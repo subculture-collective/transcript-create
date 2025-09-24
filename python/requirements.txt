@@ -1,0 +1,3 @@
+# Minimal; versions pinned during image bake as needed
+torch
+whisperx

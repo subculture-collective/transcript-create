@@ -1,3 +1,5 @@
 # Minimal; versions pinned during image bake as needed
 torch
+torchaudio
 whisperx
+matplotlib

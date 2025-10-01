@@ -3,3 +3,7 @@ dist/
 .env
 .DS_Store
 artifacts/
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

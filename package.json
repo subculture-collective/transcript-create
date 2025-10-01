@@ -10,6 +10,9 @@
     "migrate:dev": "ts-node src/db/migrate.ts",
     "ingest": "ts-node src/cli/ingest.ts",
     "chunk": "ts-node src/cli/chunk.ts",
+    "channel": "ts-node src/cli/channel.ts",
+  "reset": "ts-node src/cli/reset.ts",
+  "logs": "ts-node src/cli/logs.ts",
     "export": "ts-node src/cli/export.ts",
     "transcribe": "ts-node src/cli/transcribe.ts"
   },

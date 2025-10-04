@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+yt-dlp
+faster-whisper
+openai-whisper
+pyannote.audio
+numpy
+python-dotenv
+pydantic
+pydantic-settings

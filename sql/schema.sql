@@ -1,0 +1,72 @@
+-- Enable required extensions (if not already)
+CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid
+
+DO $$ BEGIN
+    CREATE TYPE job_state AS ENUM (
+        'pending',
+        'downloading',
+        'transcoding',
+        'transcribing',
+        'diarizing',
+        'persisting',
+        'completed',
+        'failed'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind TEXT NOT NULL CHECK (kind IN ('single','channel')),
+    input_url TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    state job_state NOT NULL DEFAULT 'pending',
+    error TEXT,
+    priority INT NOT NULL DEFAULT 100,
+    meta JSONB DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS videos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    youtube_id TEXT NOT NULL,
+    title TEXT,
+    duration_seconds INT,
+    raw_path TEXT,
+    wav_path TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    state job_state NOT NULL DEFAULT 'pending',
+    error TEXT,
+    idx INT,
+    UNIQUE (job_id, youtube_id)
+);
+CREATE INDEX IF NOT EXISTS videos_job_id_idx ON videos(job_id);
+CREATE INDEX IF NOT EXISTS videos_state_idx ON videos(state);
+
+CREATE TABLE IF NOT EXISTS transcripts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    full_text TEXT,
+    language TEXT,
+    model TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS transcripts_video_id_idx ON transcripts(video_id);
+
+CREATE TABLE IF NOT EXISTS segments (
+    id BIGSERIAL PRIMARY KEY,
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    start_ms INT NOT NULL,
+    end_ms INT NOT NULL,
+    text TEXT NOT NULL,
+    speaker_label TEXT,
+    confidence REAL,
+    avg_logprob REAL,
+    temperature REAL,
+    token_count INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS segments_video_time_idx ON segments(video_id, start_ms);

@@ -1,0 +1,165 @@
+import logging
+import os
+import torch
+from app.settings import settings
+
+_ct2 = None
+_torch_whisper = None
+
+_model = None
+_fallback_ct2_model = None
+
+def _lazy_imports():
+    global _ct2, _torch_whisper
+    if settings.WHISPER_BACKEND == "faster-whisper" and _ct2 is None:
+        from faster_whisper import WhisperModel as CT2Model
+        _ct2 = CT2Model
+    if settings.WHISPER_BACKEND == "whisper" and _torch_whisper is None:
+        import whisper as torch_whisper
+        _torch_whisper = torch_whisper
+
+def _try_load_ct2(model_name: str, device: str, compute_type: str):
+    _lazy_imports()
+    logging.info("Loading faster-whisper '%s' (device=%s, compute_type=%s)", model_name, device, compute_type)
+    return _ct2(model_name, device=device, compute_type=compute_type)
+
+def _try_load_torch(model_name: str, force_gpu: bool):
+    _lazy_imports()
+    # For ROCm, torch.device("cuda") maps to HIP when ROCm builds are installed
+    use_cuda = torch.cuda.is_available()
+    if force_gpu and not use_cuda:
+        raise RuntimeError("FORCE_GPU is true but torch.cuda is not available")
+    device = torch.device("cuda" if use_cuda else "cpu")
+    logging.info("Loading openai-whisper '%s' on device=%s", model_name, device)
+    return _torch_whisper.load_model(model_name, device=str(device))
+
+
+def _get_model():
+    global _model
+    if _model is None:
+        if settings.WHISPER_BACKEND == "whisper":
+            # PyTorch Whisper path (ROCm-compatible when torch is ROCm build)
+            _model = _try_load_torch(settings.WHISPER_MODEL, settings.FORCE_GPU)
+        else:
+            # faster-whisper (CTranslate2) path
+            if settings.FORCE_GPU:
+                devices = [d.strip() for d in settings.GPU_DEVICE_PREFERENCE.split(',') if d.strip()]
+                compute_types = [c.strip() for c in settings.GPU_COMPUTE_TYPES.split(',') if c.strip()]
+                models = [m.strip() for m in settings.GPU_MODEL_FALLBACKS.split(',') if m.strip()]
+                if settings.WHISPER_MODEL not in models:
+                    models.insert(0, settings.WHISPER_MODEL)
+                else:
+                    models = [settings.WHISPER_MODEL] + [m for m in models if m != settings.WHISPER_MODEL]
+
+                last_err = None
+                for dev in devices:
+                    for model_name in models:
+                        for ctype in compute_types:
+                            try:
+                                logging.info("FORCE_GPU is enabled. Trying device=%s model=%s compute=%s", dev, model_name, ctype)
+                                _model = _try_load_ct2(model_name, device=dev, compute_type=ctype)
+                                logging.info("Loaded model on GPU successfully: device=%s model=%s compute=%s", dev, model_name, ctype)
+                                return _model
+                            except Exception as e:
+                                last_err = e
+                                logging.warning("GPU load failed (device=%s model=%s compute=%s): %s", dev, model_name, ctype, e)
+                                continue
+                raise RuntimeError(f"FORCE_GPU is true but no GPU configuration succeeded: {last_err}")
+            else:
+                # Device auto, try half then float32
+                try:
+                    _model = _try_load_ct2(settings.WHISPER_MODEL, device="auto", compute_type="float16")
+                except Exception:
+                    logging.warning("Half precision failed; retrying with float32 on device=auto")
+                    _model = _try_load_ct2(settings.WHISPER_MODEL, device="auto", compute_type="float32")
+    return _model
+
+
+def _get_ct2_fallback_model():
+    """Load a ROCm HIP CTranslate2 model as a fallback when PyTorch whisper crashes on ROCm."""
+    global _fallback_ct2_model
+    if _fallback_ct2_model is None:
+        try_order = [
+            (settings.WHISPER_MODEL, "auto", "float32"),
+            # If the exact model fails, try stepping down once for stability
+            ("medium", "auto", "float32"),
+        ]
+        last_err = None
+        for model_name, dev, ctype in try_order:
+            try:
+                _fallback_ct2_model = _try_load_ct2(model_name, device=dev, compute_type=ctype)
+                logging.info("CT2 fallback loaded: model=%s device=%s compute=%s", model_name, dev, ctype)
+                break
+            except Exception as e:
+                last_err = e
+                logging.warning("CT2 fallback load failed (model=%s dev=%s compute=%s): %s", model_name, dev, ctype, e)
+        if _fallback_ct2_model is None:
+            raise RuntimeError(f"Unable to load CT2 fallback model on ROCm HIP: {last_err}")
+    return _fallback_ct2_model
+
+def transcribe_chunk(wav_path):
+    model = _get_model()
+    logging.info("Transcribing %s", wav_path)
+    if settings.WHISPER_BACKEND == "whisper":
+        # openai-whisper returns dict with 'segments' list
+        # On ROCm, some optimized attention kernels can cause faults on certain drivers/GPUs.
+        # Force fp32 and disable flash/mem-efficient attention so math kernels are used.
+        # Best-effort: use runtime toggles; also set env fallbacks for future imports.
+        os.environ.setdefault("PYTORCH_SDP_DISABLE_FLASH_ATTENTION", "1")
+        os.environ.setdefault("PYTORCH_SDP_DISABLE_MEM_EFFICIENT_ATTENTION", "1")
+        os.environ.setdefault("PYTORCH_SDP_DISABLE_FUSED_ATTENTION", "1")
+        sdp_ctx = getattr(getattr(torch.backends, 'cuda', object()), 'sdp_kernel', None)
+        try:
+            if callable(sdp_ctx):
+                with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True):
+                    result = model.transcribe(str(wav_path), fp16=False)
+            else:
+                result = model.transcribe(str(wav_path), fp16=False)
+        except Exception as e:
+            # Known ROCm fault signatures
+            msg = str(e)
+            if "Memory access fault" in msg or "hipError" in msg or "HSA_STATUS_ERROR" in msg:
+                logging.error("PyTorch whisper on ROCm crashed (%s). Falling back to CT2 HIP backend.", msg)
+                ct2 = _get_ct2_fallback_model()
+                segments, info = ct2.transcribe(str(wav_path), beam_size=5)
+                out = []
+                for s in segments:
+                    out.append({
+                        "start": s.start,
+                        "end": s.end,
+                        "text": s.text.strip(),
+                        "avg_logprob": s.avg_logprob,
+                        "temperature": s.temperature,
+                        "token_count": len(s.tokens),
+                        "confidence": getattr(s, "no_speech_prob", None)
+                    })
+                return out
+            else:
+                raise
+        out = []
+        for seg in result.get("segments", []):
+            out.append({
+                "start": float(seg.get("start", 0)),
+                "end": float(seg.get("end", 0)),
+                "text": (seg.get("text") or "").strip(),
+                "avg_logprob": seg.get("avg_logprob"),
+                "temperature": seg.get("temperature"),
+                "token_count": len(seg.get("tokens") or []),
+                "confidence": None,
+            })
+        return out
+    else:
+        segments, info = model.transcribe(str(wav_path), beam_size=5)
+        logging.debug("Transcribe info: %s", info)
+        out = []
+        for s in segments:
+            out.append({
+                "start": s.start,
+                "end": s.end,
+                "text": s.text.strip(),
+                "avg_logprob": s.avg_logprob,
+                "temperature": s.temperature,
+                "token_count": len(s.tokens),
+                "confidence": getattr(s, "no_speech_prob", None)
+            })
+        return out

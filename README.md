@@ -1,146 +1,174 @@
-# transcript-create
+# Transcript Create
 
-Local pipeline to produce canonical transcripts from (very) long YouTube videos / livestreams.
+End-to-end pipeline for:
 
-Core pipeline (sequential): ingest -> chunk -> transcribe -> export.
+1. Accepting YouTube URL (single video or entire channel)
+2. Downloading and converting audio to 16 kHz mono WAV
+3. Chunking long audio
+4. Transcribing with Whisper (ROCm GPU) via `faster-whisper`
+5. Speaker diarization with `pyannote.audio`
+6. Aligning speakers to Whisper segments
+7. Persisting full transcript and segments into PostgreSQL
+8. Querying status and transcript via FastAPI
 
--   TypeScript orchestrates filesystem + DB + docker.
--   WhisperX runs inside a container (ROCm for AMD GPUs, or CPU fallback) to perform ASR + alignment.
--   Artifacts live under `artifacts/<videoId>/` (idempotent, resumable). Database keeps lightweight metadata.
+## Architecture
 
-## Quick Start
+-   **API**: FastAPI (`/jobs`, `/jobs/{id}`, `/videos/{video_id}/transcript`)
+-   **Queue**: PostgreSQL tables (`jobs`, `videos`) using `SELECT ... FOR UPDATE SKIP LOCKED` for job locking.
+-   **Worker**: Polls pending videos, processes pipeline stages, updates states.
+-   **Storage**: PostgreSQL for metadata, transcripts, segments. (Audio files stored on a mounted volume at `/data` inside container.)
+-   **Models**: `faster-whisper` large-v3, `pyannote/speaker-diarization`.
 
-Prereqs: Docker, Node 18+, ffmpeg, Postgres (docker compose), optional yt-dlp (binary or Python package).
+## Database Schema
 
-1. Install deps: `npm install`
-2. Start DB: `docker compose -f docker/compose.yaml up -d db`
-3. Build: `npm run build`
-4. Migrate: `npm run migrate`
-5. Dry run a single video: `npm run transcribe -- --video <id|url> --dry-run`
+See `sql/schema.sql`.
 
-Produces (dry run):
-
-```text
-artifacts/<videoId>/
-  audio.wav (empty placeholder)
-  source.json
-  manifest.json
-  transcript.json (empty arrays)
-  snippets.jsonl
-```
-
-## Real Transcription (Single Video)
+Apply schema locally:
 
 ```bash
-npm run transcribe -- --video <id|url>
+psql $DATABASE_URL -f sql/schema.sql
 ```
 
-Flags:
+## Environment
 
--   `--dry-run` generate empty artifacts only.
--   `--force` re-download audio and re-run all stages even if outputs exist.
-
-Environment (override via `.env` or process env): see `src/pipeline/env.ts`.
-
-Key vars:
-
--   `ARTIFACTS_ROOT` (default `artifacts`)
--   `CHUNK_SEC` / `OVERLAP_SEC` (default 1800s / 8s)
--   `WHISPERX_IMAGE` (required for docker execution)
--   `DOCKER_ADDITIONAL_ARGS` (e.g. `--device /dev/kfd --device /dev/dri --group-add video` for AMD)
--   `WHISPERX_FORCE_CPU=1` force CPU path even if GPU devices passed through
--   `YTDLP_BIN` and/or `YTDLP_PYTHON_BIN` for custom yt-dlp resolution
-
-## Channel Transcription
-
-Batch process every video found on a channel (YouTube channel URL or ID). The CLI automatically:
-
--   Lists videos via layered yt-dlp fallback: configured binary -> `yt-dlp` -> `<python> -m yt_dlp` (custom) -> `python3 -m yt_dlp`.
--   Skips any video whose `artifacts/<id>/transcript.json` already exists unless `--force`.
--   Supports bounded concurrency.
--   Summarizes results (processed / skipped / failed).
-
-Usage:
+Create `.env` from example:
 
 ```bash
-npm run channel -- --channel <channelId|url> [--limit N] [--concurrency K] [--force] [--dry-run]
+cp .env.example .env
+# Edit HF_TOKEN for pyannote access
 ```
 
-Examples:
+## Running Locally (Host Python)
 
--   First pass (dry): `npm run channel -- --channel UCXXXX --limit 3 --dry-run`
--   Real run, 2 at a time: `npm run channel -- --channel UCXXXX --concurrency 2`
+Install dependencies (recommend venv):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Run API:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Run worker:
+
+```bash
+python -m worker.loop
+```
+
+## Docker (ROCm)
+
+Build image:
+
+```bash
+docker build -t transcript-create:latest .
+```
+
+Run API container (mount data + pass devices):
+
+```bash
+docker run --rm -it \
+  --device /dev/kfd --device /dev/dri --group-add video \
+  --env-file .env \
+  -v $(pwd)/data:/data \
+  -p 8000:8000 \
+  transcript-create:latest
+```
+
+Start worker (second container sharing volume & env):
+
+```bash
+docker run --rm -it \
+  --device /dev/kfd --device /dev/dri --group-add video \
+  --env-file .env \
+  -v $(pwd)/data:/data \
+  transcript-create:latest \
+  python -m worker.loop
+```
+
+### Docker Compose (recommended)
+
+Start the full stack (PostgreSQL, API, worker) with ROCm device passthrough:
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+The API will be at <http://localhost:8000> and the database at db:5432 inside the network. Volume `./data` is mounted at `/data` inside the containers. The schema is applied automatically on first DB startup.
+
+If your host ROCm version isn’t 6.0, set the build arg when building:
+
+```bash
+docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.1
+docker compose up -d
+```
+
+Check logs:
+
+```bash
+docker compose logs -f api worker db
+```
+
+## API Usage
+
+Create single video job:
+
+```bash
+curl -X POST http://localhost:8000/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.youtube.com/watch?v=VIDEOID","kind":"single"}'
+```
+
+Check job:
+
+```bash
+curl http://localhost:8000/jobs/JOB_UUID
+```
+
+Transcript:
+
+```bash
+curl http://localhost:8000/videos/VIDEO_UUID/transcript
+```
+
+## Long Video Chunking
+
+Configured via `CHUNK_SECONDS` (default 900). Each chunk transcribed; timestamps offset and merged. Diarization runs once on full WAV for coherent speakers.
+
+## Notes / Next Steps
+
+-   Add retry/backoff logic per stage (currently single attempt)
+-   Add SRT/VTT export endpoints
+-   Add language auto-detection (we assume English now)
+-   Cache pyannote model across processes (presently per-process load)
+-   Observability: add logging + metrics
+-   Security: validate input URLs and limit channel expansion size
+-   Consider using migrations tool (Alembic) instead of raw SQL for evolutions
+
+### Force GPU mode for faster-whisper
+
+If you want to guarantee the model runs on GPU (CUDA or ROCm HIP) and never fall back to CPU, set:
+
+```env
+FORCE_GPU=true
+# Optionally tune the order we try backends and compute types:
+GPU_DEVICE_PREFERENCE=cuda,hip
+GPU_COMPUTE_TYPES=float16,int8_float16,bfloat16,float32
+# And allow model size fallbacks to reduce VRAM pressure:
+GPU_MODEL_FALLBACKS=large-v3,medium,small,base,tiny
+```
 
 Behavior:
 
--   Concurrency default = 1. Higher values increase I/O & CPU pressure (each video downloads + chunks + spawns WhisperX containers per chunk).
--   Skip logic: presence of `transcript.json` is authoritative that the video finished at least once.
--   Failure of one video does not halt others; errors are logged and counted.
+-   The worker will try each combination of backend and compute type in order for the primary `WHISPER_MODEL`.
+-   If loading fails (e.g., out of memory), it tries the next model in `GPU_MODEL_FALLBACKS`.
+-   If none of the GPU combinations succeed, the job fails fast instead of silently using CPU.
 
-## Resumability & Idempotency
+## License
 
-Each stage checks for existing outputs unless `--force` is supplied. This makes the pipeline safe to re-run after interruption.
-
-## CPU vs GPU
-
-Set `WHISPERX_FORCE_CPU=1` to remove device flags and request CPU inference even if GPU devices are available. This is useful when GPU drivers / ROCm stack are unstable.
-
-If using AMD ROCm:
-
--   Provide an image built from `docker/whisperx.rocm.Dockerfile` with ROCm-compatible PyTorch.
--   Supply device mappings in `DOCKER_ADDITIONAL_ARGS`.
--   Verify container health (the pipeline runs a health probe before chunk processing).
-
-CPU-only:
-
--   Optionally build `docker/whisperx.cpu.Dockerfile` and set `WHISPERX_IMAGE` to that tag, or just keep using the ROCm image with `WHISPERX_FORCE_CPU`.
-
-## yt-dlp Fallback Chain
-
-For both single video ingest and channel listing the following order is tried until success:
-
-1. Configured `YTDLP_BIN`
-2. `yt-dlp`
-3. Configured `YTDLP_PYTHON_BIN -m yt_dlp`
-4. `python3 -m yt_dlp`
-
-This minimizes setup friction; ensure at least one path works (virtualenv or system install).
-
-## Artifacts Layout
-
-```text
-artifacts/<videoId>/
-  source.json          # metadata (title, duration, etc.)
-  audio.wav            # normalized mono 16k
-  manifest.json        # chunk boundaries with global offsets
-  chunk_0000.json ...  # per-chunk raw WhisperX output (during run)
-  transcript.json      # merged + offset-adjusted transcript
-  snippets.jsonl       # sliding window textual snippets
-```
-
-## Development Notes
-
--   Pure logic kept small & testable; cross-language handoff via JSON only.
--   All paths written absolute to simplify docker volume mounts.
--   Per-chunk JSON merge tolerates partial failures (continues merging others).
-
-## Roadmap / TODO (high-level)
-
--   Optional speaker diarization stage
--   Smarter snippet windowing + semantic scoring
--   Configurable language & model selection per run
--   GPU cache volume (HF model cache) for faster cold starts
-
-## Troubleshooting
-
-Missing yt-dlp: ensure one of the fallback methods is installed.
-
-Container health fails: verify `WHISPERX_IMAGE` tag, device mappings, and that the image contains required models (or allow it to download them). Use `docker run --rm <image> --health` manually for debugging.
-
-Chunk outputs missing: inspect ffmpeg install, confirm `audio.wav` is non-empty; rerun with `--force` if needed.
-
-Slow performance: reduce `CHUNK_SEC` or concurrency; on CPU large models can be prohibitively slow.
-
-Model download interruptions: pre-pull models by running the container with a dummy short audio to populate the cache (mount a persistent volume for cache if needed).
-
-Zero-byte or tiny audio after dry-run: a previous `--dry-run` creates an empty placeholder `audio.wav`. The ingest step now auto-detects 0-byte or <1KB files and re-downloads real audio even without `--force`; a log line `[ingest] Detected empty placeholder audio ...` will appear. If you see many failures citing `Input audio is empty (0 bytes)`, remove affected directories or rerun the channel command (it will repair them on the next pass).
+TBD

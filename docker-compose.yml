@@ -1,0 +1,70 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: transcripts
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      # Initialize schema on first run
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+
+  api:
+    build:
+      context: .
+      args:
+        # Change to rocm6.1 or rocm6.2 if your host ROCm matches those
+        ROCM_WHEEL_INDEX: https://download.pytorch.org/whl/rocm6.0
+    image: transcript-create:latest
+    env_file: .env
+    environment:
+      # Point app to the compose network Postgres
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+      # Persist model caches to a mounted volume
+      HF_HOME: /root/.cache/hf
+      HF_HUB_CACHE: /root/.cache/hf/hub
+      TRANSFORMERS_CACHE: /root/.cache/hf/transformers
+      LOG_LEVEL: DEBUG
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./data:/data
+      - ./cache:/root/.cache
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri:/dev/dri"
+    group_add:
+      - "video"
+
+  worker:
+    image: transcript-create:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+      # Persist model caches to a mounted volume
+      HF_HOME: /root/.cache/hf
+      HF_HUB_CACHE: /root/.cache/hf/hub
+      TRANSFORMERS_CACHE: /root/.cache/hf/transformers
+      LOG_LEVEL: DEBUG
+      # Use ROCm PyTorch whisper backend and force GPU
+      WHISPER_BACKEND: "whisper"
+      WHISPER_MODEL: "medium"
+      FORCE_GPU: "true"
+      # ROCm stability tweaks for some RDNA cards/drivers
+      HSA_ENABLE_SDMA: "0"
+    depends_on:
+      - db
+    command: ["python3", "-m", "worker.loop"]
+    volumes:
+      - ./data:/data
+      - ./cache:/root/.cache
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri:/dev/dri"
+    group_add:
+      - "video"
+
+volumes:
+  dbdata:

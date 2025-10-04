@@ -1,7 +1,12 @@
 import logging
 import os
 import torch
+import warnings
 from app.settings import settings
+
+# Suppress PyTorch weights_only FutureWarning for trusted Whisper models
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*weights_only.*")
+warnings.filterwarnings("ignore", category=FutureWarning, module="whisper")
 
 _ct2 = None
 _torch_whisper = None
@@ -31,7 +36,11 @@ def _try_load_torch(model_name: str, force_gpu: bool):
         raise RuntimeError("FORCE_GPU is true but torch.cuda is not available")
     device = torch.device("cuda" if use_cuda else "cpu")
     logging.info("Loading openai-whisper '%s' on device=%s", model_name, device)
-    return _torch_whisper.load_model(model_name, device=str(device))
+    
+    # Suppress weights_only FutureWarning for trusted OpenAI models
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*weights_only.*")
+        return _torch_whisper.load_model(model_name, device=str(device))
 
 
 def _get_model():
@@ -108,10 +117,27 @@ def transcribe_chunk(wav_path):
         os.environ.setdefault("PYTORCH_SDP_DISABLE_FLASH_ATTENTION", "1")
         os.environ.setdefault("PYTORCH_SDP_DISABLE_MEM_EFFICIENT_ATTENTION", "1")
         os.environ.setdefault("PYTORCH_SDP_DISABLE_FUSED_ATTENTION", "1")
-        sdp_ctx = getattr(getattr(torch.backends, 'cuda', object()), 'sdp_kernel', None)
+        
+        # Use new PyTorch API (torch.nn.attention.sdpa_kernel) with fallback for older versions
         try:
-            if callable(sdp_ctx):
-                with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True):
+            from torch.nn.attention import sdpa_kernel, SDPBackend
+            # Use MATH backend only (equivalent to enable_math=True, others=False)
+            def new_sdp_ctx():
+                return sdpa_kernel([SDPBackend.MATH])
+            sdp_ctx = new_sdp_ctx
+        except ImportError:
+            # Fallback to deprecated API for older PyTorch versions
+            sdp_ctx_func = getattr(getattr(torch.backends, 'cuda', object()), 'sdp_kernel', None)
+            if callable(sdp_ctx_func):
+                def old_sdp_ctx():
+                    return sdp_ctx_func(enable_flash=False, enable_mem_efficient=False, enable_math=True)
+                sdp_ctx = old_sdp_ctx
+            else:
+                sdp_ctx = None
+        
+        try:
+            if sdp_ctx:
+                with sdp_ctx():
                     result = model.transcribe(str(wav_path), fp16=False)
             else:
                 result = model.transcribe(str(wav_path), fp16=False)

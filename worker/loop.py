@@ -41,6 +41,80 @@ def run():
                     ), {"secs": rescue_seconds})
             except Exception as e:
                 logging.warning("Rescue check failed: %s", e)
+            
+            # Model upgrade requeue: reprocess completed videos if current model is larger/better
+            try:
+                current_model = settings.WHISPER_MODEL
+                model_hierarchy = {'tiny': 1, 'base': 2, 'small': 3, 'medium': 4, 'large': 5, 'large-v2': 6, 'large-v3': 7}
+                current_rank = model_hierarchy.get(current_model, 0)
+                if current_rank > 0:
+                    requeue_result = conn.execute(text("""
+                        UPDATE videos v
+                        SET state = 'pending', updated_at = now()
+                        FROM transcripts t
+                        WHERE v.id = t.video_id
+                          AND v.state = 'completed'
+                          AND t.model IS NOT NULL
+                          AND (
+                            -- Requeue if transcript model rank is lower than current
+                            CASE 
+                              WHEN t.model = 'tiny' THEN 1
+                              WHEN t.model = 'base' THEN 2
+                              WHEN t.model = 'small' THEN 3
+                              WHEN t.model = 'medium' THEN 4
+                              WHEN t.model = 'large' THEN 5
+                              WHEN t.model = 'large-v2' THEN 6
+                              WHEN t.model = 'large-v3' THEN 7
+                              ELSE 0
+                            END
+                          ) < :current_rank
+                        RETURNING v.id, t.model
+                    """), {"current_rank": current_rank})
+                    requeued = requeue_result.fetchall()
+                    if requeued:
+                        logging.info("Model upgrade requeue: %d videos (%s -> %s)", 
+                                   len(requeued), 
+                                   ", ".join(set(r[1] for r in requeued)), 
+                                   current_model)
+            except Exception as e:
+                logging.warning("Model upgrade requeue failed: %s", e)
+            
+            # Model upgrade requeue: reprocess completed videos if current model is larger/better
+            try:
+                current_model = settings.WHISPER_MODEL
+                model_hierarchy = {'tiny': 1, 'base': 2, 'small': 3, 'medium': 4, 'large': 5, 'large-v2': 6, 'large-v3': 7}
+                current_rank = model_hierarchy.get(current_model, 0)
+                if current_rank > 0:
+                    requeue_result = conn.execute(text("""
+                        UPDATE videos v
+                        SET state = 'pending', updated_at = now()
+                        FROM transcripts t
+                        WHERE v.id = t.video_id
+                          AND v.state = 'completed'
+                          AND t.model IS NOT NULL
+                          AND (
+                            -- Requeue if transcript model rank is lower than current
+                            CASE 
+                              WHEN t.model = 'tiny' THEN 1
+                              WHEN t.model = 'base' THEN 2
+                              WHEN t.model = 'small' THEN 3
+                              WHEN t.model = 'medium' THEN 4
+                              WHEN t.model = 'large' THEN 5
+                              WHEN t.model = 'large-v2' THEN 6
+                              WHEN t.model = 'large-v3' THEN 7
+                              ELSE 0
+                            END
+                          ) < :current_rank
+                        RETURNING v.id, t.model
+                    """), {"current_rank": current_rank})
+                    requeued = requeue_result.fetchall()
+                    if requeued:
+                        logging.info("Model upgrade requeue: %d videos (%s -> %s)", 
+                                   len(requeued), 
+                                   ", ".join(set(r[1] for r in requeued)), 
+                                   current_model)
+            except Exception as e:
+                logging.warning("Model upgrade requeue failed: %s", e)
             row = conn.execute(text("""
                 SELECT v.id
                 FROM videos v

@@ -35,11 +35,14 @@ def expand_channel_if_needed(conn):
         logging.info("Channel expansion found %d entries", len(entries))
         for idx, e in enumerate(entries):
             yid = e["id"]
+            # Extract metadata for each channel video
+            title = e.get("title", "")
+            duration = e.get("duration")  # duration in seconds
             conn.execute(text("""
-                INSERT INTO videos (job_id, youtube_id, idx)
-                VALUES (:j,:y,:idx)
+                INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
+                VALUES (:j,:y,:idx,:title,:dur)
                 ON CONFLICT (job_id, youtube_id) DO NOTHING
-            """), {"j": job["id"], "y": yid, "idx": idx})
+            """), {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration})
         logging.info("Marking job %s as downloading after expansion", job["id"])
         conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
 
@@ -72,11 +75,15 @@ def expand_single_if_needed(conn):
         if not vid:
             raise RuntimeError(f"Unable to determine YouTube ID for URL: {url}")
         logging.info("Job %s resolved video id %s", job["id"], vid)
+        # Extract title and duration from metadata
+        title = data.get("title", "")
+        duration = data.get("duration")  # duration in seconds
+        logging.info("Video metadata: title='%s', duration=%ss", title[:50] + ("..." if len(title) > 50 else ""), duration)
         conn.execute(text("""
-            INSERT INTO videos (job_id, youtube_id, idx)
-            VALUES (:j,:y,:idx)
+            INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
+            VALUES (:j,:y,:idx,:title,:dur)
             ON CONFLICT (job_id, youtube_id) DO NOTHING
-        """), {"j": job["id"], "y": vid, "idx": 0})
+        """), {"j": job["id"], "y": vid, "idx": 0, "title": title, "dur": duration})
         logging.info("Marking job %s as downloading after single expansion", job["id"])
         conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
 

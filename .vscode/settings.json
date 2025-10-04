@@ -1,0 +1,12 @@
+{
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "driver": "PostgreSQL",
+            "name": "transcripts",
+            "connectString": "postgresql://postgres:postgres@localhost:5434/transcripts"
+        }
+    ]
+}

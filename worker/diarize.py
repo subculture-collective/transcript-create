@@ -22,12 +22,14 @@ def _get_pipeline():
         os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", settings.HF_TOKEN)
         os.environ.setdefault("HF_TOKEN", settings.HF_TOKEN)
         try:
-            _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
-        except TypeError:
+            _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-community-1", token=settings.HF_TOKEN)
+        except Exception as e:
+            logging.warning("Failed to initialize pyannote Pipeline: %s; skipping diarization", e)
             try:
+                # Fallback to older model
                 _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization", token=settings.HF_TOKEN)
-            except Exception as e:
-                logging.warning("Failed to initialize pyannote Pipeline: %s; skipping diarization", e)
+            except Exception as e2:
+                logging.warning("Fallback pipeline also failed: %s; skipping diarization", e2)
                 _pipeline = None
     return _pipeline
 
@@ -35,6 +37,7 @@ def diarize_and_align(wav_path, whisper_segments):
     try:
         pipe = _get_pipeline()
         if pipe is None:
+            logging.info("Diarization pipeline not available; returning whisper segments as-is")
             return whisper_segments
         logging.info("Running diarization on %s", wav_path)
         diar = pipe(str(wav_path))
@@ -43,15 +46,18 @@ def diarize_and_align(wav_path, whisper_segments):
             diar_list.append((seg.start, seg.end, speaker))
         logging.info("Diarization produced %d speaker segments", len(diar_list))
         diar_segments = []
+        speakers_assigned = 0
         for w in whisper_segments:
             w_mid = (w["start"] + w["end"]) / 2.0
             speaker = None
             for ds in diar_list:
                 if w_mid >= ds[0] and w_mid <= ds[1]:
                     speaker = ds[2]
+                    speakers_assigned += 1
                     break
             w["speaker"] = speaker
             diar_segments.append(w)
+        logging.info("Diarization assigned speakers to %d/%d segments", speakers_assigned, len(whisper_segments))
         return diar_segments
     except Exception as e:
         logging.warning("Diarization failed (%s); returning Whisper segments as-is", e)

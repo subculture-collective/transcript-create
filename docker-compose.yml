@@ -8,6 +8,10 @@ services:
       - dbdata:/var/lib/postgresql/data
       # Initialize schema on first run
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    # Expose Postgres to the host for external clients (psql/DBeaver/etc.)
+    # If port 5432 is already used on your host, change to something like "5434:5432".
+    ports:
+      - "5434:5432"
 
   api:
     build:
@@ -50,10 +54,12 @@ services:
       LOG_LEVEL: DEBUG
       # Use ROCm PyTorch whisper backend and force GPU
       WHISPER_BACKEND: "whisper"
-      WHISPER_MODEL: "medium"
+      WHISPER_MODEL: "large-v3"
       FORCE_GPU: "true"
       # ROCm stability tweaks for some RDNA cards/drivers
       HSA_ENABLE_SDMA: "0"
+      # Suppress PyTorch FutureWarnings for trusted models
+      PYTHONWARNINGS: "ignore::FutureWarning"
     depends_on:
       - db
     command: ["python3", "-m", "worker.loop"]

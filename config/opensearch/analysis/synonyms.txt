@@ -1,0 +1,26 @@
+# Global synonyms for transcript search (one rule per line)
+# Format examples:
+# comma-separated equivalents:  a, b, c
+# directional (=>) expands left to right:  a => b
+
+# Common tech terms
+ai, artificial intelligence
+llm, large language model
+ml, machine learning
+nlp, natural language processing
+cpu, central processing unit
+gpu, graphics processing unit
+fp16, half precision
+bf16, bfloat16
+
+# Brands / products
+postgres, postgresql
+opensearch, elasticsearch
+whisper, openai whisper
+
+# YouTube
+youtube, yt
+
+# Countries/regions
+usa, united states, u.s., us
+uk, united kingdom, u.k., gb, great britain

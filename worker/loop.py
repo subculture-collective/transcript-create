@@ -2,7 +2,7 @@ import time
 import logging
 from sqlalchemy import create_engine, text
 from app.settings import settings
-from worker.pipeline import process_video, expand_channel_if_needed
+from worker.pipeline import process_video, expand_channel_if_needed, capture_youtube_captions_for_unprocessed
 from datetime import datetime, timezone, timedelta
 
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
@@ -24,6 +24,12 @@ def run():
                 expand_channel_if_needed(conn)
             except Exception as e:
                 logging.exception("Error expanding jobs: %s", e)
+
+            # Opportunistically capture YouTube captions early for videos without captions yet
+            try:
+                capture_youtube_captions_for_unprocessed(conn, limit=5)
+            except Exception as e:
+                logging.warning("YouTube captions capture step failed: %s", e)
 
             # Rescue stuck videos: if a video has been in a non-terminal state for too long, mark it pending again
             try:

@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+	--font-display: "Satoshi", sans-serif;
+	--font-body: "Satoshi", sans-serif;
+	--tab-size-2: 2;
+  	--tab-size-4: 4;
+  	--tab-size-github: 8;
+}
+
+@layer components {
+	/* Example component */
+	.btn {
+		@apply inline-block px-6 py-2 rounded-md text-center font-semibold transition-colors;
+		background-color: theme("colors.blue.600");
+		color: theme("colors.white");
+
+		&:hover {
+			background-color: theme("colors.blue.700");
+		}
+
+		&:disabled {
+			@apply opacity-50 cursor-not-allowed;
+			background-color: theme("colors.blue.600");
+		}
+	}
+}
+
+@utility content-auto {
+  content-visibility: auto;
+}
+
+@utility scrollbar-hidden {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility tab-* {
+  tab-size: --value(--tab-size-*);
+}

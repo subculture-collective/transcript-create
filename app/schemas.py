@@ -24,3 +24,26 @@ class Segment(BaseModel):
 class TranscriptResponse(BaseModel):
     video_id: uuid.UUID
     segments: List[Segment]
+
+class YTSegment(BaseModel):
+    start_ms: int
+    end_ms: int
+    text: str
+
+class YouTubeTranscriptResponse(BaseModel):
+    video_id: uuid.UUID
+    language: Optional[str] = None
+    kind: Optional[str] = None
+    full_text: Optional[str] = None
+    segments: List[YTSegment]
+
+class SearchHit(BaseModel):
+    id: int
+    video_id: uuid.UUID
+    start_ms: int
+    end_ms: int
+    snippet: str
+
+class SearchResponse(BaseModel):
+    total: Optional[int] = None  # optional for now
+    hits: List[SearchHit]

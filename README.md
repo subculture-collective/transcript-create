@@ -136,6 +136,17 @@ Transcript:
 curl http://localhost:8000/videos/VIDEO_UUID/transcript
 ```
 
+YouTube auto-captions (if available):
+
+```bash
+# JSON (merged segments with speaker if diarized)
+curl http://localhost:8000/videos/VIDEO_UUID/youtube-transcript
+
+# SRT and VTT exports
+curl http://localhost:8000/videos/VIDEO_UUID/youtube-transcript.srt
+curl http://localhost:8000/videos/VIDEO_UUID/youtube-transcript.vtt
+```
+
 ## Long Video Chunking
 
 Configured via `CHUNK_SECONDS` (default 900). Each chunk transcribed; timestamps offset and merged. Diarization runs once on full WAV for coherent speakers.
@@ -143,7 +154,6 @@ Configured via `CHUNK_SECONDS` (default 900). Each chunk transcribed; timestamps
 ## Notes / Next Steps
 
 -   Add retry/backoff logic per stage (currently single attempt)
--   Add SRT/VTT export endpoints
 -   Add language auto-detection (we assume English now)
 -   Cache pyannote model across processes (presently per-process load)
 -   Observability: add logging + metrics
@@ -168,6 +178,86 @@ Behavior:
 -   The worker will try each combination of backend and compute type in order for the primary `WHISPER_MODEL`.
 -   If loading fails (e.g., out of memory), it tries the next model in `GPU_MODEL_FALLBACKS`.
 -   If none of the GPU combinations succeed, the job fails fast instead of silently using CPU.
+
+## YouTube Auto Captions Ingestion
+
+This project automatically fetches YouTube auto-captions (when available) as an early pre-processing step. Captions are stored separately from native Whisper transcripts so you can compare or search either source.
+
+- Tables: `youtube_transcripts` (one per video, with `full_text`) and `youtube_segments` (one per caption segment).
+- Worker fetches JSON3 captions first, falling back to VTT; both are normalized into segments with `start_ms`, `end_ms`, and `text`.
+- Endpoints: see the API Usage section above for JSON/SRT/VTT routes.
+
+Backfill captions for existing videos:
+
+```bash
+python scripts/backfill_youtube_captions.py --batch 200
+```
+
+Idempotent: it only inserts when missing (or replaces cleanly per video).
+
+## Search Backends (Postgres FTS or OpenSearch)
+
+You can search across native Whisper segments or YouTube auto-captions via a single endpoint:
+
+```bash
+GET /search?q=your+query&source=native|youtube
+```
+
+Two interchangeable backends are supported and selected via `.env`:
+
+- `SEARCH_BACKEND=postgres` uses PostgreSQL FTS with `tsvector` columns, triggers, and GIN indexes.
+- `SEARCH_BACKEND=opensearch` uses OpenSearch with rich analyzers (English stem/stop, synonyms, n-grams, edge n-grams, shingles) and highlighting.
+
+### Postgres FTS setup
+
+FTS schema is defined in `sql/schema.sql` and applied automatically on first compose up. If applying manually, run:
+
+```bash
+psql $DATABASE_URL -f sql/schema.sql
+```
+
+Backfill `tsvector` for existing rows:
+
+```bash
+python scripts/backfill_fts.py --batch 500 --until-empty
+```
+
+### OpenSearch (local, CPU-only)
+
+Docker Compose includes OpenSearch and Dashboards for local development with security disabled. Start as part of the stack:
+
+```bash
+docker compose up -d
+```
+
+Relevant `.env` settings (defaults exist):
+
+```env
+SEARCH_BACKEND=opensearch
+OPENSEARCH_URL=http://localhost:9200
+OPENSEARCH_INDEX_NATIVE=segments
+OPENSEARCH_INDEX_YOUTUBE=youtube_segments
+```
+
+Synonyms are managed in `config/opensearch/analysis/synonyms.txt` and mounted into the container; indices reference this file via `synonyms_path`.
+
+Index or reindex data from Postgres into OpenSearch:
+
+```bash
+python scripts/opensearch_indexer.py \
+  --recreate \
+  --batch 5000 \
+  --bulk-docs 1000 \
+  --refresh-off
+```
+
+Notes:
+
+- `--recreate` drops and recreates indices with the latest analyzers/mappings.
+- `--bulk-docs` controls the size of each bulk request; tune to avoid 429 throttling.
+- `--refresh-off` speeds up bulk loads by disabling refresh and making translog asynchronous during indexing; the tool restores defaults afterwards.
+
+With OpenSearch selected, `/search` automatically runs boosted multi-field queries (including phrase and prefix variants) and returns highlighted matches.
 
 ## License
 

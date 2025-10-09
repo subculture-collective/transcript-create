@@ -24,11 +24,15 @@ services:
     environment:
       # Point app to the compose network Postgres
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+      # Point app to OpenSearch service inside the compose network
+      OPENSEARCH_URL: http://opensearch:9200
       # Persist model caches to a mounted volume
       HF_HOME: /root/.cache/hf
       HF_HUB_CACHE: /root/.cache/hf/hub
       TRANSFORMERS_CACHE: /root/.cache/hf/transformers
       LOG_LEVEL: DEBUG
+      # Disable OpenTelemetry SDK to avoid external telemetry posts
+      OTEL_SDK_DISABLED: "true"
     ports:
       - "8000:8000"
     depends_on:
@@ -47,6 +51,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+      OPENSEARCH_URL: http://opensearch:9200
       # Persist model caches to a mounted volume
       HF_HOME: /root/.cache/hf
       HF_HUB_CACHE: /root/.cache/hf/hub
@@ -60,6 +65,8 @@ services:
       HSA_ENABLE_SDMA: "0"
       # Suppress PyTorch FutureWarnings for trusted models
       PYTHONWARNINGS: "ignore::FutureWarning"
+      # Disable OpenTelemetry SDK to avoid external telemetry posts
+      OTEL_SDK_DISABLED: "true"
     depends_on:
       - db
     command: ["python3", "-m", "worker.loop"]
@@ -71,6 +78,32 @@ services:
       - "/dev/dri:/dev/dri"
     group_add:
       - "video"
+
+  opensearch:
+    image: opensearchproject/opensearch:2.12.0
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - ./config/opensearch/analysis:/usr/share/opensearch/config/analysis:ro
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.12.0
+    environment:
+      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
 
 volumes:
   dbdata:

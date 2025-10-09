@@ -70,3 +70,70 @@ CREATE TABLE IF NOT EXISTS segments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS segments_video_time_idx ON segments(video_id, start_ms);
+
+-- ---
+-- Full-text search support for segments
+-- Adds a tsvector column, GIN index, and triggers to keep it in sync
+-- ---
+ALTER TABLE segments ADD COLUMN IF NOT EXISTS text_tsv tsvector;
+
+CREATE OR REPLACE FUNCTION segments_tsv_trigger() RETURNS trigger LANGUAGE plpgsql AS $segments_tsv$
+BEGIN
+    NEW.text_tsv := to_tsvector('english', COALESCE(NEW.text, ''));
+    RETURN NEW;
+END
+$segments_tsv$;
+
+DO $$ BEGIN
+    CREATE TRIGGER segments_tsv_update
+    BEFORE INSERT OR UPDATE OF text ON segments
+    FOR EACH ROW EXECUTE FUNCTION segments_tsv_trigger();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS segments_text_tsv_idx ON segments USING GIN (text_tsv);
+
+-- ---
+-- YouTube auto-generated transcript storage
+-- Stores raw YouTube caption tracks (auto-captions) and their segments
+-- ---
+
+CREATE TABLE IF NOT EXISTS youtube_transcripts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    language TEXT,
+    kind TEXT DEFAULT 'auto', -- 'auto' for auto-captions; future-proof for 'manual'
+    source_url TEXT,          -- caption track URL (json3) used for ingestion
+    full_text TEXT,           -- concatenated caption text for quick retrieval
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS youtube_transcripts_video_unique ON youtube_transcripts(video_id);
+CREATE INDEX IF NOT EXISTS youtube_transcripts_video_idx ON youtube_transcripts(video_id);
+
+CREATE TABLE IF NOT EXISTS youtube_segments (
+    id BIGSERIAL PRIMARY KEY,
+    youtube_transcript_id UUID NOT NULL REFERENCES youtube_transcripts(id) ON DELETE CASCADE,
+    start_ms INT NOT NULL,
+    end_ms INT NOT NULL,
+    text TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS youtube_segments_time_idx ON youtube_segments(youtube_transcript_id, start_ms);
+
+-- Full-text search support for youtube_segments
+ALTER TABLE youtube_segments ADD COLUMN IF NOT EXISTS text_tsv tsvector;
+
+-- Function must exist before creating trigger
+CREATE OR REPLACE FUNCTION youtube_segments_tsv_trigger() RETURNS trigger LANGUAGE plpgsql AS $yt_segments_tsv$
+BEGIN
+    NEW.text_tsv := to_tsvector('english', COALESCE(NEW.text, ''));
+    RETURN NEW;
+END
+$yt_segments_tsv$;
+
+DO $$ BEGIN
+    CREATE TRIGGER youtube_segments_tsv_update
+    BEFORE INSERT OR UPDATE OF text ON youtube_segments
+    FOR EACH ROW EXECUTE FUNCTION youtube_segments_tsv_trigger();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS youtube_segments_text_tsv_idx ON youtube_segments USING GIN (text_tsv);

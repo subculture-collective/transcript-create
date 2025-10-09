@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 from functools import lru_cache
+
+
+BASE_DIR = Path(__file__).resolve().parents[1]  # repo root (parent of 'app')
 
 
 class Settings(BaseSettings):
@@ -28,7 +32,22 @@ class Settings(BaseSettings):
     # If a video stays in a non-terminal state for too long, requeue it
     RESCUE_STUCK_AFTER_SECONDS: int = 900
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # Search backend toggle: 'postgres' (default) or 'opensearch'
+    SEARCH_BACKEND: str = "postgres"
+    # OpenSearch settings
+    OPENSEARCH_URL: str = "http://localhost:9200"
+    OPENSEARCH_INDEX_NATIVE: str = "segments"
+    OPENSEARCH_INDEX_YOUTUBE: str = "youtube_segments"
+    OPENSEARCH_USER: str = ""
+    OPENSEARCH_PASSWORD: str = ""
+
+    # Resolve .env relative to the repository root so scripts work from any CWD.
+    # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
+    model_config = SettingsConfigDict(
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 @lru_cache

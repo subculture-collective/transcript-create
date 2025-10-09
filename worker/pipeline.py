@@ -8,6 +8,7 @@ from app.settings import settings
 from worker.audio import download_audio, ensure_wav_16k, chunk_audio
 from worker.whisper_runner import transcribe_chunk
 from worker.diarize import diarize_and_align
+from worker.youtube_captions import fetch_youtube_auto_captions
 
 WORKDIR = Path("/data")  # mount volume externally
 
@@ -130,6 +131,13 @@ def process_video(engine, video_id):
     with engine.begin() as conn:
         full_text = " ".join(s["text"] for s in diar_segments)
         logging.info("Inserting transcript len=%d chars", len(full_text))
+        # Clean existing transcript/segments for idempotent reprocessing
+        try:
+            conn.execute(text("DELETE FROM segments WHERE video_id = :v"), {"v": video_id})
+            conn.execute(text("DELETE FROM transcripts WHERE video_id = :v"), {"v": video_id})
+            logging.info("Cleared existing transcript/segments for video %s", video_id)
+        except Exception as e:
+            logging.warning("Failed to clear existing rows (continuing): %s", e)
         conn.execute(text("""
             INSERT INTO transcripts (video_id, full_text, language, model)
             VALUES (:v,:t,:lang,:m)
@@ -152,6 +160,55 @@ def process_video(engine, video_id):
             })
         logging.info("Marking video %s completed", video_id)
         conn.execute(text("UPDATE videos SET state='completed', updated_at=now() WHERE id=:i"), {"i": video_id})
+
+    # YouTube captions are handled by a pre-processing loop step; see capture_youtube_captions_for_unprocessed
+
+def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
+    """Select a few videos lacking youtube_transcripts and attempt to fetch/persist captions.
+
+    Run inside the worker loop before audio processing to make captions available early.
+    """
+    rows = conn.execute(text(
+        """
+        SELECT v.id, v.youtube_id
+        FROM videos v
+        WHERE NOT EXISTS (
+            SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id
+        )
+        ORDER BY v.created_at
+        FOR UPDATE SKIP LOCKED
+        LIMIT :lim
+        """
+    ), {"lim": limit}).all()
+    processed = 0
+    for vid, yid in rows:
+        try:
+            logging.info("Fetching YouTube captions for video %s (yid=%s)", vid, yid)
+            res = fetch_youtube_auto_captions(yid)
+            if not res:
+                logging.info("No auto captions for %s", yid)
+                continue
+            track, segs = res
+            yt_full_text = " ".join(s.text for s in segs)
+            # delete + insert for idempotency
+            conn.execute(text("DELETE FROM youtube_segments WHERE youtube_transcript_id IN (SELECT id FROM youtube_transcripts WHERE video_id=:v)"), {"v": str(vid)})
+            conn.execute(text("DELETE FROM youtube_transcripts WHERE video_id=:v"), {"v": str(vid)})
+            row = conn.execute(text("""
+                INSERT INTO youtube_transcripts (video_id, language, kind, source_url, full_text)
+                VALUES (:v,:lang,:kind,:url,:full)
+                RETURNING id
+            """), {"v": str(vid), "lang": track.language, "kind": track.kind, "url": track.url, "full": yt_full_text}).first()
+            yt_tr_id = row[0]
+            for s in segs:
+                conn.execute(text("""
+                    INSERT INTO youtube_segments (youtube_transcript_id, start_ms, end_ms, text)
+                    VALUES (:t, :s, :e, :txt)
+                """), {"t": yt_tr_id, "s": int(s.start * 1000), "e": int(s.end * 1000), "txt": s.text})
+            logging.info("Persisted %d YouTube caption segments for %s", len(segs), yid)
+            processed += 1
+        except Exception as e:
+            logging.warning("YouTube captions fetch failed for %s: %s", yid, e)
+    return processed
     # Cleanup large intermediates if configured
     if settings.CLEANUP_AFTER_PROCESS:
         try:

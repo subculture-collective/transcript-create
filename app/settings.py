@@ -41,6 +41,16 @@ class Settings(BaseSettings):
     OPENSEARCH_USER: str = ""
     OPENSEARCH_PASSWORD: str = ""
 
+    # Frontend origin for CORS/redirects
+    FRONTEND_ORIGIN: str = "http://localhost:5173"
+    # Session and OAuth
+    SESSION_SECRET: str = "change-me"
+    OAUTH_GOOGLE_CLIENT_ID: str = ""
+    OAUTH_GOOGLE_CLIENT_SECRET: str = ""
+    OAUTH_GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/callback/google"
+    # Comma-separated admin emails for admin dashboard access
+    ADMIN_EMAILS: str = ""
+
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
     model_config = SettingsConfigDict(

@@ -137,3 +137,56 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS youtube_segments_text_tsv_idx ON youtube_segments USING GIN (text_tsv);
+
+-- ---
+-- Users, sessions, and favorites for web frontend
+-- ---
+
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT,
+    name TEXT,
+    avatar_url TEXT,
+    oauth_provider TEXT,
+    oauth_subject TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (oauth_provider, oauth_subject)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL, -- random opaque token stored in cookie
+    user_agent TEXT,
+    ip_address TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token);
+
+CREATE TABLE IF NOT EXISTS favorites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    start_ms INT NOT NULL,
+    end_ms INT NOT NULL,
+    text TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS favorites_user_idx ON favorites(user_id);
+CREATE INDEX IF NOT EXISTS favorites_video_idx ON favorites(video_id);
+
+-- ---
+-- Analytics events
+-- ---
+CREATE TABLE IF NOT EXISTS events (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    session_token TEXT,
+    type TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS events_created_idx ON events(created_at);
+CREATE INDEX IF NOT EXISTS events_type_idx ON events(type);

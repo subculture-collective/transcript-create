@@ -21,3 +21,16 @@ export const api = {
     return http.get(`videos/${videoId}`).json<VideoInfo>()
   },
 }
+
+export async function apiListFavorites(videoId?: string) {
+  const searchParams = videoId ? new URLSearchParams({ video_id: videoId }) : undefined
+  return http.get('users/me/favorites', { searchParams }).json<{ items: Array<{ id: string; video_id: string; start_ms: number; end_ms: number; text?: string }> }>()
+}
+
+export async function apiAddFavorite(payload: { video_id: string; start_ms: number; end_ms: number; text?: string }) {
+  return http.post('users/me/favorites', { json: payload }).json<{ id: string }>()
+}
+
+export async function apiDeleteFavorite(id: string) {
+  return http.delete(`users/me/favorites/${id}`).json<{ ok: boolean }>()
+}

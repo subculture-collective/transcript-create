@@ -38,6 +38,35 @@ cp .env.example .env
 # Edit HF_TOKEN for pyannote access
 ```
 
+### Environment variables overview
+
+Backend (.env):
+
+- Core/worker
+  - DATABASE_URL: Postgres URL (with psycopg driver)
+  - HF_TOKEN: Optional, enables diarization models
+  - WHISPER_MODEL: Model name (e.g., large-v3)
+  - WHISPER_BACKEND: faster-whisper (default) or whisper
+  - CHUNK_SECONDS: Chunk size for long audio (seconds)
+  - MAX_PARALLEL_JOBS: Concurrency in worker
+  - ROCM: true to enable ROCm-specific behavior in Docker image
+  - CLEANUP_*: Cleanup toggles for media artifacts
+- Search
+  - SEARCH_BACKEND: postgres or opensearch
+  - OPENSEARCH_URL, OPENSEARCH_INDEX_NATIVE, OPENSEARCH_INDEX_YOUTUBE
+  - OPENSEARCH_USER, OPENSEARCH_PASSWORD (if security enabled)
+- API/Frontend integration
+  - FRONTEND_ORIGIN: e.g., http://localhost:5173 for dev CORS
+  - SESSION_SECRET: Random string for session cookie signing
+  - ADMIN_EMAILS: Comma-separated admin emails for /admin
+- OAuth (Google)
+  - OAUTH_GOOGLE_CLIENT_ID, OAUTH_GOOGLE_CLIENT_SECRET
+  - OAUTH_GOOGLE_REDIRECT_URI: e.g., http://localhost:8000/auth/callback/google
+
+Frontend (frontend/.env):
+
+- VITE_API_BASE: Override API base URL for the web app (optional; defaults to http://localhost:8000 in dev)
+
 ## Running Locally (Host Python)
 
 Install dependencies (recommend venv):

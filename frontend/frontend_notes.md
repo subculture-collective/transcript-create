@@ -15,4 +15,7 @@
 - serif
 - print
 
+## Search
 
+- prefer our transcript if it exists
+- include more context around the result segment

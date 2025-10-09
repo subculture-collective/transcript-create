@@ -149,6 +149,7 @@ activemq-data/
 
 # Environments
 .env
+.env.*
 .envrc
 .venv
 env/
@@ -216,3 +217,33 @@ __marimo__/
 .streamlit/secrets.toml
 data/
 cache/
+
+# --- Monorepo / Frontend (Vite React) ---
+# Node and build outputs
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/.eslintcache
+frontend/.tsbuildinfo
+**/node_modules/
+**/dist/
+
+# Frontend env and local overrides
+frontend/.env
+frontend/.env.*
+frontend/*.local
+
+# Package manager lockfiles (managed per workspace)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# OS/editor cruft and logs
+**/.DS_Store
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../services/api'
 import type { SearchHit } from '../types/api'
+import { track } from '../services/analytics'
 
 function msToTimestamp(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -15,6 +16,7 @@ export default function SearchPage() {
   const [params, setParams] = useSearchParams()
   const [q, setQ] = useState(params.get('q') ?? '')
   const [hits, setHits] = useState<SearchHit[]>([])
+  const [source, setSource] = useState<'native' | 'youtube'>(() => (params.get('source') === 'youtube' ? 'youtube' : 'native'))
   const [loading, setLoading] = useState(false)
 
   const grouped = useMemo(() => {
@@ -30,8 +32,9 @@ export default function SearchPage() {
     const query = params.get('q')
     if (!query) return
     setLoading(true)
-    api.search(query).then((res: { hits: SearchHit[] }) => setHits(res.hits)).finally(() => setLoading(false))
-  }, [params])
+    track({ type: 'search', payload: { q: query, source } })
+    api.search(query, { source }).then((res: { hits: SearchHit[] }) => setHits(res.hits)).finally(() => setLoading(false))
+  }, [params, source])
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -50,6 +53,10 @@ export default function SearchPage() {
           placeholder="Search transcripts…"
           className="w-full rounded-md border px-3 py-2"
         />
+        <select value={source} onChange={(e) => setSource(e.target.value as any)} className="rounded-md border px-2 py-2 text-sm">
+          <option value="native">Our Transcript</option>
+          <option value="youtube">YouTube Auto-Captions</option>
+        </select>
         <button className="btn" disabled={!q || loading}>
           {loading ? 'Searching…' : 'Search'}
         </button>
@@ -68,10 +75,10 @@ export default function SearchPage() {
               <ul className="space-y-3">
                 {group.slice(0, 5).map(h => (
                   <li key={h.id} className="rounded-md border bg-gray-50 p-3">
-                    <div className="mb-1 text-sm text-gray-600">{msToTimestamp(h.start_ms)}–{msToTimestamp(h.end_ms)}</div>
+                    <div className="mb-1 text-sm text-gray-600">{msToTimestamp(h.start_ms)}–{msToTimestamp(h.end_ms)} • {source === 'native' ? 'Our Transcript' : 'YouTube'}</div>
                     <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: h.snippet }} />
                     <div className="mt-2 text-sm">
-                      <Link to={`/v/${videoId}?t=${Math.floor(h.start_ms / 1000)}#seg-${h.id}`} className="text-blue-600 hover:underline">Open at timestamp</Link>
+                      <Link to={`/v/${videoId}?t=${Math.floor(h.start_ms / 1000)}#seg-${h.id}`} className="text-blue-600 hover:underline" onClick={() => track({ type: 'result_click', payload: { videoId, start_ms: h.start_ms, id: h.id, source } })}>Open at timestamp</Link>
                       <button
                         type="button"
                         onClick={() => {

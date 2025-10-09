@@ -1,15 +1,27 @@
 import { Link, Outlet } from 'react-router-dom'
+import { useAuth } from '../services/auth'
 
 export default function AppLayout() {
+  const { user, loading, login, logout } = useAuth()
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-stone-50 text-stone-900 font-serif">
       <header className="border-b">
         <div className="mx-auto flex max-w-7xl items-center justify-between p-4">
-          <Link to="/" className="font-semibold">Transcript Search</Link>
+          <Link to="/" className="font-semibold tracking-tight">Transcript Search</Link>
           <nav className="flex items-center gap-4">
-            <Link to="/" className="text-gray-600 hover:text-gray-900">Search</Link>
-            <Link to="/favorites" className="text-gray-600 hover:text-gray-900">Favorites</Link>
-            <Link to="/login" className="text-gray-600 hover:text-gray-900">Login</Link>
+            <Link to="/" className="text-stone-600 hover:text-stone-900">Search</Link>
+            <Link to="/favorites" className="text-stone-600 hover:text-stone-900">Favorites</Link>
+            {loading ? (
+              <span className="text-stone-500">…</span>
+            ) : user ? (
+              <div className="flex items-center gap-3">
+                {user.avatar_url && <img src={user.avatar_url} alt="avatar" className="h-6 w-6 rounded-full" />}
+                <span className="text-stone-700">{user.name || user.email}</span>
+                <button onClick={logout} className="text-stone-600 hover:text-stone-900">Logout</button>
+              </div>
+            ) : (
+              <button onClick={login} className="text-stone-600 hover:text-stone-900">Login</button>
+            )}
           </nav>
         </div>
       </header>

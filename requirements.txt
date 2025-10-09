@@ -11,3 +11,4 @@ python-dotenv
 pydantic
 pydantic-settings
 requests
+Authlib

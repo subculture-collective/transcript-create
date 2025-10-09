@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { http } from './api'
 
-type User = { id: string; email?: string | null; name?: string | null; avatar_url?: string | null }
+type User = { id: string; email?: string | null; name?: string | null; avatar_url?: string | null; plan?: string | null; searches_used_today?: number | null; search_limit?: number | null }
 
 type AuthState = {
   user: User | null
   loading: boolean
   login: () => void
+  loginTwitch: () => void
   logout: () => Promise<void>
 }
 
@@ -19,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     http.get('auth/me').json<{ user: User | null }>().then(r => setUser(r.user)).finally(() => setLoading(false))
   }, [])
   return (
-    <AuthCtx.Provider value={{ user, loading, login: () => { window.location.href = '/api/auth/login/google' }, logout: async () => { await http.post('auth/logout').json().catch(() => {}); setUser(null) } }}>
+    <AuthCtx.Provider value={{ user, loading, login: () => { window.location.href = '/api/auth/login/google' }, loginTwitch: () => { window.location.href = '/api/auth/login/twitch' }, logout: async () => { await http.post('auth/logout').json().catch(() => {}); setUser(null) } }}>
       {children}
     </AuthCtx.Provider>
   )

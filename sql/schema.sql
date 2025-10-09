@@ -149,6 +149,9 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url TEXT,
     oauth_provider TEXT,
     oauth_subject TEXT,
+    plan TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT,
+    stripe_subscription_status TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (oauth_provider, oauth_subject)

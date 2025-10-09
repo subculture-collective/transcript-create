@@ -1,3 +1,4 @@
+# Admin: Set user plan
 # Transcript Create
 
 End-to-end pipeline for:
@@ -62,6 +63,9 @@ Backend (.env):
 - OAuth (Google)
   - OAUTH_GOOGLE_CLIENT_ID, OAUTH_GOOGLE_CLIENT_SECRET
   - OAUTH_GOOGLE_REDIRECT_URI: e.g., http://localhost:8000/auth/callback/google
+ - OAuth (Twitch)
+  - OAUTH_TWITCH_CLIENT_ID, OAUTH_TWITCH_CLIENT_SECRET
+  - OAUTH_TWITCH_REDIRECT_URI: e.g., http://localhost:8000/auth/callback/twitch
 
 Frontend (frontend/.env):
 
@@ -144,6 +148,28 @@ docker compose logs -f api worker db
 ```
 
 ## API Usage
+# Admin: Set user plan
+
+Admins can set a user's plan to free or pro:
+
+POST /admin/users/{user_id}/plan
+
+Body:
+
+{ "plan": "pro" }  # or "free"
+
+## Billing (Stripe)
+
+- POST `/billing/checkout-session` → returns Checkout URL
+- GET `/billing/portal` → returns Customer Portal URL
+- POST `/stripe/webhook` → handles subscription lifecycle
+
+Events:
+- checkout.session.completed, customer.subscription.created/updated: plan set to Pro when status is active or trialing.
+- customer.subscription.deleted: plan set to Free.
+
+Configure `.env` with STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, and price IDs. Success/cancel URLs default to the Pricing page unless overridden.
+
 
 Create single video job:
 

@@ -12,6 +12,8 @@ import AdminLayout from './routes/admin/AdminLayout'
 import AdminEvents from './routes/admin/AdminEvents'
 import AdminUsers from './routes/admin/AdminUsers'
 import { AuthProvider } from './services/auth'
+import PricingPage from './routes/PricingPage'
+import UpgradePage from './routes/UpgradePage'
 
 const router = createBrowserRouter([
   {
@@ -21,6 +23,8 @@ const router = createBrowserRouter([
       { index: true, element: <SearchPage /> },
       { path: 'v/:videoId', element: <VideoPage /> },
       { path: 'login', element: <LoginPage /> },
+  { path: 'pricing', element: <PricingPage /> },
+  { path: 'upgrade', element: <UpgradePage /> },
   { path: 'favorites', element: <Protected><FavoritesPage /></Protected> },
       {
         path: 'admin',

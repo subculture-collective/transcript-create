@@ -18,6 +18,7 @@ export default function SearchPage() {
   const [hits, setHits] = useState<SearchHit[]>([])
   const [source, setSource] = useState<'native' | 'youtube'>(() => (params.get('source') === 'youtube' ? 'youtube' : 'native'))
   const [loading, setLoading] = useState(false)
+  const [quotaError, setQuotaError] = useState<{ message: string; used: number; limit: number } | null>(null)
 
   const grouped = useMemo(() => {
     const g = new Map<string, SearchHit[]>()
@@ -32,8 +33,20 @@ export default function SearchPage() {
     const query = params.get('q')
     if (!query) return
     setLoading(true)
+    setQuotaError(null)
     track({ type: 'search', payload: { q: query, source } })
-    api.search(query, { source }).then((res: { hits: SearchHit[] }) => setHits(res.hits)).finally(() => setLoading(false))
+    api.search(query, { source })
+      .then((res: { hits: SearchHit[] }) => setHits(res.hits))
+      .catch(async (err: unknown) => {
+        const e = err as any
+        if (e?.response?.status === 402) {
+          const data = await e.response.json().catch(() => null)
+          if (data?.limit != null) setQuotaError({ message: data.message || 'Upgrade required', used: data.used || 0, limit: data.limit || 0 })
+        } else {
+          console.error(e)
+        }
+      })
+      .finally(() => setLoading(false))
   }, [params, source])
 
   function onSubmit(e: React.FormEvent) {
@@ -67,6 +80,13 @@ export default function SearchPage() {
 
       {q && !loading && (
         <div className="space-y-6">
+          {quotaError && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-800">
+              <div className="mb-2 font-medium">Daily search limit reached</div>
+              <div className="text-sm">You used {quotaError.used}/{quotaError.limit} searches today. Upgrade to Pro for unlimited search and exports.</div>
+              <Link to="/pricing" className="mt-2 inline-block text-blue-600 hover:underline">See pricing</Link>
+            </div>
+          )}
           {grouped.map(([videoId, group]) => (
             <div key={videoId} className="rounded-lg border p-4">
               <div className="mb-2 flex items-center justify-between">

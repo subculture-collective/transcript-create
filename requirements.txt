@@ -12,3 +12,5 @@ pydantic
 pydantic-settings
 requests
 Authlib
+stripe
+reportlab

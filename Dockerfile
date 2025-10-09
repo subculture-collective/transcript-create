@@ -25,6 +25,9 @@ PY
 
 COPY . /app
 
+# Optional: set default PDF font if present
+ENV PDF_FONT_PATH=/app/fonts/DejaVuSerif.ttf
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,7 +1,7 @@
 import { http } from './api'
 
 export type EventPayload = {
-  type: 'search' | 'result_click' | 'seek' | 'favorite_add' | 'favorite_remove' | 'video_open'
+  type: 'search' | 'result_click' | 'seek' | 'favorite_add' | 'favorite_remove' | 'video_open' | 'export_click'
   payload?: Record<string, unknown>
 }
 

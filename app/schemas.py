@@ -47,3 +47,9 @@ class SearchHit(BaseModel):
 class SearchResponse(BaseModel):
     total: Optional[int] = None  # optional for now
     hits: List[SearchHit]
+
+class VideoInfo(BaseModel):
+    id: uuid.UUID
+    youtube_id: str
+    title: Optional[str] = None
+    duration_seconds: Optional[int] = None

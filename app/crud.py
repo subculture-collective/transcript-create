@@ -21,6 +21,23 @@ def list_segments(db, video_id):
     ).all()
     return rows
 
+def get_video(db, video_id: uuid.UUID):
+    return db.execute(
+        text("SELECT id, youtube_id, title, duration_seconds FROM videos WHERE id=:v"),
+        {"v": str(video_id)}
+    ).mappings().first()
+
+def list_videos(db, limit: int = 50, offset: int = 0):
+    return db.execute(
+        text("""
+            SELECT id, youtube_id, title, duration_seconds
+            FROM videos
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+        """),
+        {"limit": limit, "offset": offset}
+    ).mappings().all()
+
 def get_youtube_transcript(db, video_id):
     return db.execute(
         text("SELECT id, language, kind, full_text FROM youtube_transcripts WHERE video_id=:v"),

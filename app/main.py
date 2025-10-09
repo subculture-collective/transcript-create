@@ -1,11 +1,12 @@
 import logging, os
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from .db import get_db
 from .settings import settings
 import requests
 from . import crud
-from .schemas import JobCreate, JobStatus, TranscriptResponse, Segment, YouTubeTranscriptResponse, YTSegment, SearchResponse, SearchHit
+from .schemas import JobCreate, JobStatus, TranscriptResponse, Segment, YouTubeTranscriptResponse, YTSegment, SearchResponse, SearchHit, VideoInfo
 import uuid
 
 logging.basicConfig(
@@ -13,6 +14,19 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s [api] %(message)s',
 )
 app = FastAPI()
+
+# Allow local dev frontends to call the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        os.environ.get("FRONTEND_ORIGIN") or "",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/jobs", response_model=JobStatus)
 def create_job(payload: JobCreate, db=Depends(get_db)):
@@ -36,6 +50,18 @@ def get_transcript(video_id: uuid.UUID, db=Depends(get_db)):
         video_id=video_id,
         segments=[Segment(start_ms=r[0], end_ms=r[1], text=r[2], speaker_label=r[3]) for r in segs]
     )
+
+@app.get("/videos/{video_id}", response_model=VideoInfo)
+def get_video_info(video_id: uuid.UUID, db=Depends(get_db)):
+    v = crud.get_video(db, video_id)
+    if not v:
+        raise HTTPException(404, "Video not found")
+    return VideoInfo(id=v["id"], youtube_id=v["youtube_id"], title=v.get("title"), duration_seconds=v.get("duration_seconds"))
+
+@app.get("/videos", response_model=list[VideoInfo])
+def list_videos(limit: int = 50, offset: int = 0, db=Depends(get_db)):
+    rows = crud.list_videos(db, limit=limit, offset=offset)
+    return [VideoInfo(id=r["id"], youtube_id=r["youtube_id"], title=r.get("title"), duration_seconds=r.get("duration_seconds")) for r in rows]
 
 @app.get("/videos/{video_id}/youtube-transcript", response_model=YouTubeTranscriptResponse)
 def get_youtube_transcript(video_id: uuid.UUID, db=Depends(get_db)):

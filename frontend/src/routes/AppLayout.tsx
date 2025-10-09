@@ -1,5 +1,5 @@
 import { Link, Outlet } from 'react-router-dom'
-import { useAuth } from '../services/auth'
+import { useAuth } from '../services'
 
 export default function AppLayout() {
   const { user, loading, login, loginTwitch, logout } = useAuth()

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { api } from '../services/api'
+import { api, track } from '../services'
 import type { SearchHit } from '../types/api'
-import { track } from '../services/analytics'
+// track imported via services barrel
 
 function msToTimestamp(ms: number) {
   const s = Math.floor(ms / 1000)

@@ -1,6 +1,5 @@
 import { useSearchParams, Link } from 'react-router-dom'
-import { useAuth } from '../services/auth'
-import { http } from '../services/api'
+import { useAuth, http } from '../services'
 
 export default function UpgradePage() {
   const { user, login } = useAuth()

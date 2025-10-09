@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { favorites } from '../services/favorites'
-import { useAuth } from '../services/auth'
-import { apiListFavorites, apiDeleteFavorite } from '../services/api'
+import { favorites, useAuth, apiListFavorites, apiDeleteFavorite } from '../services'
 
 export default function FavoritesPage() {
   const { user } = useAuth()

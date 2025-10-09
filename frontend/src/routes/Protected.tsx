@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useAuth } from '../services/auth'
+import { useAuth } from '../services'
 
 export default function Protected({ children }: { children: ReactNode }) {
   const { user, loading, login } = useAuth()

@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { api, apiAddFavorite, apiListFavorites, apiDeleteFavorite } from '../services/api'
+import { api, apiAddFavorite, apiListFavorites, apiDeleteFavorite, favorites, useAuth, track } from '../services'
 import type { Segment, TranscriptResponse, VideoInfo, SearchHit } from '../types/api'
-import { favorites } from '../services/favorites'
-import { useAuth } from '../services/auth'
-import YouTubePlayer, { type YouTubePlayerHandle } from '../components/YouTubePlayer'
-import UpgradeModal from '../components/UpgradeModal'
-import { track } from '../services/analytics'
+// favorites, useAuth imported from services barrel
+import { YouTubePlayer, UpgradeModal, ExportMenu } from '../components'
+import type { YouTubePlayerHandle } from '../components/YouTubePlayer'
+// track imported from services barrel
 
 function secondsToYouTubeTs(s: number) {
   // Converts seconds to YouTube timestamp format
@@ -149,26 +148,11 @@ export default function VideoPage() {
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-gray-500">Exports:</span>
-                <details className="relative inline-block group">
-                  <summary className="inline-flex cursor-pointer list-none rounded border px-2 py-1 hover:bg-gray-50">Export</summary>
-                  <div className="absolute z-10 mt-1 w-56 rounded border bg-white p-2 shadow-lg">
-                    <div className="mb-1 text-xs font-medium text-gray-500">Native transcript</div>
-                    <div className="flex flex-wrap gap-2">
-                      <a className="rounded border px-2 py-1 hover:bg-gray-50" onClick={(e) => { if (user?.plan !== 'pro') { e.preventDefault(); return setShowUpgrade(true) } track({ type: 'export_click', payload: { videoId, format: 'srt', source: 'native' } }) }} href={`/api/videos/${video.id}/transcript.srt`} download={`video-${video.id}.srt`}>SRT</a>
-                      <a className="rounded border px-2 py-1 hover:bg-gray-50" onClick={(e) => { if (user?.plan !== 'pro') { e.preventDefault(); return setShowUpgrade(true) } track({ type: 'export_click', payload: { videoId, format: 'vtt', source: 'native' } }) }} href={`/api/videos/${video.id}/transcript.vtt`} download={`video-${video.id}.vtt`}>VTT</a>
-                      <a className="rounded border px-2 py-1 hover:bg-gray-50" onClick={(e) => { if (user?.plan !== 'pro') { e.preventDefault(); return setShowUpgrade(true) } track({ type: 'export_click', payload: { videoId, format: 'json', source: 'native' } }) }} href={`/api/videos/${video.id}/transcript.json`} download={`video-${video.id}.json`}>JSON</a>
-                      <a className="rounded border px-2 py-1 hover:bg-gray-50" onClick={(e) => { if (user?.plan !== 'pro') { e.preventDefault(); return setShowUpgrade(true) } track({ type: 'export_click', payload: { videoId, format: 'pdf', source: 'native' } }) }} href={`/api/videos/${video.id}/transcript.pdf`} download={`video-${video.id}.pdf`}>PDF</a>
-                    </div>
-                    <div className="mt-2 mb-1 text-xs font-medium text-gray-500">YouTube captions</div>
-                    <div className="flex flex-wrap gap-2">
-                      <a className="rounded border px-2 py-1 hover:bg-gray-50" onClick={(e) => { if (user?.plan !== 'pro') { e.preventDefault(); return setShowUpgrade(true) } track({ type: 'export_click', payload: { videoId, format: 'srt', source: 'youtube' } }) }} href={`/api/videos/${video.id}/youtube-transcript.srt`} download={`video-${video.id}.youtube.srt`}>SRT</a>
-                      <a className="rounded border px-2 py-1 hover:bg-gray-50" onClick={(e) => { if (user?.plan !== 'pro') { e.preventDefault(); return setShowUpgrade(true) } track({ type: 'export_click', payload: { videoId, format: 'vtt', source: 'youtube' } }) }} href={`/api/videos/${video.id}/youtube-transcript.vtt`} download={`video-${video.id}.youtube.vtt`}>VTT</a>
-                      <a className="rounded border px-2 py-1 hover:bg-gray-50" onClick={(e) => { if (user?.plan !== 'pro') { e.preventDefault(); return setShowUpgrade(true) } track({ type: 'export_click', payload: { videoId, format: 'json', source: 'youtube' } }) }} href={`/api/videos/${video.id}/youtube-transcript.json`} download={`video-${video.id}.youtube.json`}>JSON</a>
-                    </div>
-                    <div className="mt-2 mb-1 text-xs font-medium text-gray-500">Per-section</div>
-                    <div className="text-xs text-gray-600">Use the inline copy link next to any segment, or select text to build a custom pack (coming soon).</div>
-                  </div>
-                </details>
+                <ExportMenu
+                  videoId={video.id}
+                  isPro={user?.plan === 'pro'}
+                  onRequireUpgrade={() => setShowUpgrade(true)}
+                />
               </div>
             </>
           )}

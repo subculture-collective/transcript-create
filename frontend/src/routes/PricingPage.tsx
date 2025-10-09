@@ -1,7 +1,7 @@
-import { http } from '../services/api'
+import { http, useAuth } from '../services'
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useAuth } from '../services/auth'
+// useAuth imported via services barrel
 export default function PricingPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()

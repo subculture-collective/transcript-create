@@ -1,318 +1,243 @@
-# Admin: Set user plan
+<img src="public/icon.png" alt="Logo" width="64" height="64" align="right" />
+
 # Transcript Create
 
-End-to-end pipeline for:
+Create searchable, exportable transcripts from YouTube videos or channels. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
 
-1. Accepting YouTube URL (single video or entire channel)
-2. Downloading and converting audio to 16 kHz mono WAV
-3. Chunking long audio
-4. Transcribing with Whisper (ROCm GPU) via `faster-whisper`
-5. Speaker diarization with `pyannote.audio`
-6. Aligning speakers to Whisper segments
-7. Persisting full transcript and segments into PostgreSQL
-8. Querying status and transcript via FastAPI
+## Highlights
 
-## Architecture
+- Ingest a single video or entire channel with yt-dlp
+- Transcribe with Whisper large-v3 (GPU preferred) and optional speaker diarization
+- Long-audio chunking with automatic time-offset merging
+- YouTube auto-captions ingestion to compare vs native transcripts
+- Full-text search across native or YouTube captions (Postgres FTS or OpenSearch)
+- Exports: SRT, VTT, JSON (native and YouTube), plus pretty PDF with headers/footers
+- OAuth login (Google, Twitch), favorites, admin analytics
+- Monetization-ready: free vs pro plans, daily limits, Stripe checkout/portal/webhook
+- Horizontal-safe worker queue using Postgres SKIP LOCKED
 
--   **API**: FastAPI (`/jobs`, `/jobs/{id}`, `/videos/{video_id}/transcript`)
--   **Queue**: PostgreSQL tables (`jobs`, `videos`) using `SELECT ... FOR UPDATE SKIP LOCKED` for job locking.
--   **Worker**: Polls pending videos, processes pipeline stages, updates states.
--   **Storage**: PostgreSQL for metadata, transcripts, segments. (Audio files stored on a mounted volume at `/data` inside container.)
--   **Models**: `faster-whisper` large-v3, `pyannote/speaker-diarization`.
+## Architecture (at a glance)
 
-## Database Schema
+- API (FastAPI): modular routers for auth, billing, jobs, videos, favorites, events, admin, search, exports
+- Database (PostgreSQL): `jobs`, `videos`, `transcripts`, `segments`, plus YouTube captions tables
+- Worker: selects one pending video with `FOR UPDATE SKIP LOCKED`, runs the pipeline, updates status
+- Optional: OpenSearch for richer search and highlighting
+- Frontend (Vite + React + Tailwind): search/group-by-video, timestamp deep links, export menu, pricing/upgrade flow
 
-See `sql/schema.sql`.
+Why this design: a DB-backed queue keeps infra light while enabling scale-out workers. Chunking manages memory/runtime; diarization runs post-process for coherent speakers across the whole audio.
 
-Apply schema locally:
+## Quickstart
 
-```bash
-psql $DATABASE_URL -f sql/schema.sql
-```
-
-## Environment
-
-Create `.env` from example:
+1) Copy env and fill basics
 
 ```bash
 cp .env.example .env
-# Edit HF_TOKEN for pyannote access
+# Required for local dev: set a random SESSION_SECRET
+# Optional: FRONTEND_ORIGIN (defaults to http://localhost:5173), HF_TOKEN for diarization
+# Billing/auth can be added later; see sections below
 ```
 
-### Environment variables overview
-
-Backend (.env):
-
-- Core/worker
-  - DATABASE_URL: Postgres URL (with psycopg driver)
-  - HF_TOKEN: Optional, enables diarization models
-  - WHISPER_MODEL: Model name (e.g., large-v3)
-  - WHISPER_BACKEND: faster-whisper (default) or whisper
-  - CHUNK_SECONDS: Chunk size for long audio (seconds)
-  - MAX_PARALLEL_JOBS: Concurrency in worker
-  - ROCM: true to enable ROCm-specific behavior in Docker image
-  - CLEANUP_*: Cleanup toggles for media artifacts
-- Search
-  - SEARCH_BACKEND: postgres or opensearch
-  - OPENSEARCH_URL, OPENSEARCH_INDEX_NATIVE, OPENSEARCH_INDEX_YOUTUBE
-  - OPENSEARCH_USER, OPENSEARCH_PASSWORD (if security enabled)
-- API/Frontend integration
-  - FRONTEND_ORIGIN: e.g., http://localhost:5173 for dev CORS
-  - SESSION_SECRET: Random string for session cookie signing
-  - ADMIN_EMAILS: Comma-separated admin emails for /admin
-- OAuth (Google)
-  - OAUTH_GOOGLE_CLIENT_ID, OAUTH_GOOGLE_CLIENT_SECRET
-  - OAUTH_GOOGLE_REDIRECT_URI: e.g., http://localhost:8000/auth/callback/google
- - OAuth (Twitch)
-  - OAUTH_TWITCH_CLIENT_ID, OAUTH_TWITCH_CLIENT_SECRET
-  - OAUTH_TWITCH_REDIRECT_URI: e.g., http://localhost:8000/auth/callback/twitch
-
-Frontend (frontend/.env):
-
-- VITE_API_BASE: Override API base URL for the web app (optional; defaults to http://localhost:8000 in dev)
-
-## Running Locally (Host Python)
-
-Install dependencies (recommend venv):
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Run API:
-
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-Run worker:
-
-```bash
-python -m worker.loop
-```
-
-## Docker (ROCm)
-
-Build image:
-
-```bash
-docker build -t transcript-create:latest .
-```
-
-Run API container (mount data + pass devices):
-
-```bash
-docker run --rm -it \
-  --device /dev/kfd --device /dev/dri --group-add video \
-  --env-file .env \
-  -v $(pwd)/data:/data \
-  -p 8000:8000 \
-  transcript-create:latest
-```
-
-Start worker (second container sharing volume & env):
-
-```bash
-docker run --rm -it \
-  --device /dev/kfd --device /dev/dri --group-add video \
-  --env-file .env \
-  -v $(pwd)/data:/data \
-  transcript-create:latest \
-  python -m worker.loop
-```
-
-### Docker Compose (recommended)
-
-Start the full stack (PostgreSQL, API, worker) with ROCm device passthrough:
+2) Start services with Docker Compose (Postgres + API + Worker; OpenSearch optional)
 
 ```bash
 docker compose build
 docker compose up -d
 ```
 
-The API will be at <http://localhost:8000> and the database at db:5432 inside the network. Volume `./data` is mounted at `/data` inside the containers. The schema is applied automatically on first DB startup.
-
-If your host ROCm version isn’t 6.0, set the build arg when building:
+- API available at http://localhost:8000
+- Postgres exposed on host port 5434 (inside network: db:5432)
+- If your host ROCm version ≠ 6.0, use a different build arg, e.g.:
 
 ```bash
 docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.1
 docker compose up -d
 ```
 
-Check logs:
+3) Start the frontend (separate terminal)
 
 ```bash
-docker compose logs -f api worker db
+cd frontend
+npm install
+npm run dev
 ```
 
-## API Usage
-# Admin: Set user plan
+Open http://localhost:5173.
 
-Admins can set a user's plan to free or pro:
-
-POST /admin/users/{user_id}/plan
-
-Body:
-
-{ "plan": "pro" }  # or "free"
-
-## Billing (Stripe)
-
-- POST `/billing/checkout-session` → returns Checkout URL
-- GET `/billing/portal` → returns Customer Portal URL
-- POST `/stripe/webhook` → handles subscription lifecycle
-
-Events:
-- checkout.session.completed, customer.subscription.created/updated: plan set to Pro when status is active or trialing.
-- customer.subscription.deleted: plan set to Free.
-
-Configure `.env` with STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, and price IDs. Success/cancel URLs default to the Pricing page unless overridden.
-
-
-Create single video job:
+4) Ingest a video
 
 ```bash
-curl -X POST http://localhost:8000/jobs \
+curl -s -X POST http://localhost:8000/jobs \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://www.youtube.com/watch?v=VIDEOID","kind":"single"}'
 ```
 
-Check job:
+Check status and fetch transcript when complete (see API section below).
 
-```bash
-curl http://localhost:8000/jobs/JOB_UUID
+## Repository layout
+
+- Backend: `app/` (routers in `app/routes/`, settings in `app/settings.py`)
+- Worker: `worker/` (pipeline + whisper runner + diarization)
+- Frontend: `frontend/` (Vite + React + Tailwind)
+- SQL schema: `sql/schema.sql` (auto-applied on first compose up)
+- Data storage: `data/VIDEO_UUID/` mounted as `/data` in containers
+- OpenSearch analysis: `config/opensearch/analysis/`
+
+## Pipeline overview
+
+1. Fetch metadata and download audio (yt-dlp)
+2. Ensure 16 kHz mono WAV via ffmpeg
+3. Chunk long audio (`CHUNK_SECONDS`, default 900s)
+4. Transcribe each chunk (Whisper CT2 or PyTorch)
+5. Optional diarization and alignment (pyannote) if `HF_TOKEN` is set
+6. Persist one `transcripts` row and many `segments` rows; mark video `completed`
+
+States progress from `downloading` → `transcoding` → `transcribing` → `completed` or `failed`. Worker requeues stalled videos based on `RESCUE_STUCK_AFTER_SECONDS`.
+
+## Search backends
+
+Single endpoint for both native or YouTube captions:
+
+```
+GET /search?q=hello&source=native|youtube
 ```
 
-Transcript:
+- Postgres FTS: `SEARCH_BACKEND=postgres` (GIN indices and triggers included in `sql/schema.sql`)
+- OpenSearch: `SEARCH_BACKEND=opensearch` (indices with synonyms/n-grams set up by the indexer script)
 
-```bash
-curl http://localhost:8000/videos/VIDEO_UUID/transcript
-```
-
-YouTube auto-captions (if available):
-
-```bash
-# JSON (merged segments with speaker if diarized)
-curl http://localhost:8000/videos/VIDEO_UUID/youtube-transcript
-
-# SRT and VTT exports
-curl http://localhost:8000/videos/VIDEO_UUID/youtube-transcript.srt
-curl http://localhost:8000/videos/VIDEO_UUID/youtube-transcript.vtt
-```
-
-## Long Video Chunking
-
-Configured via `CHUNK_SECONDS` (default 900). Each chunk transcribed; timestamps offset and merged. Diarization runs once on full WAV for coherent speakers.
-
-## Notes / Next Steps
-
--   Add retry/backoff logic per stage (currently single attempt)
--   Add language auto-detection (we assume English now)
--   Cache pyannote model across processes (presently per-process load)
--   Observability: add logging + metrics
--   Security: validate input URLs and limit channel expansion size
--   Consider using migrations tool (Alembic) instead of raw SQL for evolutions
-
-### Force GPU mode for faster-whisper
-
-If you want to guarantee the model runs on GPU (CUDA or ROCm HIP) and never fall back to CPU, set:
-
-```env
-FORCE_GPU=true
-# Optionally tune the order we try backends and compute types:
-GPU_DEVICE_PREFERENCE=cuda,hip
-GPU_COMPUTE_TYPES=float16,int8_float16,bfloat16,float32
-# And allow model size fallbacks to reduce VRAM pressure:
-GPU_MODEL_FALLBACKS=large-v3,medium,small,base,tiny
-```
-
-Behavior:
-
--   The worker will try each combination of backend and compute type in order for the primary `WHISPER_MODEL`.
--   If loading fails (e.g., out of memory), it tries the next model in `GPU_MODEL_FALLBACKS`.
--   If none of the GPU combinations succeed, the job fails fast instead of silently using CPU.
-
-## YouTube Auto Captions Ingestion
-
-This project automatically fetches YouTube auto-captions (when available) as an early pre-processing step. Captions are stored separately from native Whisper transcripts so you can compare or search either source.
-
-- Tables: `youtube_transcripts` (one per video, with `full_text`) and `youtube_segments` (one per caption segment).
-- Worker fetches JSON3 captions first, falling back to VTT; both are normalized into segments with `start_ms`, `end_ms`, and `text`.
-- Endpoints: see the API Usage section above for JSON/SRT/VTT routes.
-
-Backfill captions for existing videos:
-
-```bash
-python scripts/backfill_youtube_captions.py --batch 200
-```
-
-Idempotent: it only inserts when missing (or replaces cleanly per video).
-
-## Search Backends (Postgres FTS or OpenSearch)
-
-You can search across native Whisper segments or YouTube auto-captions via a single endpoint:
-
-```bash
-GET /search?q=your+query&source=native|youtube
-```
-
-Two interchangeable backends are supported and selected via `.env`:
-
-- `SEARCH_BACKEND=postgres` uses PostgreSQL FTS with `tsvector` columns, triggers, and GIN indexes.
-- `SEARCH_BACKEND=opensearch` uses OpenSearch with rich analyzers (English stem/stop, synonyms, n-grams, edge n-grams, shingles) and highlighting.
-
-### Postgres FTS setup
-
-FTS schema is defined in `sql/schema.sql` and applied automatically on first compose up. If applying manually, run:
-
-```bash
-psql $DATABASE_URL -f sql/schema.sql
-```
-
-Backfill `tsvector` for existing rows:
+Indexer examples:
 
 ```bash
 python scripts/backfill_fts.py --batch 500 --until-empty
+python scripts/opensearch_indexer.py --recreate --batch 5000 --bulk-docs 1000 --refresh-off
 ```
 
-### OpenSearch (local, CPU-only)
+## Exports
 
-Docker Compose includes OpenSearch and Dashboards for local development with security disabled. Start as part of the stack:
+- Native: `/videos/{id}/transcript.(json|srt|vtt|pdf)`
+- YouTube captions: `/videos/{id}/youtube-transcript.(json|srt|vtt)`
+
+PDF export uses ReportLab with a serif font (set via `PDF_FONT_PATH`) and includes headers/footers/metadata. Export requests are logged for analytics. Free plans may be gated by daily limits; HTML requests to gated endpoints redirect to an upgrade route.
+
+## Authentication and plans
+
+- OAuth providers: Google and Twitch
+- Session cookie with server-side lookup; `/auth/me` returns plan/quota
+- Admins (by email) can view analytics and set user plans
+- Free vs Pro: configurable daily limits for search and exports
+
+Frontend includes a pricing/upgrade flow and an interstitial upgrade page that returns users to their original destination after upgrading.
+
+## Billing (Stripe)
+
+Endpoints
+
+- `POST /billing/checkout-session` → returns a Checkout URL
+- `GET  /billing/portal` → returns a Customer Portal URL
+- `POST /stripe/webhook` → subscription lifecycle (set plan to Pro on active/trialing; revert to Free on cancellation)
+
+Environment
+
+- `STRIPE_API_KEY` = `sk_...`
+- `STRIPE_PRICE_PRO_MONTHLY` / `STRIPE_PRICE_PRO_YEARLY` = `price_...`
+- `STRIPE_WEBHOOK_SECRET` = `whsec_...`
+- `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` use `{origin}` which resolves to `FRONTEND_ORIGIN`
+
+Tip: For local testing, use Stripe CLI to forward events to `http://localhost:8000/stripe/webhook` and create a Checkout session from the Pricing page or via the API.
+
+## API reference (selected)
+
+Jobs
+
+- `POST /jobs` → `{ url: string, kind: "single"|"channel" }` → enqueues
+- `GET /jobs/{id}` → status
+
+Videos
+
+- `GET /videos/{id}` → details
+- `GET /videos/{id}/transcript` → merged segments (JSON)
+- `GET /videos/{id}/transcript.(srt|vtt|pdf)`
+- `GET /videos/{id}/youtube-transcript.(json|srt|vtt)`
+
+Search
+
+- `GET /search?q=...&source=native|youtube` → grouped hits with timestamps and highlights
+
+Admin
+
+- `POST /admin/users/{user_id}/plan` body `{ "plan": "free"|"pro" }`
+- `GET /admin/events` / `/admin/events.csv` / `/admin/events/summary`
+
+Billing
+
+- `POST /billing/checkout-session` (body can include `period: "monthly"|"yearly"`)
+- `GET /billing/portal`
+
+Auth
+
+- `GET /auth/me`, `GET /auth/login/google`, `GET /auth/login/twitch`, callbacks, `POST /auth/logout`
+
+All endpoints return structured JSON or a redirect/byte stream where applicable. See `app/routes/` for full definitions.
+
+## Environment configuration
+
+The backend reads `.env` via `pydantic-settings` in `app/settings.py`. Highlights:
+
+- Core: `DATABASE_URL`, `SESSION_SECRET`, `FRONTEND_ORIGIN`, `ADMIN_EMAILS`
+- Whisper/GPU: `WHISPER_BACKEND`, `WHISPER_MODEL`, `FORCE_GPU`, `GPU_DEVICE_PREFERENCE` (e.g., `hip,cuda`), `GPU_COMPUTE_TYPES`, `GPU_MODEL_FALLBACKS`
+- Chunking/cleanup: `CHUNK_SECONDS`, `CLEANUP_*`, `RESCUE_STUCK_AFTER_SECONDS`
+- Diarization: `HF_TOKEN` (optional)
+- Search: `SEARCH_BACKEND`, `OPENSEARCH_*`
+- Quotas/plans: `FREE_DAILY_SEARCH_LIMIT`, `FREE_DAILY_EXPORT_LIMIT`, `PRO_PLAN_NAME`
+- PDF: `PDF_FONT_PATH`
+- Stripe: as listed in the Billing section above
+
+Frontend env: `frontend/.env` supports `VITE_API_BASE` to point the web app at a non-default API origin.
+
+Consult `.env.example` for a complete list and defaults. Compose sets `DATABASE_URL` to the internal `db` service automatically.
+
+## Running without Docker (dev)
 
 ```bash
-docker compose up -d
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Terminal 1 – API
+uvicorn app.main:app --reload --port 8000
+
+# Terminal 2 – Worker
+python -m worker.loop
+
+# Terminal 3 – Frontend
+cd frontend && npm install && npm run dev
 ```
 
-Relevant `.env` settings (defaults exist):
+## GPU notes (ROCm/CUDA)
 
-```env
-SEARCH_BACKEND=opensearch
-OPENSEARCH_URL=http://localhost:9200
-OPENSEARCH_INDEX_NATIVE=segments
-OPENSEARCH_INDEX_YOUTUBE=youtube_segments
-```
+- Compose passes `/dev/kfd` and `/dev/dri` and adds the `video` group for ROCm
+- Set `GPU_DEVICE_PREFERENCE=hip,cuda` to try ROCm first, then CUDA, or vice versa
+- To force GPU and fail fast when not available: `FORCE_GPU=true`
+- If VRAM is tight, reduce `WHISPER_MODEL` or set `GPU_MODEL_FALLBACKS`
 
-Synonyms are managed in `config/opensearch/analysis/synonyms.txt` and mounted into the container; indices reference this file via `synonyms_path`.
+## OpenSearch (optional)
 
-Index or reindex data from Postgres into OpenSearch:
+- Compose includes OpenSearch and Dashboards on ports 9200/5601 with security disabled for local dev
+- Configure `SEARCH_BACKEND=opensearch` and run `scripts/opensearch_indexer.py` to create/populate indices
+- Synonyms live in `config/opensearch/analysis/synonyms.txt`
 
-```bash
-python scripts/opensearch_indexer.py \
-  --recreate \
-  --batch 5000 \
-  --bulk-docs 1000 \
-  --refresh-off
-```
+## Troubleshooting
 
-Notes:
+- Worker fails to start on GPU: verify ROCm drivers; try a different `ROCM_WHEEL_INDEX` build arg; set `FORCE_GPU=false` to allow CPU fallback when using `faster-whisper`
+- 402 responses on export/search: expected for Free plan beyond quotas; upgrade or adjust limits in `.env`
+- Webhook not firing: ensure `STRIPE_WEBHOOK_SECRET` matches and that Stripe CLI or a public URL forwards to `/stripe/webhook`
+- CORS: set `FRONTEND_ORIGIN` to your web app origin
+- Schema: Compose auto-applies `sql/schema.sql`; to re-apply manually: `psql $DATABASE_URL -f sql/schema.sql`
 
-- `--recreate` drops and recreates indices with the latest analyzers/mappings.
-- `--bulk-docs` controls the size of each bulk request; tune to avoid 429 throttling.
-- `--refresh-off` speeds up bulk loads by disabling refresh and making translog asynchronous during indexing; the tool restores defaults afterwards.
+## Contributing
 
-With OpenSearch selected, `/search` automatically runs boosted multi-field queries (including phrase and prefix variants) and returns highlighted matches.
+- Code structure: see `app/routes/*`, `worker/*`, and `frontend/src/*`
+- Style: prefer SQLAlchemy Core and parameterized SQL; keep worker idempotent and stateful via DB
+- Small PRs welcome; please include minimal repro steps and note any env additions
 
 ## License
 

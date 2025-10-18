@@ -1,16 +1,33 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-psycopg[binary]
-yt-dlp
-faster-whisper
-openai-whisper
-pyannote.audio
-numpy
-python-dotenv
-pydantic
-pydantic-settings
-requests
-Authlib
-stripe
-reportlab
+# Core API framework
+fastapi==0.119.0
+uvicorn[standard]==0.38.0
+
+# Database
+sqlalchemy==2.0.44
+psycopg[binary]==3.2.10
+
+# YouTube and media processing
+yt-dlp==2025.10.14
+
+# Whisper transcription backends
+faster-whisper==1.2.0
+openai-whisper==20250625
+
+# Speaker diarization (optional, requires HF_TOKEN)
+pyannote.audio==4.0.1
+
+# Core dependencies
+numpy==2.3.4
+python-dotenv==1.1.1
+pydantic==2.12.3
+pydantic-settings==2.11.0
+requests==2.32.5
+
+# Authentication
+Authlib==1.6.5
+
+# Billing
+stripe==13.0.1
+
+# PDF export
+reportlab==4.4.4

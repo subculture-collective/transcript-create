@@ -1,9 +1,10 @@
 import json
 import logging
 import subprocess
-from urllib.request import urlopen, Request
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+from urllib.request import Request, urlopen
+
 
 @dataclass
 class YTSegment:

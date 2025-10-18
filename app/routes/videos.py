@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
-from ..db import get_db
-from .. import crud
-from ..schemas import TranscriptResponse, Segment, VideoInfo, YouTubeTranscriptResponse, YTSegment
 import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from .. import crud
+from ..db import get_db
+from ..schemas import Segment, TranscriptResponse, VideoInfo, YouTubeTranscriptResponse, YTSegment
 
 router = APIRouter()
 

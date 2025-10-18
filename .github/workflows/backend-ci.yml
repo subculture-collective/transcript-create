@@ -1,0 +1,98 @@
+name: Backend CI - Lint & Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'worker/**'
+      - '*.py'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'worker/**'
+      - '*.py'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  lint-and-format:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black mypy
+          pip install -r requirements.txt
+
+      - name: Run ruff check
+        run: |
+          ruff check app/ worker/ --output-format=github
+
+      - name: Run black check
+        run: |
+          black --check app/ worker/
+
+      - name: Run mypy type check
+        run: |
+          mypy app/ worker/
+        continue-on-error: true  # Don't fail the build for mypy initially
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit bandit[toml]
+          pip install -r requirements.txt
+
+      - name: Run pip-audit for dependency vulnerabilities
+        run: |
+          pip-audit --desc --skip-editable
+        continue-on-error: true  # Don't fail on vulnerabilities initially
+
+      - name: Run bandit for code security issues
+        run: |
+          bandit -r app/ worker/ -f json -o bandit-report.json || true
+          bandit -r app/ worker/ -f screen
+        continue-on-error: true  # Don't fail on security issues initially
+
+      - name: Upload bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+          retention-days: 30

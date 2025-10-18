@@ -1,5 +1,6 @@
 import logging
 import os
+
 from app.settings import settings
 
 _pipeline = None
@@ -41,7 +42,7 @@ def diarize_and_align(wav_path, whisper_segments):
             return whisper_segments
         logging.info("Running diarization on %s", wav_path)
         # pyannote Pipeline accepts raw path or dict with key 'audio'
-        diar = pipe({"audio": str(wav_path)}) if hasattr(pipe, "__call__") else pipe(str(wav_path))
+        diar = pipe({"audio": str(wav_path)}) if callable(pipe) else pipe(str(wav_path))
         diar_list = []
         # itertracks(yield_label=True) yields (segment, track, label)
         label_first_time = {}

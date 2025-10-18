@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text as _text
+
+from ..common.session import get_session_token as _get_session_token
+from ..common.session import get_user_from_session as _get_user_from_session
 from ..db import get_db
-from ..common.session import get_session_token as _get_session_token, get_user_from_session as _get_user_from_session
 
 router = APIRouter()
 

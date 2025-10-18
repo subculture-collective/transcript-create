@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
-from ..db import get_db
-from .. import crud
-from ..schemas import JobCreate, JobStatus
-from sqlalchemy import text
 import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from .. import crud
+from ..db import get_db
+from ..schemas import JobCreate, JobStatus
 
 router = APIRouter()
 

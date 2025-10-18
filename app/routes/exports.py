@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -6,20 +7,19 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy import text
-
-from ..db import get_db
-from ..settings import settings
-from .. import crud
-from ..common.session import get_session_token, get_user_from_session, is_admin
-
-from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from sqlalchemy import text
+
+from .. import crud
+from ..common.session import get_session_token, get_user_from_session, is_admin
+from ..db import get_db
+from ..settings import settings
 
 router = APIRouter()
 
@@ -215,7 +215,7 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
 
 @router.get("/videos/{video_id}/transcript.pdf")
 def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
-    user = _get_user_from_session(db, _get_session_token(request))
+    user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
     )

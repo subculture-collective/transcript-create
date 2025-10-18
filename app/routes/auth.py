@@ -1,11 +1,17 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
-from fastapi.responses import RedirectResponse, JSONResponse
-from sqlalchemy import text
-import uuid, secrets
+import secrets
+import uuid
 from datetime import datetime, timedelta
-from ..settings import settings
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy import text
+
+from ..common.session import clear_session_cookie as _clear_session_cookie
+from ..common.session import get_session_token as _get_session_token
+from ..common.session import get_user_from_session as _get_user_from_session
+from ..common.session import set_session_cookie as _set_session_cookie
 from ..db import get_db
-from ..common.session import get_session_token as _get_session_token, set_session_cookie as _set_session_cookie, clear_session_cookie as _clear_session_cookie, get_user_from_session as _get_user_from_session
+from ..settings import settings
 
 try:
     from authlib.integrations.starlette_client import OAuth

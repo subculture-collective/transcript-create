@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
+import stripe
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import text
+
+from ..common.session import get_session_token as _get_session_token
+from ..common.session import get_user_from_session as _get_user_from_session
 from ..db import get_db
 from ..settings import settings
-from ..common.session import get_session_token as _get_session_token, get_user_from_session as _get_user_from_session
-from sqlalchemy import text
-import stripe
 
 router = APIRouter()
 stripe.api_key = settings.STRIPE_API_KEY or None
@@ -16,8 +18,8 @@ def create_checkout_session(payload: dict, request: Request, db=Depends(get_db))
     if not user:
         raise HTTPException(401)
     period = (payload.get("period") or "").lower()
-    price_id = payload.get("price_id") or (settings.STRIPE_PRICE_PRO_YEARLY if period == 'yearly' and settings.STRIPE_PRICE_PRO_YEARLY else settings.STRIPE_PRICE_PRO_MONTHLY)
-    origin = settings.FRONTEND_ORIGIN.rstrip('/')
+    price_id = payload.get("price_id") or (settings.STRIPE_PRICE_PRO_YEARLY if period == "yearly" and settings.STRIPE_PRICE_PRO_YEARLY else settings.STRIPE_PRICE_PRO_MONTHLY)
+    origin = settings.FRONTEND_ORIGIN.rstrip("/")
     success_url_t = (settings.STRIPE_SUCCESS_URL or f"{origin}/pricing?success=1").replace("{origin}", origin)
     cancel_url_t = (settings.STRIPE_CANCEL_URL or f"{origin}/pricing?canceled=1").replace("{origin}", origin)
     customer_id = user.get("stripe_customer_id")
@@ -46,7 +48,7 @@ def billing_portal(request: Request, db=Depends(get_db)):
         raise HTTPException(401)
     if not user.get("stripe_customer_id"):
         raise HTTPException(400, "No Stripe customer")
-    origin = settings.FRONTEND_ORIGIN.rstrip('/')
+    origin = settings.FRONTEND_ORIGIN.rstrip("/")
     portal = stripe.billing_portal.Session.create(customer=user["stripe_customer_id"], return_url=f"{origin}/pricing")
     return {"url": portal.url}
 

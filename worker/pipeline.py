@@ -1,13 +1,15 @@
 import json
-import subprocess
 import logging
+import subprocess
 import time
 from pathlib import Path
+
 from sqlalchemy import text
+
 from app.settings import settings
-from worker.audio import download_audio, ensure_wav_16k, chunk_audio
-from worker.whisper_runner import transcribe_chunk
+from worker.audio import chunk_audio, download_audio, ensure_wav_16k
 from worker.diarize import diarize_and_align
+from worker.whisper_runner import transcribe_chunk
 from worker.youtube_captions import fetch_youtube_auto_captions
 
 WORKDIR = Path("/data")  # mount volume externally
@@ -161,6 +163,35 @@ def process_video(engine, video_id):
         logging.info("Marking video %s completed", video_id)
         conn.execute(text("UPDATE videos SET state='completed', updated_at=now() WHERE id=:i"), {"i": video_id})
 
+    # Cleanup large intermediates if configured
+    if settings.CLEANUP_AFTER_PROCESS:
+        try:
+            removed = []
+            # Delete chunk files
+            if settings.CLEANUP_DELETE_CHUNKS:
+                for p in dest_dir.glob("chunk_*.wav"):
+                    p.unlink(missing_ok=True)
+                    removed.append(p.name)
+            # Delete wav
+            if settings.CLEANUP_DELETE_WAV and wav_path.exists():
+                wav_path.unlink(missing_ok=True)
+                removed.append(Path(wav_path).name)
+            # Delete raw
+            if settings.CLEANUP_DELETE_RAW and raw_path.exists():
+                raw_path.unlink(missing_ok=True)
+                removed.append(Path(raw_path).name)
+            # Remove dir if empty
+            if settings.CLEANUP_DELETE_DIR_IF_EMPTY:
+                try:
+                    next(dest_dir.iterdir())
+                except StopIteration:
+                    dest_dir.rmdir()
+                    removed.append(f"dir:{dest_dir.name}")
+            logging.info("Cleanup removed: %s", ", ".join(removed) if removed else "nothing")
+        except Exception as e:
+            logging.warning("Cleanup encountered an error: %s", e)
+    logging.info("process_video end %s (%.2fs)", video_id, time.time() - t0)
+
     # YouTube captions are handled by a pre-processing loop step; see capture_youtube_captions_for_unprocessed
 
 def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
@@ -209,31 +240,3 @@ def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
         except Exception as e:
             logging.warning("YouTube captions fetch failed for %s: %s", yid, e)
     return processed
-    # Cleanup large intermediates if configured
-    if settings.CLEANUP_AFTER_PROCESS:
-        try:
-            removed = []
-            # Delete chunk files
-            if settings.CLEANUP_DELETE_CHUNKS:
-                for p in dest_dir.glob("chunk_*.wav"):
-                    p.unlink(missing_ok=True)
-                    removed.append(p.name)
-            # Delete wav
-            if settings.CLEANUP_DELETE_WAV and wav_path.exists():
-                wav_path.unlink(missing_ok=True)
-                removed.append(Path(wav_path).name)
-            # Delete raw
-            if settings.CLEANUP_DELETE_RAW and raw_path.exists():
-                raw_path.unlink(missing_ok=True)
-                removed.append(Path(raw_path).name)
-            # Remove dir if empty
-            if settings.CLEANUP_DELETE_DIR_IF_EMPTY:
-                try:
-                    next(dest_dir.iterdir())
-                except StopIteration:
-                    dest_dir.rmdir()
-                    removed.append(f"dir:{dest_dir.name}")
-            logging.info("Cleanup removed: %s", ", ".join(removed) if removed else "nothing")
-        except Exception as e:
-            logging.warning("Cleanup encountered an error: %s", e)
-    logging.info("process_video end %s (%.2fs)", video_id, time.time() - t0)

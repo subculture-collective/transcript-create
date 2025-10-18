@@ -1,9 +1,13 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text as _text
+
+from ..common.session import get_session_token as _get_session_token
+from ..common.session import get_user_from_session as _get_user_from_session
+from ..common.session import is_admin as _is_admin
 from ..db import get_db
-from ..common.session import get_session_token as _get_session_token, get_user_from_session as _get_user_from_session, is_admin as _is_admin
-import uuid
 
 router = APIRouter()
 
@@ -52,8 +56,8 @@ def admin_events_csv(request: Request, db=Depends(get_db), type: str | None = No
     params["limit"] = limit; params["offset"] = offset
     rows = db.execute(_text(sql), params).all()
     def esc(x):
-        s = str(x) if x is not None else ''
-        if any(c in s for c in [',','"','\n']):
+        s = str(x) if x is not None else ""
+        if any(c in s for c in [",",'"',"\n"]):
             s = '"' + s.replace('"','""') + '"'
         return s
     header = "id,created_at,user_id,session_token,type,payload\n"

@@ -1,5 +1,7 @@
-from sqlalchemy import text
 import uuid
+
+from sqlalchemy import text
+
 
 def create_job(db, kind: str, url: str):
     job_id = uuid.uuid4()

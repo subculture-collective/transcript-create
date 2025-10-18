@@ -1,7 +1,9 @@
 import logging
 import os
-import torch
 import warnings
+
+import torch
+
 from app.settings import settings
 
 # Suppress PyTorch weights_only FutureWarning for trusted Whisper models
@@ -36,7 +38,7 @@ def _try_load_torch(model_name: str, force_gpu: bool):
         raise RuntimeError("FORCE_GPU is true but torch.cuda is not available")
     device = torch.device("cuda" if use_cuda else "cpu")
     logging.info("Loading openai-whisper '%s' on device=%s", model_name, device)
-    
+
     # Suppress weights_only FutureWarning for trusted OpenAI models
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*weights_only.*")
@@ -52,9 +54,9 @@ def _get_model():
         else:
             # faster-whisper (CTranslate2) path
             if settings.FORCE_GPU:
-                devices = [d.strip() for d in settings.GPU_DEVICE_PREFERENCE.split(',') if d.strip()]
-                compute_types = [c.strip() for c in settings.GPU_COMPUTE_TYPES.split(',') if c.strip()]
-                models = [m.strip() for m in settings.GPU_MODEL_FALLBACKS.split(',') if m.strip()]
+                devices = [d.strip() for d in settings.GPU_DEVICE_PREFERENCE.split(",") if d.strip()]
+                compute_types = [c.strip() for c in settings.GPU_COMPUTE_TYPES.split(",") if c.strip()]
+                models = [m.strip() for m in settings.GPU_MODEL_FALLBACKS.split(",") if m.strip()]
                 if settings.WHISPER_MODEL not in models:
                     models.insert(0, settings.WHISPER_MODEL)
                 else:
@@ -117,24 +119,24 @@ def transcribe_chunk(wav_path):
         os.environ.setdefault("PYTORCH_SDP_DISABLE_FLASH_ATTENTION", "1")
         os.environ.setdefault("PYTORCH_SDP_DISABLE_MEM_EFFICIENT_ATTENTION", "1")
         os.environ.setdefault("PYTORCH_SDP_DISABLE_FUSED_ATTENTION", "1")
-        
+
         # Use new PyTorch API (torch.nn.attention.sdpa_kernel) with fallback for older versions
         try:
-            from torch.nn.attention import sdpa_kernel, SDPBackend
+            from torch.nn.attention import SDPBackend, sdpa_kernel
             # Use MATH backend only (equivalent to enable_math=True, others=False)
             def new_sdp_ctx():
                 return sdpa_kernel([SDPBackend.MATH])
             sdp_ctx = new_sdp_ctx
         except ImportError:
             # Fallback to deprecated API for older PyTorch versions
-            sdp_ctx_func = getattr(getattr(torch.backends, 'cuda', object()), 'sdp_kernel', None)
+            sdp_ctx_func = getattr(getattr(torch.backends, "cuda", object()), "sdp_kernel", None)
             if callable(sdp_ctx_func):
                 def old_sdp_ctx():
                     return sdp_ctx_func(enable_flash=False, enable_mem_efficient=False, enable_math=True)
                 sdp_ctx = old_sdp_ctx
             else:
                 sdp_ctx = None
-        
+
         try:
             if sdp_ctx:
                 with sdp_ctx():

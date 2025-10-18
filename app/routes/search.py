@@ -1,12 +1,17 @@
+import uuid
+
+import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-import uuid, requests
-from ..db import get_db
-from ..settings import settings
-from ..common.session import get_session_token as _get_session_token, get_user_from_session as _get_user_from_session, is_admin as _is_admin
-from ..schemas import SearchResponse, SearchHit
 from sqlalchemy import text as _text
+
+from ..common.session import get_session_token as _get_session_token
+from ..common.session import get_user_from_session as _get_user_from_session
+from ..common.session import is_admin as _is_admin
+from ..db import get_db
+from ..schemas import SearchHit, SearchResponse
+from ..settings import settings
 
 router = APIRouter()
 

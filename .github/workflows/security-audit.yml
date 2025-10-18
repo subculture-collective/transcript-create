@@ -61,35 +61,35 @@ jobs:
           
           # Parse and display results
           if [ -f safety-report.json ]; then
-            python3 << 'EOF'
-import json
-import sys
-try:
-    with open('safety-report.json', 'r') as f:
-        data = json.load(f)
-    
-    if isinstance(data, dict) and 'vulnerabilities' in data:
-        vulns = data['vulnerabilities']
-    elif isinstance(data, list):
-        vulns = data
-    else:
-        vulns = []
-    
-    print(f"Found {len(vulns)} vulnerabilities")
-    
-    high_severity = [v for v in vulns if v.get('severity', '').lower() in ['high', 'critical']]
-    
-    if high_severity:
-        print(f"CRITICAL: {len(high_severity)} high/critical severity vulnerabilities found!")
-        for v in high_severity:
-            print(f"  - {v.get('package_name')} {v.get('vulnerable_spec')}: {v.get('advisory')}")
-        sys.exit(1)
-    
-    print("No high/critical severity vulnerabilities found.")
-except Exception as e:
-    print(f"Error parsing safety report: {e}")
-    sys.exit(0)
-EOF
+            python3 <<'PYEOF'
+          import json
+          import sys
+          try:
+              with open('safety-report.json', 'r') as f:
+                  data = json.load(f)
+              
+              if isinstance(data, dict) and 'vulnerabilities' in data:
+                  vulns = data['vulnerabilities']
+              elif isinstance(data, list):
+                  vulns = data
+              else:
+                  vulns = []
+              
+              print(f"Found {len(vulns)} vulnerabilities")
+              
+              high_severity = [v for v in vulns if v.get('severity', '').lower() in ['high', 'critical']]
+              
+              if high_severity:
+                  print(f"CRITICAL: {len(high_severity)} high/critical severity vulnerabilities found!")
+                  for v in high_severity:
+                      print(f"  - {v.get('package_name')} {v.get('vulnerable_spec')}: {v.get('advisory')}")
+                  sys.exit(1)
+              
+              print("No high/critical severity vulnerabilities found.")
+          except Exception as e:
+              print(f"Error parsing safety report: {e}")
+              sys.exit(0)
+          PYEOF
           fi
 
       - name: Check results and fail if needed

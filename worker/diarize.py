@@ -6,6 +6,7 @@ from app.settings import settings
 _pipeline = None
 _pyannote_import_error = None
 
+
 def _get_pipeline():
     global _pipeline
     if _pipeline is None:
@@ -33,6 +34,7 @@ def _get_pipeline():
                 logging.warning("Fallback pipeline also failed: %s; skipping diarization", e2)
                 _pipeline = None
     return _pipeline
+
 
 def diarize_and_align(wav_path, whisper_segments):
     try:

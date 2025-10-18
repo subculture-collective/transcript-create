@@ -9,6 +9,7 @@ class Chunk:
     path: Path
     offset: float  # seconds
 
+
 def download_audio(url: str, dest_dir: Path) -> Path:
     out = dest_dir / "raw.m4a"
     cmd = ["yt-dlp", "-v", "-f", "bestaudio", "-o", str(out), url]
@@ -16,20 +17,46 @@ def download_audio(url: str, dest_dir: Path) -> Path:
     subprocess.check_call(cmd)
     return out
 
+
 def ensure_wav_16k(src: Path) -> Path:
     wav = src.parent / "audio_16k.wav"
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "info", "-y", "-i", str(src), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)]
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "info",
+        "-y",
+        "-i",
+        str(src),
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-c:a",
+        "pcm_s16le",
+        str(wav),
+    ]
     logging.info("Running: %s", " ".join(cmd))
     subprocess.check_call(cmd)
     return wav
 
+
 def get_duration_seconds(path: Path) -> float:
     cmd = [
-        "ffprobe","-hide_banner","-v","info","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",str(path)
+        "ffprobe",
+        "-hide_banner",
+        "-v",
+        "info",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
     ]
     logging.info("Running: %s", " ".join(cmd))
     out = subprocess.check_output(cmd).decode().strip()
     return float(out)
+
 
 def chunk_audio(wav: Path, chunk_seconds: int):
     dur = get_duration_seconds(wav)
@@ -43,9 +70,20 @@ def chunk_audio(wav: Path, chunk_seconds: int):
         end = min(start + chunk_seconds, dur)
         chunk_path = wav.parent / f"chunk_{idx:04d}.wav"
         cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "info", "-y", "-i", str(wav),
-            "-ss", f"{start}", "-to", f"{end}",
-            "-c", "copy", str(chunk_path)
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "info",
+            "-y",
+            "-i",
+            str(wav),
+            "-ss",
+            f"{start}",
+            "-to",
+            f"{end}",
+            "-c",
+            "copy",
+            str(chunk_path),
         ]
         logging.info("Running: %s", " ".join(cmd))
         subprocess.check_call(cmd)

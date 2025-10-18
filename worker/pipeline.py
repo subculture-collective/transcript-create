@@ -17,7 +17,10 @@ WORKDIR = Path("/data")  # mount volume externally
 
 def expand_channel_if_needed(conn):
     logging.debug("Checking for pending channel jobs to expand")
-    jobs = conn.execute(text("""
+    jobs = (
+        conn.execute(
+            text(
+                """
         SELECT j.id, j.input_url
         FROM jobs j
         WHERE j.kind='channel'
@@ -27,7 +30,12 @@ def expand_channel_if_needed(conn):
           )
         FOR UPDATE SKIP LOCKED
         LIMIT 5
-    """)).mappings().all()
+    """
+            )
+        )
+        .mappings()
+        .all()
+    )
     for job in jobs:
         url = job["input_url"]
         logging.info("Expanding channel job %s from %s", job["id"], url)
@@ -41,18 +49,26 @@ def expand_channel_if_needed(conn):
             # Extract metadata for each channel video
             title = e.get("title", "")
             duration = e.get("duration")  # duration in seconds
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
                 VALUES (:j,:y,:idx,:title,:dur)
                 ON CONFLICT (job_id, youtube_id) DO NOTHING
-            """), {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration})
+            """
+                ),
+                {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration},
+            )
         logging.info("Marking job %s as downloading after expansion", job["id"])
         conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
 
 
 def expand_single_if_needed(conn):
     logging.debug("Checking for pending single jobs to expand")
-    jobs = conn.execute(text("""
+    jobs = (
+        conn.execute(
+            text(
+                """
         SELECT j.id, j.input_url
         FROM jobs j
         WHERE j.kind='single'
@@ -62,7 +78,12 @@ def expand_single_if_needed(conn):
           )
         FOR UPDATE SKIP LOCKED
         LIMIT 5
-    """)).mappings().all()
+    """
+            )
+        )
+        .mappings()
+        .all()
+    )
     for job in jobs:
         url = job["input_url"]
         logging.info("Expanding single job %s from %s", job["id"], url)
@@ -81,12 +102,19 @@ def expand_single_if_needed(conn):
         # Extract title and duration from metadata
         title = data.get("title", "")
         duration = data.get("duration")  # duration in seconds
-        logging.info("Video metadata: title='%s', duration=%ss", title[:50] + ("..." if len(title) > 50 else ""), duration)
-        conn.execute(text("""
+        logging.info(
+            "Video metadata: title='%s', duration=%ss", title[:50] + ("..." if len(title) > 50 else ""), duration
+        )
+        conn.execute(
+            text(
+                """
             INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
             VALUES (:j,:y,:idx,:title,:dur)
             ON CONFLICT (job_id, youtube_id) DO NOTHING
-        """), {"j": job["id"], "y": vid, "idx": 0, "title": title, "dur": duration})
+        """
+            ),
+            {"j": job["id"], "y": vid, "idx": 0, "title": title, "dur": duration},
+        )
         logging.info("Marking job %s as downloading after single expansion", job["id"])
         conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
 
@@ -95,8 +123,14 @@ def process_video(engine, video_id):
     t0 = time.time()
     logging.info("process_video start %s", video_id)
     with engine.begin() as conn:
-        v = conn.execute(text("SELECT v.*, j.id AS job_id FROM videos v JOIN jobs j ON j.id=v.job_id WHERE v.id=:i"),
-                         {"i": video_id}).mappings().first()
+        v = (
+            conn.execute(
+                text("SELECT v.*, j.id AS job_id FROM videos v JOIN jobs j ON j.id=v.job_id WHERE v.id=:i"),
+                {"i": video_id},
+            )
+            .mappings()
+            .first()
+        )
     youtube_id = v["youtube_id"]
     dest_dir = WORKDIR / str(video_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -104,14 +138,18 @@ def process_video(engine, video_id):
     logging.info("Downloading audio for %s", youtube_id)
     raw_path = download_audio(f"https://www.youtube.com/watch?v={youtube_id}", dest_dir)
     with engine.begin() as conn:
-        conn.execute(text("UPDATE videos SET raw_path=:p, state='transcoding', updated_at=now() WHERE id=:i"),
-                     {"p": str(raw_path), "i": video_id})
+        conn.execute(
+            text("UPDATE videos SET raw_path=:p, state='transcoding', updated_at=now() WHERE id=:i"),
+            {"p": str(raw_path), "i": video_id},
+        )
 
     logging.info("Converting to wav 16k for %s", video_id)
     wav_path = ensure_wav_16k(raw_path)
     with engine.begin() as conn:
-        conn.execute(text("UPDATE videos SET wav_path=:p, state='transcribing', updated_at=now() WHERE id=:i"),
-                     {"p": str(wav_path), "i": video_id})
+        conn.execute(
+            text("UPDATE videos SET wav_path=:p, state='transcribing', updated_at=now() WHERE id=:i"),
+            {"p": str(wav_path), "i": video_id},
+        )
 
     logging.info("Chunking audio (max %ss)", settings.CHUNK_SECONDS)
     chunks = chunk_audio(wav_path, settings.CHUNK_SECONDS)
@@ -140,26 +178,36 @@ def process_video(engine, video_id):
             logging.info("Cleared existing transcript/segments for video %s", video_id)
         except Exception as e:
             logging.warning("Failed to clear existing rows (continuing): %s", e)
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             INSERT INTO transcripts (video_id, full_text, language, model)
             VALUES (:v,:t,:lang,:m)
-        """), {"v": video_id, "t": full_text, "lang": "en", "m": settings.WHISPER_MODEL})
+        """
+            ),
+            {"v": video_id, "t": full_text, "lang": "en", "m": settings.WHISPER_MODEL},
+        )
         logging.info("Inserting %d segment rows", len(diar_segments))
         for s in diar_segments:
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 INSERT INTO segments (video_id,start_ms,end_ms,text,speaker_label,confidence,avg_logprob,temperature,token_count)
                 VALUES (:v,:s,:e,:txt,:spk,:conf,:lp,:temp,:tc)
-            """), {
-                "v": video_id,
-                "s": int(s["start"] * 1000),
-                "e": int(s["end"] * 1000),
-                "txt": s["text"],
-                "spk": s.get("speaker"),
-                "conf": s.get("confidence"),
-                "lp": s.get("avg_logprob"),
-                "temp": s.get("temperature"),
-                "tc": s.get("token_count"),
-            })
+            """  # noqa: E501
+                ),
+                {
+                    "v": video_id,
+                    "s": int(s["start"] * 1000),
+                    "e": int(s["end"] * 1000),
+                    "txt": s["text"],
+                    "spk": s.get("speaker"),
+                    "conf": s.get("confidence"),
+                    "lp": s.get("avg_logprob"),
+                    "temp": s.get("temperature"),
+                    "tc": s.get("token_count"),
+                },
+            )
         logging.info("Marking video %s completed", video_id)
         conn.execute(text("UPDATE videos SET state='completed', updated_at=now() WHERE id=:i"), {"i": video_id})
 
@@ -194,13 +242,15 @@ def process_video(engine, video_id):
 
     # YouTube captions are handled by a pre-processing loop step; see capture_youtube_captions_for_unprocessed
 
+
 def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
     """Select a few videos lacking youtube_transcripts and attempt to fetch/persist captions.
 
     Run inside the worker loop before audio processing to make captions available early.
     """
-    rows = conn.execute(text(
-        """
+    rows = conn.execute(
+        text(
+            """
         SELECT v.id, v.youtube_id
         FROM videos v
         WHERE NOT EXISTS (
@@ -210,7 +260,9 @@ def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
         FOR UPDATE SKIP LOCKED
         LIMIT :lim
         """
-    ), {"lim": limit}).all()
+        ),
+        {"lim": limit},
+    ).all()
     processed = 0
     for vid, yid in rows:
         try:
@@ -222,19 +274,34 @@ def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
             track, segs = res
             yt_full_text = " ".join(s.text for s in segs)
             # delete + insert for idempotency
-            conn.execute(text("DELETE FROM youtube_segments WHERE youtube_transcript_id IN (SELECT id FROM youtube_transcripts WHERE video_id=:v)"), {"v": str(vid)})
+            conn.execute(
+                text(
+                    "DELETE FROM youtube_segments WHERE youtube_transcript_id IN (SELECT id FROM youtube_transcripts WHERE video_id=:v)"  # noqa: E501
+                ),
+                {"v": str(vid)},
+            )
             conn.execute(text("DELETE FROM youtube_transcripts WHERE video_id=:v"), {"v": str(vid)})
-            row = conn.execute(text("""
+            row = conn.execute(
+                text(
+                    """
                 INSERT INTO youtube_transcripts (video_id, language, kind, source_url, full_text)
                 VALUES (:v,:lang,:kind,:url,:full)
                 RETURNING id
-            """), {"v": str(vid), "lang": track.language, "kind": track.kind, "url": track.url, "full": yt_full_text}).first()
+            """
+                ),
+                {"v": str(vid), "lang": track.language, "kind": track.kind, "url": track.url, "full": yt_full_text},
+            ).first()
             yt_tr_id = row[0]
             for s in segs:
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     INSERT INTO youtube_segments (youtube_transcript_id, start_ms, end_ms, text)
                     VALUES (:t, :s, :e, :txt)
-                """), {"t": yt_tr_id, "s": int(s.start * 1000), "e": int(s.end * 1000), "txt": s.text})
+                """
+                    ),
+                    {"t": yt_tr_id, "s": int(s.start * 1000), "e": int(s.end * 1000), "txt": s.text},
+                )
             logging.info("Persisted %d YouTube caption segments for %s", len(segs), yid)
             processed += 1
         except Exception as e:

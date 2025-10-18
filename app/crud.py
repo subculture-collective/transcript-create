@@ -6,51 +6,68 @@ from sqlalchemy import text
 def create_job(db, kind: str, url: str):
     job_id = uuid.uuid4()
     db.execute(
-        text("INSERT INTO jobs (id, kind, input_url) VALUES (:i,:k,:u)"),
-        {"i": str(job_id), "k": kind, "u": url}
+        text("INSERT INTO jobs (id, kind, input_url) VALUES (:i,:k,:u)"), {"i": str(job_id), "k": kind, "u": url}
     )
     db.commit()
     return job_id
+
 
 def fetch_job(db, job_id):
     row = db.execute(text("SELECT * FROM jobs WHERE id=:i"), {"i": str(job_id)}).mappings().first()
     return row
 
+
 def list_segments(db, video_id):
     rows = db.execute(
         text("SELECT start_ms,end_ms,text,speaker_label FROM segments WHERE video_id=:v ORDER BY start_ms"),
-        {"v": str(video_id)}
+        {"v": str(video_id)},
     ).all()
     return rows
 
+
 def get_video(db, video_id: uuid.UUID):
-    return db.execute(
-        text("SELECT id, youtube_id, title, duration_seconds FROM videos WHERE id=:v"),
-        {"v": str(video_id)}
-    ).mappings().first()
+    return (
+        db.execute(text("SELECT id, youtube_id, title, duration_seconds FROM videos WHERE id=:v"), {"v": str(video_id)})
+        .mappings()
+        .first()
+    )
+
 
 def list_videos(db, limit: int = 50, offset: int = 0):
-    return db.execute(
-        text("""
+    return (
+        db.execute(
+            text(
+                """
             SELECT id, youtube_id, title, duration_seconds
             FROM videos
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-        """),
-        {"limit": limit, "offset": offset}
-    ).mappings().all()
+        """
+            ),
+            {"limit": limit, "offset": offset},
+        )
+        .mappings()
+        .all()
+    )
+
 
 def get_youtube_transcript(db, video_id):
-    return db.execute(
-        text("SELECT id, language, kind, full_text FROM youtube_transcripts WHERE video_id=:v"),
-        {"v": str(video_id)}
-    ).mappings().first()
+    return (
+        db.execute(
+            text("SELECT id, language, kind, full_text FROM youtube_transcripts WHERE video_id=:v"),
+            {"v": str(video_id)},
+        )
+        .mappings()
+        .first()
+    )
+
 
 def list_youtube_segments(db, youtube_transcript_id):
     return db.execute(
         text("SELECT start_ms,end_ms,text FROM youtube_segments WHERE youtube_transcript_id=:t ORDER BY start_ms"),
-        {"t": str(youtube_transcript_id)}
+        {"t": str(youtube_transcript_id)},
     ).all()
+
 
 def search_segments(db, q: str, video_id: str | None = None, limit: int = 50, offset: int = 0):
     sql = """
@@ -70,6 +87,7 @@ def search_segments(db, q: str, video_id: str | None = None, limit: int = 50, of
         params["vid"] = str(video_id)
     rows = db.execute(text(sql.format(video_filter=video_filter)), params).mappings().all()
     return rows
+
 
 def search_youtube_segments(db, q: str, video_id: str | None = None, limit: int = 50, offset: int = 0):
     sql = """

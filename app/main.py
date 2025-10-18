@@ -47,6 +47,7 @@ app.include_router(events_router)
 app.include_router(admin_router)
 app.include_router(search_router)
 
+
 # Count today's searches for a user (based on events table) in UTC day
 def _count_searches_today(db, user_id: Optional[str]) -> int:
     if not user_id:

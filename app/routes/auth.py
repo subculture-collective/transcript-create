@@ -20,6 +20,7 @@ except Exception:
 
 router = APIRouter()
 
+
 def _new_oauth():
     if not OAuth:
         return None
@@ -35,6 +36,7 @@ def _new_oauth():
     )
     return oauth
 
+
 @router.get("/auth/me")
 def auth_me(request: Request, db=Depends(get_db)):
     user = _get_user_from_session(db, _get_session_token(request))
@@ -45,13 +47,29 @@ def auth_me(request: Request, db=Depends(get_db)):
     # Count searches today used in main previously via events table
     used = None
     if plan == "free":
-        used = db.execute(text("""
+        used = db.execute(
+            text(
+                """
             SELECT COUNT(*) FROM events
             WHERE user_id = :u
               AND type = 'search'
               AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
-        """), {"u": str(user["id"]) }).scalar_one()
-    return {"user": {"id": user["id"], "email": user.get("email"), "name": user.get("name"), "avatar_url": user.get("avatar_url"), "plan": plan, "searches_used_today": used, "search_limit": limit}}
+        """
+            ),
+            {"u": str(user["id"])},
+        ).scalar_one()
+    return {
+        "user": {
+            "id": user["id"],
+            "email": user.get("email"),
+            "name": user.get("name"),
+            "avatar_url": user.get("avatar_url"),
+            "plan": plan,
+            "searches_used_today": used,
+            "search_limit": limit,
+        }
+    }
+
 
 @router.get("/auth/login/google")
 def auth_login_google(request: Request):
@@ -68,6 +86,7 @@ def auth_login_google(request: Request):
     redirect_uri = settings.OAUTH_GOOGLE_REDIRECT_URI
     return oauth.google.authorize_redirect(request, redirect_uri)
 
+
 @router.get("/auth/login/twitch")
 def auth_login_twitch(request: Request):
     if not OAuth:
@@ -75,6 +94,7 @@ def auth_login_twitch(request: Request):
     oauth = _new_oauth()
     redirect_uri = settings.OAUTH_TWITCH_REDIRECT_URI
     return oauth.twitch.authorize_redirect(request, redirect_uri)
+
 
 @router.get("/auth/callback/google")
 async def auth_callback_google(request: Request, db=Depends(get_db)):
@@ -100,19 +120,43 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
     if not sub:
         raise HTTPException(400, "Missing subject")
     with db.begin():
-        row = db.execute(text("SELECT * FROM users WHERE oauth_provider='google' AND oauth_subject=:s"), {"s": sub}).mappings().first()
+        row = (
+            db.execute(text("SELECT * FROM users WHERE oauth_provider='google' AND oauth_subject=:s"), {"s": sub})
+            .mappings()
+            .first()
+        )
         if row:
             user_id = row["id"]
-            db.execute(text("UPDATE users SET email=:e, name=:n, avatar_url=:a, updated_at=now() WHERE id=:i"), {"e": email, "n": name, "a": avatar, "i": str(user_id)})
+            db.execute(
+                text("UPDATE users SET email=:e, name=:n, avatar_url=:a, updated_at=now() WHERE id=:i"),
+                {"e": email, "n": name, "a": avatar, "i": str(user_id)},
+            )
         else:
             user_id = uuid.uuid4()
-            db.execute(text("INSERT INTO users (id,email,name,avatar_url,oauth_provider,oauth_subject) VALUES (:i,:e,:n,:a,'google',:s)"), {"i": str(user_id), "e": email, "n": name, "a": avatar, "s": sub})
+            db.execute(
+                text(
+                    "INSERT INTO users (id,email,name,avatar_url,oauth_provider,oauth_subject) VALUES (:i,:e,:n,:a,'google',:s)"  # noqa: E501
+                ),
+                {"i": str(user_id), "e": email, "n": name, "a": avatar, "s": sub},
+            )
         session_token = secrets.token_urlsafe(32)
         expires = datetime.utcnow() + timedelta(days=7)
-        db.execute(text("INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at) VALUES (:u,:t,:ua,:ip,:exp)"), {"u": str(user_id), "t": session_token, "ua": request.headers.get("user-agent"), "ip": request.client.host if request.client else None, "exp": expires})
+        db.execute(
+            text(
+                "INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at) VALUES (:u,:t,:ua,:ip,:exp)"
+            ),
+            {
+                "u": str(user_id),
+                "t": session_token,
+                "ua": request.headers.get("user-agent"),
+                "ip": request.client.host if request.client else None,
+                "exp": expires,
+            },
+        )
     resp = RedirectResponse(url=f"{settings.FRONTEND_ORIGIN}")
     _set_session_cookie(resp, session_token)
     return resp
+
 
 @router.get("/auth/callback/twitch")
 async def auth_callback_twitch(request: Request, db=Depends(get_db)):
@@ -140,25 +184,50 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
     if not sub:
         raise HTTPException(400, "Missing Twitch user id")
     with db.begin():
-        row = db.execute(text("SELECT * FROM users WHERE oauth_provider='twitch' AND oauth_subject=:s"), {"s": sub}).mappings().first()
+        row = (
+            db.execute(text("SELECT * FROM users WHERE oauth_provider='twitch' AND oauth_subject=:s"), {"s": sub})
+            .mappings()
+            .first()
+        )
         if row:
             user_id = row["id"]
-            db.execute(text("UPDATE users SET email=:e, name=:n, avatar_url=:a, updated_at=now() WHERE id=:i"), {"e": email, "n": name, "a": avatar, "i": str(user_id)})
+            db.execute(
+                text("UPDATE users SET email=:e, name=:n, avatar_url=:a, updated_at=now() WHERE id=:i"),
+                {"e": email, "n": name, "a": avatar, "i": str(user_id)},
+            )
         else:
             user_id = uuid.uuid4()
-            db.execute(text("INSERT INTO users (id,email,name,avatar_url,oauth_provider,oauth_subject) VALUES (:i,:e,:n,:a,'twitch',:s)"), {"i": str(user_id), "e": email, "n": name, "a": avatar, "s": sub})
+            db.execute(
+                text(
+                    "INSERT INTO users (id,email,name,avatar_url,oauth_provider,oauth_subject) VALUES (:i,:e,:n,:a,'twitch',:s)"  # noqa: E501
+                ),
+                {"i": str(user_id), "e": email, "n": name, "a": avatar, "s": sub},
+            )
         session_token = secrets.token_urlsafe(32)
         expires = datetime.utcnow() + timedelta(days=7)
-        db.execute(text("INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at) VALUES (:u,:t,:ua,:ip,:exp)"), {"u": str(user_id), "t": session_token, "ua": request.headers.get("user-agent"), "ip": request.client.host if request.client else None, "exp": expires})
+        db.execute(
+            text(
+                "INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at) VALUES (:u,:t,:ua,:ip,:exp)"
+            ),
+            {
+                "u": str(user_id),
+                "t": session_token,
+                "ua": request.headers.get("user-agent"),
+                "ip": request.client.host if request.client else None,
+                "exp": expires,
+            },
+        )
     resp = RedirectResponse(url=f"{settings.FRONTEND_ORIGIN}")
     _set_session_cookie(resp, session_token)
     return resp
+
 
 @router.post("/auth/logout")
 def auth_logout(request: Request, db=Depends(get_db)):
     tok = _get_session_token(request)
     if tok:
-        db.execute(text("DELETE FROM sessions WHERE token=:t"), {"t": tok}); db.commit()
+        db.execute(text("DELETE FROM sessions WHERE token=:t"), {"t": tok})
+        db.commit()
     resp = JSONResponse({"ok": True})
     _clear_session_cookie(resp)
     return resp

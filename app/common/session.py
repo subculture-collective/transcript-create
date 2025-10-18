@@ -24,12 +24,16 @@ def clear_session_cookie(resp: Response):
 def get_user_from_session(db, token: Optional[str]):
     if not token:
         return None
-    row = db.execute(
-        text(
-            "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=:t AND (s.expires_at IS NULL OR s.expires_at>now())"
-        ),
-        {"t": token},
-    ).mappings().first()
+    row = (
+        db.execute(
+            text(
+                "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=:t AND (s.expires_at IS NULL OR s.expires_at>now())"  # noqa: E501
+            ),
+            {"t": token},
+        )
+        .mappings()
+        .first()
+    )
     return row
 
 

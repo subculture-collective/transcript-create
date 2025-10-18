@@ -1,0 +1,98 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+jobs:
+  lint-and-type-check:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npm run lint
+        continue-on-error: true
+
+      - name: Check Prettier formatting
+        run: |
+          cd frontend
+          npm run format:check
+        continue-on-error: true
+
+      - name: Run TypeScript type check
+        run: |
+          cd frontend
+          npx tsc --noEmit
+
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Check bundle size
+        run: |
+          cd frontend
+          BUNDLE_SIZE=$(stat -c%s "dist/assets/index-"*.js 2>/dev/null || stat -f%z "dist/assets/index-"*.js)
+          BUNDLE_SIZE_KB=$((BUNDLE_SIZE / 1024))
+          echo "Bundle size: ${BUNDLE_SIZE_KB}KB"
+          if [ $BUNDLE_SIZE_KB -gt 500 ]; then
+            echo "::warning::Bundle size (${BUNDLE_SIZE_KB}KB) exceeds 500KB threshold"
+          else
+            echo "✅ Bundle size is within acceptable limits"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist/
+          retention-days: 7

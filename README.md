@@ -247,6 +247,10 @@ cd frontend && npm install && npm run dev
 
 1. Install pre-commit hooks for security and code quality:
    ```bash
+   # Quick setup (recommended)
+   ./scripts/setup_precommit.sh
+   
+   # Or manual setup
    pip install pre-commit
    pre-commit install
    ```

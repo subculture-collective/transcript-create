@@ -1,0 +1,41 @@
+name: Auto-triage issues to Project 7
+
+on:
+    issues:
+        types: [opened]
+
+permissions:
+    contents: read
+    issues: write
+
+jobs:
+    triage:
+        name: Label and add to Project
+        runs-on: ubuntu-latest
+        steps:
+            - name: Ensure default label status todo
+              uses: actions/github-script@v7
+              with:
+                  github-token: ${{ github.token }}
+                  script: |
+                      const { owner, repo } = context.repo;
+                      const issue_number = context.issue.number;
+                      const defaultLabel = 'status: todo';
+                      const { data: labels } = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number, per_page: 100 });
+                      if (!labels.find(l => l.name === defaultLabel)) {
+                        await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [defaultLabel] });
+                      }
+
+            - name: Add issue to Project 7
+              id: add_to_project
+              uses: actions/add-to-project@v1.0.1
+              with:
+                  project-url: https://github.com/users/onnwee/projects/7
+                  github-token: ${{ github.token }}
+              continue-on-error: true
+
+            - name: Warn if project add failed due to permissions
+              if: ${{ steps.add_to_project.outcome == 'failure' }}
+              run: |
+                  echo "Adding issues to Project 7 may require a fine-grained PAT with Project write permissions."
+                  echo "Create a PAT and set it as repo secret PROJECT_PAT, then re-run."

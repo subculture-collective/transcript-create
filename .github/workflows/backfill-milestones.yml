@@ -1,0 +1,61 @@
+name: Backfill milestones on issues
+
+on:
+    workflow_dispatch:
+        inputs:
+            dry_run:
+                description: "Dry run (true/false)"
+                required: false
+                default: "true"
+
+permissions:
+    issues: write
+
+jobs:
+    backfill:
+        runs-on: ubuntu-latest
+        env:
+            DRY_RUN: ${{ inputs.dry_run }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install jq
+              run: sudo apt-get update && sudo apt-get install -y jq
+
+            - name: Map labels to milestones and apply
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  REPO: ${{ github.repository }}
+              run: |
+                  set -euo pipefail
+                  # Milestone mapping rules by label prefixes
+                  map_milestone() {
+                    title="$1"
+                    labels="$2"
+                    if echo "$labels" | grep -qi 'type: docs\|docs'; then echo 'Documentation & Testing'; return; fi
+                    if echo "$labels" | grep -qi 'type: bug\|status: bug\|bug'; then echo 'Stabilization & Cleanup'; return; fi
+                    if echo "$labels" | grep -qi 'area: worker\|area: pipeline\|area: api'; then echo 'Feature Completion'; return; fi
+                    if echo "$labels" | grep -qi 'area: infra\|area: devops\|opensearch\|performance\|scale'; then echo 'Optimization & Scalability'; return; fi
+                    if echo "$labels" | grep -qi 'release\|v1'; then echo 'Professional Release v1.0'; return; fi
+                    # default fallback
+                    echo 'Feature Completion'
+                  }
+
+                  issues_json=$(gh issue list --repo "$REPO" --state open --limit 200 --json number,title,labels,milestone)
+                  echo "$issues_json" | jq -c '.[]' | while read -r issue; do
+                    number=$(echo "$issue" | jq -r '.number')
+                    title=$(echo "$issue" | jq -r '.title')
+                    current_ms=$(echo "$issue" | jq -r '.milestone.title // ""')
+                    labels=$(echo "$issue" | jq -r '[.labels[].name] | join(", ")')
+                    target_ms=$(map_milestone "$title" "$labels")
+                    if [ -n "$current_ms" ] && [ "$current_ms" != "null" ]; then
+                      echo "#${number} already has milestone '$current_ms' — skipping"
+                      continue
+                    fi
+                    echo "#${number} => '$target_ms' (labels: $labels)"
+                    if [ "$DRY_RUN" = "true" ]; then
+                      continue
+                    fi
+                    gh issue edit "$number" --repo "$REPO" --milestone "$target_ms"
+                  done

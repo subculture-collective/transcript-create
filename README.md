@@ -28,7 +28,7 @@ Why this design: a DB-backed queue keeps infra light while enabling scale-out wo
 
 ## Quickstart
 
-1) Copy env and fill basics
+1. Copy env and fill basics
 
 ```bash
 cp .env.example .env
@@ -37,7 +37,7 @@ cp .env.example .env
 # Billing/auth can be added later; see sections below
 ```
 
-2) Start services with Docker Compose (Postgres + API + Worker; OpenSearch optional)
+2. Start services with Docker Compose (Postgres + API + Worker; OpenSearch optional)
 
 ```bash
 docker compose build
@@ -53,7 +53,7 @@ docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/w
 docker compose up -d
 ```
 
-3) Start the frontend (separate terminal)
+3. Start the frontend (separate terminal)
 
 ```bash
 cd frontend
@@ -63,7 +63,7 @@ npm run dev
 
 Open http://localhost:5173.
 
-4) Ingest a video
+4. Ingest a video
 
 ```bash
 curl -s -X POST http://localhost:8000/jobs \
@@ -242,3 +242,11 @@ cd frontend && npm install && npm run dev
 ## License
 
 TBD
+
+## GitHub project automation
+
+- Auto-triage: New issues are automatically labeled `status: triage` and added to Project 7 via `.github/workflows/auto-triage.yml`.
+- Milestone backfill: Run manually from the Actions tab using "Backfill milestones on issues". Start with dry_run=true to preview; set to false to apply.
+- Project saved views: To create helpful saved views (Priority and Milestone) for Project 7, run:
+  - Make executable: `chmod +x scripts/setup_project_views.sh`
+  - Run with defaults: `OWNER=onnwee PROJECT_NUMBER=7 ./scripts/setup_project_views.sh`

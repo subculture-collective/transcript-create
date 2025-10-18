@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Setup script for pre-commit hooks
 # This installs pre-commit and sets up git hooks for security and code quality
 
-set -e
+set -euo pipefail
 
 echo "🔧 Setting up pre-commit hooks for transcript-create..."
 echo ""

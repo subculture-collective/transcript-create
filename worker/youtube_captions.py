@@ -1,9 +1,10 @@
 import json
 import logging
 import subprocess
-from urllib.request import urlopen, Request
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+from urllib.request import Request, urlopen
+
 
 @dataclass
 class YTSegment:
@@ -11,12 +12,13 @@ class YTSegment:
     end: float
     text: str
 
+
 @dataclass
 class YTCaptionTrack:
     url: str
     language: Optional[str]
     kind: str  # 'auto' or 'manual'
-    ext: str   # 'json3', 'vtt', etc.
+    ext: str  # 'json3', 'vtt', etc.
 
 
 def _yt_dlp_json(url: str) -> dict:
@@ -75,6 +77,7 @@ def _parse_vtt_to_segments(vtt_bytes: bytes) -> List[YTSegment]:
             sec, ms = (s.replace(",", ".").split(".") + ["0"])[:2]
             return int(m) * 60 + int(sec) + int(ms[:3]) / 1000.0
         return 0.0
+
     text = vtt_bytes.decode(errors="ignore").splitlines()
     segs: List[YTSegment] = []
     i = 0

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -6,20 +7,19 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy import text
-
-from ..db import get_db
-from ..settings import settings
-from .. import crud
-from ..common.session import get_session_token, get_user_from_session, is_admin
-
-from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from sqlalchemy import text
+
+from .. import crud
+from ..common.session import get_session_token, get_user_from_session, is_admin
+from ..db import get_db
+from ..settings import settings
 
 router = APIRouter()
 
@@ -67,7 +67,7 @@ def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str
 def _log_export(db, request: Request, user, payload: dict):
     db.execute(
         text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'export',:p)"),
-    {"u": str(user["id"]) if user else None, "t": get_session_token(request), "p": payload},
+        {"u": str(user["id"]) if user else None, "t": get_session_token(request), "p": payload},
     )
     db.commit()
 
@@ -116,7 +116,7 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
         return f"{h:02d}:{m:02d}:{s:02d}.{ms_rem:03d}"
 
     lines = ["WEBVTT", ""]
-    for (start_ms, end_ms, textv) in segs:
+    for start_ms, end_ms, textv in segs:
         lines.append(f"{vtt_time(start_ms)} --> {vtt_time(end_ms)}")
         lines.append(textv)
         lines.append("")
@@ -168,7 +168,7 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
         return f"{h:02d}:{m:02d}:{s:02d}.{ms_rem:03d}"
 
     lines = ["WEBVTT", ""]
-    for (start_ms, end_ms, textv, _speaker) in segs:
+    for start_ms, end_ms, textv, _speaker in segs:
         lines.append(f"{vtt_time(start_ms)} --> {vtt_time(end_ms)}")
         lines.append(textv)
         lines.append("")
@@ -215,7 +215,7 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
 
 @router.get("/videos/{video_id}/transcript.pdf")
 def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
-    user = _get_user_from_session(db, _get_session_token(request))
+    user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
     )
@@ -227,7 +227,12 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
     # Build PDF in-memory
     buf = BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=LETTER, leftMargin=0.9 * inch, rightMargin=0.9 * inch, topMargin=1.1 * inch, bottomMargin=0.9 * inch
+        buf,
+        pagesize=LETTER,
+        leftMargin=0.9 * inch,
+        rightMargin=0.9 * inch,
+        topMargin=1.1 * inch,
+        bottomMargin=0.9 * inch,
     )
     styles = getSampleStyleSheet()
     # Register a serif font with priority: settings.PDF_FONT_PATH -> DejaVuSerif -> Times-Roman
@@ -244,9 +249,13 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
             base_font = "DejaVuSerif"
         except Exception:
             pass
-    heading = ParagraphStyle(name="Heading", parent=styles["Heading2"], fontName=base_font, textColor=colors.black, spaceAfter=12)
+    heading = ParagraphStyle(
+        name="Heading", parent=styles["Heading2"], fontName=base_font, textColor=colors.black, spaceAfter=12
+    )
     body = ParagraphStyle(name="Body", parent=styles["BodyText"], fontName=base_font, fontSize=11, leading=15)
-    time = ParagraphStyle(name="Time", parent=styles["BodyText"], fontName=base_font, fontSize=9, textColor=colors.grey, spaceAfter=2)
+    time = ParagraphStyle(
+        name="Time", parent=styles["BodyText"], fontName=base_font, fontSize=9, textColor=colors.grey, spaceAfter=2
+    )
     story: list = []
     # Title and header/footer + metadata
     v = crud.get_video(db, video_id)
@@ -257,7 +266,7 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
     story.append(Paragraph(title, heading))
     story.append(Spacer(1, 6))
     # Segments
-    for (start_ms, _end_ms, textv, speaker) in segs:
+    for start_ms, _end_ms, textv, speaker in segs:
         hhmmss = _fmt_time_ms(start_ms).replace(",", ".")
         ts = Paragraph(hhmmss, time)
         story.append(ts)
@@ -266,6 +275,7 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
             content = f"<b>{speaker}:</b> {content}"
         story.append(Paragraph(content, body))
         story.append(Spacer(1, 4))
+
     # Header/footer drawing
     def _header_footer(canvas, doc_obj):
         canvas.saveState()

@@ -1,11 +1,14 @@
-from pydantic import BaseModel, HttpUrl
-from typing import List, Optional
 import uuid
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, HttpUrl
+
 
 class JobCreate(BaseModel):
     url: HttpUrl
     kind: str = "single"  # or "channel"
+
 
 class JobStatus(BaseModel):
     id: uuid.UUID
@@ -15,20 +18,24 @@ class JobStatus(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class Segment(BaseModel):
     start_ms: int
     end_ms: int
     text: str
     speaker_label: Optional[str]
 
+
 class TranscriptResponse(BaseModel):
     video_id: uuid.UUID
     segments: List[Segment]
+
 
 class YTSegment(BaseModel):
     start_ms: int
     end_ms: int
     text: str
+
 
 class YouTubeTranscriptResponse(BaseModel):
     video_id: uuid.UUID
@@ -37,6 +44,7 @@ class YouTubeTranscriptResponse(BaseModel):
     full_text: Optional[str] = None
     segments: List[YTSegment]
 
+
 class SearchHit(BaseModel):
     id: int
     video_id: uuid.UUID
@@ -44,9 +52,11 @@ class SearchHit(BaseModel):
     end_ms: int
     snippet: str
 
+
 class SearchResponse(BaseModel):
     total: Optional[int] = None  # optional for now
     hits: List[SearchHit]
+
 
 class VideoInfo(BaseModel):
     id: uuid.UUID

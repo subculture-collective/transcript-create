@@ -1,17 +1,19 @@
-import time
 import logging
+import time
+
 from sqlalchemy import create_engine, text
+
 from app.settings import settings
-from worker.pipeline import process_video, expand_channel_if_needed, capture_youtube_captions_for_unprocessed
-from datetime import datetime, timezone, timedelta
+from worker.pipeline import capture_youtube_captions_for_unprocessed, expand_channel_if_needed, process_video
 
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 POLL_INTERVAL = 3
 
 logging.basicConfig(
-    level=logging.getLevelName((__import__('os').environ.get('LOG_LEVEL') or 'INFO').upper()),
-    format='%(asctime)s %(levelname)s [worker.loop] %(message)s',
+    level=logging.getLevelName((__import__("os").environ.get("LOG_LEVEL") or "INFO").upper()),
+    format="%(asctime)s %(levelname)s [worker.loop] %(message)s",
 )
+
 
 def run():
     while True:
@@ -19,6 +21,7 @@ def run():
         with engine.begin() as conn:
             # Expand pending jobs into videos
             from worker.pipeline import expand_single_if_needed
+
             try:
                 expand_single_if_needed(conn)
                 expand_channel_if_needed(conn)
@@ -36,25 +39,38 @@ def run():
                 rescue_seconds = int(getattr(settings, "RESCUE_STUCK_AFTER_SECONDS", 0) or 0)
                 if rescue_seconds > 0:
                     logging.debug("Rescue check: requeue videos stuck > %ss", rescue_seconds)
-                    conn.execute(text(
-                        """
+                    conn.execute(
+                        text(
+                            """
                         UPDATE videos
                         SET state = 'pending', updated_at = now()
                         WHERE state IN ('downloading','transcoding','transcribing')
                           AND now() - updated_at > make_interval(secs => :secs)
                         RETURNING id
                         """
-                    ), {"secs": rescue_seconds})
+                        ),
+                        {"secs": rescue_seconds},
+                    )
             except Exception as e:
                 logging.warning("Rescue check failed: %s", e)
-            
+
             # Model upgrade requeue: reprocess completed videos if current model is larger/better
             try:
                 current_model = settings.WHISPER_MODEL
-                model_hierarchy = {'tiny': 1, 'base': 2, 'small': 3, 'medium': 4, 'large': 5, 'large-v2': 6, 'large-v3': 7}
+                model_hierarchy = {
+                    "tiny": 1,
+                    "base": 2,
+                    "small": 3,
+                    "medium": 4,
+                    "large": 5,
+                    "large-v2": 6,
+                    "large-v3": 7,
+                }
                 current_rank = model_hierarchy.get(current_model, 0)
                 if current_rank > 0:
-                    requeue_result = conn.execute(text("""
+                    requeue_result = conn.execute(
+                        text(
+                            """
                         UPDATE videos v
                         SET state = 'pending', updated_at = now()
                         FROM transcripts t
@@ -63,7 +79,7 @@ def run():
                           AND t.model IS NOT NULL
                           AND (
                             -- Requeue if transcript model rank is lower than current
-                            CASE 
+                            CASE
                               WHEN t.model = 'tiny' THEN 1
                               WHEN t.model = 'base' THEN 2
                               WHEN t.model = 'small' THEN 3
@@ -75,23 +91,38 @@ def run():
                             END
                           ) < :current_rank
                         RETURNING v.id, t.model
-                    """), {"current_rank": current_rank})
+                    """
+                        ),
+                        {"current_rank": current_rank},
+                    )
                     requeued = requeue_result.fetchall()
                     if requeued:
-                        logging.info("Model upgrade requeue: %d videos (%s -> %s)", 
-                                   len(requeued), 
-                                   ", ".join(set(r[1] for r in requeued)), 
-                                   current_model)
+                        logging.info(
+                            "Model upgrade requeue: %d videos (%s -> %s)",
+                            len(requeued),
+                            ", ".join(set(r[1] for r in requeued)),
+                            current_model,
+                        )
             except Exception as e:
                 logging.warning("Model upgrade requeue failed: %s", e)
-            
+
             # Model upgrade requeue: reprocess completed videos if current model is larger/better
             try:
                 current_model = settings.WHISPER_MODEL
-                model_hierarchy = {'tiny': 1, 'base': 2, 'small': 3, 'medium': 4, 'large': 5, 'large-v2': 6, 'large-v3': 7}
+                model_hierarchy = {
+                    "tiny": 1,
+                    "base": 2,
+                    "small": 3,
+                    "medium": 4,
+                    "large": 5,
+                    "large-v2": 6,
+                    "large-v3": 7,
+                }
                 current_rank = model_hierarchy.get(current_model, 0)
                 if current_rank > 0:
-                    requeue_result = conn.execute(text("""
+                    requeue_result = conn.execute(
+                        text(
+                            """
                         UPDATE videos v
                         SET state = 'pending', updated_at = now()
                         FROM transcripts t
@@ -100,7 +131,7 @@ def run():
                           AND t.model IS NOT NULL
                           AND (
                             -- Requeue if transcript model rank is lower than current
-                            CASE 
+                            CASE
                               WHEN t.model = 'tiny' THEN 1
                               WHEN t.model = 'base' THEN 2
                               WHEN t.model = 'small' THEN 3
@@ -112,23 +143,32 @@ def run():
                             END
                           ) < :current_rank
                         RETURNING v.id, t.model
-                    """), {"current_rank": current_rank})
+                    """
+                        ),
+                        {"current_rank": current_rank},
+                    )
                     requeued = requeue_result.fetchall()
                     if requeued:
-                        logging.info("Model upgrade requeue: %d videos (%s -> %s)", 
-                                   len(requeued), 
-                                   ", ".join(set(r[1] for r in requeued)), 
-                                   current_model)
+                        logging.info(
+                            "Model upgrade requeue: %d videos (%s -> %s)",
+                            len(requeued),
+                            ", ".join(set(r[1] for r in requeued)),
+                            current_model,
+                        )
             except Exception as e:
                 logging.warning("Model upgrade requeue failed: %s", e)
-            row = conn.execute(text("""
+            row = conn.execute(
+                text(
+                    """
                 SELECT v.id
                 FROM videos v
                 WHERE v.state = 'pending'
                 ORDER BY v.created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
-            """)).first()
+            """
+                )
+            ).first()
             if not row:
                 logging.debug("No pending videos found. Sleeping %ss", POLL_INTERVAL)
                 time.sleep(POLL_INTERVAL)
@@ -145,11 +185,13 @@ def run():
             with engine.begin() as conn:
                 conn.execute(
                     text("UPDATE videos SET state='failed', error=:e, updated_at=now() WHERE id=:i"),
-                    {"i": video_id, "e": str(e)[:5000]}
+                    {"i": video_id, "e": str(e)[:5000]},
                 )
+
 
 def main():
     run()
+
 
 if __name__ == "__main__":
     main()

@@ -81,14 +81,27 @@ jobs:
       - name: Check bundle size
         run: |
           cd frontend
-          BUNDLE_SIZE=$(find dist/assets/ -type f -name 'index-*.js' -exec stat -c%s {} \; | awk '{s+=$1} END {print s}')
-          BUNDLE_SIZE_KB=$((BUNDLE_SIZE / 1024))
-          echo "Bundle size: ${BUNDLE_SIZE_KB}KB"
-          if [ $BUNDLE_SIZE_KB -gt 500 ]; then
-            echo "::warning::Bundle size (${BUNDLE_SIZE_KB}KB) exceeds 500KB threshold"
-          else
-            echo "✅ Bundle size is within acceptable limits"
-          fi
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const dir = path.join('dist', 'assets');
+          let total = 0;
+          if (fs.existsSync(dir)) {
+            for (const file of fs.readdirSync(dir)) {
+              if (/^index-.*\.js$/.test(file)) {
+                const stats = fs.statSync(path.join(dir, file));
+                total += stats.size;
+              }
+            }
+          }
+          const kb = Math.round(total / 1024);
+          console.log(`Bundle size: ${kb}KB`);
+          if (kb > 500) {
+            console.log(`::warning::Bundle size (${kb}KB) exceeds 500KB threshold`);
+          } else {
+            console.log('✅ Bundle size is within acceptable limits');
+          }
+          "
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

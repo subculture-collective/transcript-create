@@ -81,7 +81,7 @@ jobs:
       - name: Check bundle size
         run: |
           cd frontend
-          BUNDLE_SIZE=$(stat -c%s "dist/assets/index-"*.js 2>/dev/null || stat -f%z "dist/assets/index-"*.js)
+          BUNDLE_SIZE=$(find dist/assets/ -type f -name 'index-*.js' -exec stat -c%s {} \; | awk '{s+=$1} END {print s}')
           BUNDLE_SIZE_KB=$((BUNDLE_SIZE / 1024))
           echo "Bundle size: ${BUNDLE_SIZE_KB}KB"
           if [ $BUNDLE_SIZE_KB -gt 500 ]; then

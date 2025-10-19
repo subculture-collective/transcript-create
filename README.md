@@ -3,6 +3,7 @@
 # Transcript Create
 
 [![Backend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml)
 
 Create searchable, exportable transcripts from YouTube videos or channels. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
 
@@ -34,10 +35,14 @@ Why this design: a DB-backed queue keeps infra light while enabling scale-out wo
 
 ```bash
 cp .env.example .env
-# Required for local dev: set a random SESSION_SECRET
+# SECURITY: Generate a secure SESSION_SECRET
+openssl rand -hex 32  # Copy this value to SESSION_SECRET in .env
+# Required for local dev: DATABASE_URL (set automatically by docker-compose)
 # Optional: FRONTEND_ORIGIN (defaults to http://localhost:5173), HF_TOKEN for diarization
 # Billing/auth can be added later; see sections below
 ```
+
+**Security Note**: See [SECURITY.md](SECURITY.md) for detailed security practices and secrets management.
 
 2. Start services with Docker Compose (Postgres + API + Worker; OpenSearch optional)
 
@@ -241,9 +246,47 @@ cd frontend && npm install && npm run dev
 - Style: prefer SQLAlchemy Core and parameterized SQL; keep worker idempotent and stateful via DB
 - Small PRs welcome; please include minimal repro steps and note any env additions
 
+### Development Setup
+
+1. Install pre-commit hooks for security and code quality:
+   ```bash
+   # Quick setup (recommended)
+   ./scripts/setup_precommit.sh
+   
+   # Or manual setup
+   pip install pre-commit
+   pre-commit install
+   ```
+
+2. Before committing, ensure security checks pass:
+   ```bash
+   pre-commit run --all-files
+   pip-audit -r requirements.txt
+   ```
+
+3. Follow security guidelines in [SECURITY.md](SECURITY.md)
+
+## Security
+
+This project follows security best practices:
+- All dependencies are pinned with specific versions
+- Automated vulnerability scanning via GitHub Actions
+- Pre-commit hooks prevent accidental secret commits
+- Secrets managed via environment variables only
+
+See [SECURITY.md](SECURITY.md) for:
+- Reporting security vulnerabilities
+- Secrets management guidelines
+- Production security checklist
+- Dependency update procedures
+
 ## License
 
-TBD
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+For information about third-party dependencies and their licenses, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## GitHub project automation
 

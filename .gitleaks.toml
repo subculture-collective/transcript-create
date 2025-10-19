@@ -1,0 +1,76 @@
+# Gitleaks configuration for detecting secrets
+# https://github.com/gitleaks/gitleaks
+
+title = "transcript-create gitleaks config"
+
+# Global allowlist for known false positives
+[allowlist]
+description = "Global allowlist"
+paths = [
+    '''.env.example''',
+    '''constraints.txt''',
+]
+
+# Custom rules for common secret patterns
+[[rules]]
+id = "stripe-api-key"
+description = "Stripe API Key"
+regex = '''sk_(live|test)_[0-9a-zA-Z]{24,}'''
+tags = ["stripe", "secret", "api-key"]
+
+[[rules]]
+id = "stripe-webhook-secret"
+description = "Stripe Webhook Secret"
+regex = '''whsec_[0-9a-zA-Z]{32,}'''
+tags = ["stripe", "secret", "webhook"]
+
+[[rules]]
+id = "google-oauth-client-secret"
+description = "Google OAuth Client Secret"
+regex = '''GOCSPX-[0-9a-zA-Z_-]{28,}'''
+tags = ["google", "oauth", "secret"]
+
+[[rules]]
+id = "huggingface-token"
+description = "Hugging Face Access Token"
+regex = '''hf_[a-zA-Z]{34}'''
+tags = ["huggingface", "token"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey|access[_-]?key)[\"']?\s*[:=]\s*[\"']?[0-9a-zA-Z\-_]{20,}'''
+tags = ["api-key", "generic"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "PostgreSQL Connection String with Password"
+regex = '''postgresql(\+\w+)?://[^:]+:[^@\s]+@[^/\s]+'''
+tags = ["database", "postgres", "connection-string"]
+# Only flag if it's not the example/default password
+[rules.allowlist]
+regexes = [
+    '''postgresql.*:postgres@''',  # Default example password
+]
+
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY-----'''
+tags = ["private-key", "crypto"]
+
+[[rules]]
+id = "session-secret"
+description = "Session Secret (non-default)"
+regex = '''SESSION_SECRET\s*=\s*[\"']?(?!change-me)[a-zA-Z0-9]{32,}[\"']?'''
+tags = ["session", "secret"]
+
+[[rules]]
+id = "opensearch-password"
+description = "OpenSearch Password"
+regex = '''OPENSEARCH_(PASSWORD|INITIAL_ADMIN_PASSWORD)\s*=\s*[\"']?[^\s\"']+[\"']?'''
+tags = ["opensearch", "password"]
+[rules.allowlist]
+regexes = [
+    '''OPENSEARCH.*=\s*$''',  # Empty value is OK
+]

@@ -21,6 +21,7 @@ exclude = [
     ".eggs",
     "*.egg-info",
     "frontend",
+    "scripts",
 ]
 
 [tool.ruff.lint]
@@ -44,8 +45,16 @@ exclude = '''
   | \.eggs
   | .*\.egg-info
   | frontend
+  | scripts
 )/
 '''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip_gitignore = true
+extend_skip = ["frontend", "scripts"]
+src_paths = ["app", "worker"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -57,6 +66,7 @@ exclude = [
     "frontend/",
     ".venv/",
     "venv/",
+    "scripts/",
 ]
 
 [tool.bandit]

@@ -38,7 +38,7 @@ Contains all transitive dependencies with exact versions for:
 
 PyTorch and related packages (torch, torchaudio) have different builds for:
 - **CUDA**: NVIDIA GPUs
-- **ROCm**: AMD GPUs  
+- **ROCm**: AMD GPUs
 - **CPU**: No GPU acceleration
 
 These cannot coexist and must be installed separately based on the target hardware.

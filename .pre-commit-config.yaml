@@ -55,4 +55,4 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-requests]
-        args: ['--ignore-missing-imports']
+        # args: []  # Removed --ignore-missing-imports to enforce proper type checking

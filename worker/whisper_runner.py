@@ -1,6 +1,7 @@
 import logging
 import os
 import warnings
+from typing import Any, Optional
 
 import torch
 
@@ -10,11 +11,11 @@ from app.settings import settings
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*weights_only.*")
 warnings.filterwarnings("ignore", category=FutureWarning, module="whisper")
 
-_ct2 = None
-_torch_whisper = None
+_ct2: Optional[Any] = None
+_torch_whisper: Optional[Any] = None
 
-_model = None
-_fallback_ct2_model = None
+_model: Optional[Any] = None
+_fallback_ct2_model: Optional[Any] = None
 
 
 def _lazy_imports():
@@ -31,12 +32,16 @@ def _lazy_imports():
 
 def _try_load_ct2(model_name: str, device: str, compute_type: str):
     _lazy_imports()
+    if _ct2 is None:
+        raise RuntimeError("faster-whisper backend not loaded")
     logging.info("Loading faster-whisper '%s' (device=%s, compute_type=%s)", model_name, device, compute_type)
     return _ct2(model_name, device=device, compute_type=compute_type)
 
 
 def _try_load_torch(model_name: str, force_gpu: bool):
     _lazy_imports()
+    if _torch_whisper is None:
+        raise RuntimeError("whisper backend not loaded")
     # For ROCm, torch.device("cuda") maps to HIP when ROCm builds are installed
     use_cuda = torch.cuda.is_available()
     if force_gpu and not use_cuda:

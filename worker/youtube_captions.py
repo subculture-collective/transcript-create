@@ -2,7 +2,7 @@ import json
 import logging
 import subprocess
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.request import Request, urlopen
 
 
@@ -21,10 +21,11 @@ class YTCaptionTrack:
     ext: str  # 'json3', 'vtt', etc.
 
 
-def _yt_dlp_json(url: str) -> dict:
+def _yt_dlp_json(url: str) -> Dict[str, Any]:
     """Return yt-dlp JSON metadata for a YouTube URL."""
     meta = subprocess.check_output(["yt-dlp", "-J", url])
-    return json.loads(meta)
+    result: Dict[str, Any] = json.loads(meta)
+    return result
 
 
 def _pick_auto_caption(data: dict) -> Optional[YTCaptionTrack]:

@@ -181,7 +181,8 @@ def index_table(engine, table: str, index: str, last_id: int, batch: int, bulk_d
             chunk = rows[i : i + bulk_docs]
             actions = list(gen_bulk_actions(index, chunk))
             bulk_post(actions)
-        return rows[-1]["id"]
+        last_row_id = rows[-1]["id"]
+        return int(last_row_id)
 
 
 def main(

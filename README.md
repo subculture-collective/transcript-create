@@ -252,7 +252,7 @@ cd frontend && npm install && npm run dev
    ```bash
    # Quick setup (recommended)
    ./scripts/setup_precommit.sh
-   
+
    # Or manual setup
    pip install pre-commit
    pre-commit install

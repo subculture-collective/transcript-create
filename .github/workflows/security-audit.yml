@@ -48,7 +48,7 @@ jobs:
         run: |
           echo "## pip-audit Report" >> $GITHUB_STEP_SUMMARY
           pip-audit --requirement requirements.txt --desc --format markdown >> $GITHUB_STEP_SUMMARY || true
-          
+
           # Run again with exit code for high/critical severity
           pip-audit --requirement requirements.txt --vulnerability-service osv --require-hashes=false
 
@@ -58,7 +58,7 @@ jobs:
         run: |
           echo "## Safety Check Report" >> $GITHUB_STEP_SUMMARY
           safety check --json --file requirements.txt > safety-report.json || true
-          
+
           # Parse and display results
           if [ -f safety-report.json ]; then
             python3 <<'PYEOF'
@@ -67,24 +67,24 @@ jobs:
           try:
               with open('safety-report.json', 'r') as f:
                   data = json.load(f)
-              
+
               if isinstance(data, dict) and 'vulnerabilities' in data:
                   vulns = data['vulnerabilities']
               elif isinstance(data, list):
                   vulns = data
               else:
                   vulns = []
-              
+
               print(f"Found {len(vulns)} vulnerabilities")
-              
+
               high_severity = [v for v in vulns if v.get('severity', '').lower() in ['high', 'critical']]
-              
+
               if high_severity:
                   print(f"CRITICAL: {len(high_severity)} high/critical severity vulnerabilities found!")
                   for v in high_severity:
                       print(f"  - {v.get('package_name')} {v.get('vulnerable_spec')}: {v.get('advisory')}")
                   sys.exit(1)
-              
+
               print("No high/critical severity vulnerabilities found.")
           except Exception as e:
               print(f"Error parsing safety report: {e}")
@@ -124,7 +124,7 @@ jobs:
           echo "## Security Audit Complete" >> $GITHUB_STEP_SUMMARY
           echo "- Dependency Audit: ${{ needs.dependency-audit.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Secret Scanning: ${{ needs.secret-scanning.result }}" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ "${{ needs.dependency-audit.result }}" == "failure" ]] || [[ "${{ needs.secret-scanning.result }}" == "failure" ]]; then
             echo "::error::Security checks failed. Please review the audit results."
             exit 1

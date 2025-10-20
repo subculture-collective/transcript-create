@@ -16,7 +16,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt && \
     # Install ROCm PyTorch wheels explicitly (ensure ROCm backend is used)
     pip3 install --no-cache-dir --index-url ${ROCM_WHEEL_INDEX} \
         torch==2.4.1+rocm6.0 torchaudio==2.4.1+rocm6.0 && \
-    python3 - <<'PY' 
+    python3 - <<'PY'
 import torch
 print('Torch version:', torch.__version__)
 print('HIP version:', getattr(torch.version, 'hip', None))

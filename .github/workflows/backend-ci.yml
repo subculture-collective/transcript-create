@@ -28,7 +28,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

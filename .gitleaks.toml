@@ -62,8 +62,12 @@ tags = ["private-key", "crypto"]
 [[rules]]
 id = "session-secret"
 description = "Session Secret (non-default)"
-regex = '''SESSION_SECRET\s*=\s*[\"']?(?!change-me)[a-zA-Z0-9]{32,}[\"']?'''
+regex = '''SESSION_SECRET\s*=\s*[\"']?[a-zA-Z0-9]{32,}[\"']?'''
 tags = ["session", "secret"]
+[rules.allowlist]
+regexes = [
+    '''SESSION_SECRET\s*=\s*[\"']?change-me[\"']?''',  # Allow default/placeholder
+]
 
 [[rules]]
 id = "opensearch-password"

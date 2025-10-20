@@ -67,7 +67,7 @@ tags = ["session", "secret"]
 # Allowlist for default/example values
 [rules.allowlist]
 regexes = [
-    '''SESSION_SECRET.*change-me''',  # Allow default example secret
+    '''SESSION_SECRET\s*=\s*[\"']?change-me[\"']?''',  # Allow only the literal default example secret
 ]
 
 [[rules]]

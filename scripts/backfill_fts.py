@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import logging
 import argparse
+import logging
 import sys
 from pathlib import Path
+
 from sqlalchemy import create_engine, text
 
 # Ensure repo root on path
@@ -12,12 +13,13 @@ if str(REPO_ROOT) not in sys.path:
 
 from app.settings import settings
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s [fts-backfill] %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [fts-backfill] %(message)s")
 
 """
 Backfill FTS tsvector columns for existing rows. Because we created triggers, inserting or updating
 new rows is automatic. For existing rows, force an update to populate text_tsv.
 """
+
 
 def run_pass(conn, table: str, batch: int) -> int:
     if table == "segments":
@@ -64,7 +66,8 @@ def main(batch: int = 10000, until_empty: bool = False, max_iterations: int | No
             break
     logging.info("FTS backfill complete")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Backfill FTS tsvector columns for existing rows.")
     parser.add_argument("--batch", type=int, default=10000, help="Rows to update per table per pass (default: 10000)")
     parser.add_argument("--until-empty", action="store_true", help="Keep running passes until no rows are updated")

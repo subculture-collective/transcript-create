@@ -11,12 +11,12 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
-        args: ['--maxkb=5000']
+        args: ["--maxkb=5000"]
       - id: check-merge-conflict
       - id: detect-private-key
         name: Detect private keys
       - id: check-json
-        exclude: '^frontend/'
+        exclude: "^frontend/"
       - id: check-toml
 
   # Secret detection using gitleaks
@@ -32,21 +32,21 @@ repos:
     hooks:
       - id: black
         language_version: python3
-        args: ['--line-length=120']
+        args: ["--line-length=120"]
 
   # Python import sorting
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
-        args: ['--profile', 'black', '--line-length', '120']
+        args: ["--profile", "black", "--line-length", "120"]
 
   # Python linting with ruff
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.9.4
     hooks:
       - id: ruff
-        args: ['--fix']
+        args: ["--fix"]
       - id: ruff-format
 
   # Python type checking

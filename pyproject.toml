@@ -30,6 +30,7 @@ ignore = ["B008", "B904"]  # Allow Depends() in FastAPI route defaults, exceptio
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py files
+"scripts/*.py" = ["E402"]  # Allow module imports after sys.path manipulation in scripts
 
 [tool.black]
 line-length = 120
@@ -55,6 +56,8 @@ line_length = 120
 skip_gitignore = true
 extend_skip = ["frontend", "scripts"]
 src_paths = ["app", "worker"]
+known_first_party = ["app", "worker"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.mypy]
 python_version = "3.11"

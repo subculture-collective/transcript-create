@@ -56,7 +56,7 @@ def diarize_and_align(wav_path, whisper_segments):
         logging.info("Diarization produced %d speaker segments", len(diar_list))
         # Build friendly names like "Speaker 1", "Speaker 2" based on first appearance
         ordered_labels = sorted(label_first_time.items(), key=lambda kv: kv[1])
-        friendly = {raw: f"Speaker {i+1}" for i, (raw, _t) in enumerate(ordered_labels)}
+        friendly = {raw: f"Speaker {i + 1}" for i, (raw, _t) in enumerate(ordered_labels)}
         diar_segments = []
         speakers_assigned = 0
         for w in whisper_segments:

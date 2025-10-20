@@ -47,11 +47,15 @@ jobs:
 
       - name: Run ruff check
         run: |
-          ruff check app/ worker/ --output-format=github
+          ruff check app/ worker/ scripts/ --output-format=github
 
       - name: Run black check
         run: |
-          black --check app/ worker/
+          black --check app/ worker/ scripts/
+
+      - name: Run isort check
+        run: |
+          isort --check-only app/ worker/ scripts/
 
       - name: Run isort check
         run: |

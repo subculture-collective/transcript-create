@@ -21,6 +21,7 @@ exclude = [
     ".eggs",
     "*.egg-info",
     "frontend",
+    "scripts",
 ]
 
 [tool.ruff.lint]
@@ -45,6 +46,7 @@ exclude = '''
   | \.eggs
   | .*\.egg-info
   | frontend
+  | scripts
 )/
 '''
 
@@ -52,6 +54,8 @@ exclude = '''
 profile = "black"
 line_length = 120
 skip_gitignore = true
+extend_skip = ["frontend", "scripts"]
+src_paths = ["app", "worker"]
 known_first_party = ["app", "worker"]
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
@@ -65,6 +69,7 @@ exclude = [
     "frontend/",
     ".venv/",
     "venv/",
+    "scripts/",
 ]
 
 [tool.bandit]

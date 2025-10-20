@@ -28,7 +28,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,16 +42,20 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff black mypy
+          pip install ruff black isort mypy
           pip install -r requirements.txt
 
       - name: Run ruff check
         run: |
-          ruff check app/ worker/ --output-format=github
+          ruff check app/ worker/ scripts/ --output-format=github
 
       - name: Run black check
         run: |
-          black --check app/ worker/
+          black --check app/ worker/ scripts/
+
+      - name: Run isort check
+        run: |
+          isort --check-only app/ worker/ scripts/
 
       - name: Run mypy type check
         run: |
@@ -61,7 +65,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

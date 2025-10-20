@@ -258,13 +258,38 @@ cd frontend && npm install && npm run dev
    pre-commit install
    ```
 
-2. Before committing, ensure security checks pass:
+   The pre-commit hooks automatically run:
+   - **ruff**: Fast Python linter for code quality and style
+   - **black**: Code formatter for consistent Python style
+   - **isort**: Import sorting for organized imports
+   - **gitleaks**: Secret detection to prevent credential leaks
+   - Additional checks for trailing whitespace, YAML/JSON/TOML syntax, etc.
+
+2. Manual linting and formatting:
+   ```bash
+   # Check all Python files
+   ruff check app/ worker/ scripts/
+   black --check app/ worker/ scripts/
+   isort --check-only app/ worker/ scripts/
+
+   # Auto-fix issues
+   ruff check --fix app/ worker/ scripts/
+   black app/ worker/ scripts/
+   isort app/ worker/ scripts/
+
+   # Type checking (optional)
+   mypy app/ worker/
+   ```
+
+   All linting tools are configured in `pyproject.toml` with line-length=120 and consistent rules.
+
+3. Before committing, ensure security checks pass:
    ```bash
    pre-commit run --all-files
    pip-audit -r requirements.txt
    ```
 
-3. Follow security guidelines in [SECURITY.md](SECURITY.md)
+4. Follow security guidelines in [SECURITY.md](SECURITY.md)
 
 ## Security
 

@@ -55,10 +55,6 @@ jobs:
 
       - name: Run isort check
         run: |
-          isort --check-only app/ worker/ scripts/
-
-      - name: Run isort check
-        run: |
           isort --check-only app/ worker/
 
       - name: Run mypy type check

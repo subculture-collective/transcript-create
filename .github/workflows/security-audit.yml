@@ -1,131 +1,114 @@
 name: Security Audit
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'requirements.txt'
-      - 'constraints.txt'
-      - '.github/workflows/security-audit.yml'
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - 'requirements.txt'
-      - 'constraints.txt'
-      - '.github/workflows/security-audit.yml'
-  schedule:
-    # Run weekly on Mondays at 9:00 AM UTC
-    - cron: '0 9 * * 1'
-  workflow_dispatch:
+    push:
+        branches: [main, develop]
+        paths:
+            - "requirements.txt"
+            - "constraints.txt"
+            - ".github/workflows/security-audit.yml"
+    pull_request:
+        branches: [main, develop]
+        paths:
+            - "requirements.txt"
+            - "constraints.txt"
+            - ".github/workflows/security-audit.yml"
+    schedule:
+        # Run weekly on Mondays at 9:00 AM UTC
+        - cron: "0 9 * * 1"
+    workflow_dispatch:
 
 permissions:
-  contents: read
-  security-events: write
-  issues: write
+    contents: read
+    security-events: write
+    issues: write
 
 jobs:
-  dependency-audit:
-    name: Audit Python Dependencies
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    dependency-audit:
+        name: Audit Python Dependencies
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+                  cache: "pip"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pip-audit safety
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install pip-audit safety
 
-      - name: Run pip-audit (fail on high severity)
-        id: pip-audit
-        continue-on-error: true
-        run: |
-          echo "## pip-audit Report" >> $GITHUB_STEP_SUMMARY
-          pip-audit --requirement requirements.txt --desc --format markdown >> $GITHUB_STEP_SUMMARY || true
+            - name: Run pip-audit (fail on high severity)
+              id: pip-audit
+              continue-on-error: true
+              run: |
+                  echo "## pip-audit Report" >> $GITHUB_STEP_SUMMARY
+                  pip-audit --requirement requirements.txt --desc --format markdown >> $GITHUB_STEP_SUMMARY || true
 
-          # Run again with exit code for high/critical severity
-          pip-audit --requirement requirements.txt --vulnerability-service osv --require-hashes=false
+                  # Run again with exit code for high/critical severity
+                  pip-audit --requirement requirements.txt --vulnerability-service osv
 
-      - name: Run Safety check
-        id: safety
-        continue-on-error: true
-        run: |
-          echo "## Safety Check Report" >> $GITHUB_STEP_SUMMARY
-          safety check --json --file requirements.txt > safety-report.json || true
+            - name: Run Safety check
+              id: safety
+              continue-on-error: true
+              run: |
+                  echo "## Safety Check Report" >> $GITHUB_STEP_SUMMARY
 
-          # Parse and display results
-          if [ -f safety-report.json ]; then
-            python3 <<'PYEOF'
-          import json
-          import sys
-          try:
-              with open('safety-report.json', 'r') as f:
-                  data = json.load(f)
+                  # Note: Safety free version has limited JSON output
+                  # Run in text mode and capture output
+                  safety check --file requirements.txt > safety-report.txt 2>&1 || true
 
-              if isinstance(data, dict) and 'vulnerabilities' in data:
-                  vulns = data['vulnerabilities']
-              elif isinstance(data, list):
-                  vulns = data
-              else:
-                  vulns = []
+                  if [ -f safety-report.txt ]; then
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    cat safety-report.txt >> $GITHUB_STEP_SUMMARY
+                    echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+                    
+                    # Check for vulnerabilities in output
+                    if grep -iq "vulnerabilit" safety-report.txt; then
+                      echo "::warning::Safety detected potential vulnerabilities. Please review the report above."
+                    else
+                      echo "No known vulnerabilities found by Safety." >> $GITHUB_STEP_SUMMARY
+                    fi
+                  fi
 
-              print(f"Found {len(vulns)} vulnerabilities")
+            - name: Check results and fail if needed
+              if: steps.pip-audit.outcome == 'failure'
+              run: |
+                  echo "::error::High severity vulnerabilities detected by pip-audit"
+                  exit 1
 
-              high_severity = [v for v in vulns if v.get('severity', '').lower() in ['high', 'critical']]
+    secret-scanning:
+        name: Scan for Secrets
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # Full history for gitleaks
 
-              if high_severity:
-                  print(f"CRITICAL: {len(high_severity)} high/critical severity vulnerabilities found!")
-                  for v in high_severity:
-                      print(f"  - {v.get('package_name')} {v.get('vulnerable_spec')}: {v.get('advisory')}")
-                  sys.exit(1)
+            - name: Run Gitleaks
+              uses: gitleaks/gitleaks-action@v2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITLEAKS_CONFIG: .gitleaks.toml
 
-              print("No high/critical severity vulnerabilities found.")
-          except Exception as e:
-              print(f"Error parsing safety report: {e}")
-              sys.exit(0)
-          PYEOF
-          fi
+    security-summary:
+        name: Security Summary
+        runs-on: ubuntu-latest
+        needs: [dependency-audit, secret-scanning]
+        if: always()
+        steps:
+            - name: Summary
+              run: |
+                  echo "## Security Audit Complete" >> $GITHUB_STEP_SUMMARY
+                  echo "- Dependency Audit: ${{ needs.dependency-audit.result }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- Secret Scanning: ${{ needs.secret-scanning.result }}" >> $GITHUB_STEP_SUMMARY
 
-      - name: Check results and fail if needed
-        if: steps.pip-audit.outcome == 'failure'
-        run: |
-          echo "::error::High severity vulnerabilities detected by pip-audit"
-          exit 1
-
-  secret-scanning:
-    name: Scan for Secrets
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for gitleaks
-
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: .gitleaks.toml
-
-  security-summary:
-    name: Security Summary
-    runs-on: ubuntu-latest
-    needs: [dependency-audit, secret-scanning]
-    if: always()
-    steps:
-      - name: Summary
-        run: |
-          echo "## Security Audit Complete" >> $GITHUB_STEP_SUMMARY
-          echo "- Dependency Audit: ${{ needs.dependency-audit.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Secret Scanning: ${{ needs.secret-scanning.result }}" >> $GITHUB_STEP_SUMMARY
-
-          if [[ "${{ needs.dependency-audit.result }}" == "failure" ]] || [[ "${{ needs.secret-scanning.result }}" == "failure" ]]; then
-            echo "::error::Security checks failed. Please review the audit results."
-            exit 1
-          fi
+                  if [[ "${{ needs.dependency-audit.result }}" == "failure" ]] || [[ "${{ needs.secret-scanning.result }}" == "failure" ]]; then
+                    echo "::error::Security checks failed. Please review the audit results."
+                    exit 1
+                  fi

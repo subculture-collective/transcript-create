@@ -24,8 +24,7 @@ class YTCaptionTrack:
 def _yt_dlp_json(url: str) -> Dict[str, Any]:
     """Return yt-dlp JSON metadata for a YouTube URL."""
     meta = subprocess.check_output(["yt-dlp", "-J", url])
-    result: Dict[str, Any] = json.loads(meta)
-    return result
+    return json.loads(meta)
 
 
 def _pick_auto_caption(data: dict) -> Optional[YTCaptionTrack]:

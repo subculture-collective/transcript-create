@@ -1,15 +1,19 @@
 """Pytest configuration and fixtures for testing."""
 
+import logging
 import os
 from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.pool import NullPool
 
 from app.db import SessionLocal
 from app.main import app
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
@@ -53,9 +57,14 @@ def setup_test_database(test_engine):
     try:
         with test_engine.connect() as conn:
             conn.execute(text("SELECT 1 FROM jobs LIMIT 1"))
-    except Exception:
-        # Schema doesn't exist, but we won't create it here
+    except ProgrammingError:
+        # Schema doesn't exist (table not found), but we won't create it here
         # The CI will handle schema setup via docker-compose
+        logger.warning("Database schema not found. Ensure schema is initialized before running tests.")
         pass
+    except OperationalError as e:
+        # Connection or operational issues - these should be raised as they indicate real problems
+        logger.error("Database connection error: %s", e)
+        raise
 
     yield

@@ -40,7 +40,7 @@ def _try_load_ct2(model_name: str, device: str, compute_type: str):
 
 def _try_load_torch(model_name: str, force_gpu: bool):
     _lazy_imports()
-    if _torch_whisper is None:
+    if settings.WHISPER_BACKEND == "whisper" and _torch_whisper is None:
         raise RuntimeError("whisper backend not loaded")
     # For ROCm, torch.device("cuda") maps to HIP when ROCm builds are installed
     use_cuda = torch.cuda.is_available()

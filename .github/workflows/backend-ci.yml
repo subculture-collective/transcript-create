@@ -170,5 +170,6 @@ jobs:
           tags: transcript-create:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Intentionally using the CPU PyTorch wheel index for CI builds to ensure CPU compatibility.
           build-args: |
             ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/cpu

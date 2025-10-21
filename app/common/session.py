@@ -11,8 +11,6 @@ SESSION_COOKIE = os.environ.get("SESSION_COOKIE_NAME", "tc_session")
 
 def get_session_token(req: Request) -> Optional[str]:
     return req.cookies.get(SESSION_COOKIE)
-
-
 def set_session_cookie(resp: Response, token: str):
     resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", secure=False, max_age=60 * 60 * 24 * 7)
 

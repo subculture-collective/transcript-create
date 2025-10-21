@@ -1,4 +1,5 @@
 import uuid
+from typing import Any, Dict
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -64,7 +65,7 @@ def search(
             db.commit()
     if settings.SEARCH_BACKEND == "opensearch":
         index = settings.OPENSEARCH_INDEX_NATIVE if source == "native" else settings.OPENSEARCH_INDEX_YOUTUBE
-        query = {
+        query: Dict[str, Any] = {
             "from": offset,
             "size": limit,
             "query": {
@@ -80,7 +81,8 @@ def search(
             "highlight": {"fields": {"text": {"number_of_fragments": 3, "fragment_size": 180}}},
         }
         if video_id:
-            query["query"]["bool"].setdefault("filter", []).append({"term": {"video_id": str(video_id)}})
+            bool_query: Dict[str, Any] = query["query"]["bool"]  # type: ignore[assignment]
+            bool_query.setdefault("filter", []).append({"term": {"video_id": str(video_id)}})
         try:
             r = requests.post(f"{settings.OPENSEARCH_URL}/{index}/_search", json=query, timeout=10)
             r.raise_for_status()

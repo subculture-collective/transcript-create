@@ -66,7 +66,7 @@ jobs:
                     echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
                     cat safety-report.txt >> $GITHUB_STEP_SUMMARY
                     echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                    
+
                     # Check for vulnerabilities in output
                     if grep -iq "vulnerabilit" safety-report.txt; then
                       echo "::warning::Safety detected potential vulnerabilities. Please review the report above."

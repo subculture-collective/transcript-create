@@ -29,7 +29,12 @@ def create_checkout_session(payload: dict, request: Request, db=Depends(get_db))
     cancel_url_t = (settings.STRIPE_CANCEL_URL or f"{origin}/pricing?canceled=1").replace("{origin}", origin)
     customer_id = user.get("stripe_customer_id")
     if not customer_id:
-        cust = stripe.Customer.create(email=user.get("email") or None, metadata={"user_id": str(user["id"])})
+        user_email = user.get("email")
+        metadata = {"user_id": str(user["id"])}
+        if user_email:
+            cust = stripe.Customer.create(email=str(user_email), metadata=metadata)
+        else:
+            cust = stripe.Customer.create(metadata=metadata)
         customer_id = cust.id
         db.execute(
             text("UPDATE users SET stripe_customer_id=:c, updated_at=now() WHERE id=:i"),
@@ -72,7 +77,8 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
         if settings.STRIPE_WEBHOOK_SECRET:
             event = stripe.Webhook.construct_event(payload, sig, settings.STRIPE_WEBHOOK_SECRET)
         else:
-            event = stripe.Event.construct_from(request.json(), stripe.api_key)
+            event_data = await request.json()
+            event = stripe.Event.construct_from(event_data, stripe.api_key)
     except Exception as e:
         raise HTTPException(400, f"Webhook error: {e}")
     t = event.get("type")

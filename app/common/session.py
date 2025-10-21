@@ -11,7 +11,7 @@ SESSION_COOKIE = os.environ.get("SESSION_COOKIE_NAME", "tc_session")
 
 def get_session_token(req: Request) -> Optional[str]:
     token = req.cookies.get(SESSION_COOKIE)
-    return str(token) if token is not None else None
+    return token
 
 
 def set_session_cookie(resp: Response, token: str):

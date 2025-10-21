@@ -21,13 +21,21 @@ _fallback_ct2_model: Optional[Any] = None
 def _lazy_imports():
     global _ct2, _torch_whisper
     if settings.WHISPER_BACKEND == "faster-whisper" and _ct2 is None:
-        from faster_whisper import WhisperModel as CT2Model
+        try:
+            from faster_whisper import WhisperModel as CT2Model
 
-        _ct2 = CT2Model
+            _ct2 = CT2Model
+        except ImportError:
+            logging.error("Failed to import faster-whisper. Ensure it is installed.")
+            # _ct2 remains None
     if settings.WHISPER_BACKEND == "whisper" and _torch_whisper is None:
-        import whisper as torch_whisper
+        try:
+            import whisper as torch_whisper
 
-        _torch_whisper = torch_whisper
+            _torch_whisper = torch_whisper
+        except ImportError:
+            logging.error("Failed to import whisper. Ensure openai-whisper is installed.")
+            # _torch_whisper remains None
 
 
 def _try_load_ct2(model_name: str, device: str, compute_type: str):

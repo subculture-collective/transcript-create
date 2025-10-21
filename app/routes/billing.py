@@ -30,10 +30,11 @@ def create_checkout_session(payload: dict, request: Request, db=Depends(get_db))
     customer_id = user.get("stripe_customer_id")
     if not customer_id:
         user_email = user.get("email")
+        metadata = {"user_id": str(user["id"])}
         if user_email:
-            cust = stripe.Customer.create(email=str(user_email), metadata={"user_id": str(user["id"])})
+            cust = stripe.Customer.create(email=str(user_email), metadata=metadata)
         else:
-            cust = stripe.Customer.create(metadata={"user_id": str(user["id"])})
+            cust = stripe.Customer.create(metadata=metadata)
         customer_id = cust.id
         db.execute(
             text("UPDATE users SET stripe_customer_id=:c, updated_at=now() WHERE id=:i"),

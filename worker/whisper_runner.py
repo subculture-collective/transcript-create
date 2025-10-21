@@ -32,7 +32,7 @@ def _lazy_imports():
 
 def _try_load_ct2(model_name: str, device: str, compute_type: str):
     _lazy_imports()
-    if _ct2 is None:
+    if settings.WHISPER_BACKEND == "faster-whisper" and _ct2 is None:
         raise RuntimeError("faster-whisper backend not loaded")
     logging.info("Loading faster-whisper '%s' (device=%s, compute_type=%s)", model_name, device, compute_type)
     return _ct2(model_name, device=device, compute_type=compute_type)

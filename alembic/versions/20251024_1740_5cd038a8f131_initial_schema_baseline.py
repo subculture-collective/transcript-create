@@ -140,7 +140,7 @@ def upgrade() -> None:
             CREATE TRIGGER segments_tsv_update
             BEFORE INSERT OR UPDATE OF text ON segments
             FOR EACH ROW EXECUTE FUNCTION segments_tsv_trigger();
-        EXCEPTION WHEN duplicate_object THEN NULL; END $$
+        EXCEPTION WHEN duplicate_object THEN null; END $$
     """
     )
 

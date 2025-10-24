@@ -426,7 +426,7 @@ test.describe('Search Flow - Mobile', () => {
     await expect(page.locator('text=Video 0')).toBeVisible();
 
     // Scroll down to see more results
-    await page.evaluate(() => window.scrollTo(0, 1000));
+    await page.evaluate(() => (globalThis as any).window.scrollTo(0, 1000));
     
     // Should see more results after scrolling
     await expect(page.locator('text=Video 5, text=Video 10')).toBeVisible({ timeout: 3000 });

@@ -44,3 +44,9 @@ app.include_router(favorites_router)
 app.include_router(events_router)
 app.include_router(admin_router)
 app.include_router(search_router)
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring and E2E tests"""
+    return {"status": "ok"}

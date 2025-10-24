@@ -92,7 +92,7 @@ jobs:
           push: ${{ (github.event_name != 'workflow_dispatch') || inputs.push_image }}
           tags: |
             ${{ steps.meta.outputs.tags }}
-            ${{ steps.rocm.outputs.rocm_tag && format('{0}/{1}:{2}', env.REGISTRY, env.IMAGE_NAME, steps.rocm.outputs.rocm_tag) || '' }}
+            ${{ steps.rocm.outputs.rocm_tag != '' && format('{0}/{1}:{2}', env.REGISTRY, env.IMAGE_NAME, steps.rocm.outputs.rocm_tag) || '' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             ROCM_WHEEL_INDEX=${{ steps.rocm.outputs.wheel_index }}

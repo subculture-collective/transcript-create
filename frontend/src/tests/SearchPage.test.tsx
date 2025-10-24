@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SearchPage from '../routes/SearchPage'
 import { renderWithProviders } from './test-utils'
 import { http } from '../services/api'
-import * as services from '../services'
 
 vi.mock('../services', async () => {
   const actual = await vi.importActual('../services')

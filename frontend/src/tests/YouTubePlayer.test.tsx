@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import YouTubePlayer from '../components/YouTubePlayer'
 import { createRef } from 'react'
@@ -17,7 +17,7 @@ describe('YouTubePlayer', () => {
     }
 
     window.YT = {
-      Player: vi.fn(function (this: any, element: any, config: any) {
+      Player: vi.fn(function (this: any, _element: any, config: any) {
         this.seekTo = mockPlayer.seekTo
         this.destroy = mockPlayer.destroy
         // Simulate onReady callback
@@ -164,7 +164,7 @@ describe('YouTubePlayer', () => {
 
     // Check if appendChild was called with a script tag
     const scriptCalls = appendChildSpy.mock.calls.filter(call => {
-      const element = call[0]
+      const element = call[0] as HTMLElement
       return element && element.tagName === 'SCRIPT'
     })
     

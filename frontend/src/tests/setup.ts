@@ -8,7 +8,7 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 }
-global.localStorage = localStorageMock as any
+;(globalThis as any).localStorage = localStorageMock
 
 // Mock window.location
 delete (window as any).location

@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import PricingPage from '../routes/PricingPage'
 import { renderWithProviders } from './test-utils'
 import { http } from '../services/api'
-import * as authModule from '../services/auth'
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -235,7 +234,7 @@ describe('PricingPage', () => {
     const user = userEvent.setup()
     // Mock alert on window
     const alertMock = vi.fn()
-    global.alert = alertMock
+    ;(globalThis as any).alert = alertMock
     
     const getMock = vi.fn().mockReturnValue({
       json: vi.fn().mockResolvedValue({ user: null }),
@@ -265,7 +264,7 @@ describe('PricingPage', () => {
     const user = userEvent.setup()
     // Mock alert on window
     const alertMock = vi.fn()
-    global.alert = alertMock
+    ;(globalThis as any).alert = alertMock
     
     let callCount = 0
     const getMock = vi.fn().mockImplementation(() => {

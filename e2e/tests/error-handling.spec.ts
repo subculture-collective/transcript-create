@@ -12,7 +12,7 @@ test.describe('Error Handling', () => {
     await page.goto('/this-page-does-not-exist-12345');
 
     // Should show 404 page
-    await expect(page.locator('text=404, text=Not Found, text=Page not found')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=/404|Not Found|Page not found/i')).toBeVisible({ timeout: 5000 });
     
     // Should have link to go back home
     const homeLink = page.locator('a[href="/"], a:has-text("Home"), a:has-text("Go back")');

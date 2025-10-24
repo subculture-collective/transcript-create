@@ -86,6 +86,8 @@ export default defineConfig({
       timeout: 120 * 1000,
     },
     {
+      // NOTE: This command starts Docker services but does not stop them after tests complete.
+      // You must manually run `docker compose down` in the project root to clean up these services.
       command: 'cd .. && docker compose up -d db migrations api',
       url: 'http://localhost:8000/health',
       reuseExistingServer: !process.env.CI,

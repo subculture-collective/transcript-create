@@ -48,6 +48,8 @@ frontend/.eslintcache
 frontend/.tsbuildinfo
 
 # Documentation
+# Exclude all Markdown files except DEPENDENCIES.md.
+# Only DEPENDENCIES.md is needed in the image for automated dependency checks.
 *.md
 !DEPENDENCIES.md
 docs/

@@ -1,9 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from .. import crud
 from ..db import get_db
+from ..exceptions import JobNotFoundError
 from ..schemas import JobCreate, JobStatus
 
 router = APIRouter()
@@ -31,5 +32,5 @@ def create_job(payload: JobCreate, db=Depends(get_db)):
 def get_job(job_id: uuid.UUID, db=Depends(get_db)):
     job = crud.fetch_job(db, job_id)
     if not job:
-        raise HTTPException(404)
+        raise JobNotFoundError(str(job_id))
     return _row_to_status(job)

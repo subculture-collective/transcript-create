@@ -46,7 +46,6 @@ jobs:
         run: |
           cd frontend
           npm run format:check
-        continue-on-error: true
 
       - name: Run TypeScript type check
         run: |

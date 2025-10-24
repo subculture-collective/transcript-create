@@ -1,38 +1,38 @@
-type FavoriteKey = { videoId: string; segIndex: number }
-export type FavoriteItem = FavoriteKey & { startMs: number; endMs: number; text: string }
+type FavoriteKey = { videoId: string; segIndex: number };
+export type FavoriteItem = FavoriteKey & { startMs: number; endMs: number; text: string };
 
-const KEY = 'favorites:v1'
+const KEY = 'favorites:v1';
 
 function load(): FavoriteItem[] {
   try {
-    const raw = localStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as FavoriteItem[]) : []
+    const raw = localStorage.getItem(KEY);
+    return raw ? (JSON.parse(raw) as FavoriteItem[]) : [];
   } catch {
-    return []
+    return [];
   }
 }
 
 function save(items: FavoriteItem[]) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(items))
+    localStorage.setItem(KEY, JSON.stringify(items));
   } catch {}
 }
 
-let cache = load()
+let cache = load();
 
 export const favorites = {
   list(): FavoriteItem[] {
-    return [...cache]
+    return [...cache];
   },
   has(key: FavoriteKey): boolean {
-    return cache.some(i => i.videoId === key.videoId && i.segIndex === key.segIndex)
+    return cache.some((i) => i.videoId === key.videoId && i.segIndex === key.segIndex);
   },
   toggle(item: FavoriteItem) {
     if (this.has(item)) {
-      cache = cache.filter(i => !(i.videoId === item.videoId && i.segIndex === item.segIndex))
+      cache = cache.filter((i) => !(i.videoId === item.videoId && i.segIndex === item.segIndex));
     } else {
-      cache = [item, ...cache]
+      cache = [item, ...cache];
     }
-    save(cache)
+    save(cache);
   },
-}
+};

@@ -4,5 +4,5 @@ export default function LoginPage() {
       <h1 className="text-2xl font-semibold">Login</h1>
       <p className="text-gray-600">Auth coming soon. Placeholder for OAuth.</p>
     </div>
-  )
+  );
 }

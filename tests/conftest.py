@@ -72,7 +72,6 @@ def setup_test_database(test_engine):
         # Skip database setup if engine not available
         yield
         return
-        
     # Check if tables exist by trying to query a core table
     try:
         with test_engine.connect() as conn:

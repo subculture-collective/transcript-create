@@ -6,6 +6,7 @@ Thank you for considering contributing to Transcript Create! This document provi
 
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
+- [Database Migrations](#database-migrations)
 - [Code Quality](#code-quality)
 - [CI/CD Pipeline](#cicd-pipeline)
 - [Pull Request Process](#pull-request-process)
@@ -48,8 +49,10 @@ pre-commit install
 pip install -r requirements-dev.txt
 
 # Set up test database (PostgreSQL required)
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
-psql $DATABASE_URL -f sql/schema.sql
+export DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
+
+# Run migrations to set up schema
+python scripts/run_migrations.py upgrade
 
 # Run all tests
 pytest tests/
@@ -83,6 +86,223 @@ npm install
 ### Running Locally
 
 See the main [README.md](README.md) for detailed instructions on running the full stack with Docker Compose or individual services.
+
+## Database Migrations
+
+We use [Alembic](https://alembic.sqlalchemy.org/) to manage database schema changes. Migrations provide version control for the database schema and enable safe, reproducible schema evolution across environments.
+
+### Understanding Migrations
+
+- **Migrations** are stored in `alembic/versions/`
+- Each migration has an `upgrade()` function to apply changes and a `downgrade()` function to revert them
+- Migrations are applied sequentially in the order they were created
+- The `alembic_version` table tracks which migrations have been applied
+
+### Running Migrations
+
+#### Using the Helper Script
+
+```bash
+# Apply all pending migrations
+python scripts/run_migrations.py upgrade
+
+# Check current migration version
+python scripts/run_migrations.py current
+
+# View migration history
+python scripts/run_migrations.py history
+
+# Downgrade one migration (careful in production!)
+python scripts/run_migrations.py downgrade
+
+# Stamp database at a specific revision (for existing databases)
+python scripts/run_migrations.py stamp head
+```
+
+#### Using Alembic Directly
+
+```bash
+# Apply all pending migrations
+alembic upgrade head
+
+# Upgrade to a specific revision
+alembic upgrade abc123
+
+# Downgrade to a specific revision
+alembic downgrade def456
+
+# Downgrade one revision
+alembic downgrade -1
+
+# Show current revision
+alembic current
+
+# Show migration history
+alembic history --verbose
+```
+
+### Creating New Migrations
+
+When making schema changes, you **must** create a migration:
+
+```bash
+# Create a new migration file
+alembic revision -m "descriptive_name"
+
+# This creates a file like: alembic/versions/20251024_1234_abc123_descriptive_name.py
+```
+
+The generated file contains empty `upgrade()` and `downgrade()` functions that you must implement:
+
+```python
+def upgrade() -> None:
+    """Apply schema changes."""
+    # Add a new column
+    op.add_column('videos', sa.Column('thumbnail_url', sa.String(), nullable=True))
+    
+    # Create an index
+    op.create_index('idx_videos_thumbnail', 'videos', ['thumbnail_url'])
+
+def downgrade() -> None:
+    """Revert schema changes."""
+    # Drop the index
+    op.drop_index('idx_videos_thumbnail', 'videos')
+    
+    # Drop the column
+    op.drop_column('videos', 'thumbnail_url')
+```
+
+### Migration Guidelines
+
+1. **Always test both upgrade and downgrade**
+   ```bash
+   # Test upgrade
+   python scripts/run_migrations.py upgrade
+   
+   # Test downgrade
+   python scripts/run_migrations.py downgrade
+   
+   # Re-apply
+   python scripts/run_migrations.py upgrade
+   ```
+
+2. **Write idempotent migrations when possible**
+   - Use `IF NOT EXISTS` / `IF EXISTS` clauses
+   - Check for existence before creating/dropping objects
+   - Handle cases where migration is partially applied
+
+3. **Keep migrations focused and atomic**
+   - One logical change per migration
+   - Don't mix DDL and data migrations
+   - Easier to review, test, and potentially revert
+
+4. **Document complex migrations**
+   - Add comments explaining the purpose
+   - Document any manual steps required
+   - Note any data transformations
+
+5. **Test with production-like data**
+   - Test on a copy of production data when possible
+   - Consider performance impact of migrations
+   - Plan for zero-downtime deployment if needed
+
+6. **Never edit existing migrations**
+   - Once a migration is committed and deployed, never modify it
+   - Create a new migration to fix issues
+   - Exception: migrations not yet in main branch
+
+### For Existing Databases
+
+If you have an existing database created from `sql/schema.sql`, you need to "stamp" it to indicate it's at the baseline:
+
+```bash
+# Stamp the database as being at the initial migration
+export DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/transcripts"
+python scripts/run_migrations.py stamp head
+```
+
+This tells Alembic that your database already has the baseline schema, so it won't try to re-apply it.
+
+### Docker Compose Integration
+
+When running with Docker Compose, migrations are automatically applied on startup via the `migrations` service:
+
+```yaml
+services:
+  migrations:
+    image: transcript-create:latest
+    command: ["python3", "scripts/run_migrations.py", "upgrade"]
+    depends_on:
+      db:
+        condition: service_healthy
+```
+
+The API and worker services wait for migrations to complete before starting.
+
+### CI/CD Validation
+
+All migrations are automatically validated in CI:
+
+- **Fresh Database Test**: Applies migrations to an empty database
+- **Existing Schema Test**: Stamps an existing schema and verifies no conflicts
+- **Up/Down Test**: Tests upgrade and downgrade functionality
+
+See `.github/workflows/migrations-ci.yml` for details.
+
+### Common Scenarios
+
+#### Adding a new table
+
+```python
+def upgrade() -> None:
+    op.execute("""
+        CREATE TABLE new_table (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """)
+
+def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS new_table CASCADE")
+```
+
+#### Adding a column
+
+```python
+def upgrade() -> None:
+    op.execute("ALTER TABLE videos ADD COLUMN thumbnail_url TEXT")
+
+def downgrade() -> None:
+    op.execute("ALTER TABLE videos DROP COLUMN IF EXISTS thumbnail_url")
+```
+
+#### Creating an index
+
+```python
+def upgrade() -> None:
+    op.execute("CREATE INDEX IF NOT EXISTS idx_videos_youtube_id ON videos(youtube_id)")
+
+def downgrade() -> None:
+    op.execute("DROP INDEX IF EXISTS idx_videos_youtube_id")
+```
+
+#### Data migration
+
+```python
+def upgrade() -> None:
+    # First add the column
+    op.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
+    
+    # Then migrate existing data
+    op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+    
+    # Finally add NOT NULL constraint
+    op.execute("ALTER TABLE users ALTER COLUMN status SET NOT NULL")
+
+def downgrade() -> None:
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS status")
+```
 
 ## Code Quality
 

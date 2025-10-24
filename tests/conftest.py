@@ -44,7 +44,6 @@ def db_session(test_engine) -> Generator:
     """Create a new database session for a test."""
     if test_engine is None:
         pytest.skip("Database engine not available (missing driver)")
-    
     connection = test_engine.connect()
     transaction = connection.begin()
 

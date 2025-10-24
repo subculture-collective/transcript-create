@@ -25,7 +25,7 @@ class TestJobSchemas:
     def test_job_create_valid(self):
         """Test creating a valid JobCreate schema."""
         job = JobCreate(url="https://youtube.com/watch?v=test123", kind="single")
-        assert job.url == "https://youtube.com/watch?v=test123"
+        assert str(job.url) == "https://youtube.com/watch?v=test123"
         assert job.kind == "single"
 
     def test_job_create_default_kind(self):

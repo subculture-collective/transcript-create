@@ -136,8 +136,8 @@ test.describe('Error Handling', () => {
 
     // Simulate slow API response
     await page.route('**/api/jobs', async (route) => {
-      // Never respond to simulate timeout
-      await new Promise(() => {}); // Infinite wait
+      // Simulate network timeout
+      await route.abort('timedout');
     });
 
     await page.goto('/search');

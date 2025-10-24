@@ -25,7 +25,7 @@ def alembic_config():
 @pytest.fixture(scope="module")
 def test_db_url():
     """Get test database URL from environment."""
-    return os.environ.get("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/postgres")
+    return os.environ.get("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/transcripts")
 
 
 @contextmanager

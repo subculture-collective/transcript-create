@@ -4,6 +4,8 @@
 
 [![Backend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml)
 [![Frontend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml)
+[![Docker Build](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml)
+[![Docker Image Version](https://ghcr-badge.egpl.dev/onnwee/transcript-create/latest_tag?trim=major&label=latest)](https://github.com/onnwee/transcript-create/pkgs/container/transcript-create)
 
 Create searchable, exportable transcripts from YouTube videos or channels. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
 
@@ -79,6 +81,61 @@ curl -s -X POST http://localhost:8000/jobs \
 ```
 
 Check status and fetch transcript when complete (see API section below).
+
+## Docker Images
+
+Pre-built Docker images are automatically published to GitHub Container Registry (GHCR) on every release and push to main.
+
+### Pulling Images
+
+```bash
+# Pull the latest stable image
+docker pull ghcr.io/onnwee/transcript-create:latest
+
+# Pull a specific version
+docker pull ghcr.io/onnwee/transcript-create:1.0.0
+
+# Pull a specific ROCm variant
+docker pull ghcr.io/onnwee/transcript-create:rocm6.0
+docker pull ghcr.io/onnwee/transcript-create:rocm6.1
+```
+
+### Available Tags
+
+- `latest` - Latest stable build from main branch (ROCm 6.0 by default)
+- `v1.2.3`, `1.2.3`, `1.2`, `1` - Semantic version tags from releases
+- `sha-abc123` - Specific commit builds
+- `rocm6.0`, `rocm6.1`, `rocm6.2` - ROCm version variants
+- `buildcache` - Build cache (internal use)
+
+### Using Pre-built Images
+
+Update your `docker-compose.yml` to use the pre-built image:
+
+```yaml
+services:
+  api:
+    image: ghcr.io/onnwee/transcript-create:latest
+    # Remove the 'build' section
+    env_file: .env
+    # ... rest of configuration
+```
+
+### Image Details
+
+- **Base**: ROCm dev-ubuntu-22.04:6.0.2 (AMD GPU support)
+- **Size**: ~2.5-3GB (optimized with layer caching)
+- **Platforms**: linux/amd64
+- **Includes**: PyTorch ROCm, Whisper, ffmpeg, all dependencies
+
+### Build Configuration
+
+Images are built with:
+- Multi-stage optimization for smaller size
+- Layer caching for faster rebuilds (< 5 min with cache)
+- SBOM (Software Bill of Materials) for security
+- Provenance attestations for supply chain security
+- Configurable ROCm version via `ROCM_WHEEL_INDEX` build arg
 
 ## Repository layout
 

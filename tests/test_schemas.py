@@ -205,6 +205,6 @@ class TestSchemaValidation:
 
     def test_special_characters_in_text(self):
         """Test segment with special characters."""
-        special_text = "Test with émojis 🎉 and symbols @#$%"
+        special_text = "Test with emojis 🎉 and symbols @#$%"
         segment = Segment(start_ms=0, end_ms=1000, text=special_text, speaker_label=None)
         assert segment.text == special_text

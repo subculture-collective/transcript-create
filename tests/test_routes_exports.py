@@ -1,6 +1,8 @@
 """Tests for export routes."""
 
+import secrets
 import uuid
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -17,10 +19,6 @@ class TestExportRoutes:
 
     def test_export_youtube_transcript_srt(self, client: TestClient, db_session):
         """Test YouTube transcript SRT export."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         # Create authenticated user
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
@@ -71,10 +69,6 @@ class TestExportRoutes:
 
     def test_export_youtube_transcript_vtt(self, client: TestClient, db_session):
         """Test YouTube transcript VTT export."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -123,10 +117,6 @@ class TestExportRoutes:
 
     def test_export_native_transcript_srt(self, client: TestClient, db_session):
         """Test native transcript SRT export."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -173,10 +163,6 @@ class TestExportRoutes:
 
     def test_export_native_transcript_vtt(self, client: TestClient, db_session):
         """Test native transcript VTT export."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -224,10 +210,6 @@ class TestExportRoutes:
 
     def test_export_native_transcript_json(self, client: TestClient, db_session):
         """Test native transcript JSON export."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -278,10 +260,6 @@ class TestExportRoutes:
 
     def test_export_youtube_transcript_json(self, client: TestClient, db_session):
         """Test YouTube transcript JSON export."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -330,10 +308,6 @@ class TestExportRoutes:
 
     def test_export_native_transcript_pdf(self, client: TestClient, db_session):
         """Test native transcript PDF export."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -382,10 +356,6 @@ class TestExportRoutes:
 
     def test_export_not_found(self, client: TestClient, db_session):
         """Test export for non-existent video."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -408,10 +378,6 @@ class TestExportRoutes:
 
     def test_export_free_user_quota_exceeded(self, client: TestClient, db_session):
         """Test export quota for free users."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 

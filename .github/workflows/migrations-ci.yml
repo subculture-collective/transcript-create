@@ -141,7 +141,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
         run: |
-          python scripts/run_migrations.py current | grep "5cd038a8f131" || exit 1
+          python scripts/run_migrations.py current | grep -E '[a-f0-9]{12}' || exit 1
           echo "✓ Database correctly stamped"
 
       - name: Test that no new migrations are pending

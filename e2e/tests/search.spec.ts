@@ -296,7 +296,7 @@ test.describe('Search Flow', () => {
     await searchButton.click();
 
     // Should show no results message
-    await expect(page.locator('text=No results, text=No matches, text=nothing found')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=/No results|No matches|nothing found/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should handle search API errors gracefully', async ({ page }) => {

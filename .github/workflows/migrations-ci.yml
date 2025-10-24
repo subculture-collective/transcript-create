@@ -200,7 +200,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
         run: |
-          python scripts/run_migrations.py downgrade -1
+          python scripts/run_migrations.py downgrade
           echo "✓ Downgrade successful"
 
       - name: Verify tables are dropped

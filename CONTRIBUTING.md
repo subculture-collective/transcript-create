@@ -39,6 +39,40 @@ pip install ruff black isort mypy pytest pre-commit
 pre-commit install
 ```
 
+### Running Tests
+
+#### Backend Tests
+
+```bash
+# Install test dependencies
+pip install -r requirements-dev.txt
+
+# Set up test database (PostgreSQL required)
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+psql $DATABASE_URL -f sql/schema.sql
+
+# Run all tests
+pytest tests/
+
+# Run tests with coverage
+pytest tests/ --cov=app --cov-report=html --cov-report=term
+
+# Run specific test file
+pytest tests/test_routes_jobs.py -v
+
+# View HTML coverage report
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+```
+
+**Test Structure:**
+- `tests/conftest.py` - Shared fixtures (database, test client)
+- `tests/test_crud.py` - CRUD operation tests
+- `tests/test_routes_*.py` - API endpoint tests
+- `tests/test_schemas.py` - Pydantic model validation
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
+
 ### Frontend Setup
 
 ```bash
@@ -170,7 +204,11 @@ Runs on changes to:
 
 3. **Test with PostgreSQL**
    - Apply database schema
-   - Run pytest suite
+   - Run pytest suite with coverage
+   - Generate coverage reports (XML, HTML, terminal)
+   - Check 70%+ coverage threshold
+   - Upload coverage artifacts
+   - Add GitHub Actions summary with coverage stats
 
 4. **Docker Build**
    - Build Docker image (CPU-compatible check)

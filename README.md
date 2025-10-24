@@ -4,6 +4,7 @@
 
 [![Backend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml)
 [![Frontend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml)
+[![E2E Tests](https://github.com/subculture-collective/transcript-create/actions/workflows/e2e-tests.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/e2e-tests.yml)
 [![Docker Build](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml)
 [![Docker Image Version](https://ghcr-badge.egpl.dev/onnwee/transcript-create/latest_tag?trim=major&label=latest)](https://github.com/onnwee/transcript-create/pkgs/container/transcript-create)
 
@@ -14,6 +15,7 @@ Create searchable, exportable transcripts from YouTube videos or channels. The s
 This project has comprehensive CI/CD automation:
 - **Backend CI**: Linting (ruff, black, isort), type checking (mypy), security scanning, tests with PostgreSQL, Docker build validation
 - **Frontend CI**: ESLint, Prettier formatting, TypeScript checking, Vite build with bundle size monitoring
+- **E2E Tests**: Playwright tests across Chromium, Firefox, WebKit, and mobile viewports (255 tests)
 - **Docker Build**: Automated builds on push to main and tags, published to GHCR with ROCm support
 - **Security**: Weekly dependency audits, secret scanning, vulnerability detection
 
@@ -306,6 +308,83 @@ cd frontend && npm install && npm run dev
 - Webhook not firing: ensure `STRIPE_WEBHOOK_SECRET` matches and that Stripe CLI or a public URL forwards to `/stripe/webhook`
 - CORS: set `FRONTEND_ORIGIN` to your web app origin
 - Schema: Compose auto-applies `sql/schema.sql`; to re-apply manually: `psql $DATABASE_URL -f sql/schema.sql`
+
+## Testing
+
+### Unit Tests
+
+**Backend (Python + pytest)**:
+```bash
+# Run all backend tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_routes_auth.py
+
+# Run with coverage
+pytest --cov=app --cov=worker tests/
+```
+
+**Frontend (Vitest)**:
+```bash
+cd frontend
+
+# Run all unit tests
+npm test
+
+# Run with UI
+npm run test:ui
+
+# Run with coverage
+npm run test:coverage
+```
+
+### Integration Tests
+
+```bash
+# Start PostgreSQL service
+docker compose up -d db
+
+# Run integration tests
+pytest tests/integration/ -v
+```
+
+### E2E Tests (Playwright)
+
+Full end-to-end tests covering user workflows across browsers and mobile devices.
+
+```bash
+cd e2e
+
+# Install dependencies (first time)
+npm install
+npx playwright install --with-deps
+
+# Start services (in separate terminals)
+cd .. && uvicorn app.main:app --reload --port 8000  # Backend
+cd frontend && npm run dev                          # Frontend
+
+# Seed test database
+npm run seed-db
+
+# Run E2E tests
+npm test                    # All tests
+npm run test:headed        # With visible browser
+npm run test:ui            # Interactive UI mode
+npm run test:critical      # Fast critical tests only
+```
+
+**Coverage**: 255 E2E tests across:
+- Authentication & sessions
+- Job creation & processing
+- Search with filters & deeplinks
+- Export features (SRT, VTT, PDF, JSON)
+- Billing & quotas
+- Error handling & 404 pages
+- Mobile responsiveness
+- Cross-browser (Chromium, Firefox, WebKit)
+
+See [docs/E2E-TESTING.md](docs/E2E-TESTING.md) for comprehensive guide and [e2e/README.md](e2e/README.md) for detailed documentation.
 
 ## Contributing
 

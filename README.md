@@ -131,7 +131,7 @@ services:
 ### Build Configuration
 
 Images are built with:
-- Multi-stage optimization for smaller size
+- Planned: Multi-stage optimization for smaller size
 - Layer caching for faster rebuilds (< 5 min with cache)
 - SBOM (Software Bill of Materials) for security
 - Provenance attestations for supply chain security

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PR implements a complete error handling and validation system for the transcript-create application, addressing all requirements from issue #[issue_number].
+This PR implements a complete error handling and validation system for the transcript-create application, addressing all requirements from the backend error handling & validation issue.
 
 ## Changes Made
 
@@ -305,7 +305,7 @@ def get_job(job_id: uuid.UUID, db=Depends(get_db)):
 
 ## Related Issues
 
-- Implements: #[issue_number] - Backend Error Handling & Validation
+- Implements: Backend Error Handling & Validation
 - Part of: Milestone M1 - Foundation & Stability
 - Related: #26 - Master Roadmap
 

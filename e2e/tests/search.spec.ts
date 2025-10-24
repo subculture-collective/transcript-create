@@ -321,7 +321,7 @@ test.describe('Search Flow', () => {
     await searchButton.click();
 
     // Should show error message
-    await expect(page.locator('text=Error, text=Failed, text=try again')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=/Error|Failed|try again/i')).toBeVisible({ timeout: 5000 });
   });
 });
 

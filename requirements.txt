@@ -22,7 +22,7 @@ numpy==2.3.4
 python-dotenv==1.1.1
 pydantic==2.12.3
 pydantic-settings==2.11.0
-requests==2.32.5
+requests==2.32.4
 
 # Authentication
 Authlib==1.6.5

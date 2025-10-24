@@ -17,10 +17,15 @@ on:
       - '.github/workflows/migrations-ci.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   validate-migrations-fresh:
     name: Test Fresh Migration
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     services:
       postgres:
@@ -82,6 +87,8 @@ jobs:
   validate-migrations-from-existing:
     name: Test Migration from Existing Schema
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     services:
       postgres:
@@ -148,6 +155,8 @@ jobs:
   validate-migration-downgrade:
     name: Test Migration Up/Down
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     services:
       postgres:

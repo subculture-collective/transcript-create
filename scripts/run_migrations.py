@@ -77,9 +77,18 @@ def run_migrations(alembic_command: str = "upgrade", revision: str = "head"):
         sys.exit(1)
 
 
+def get_default_revision(cmd: str) -> str:
+    """Return the default revision for a given Alembic command."""
+    if cmd in ("upgrade", "stamp"):
+        return "head"
+    elif cmd == "downgrade":
+        return "-1"
+    else:
+        return ""
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "upgrade"
-    rev = sys.argv[2] if len(sys.argv) > 2 else ("head" if cmd in ("upgrade", "stamp") else "-1")
+    rev = sys.argv[2] if len(sys.argv) > 2 else get_default_revision(cmd)
 
     try:
         run_migrations(cmd, rev)

@@ -1,6 +1,5 @@
 """Smoke tests for integration test infrastructure."""
 
-import pytest
 
 
 class TestIntegrationInfrastructure:

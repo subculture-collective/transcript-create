@@ -1,8 +1,6 @@
 """Integration tests for job processing workflows."""
 
-import time
 import uuid
-from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient

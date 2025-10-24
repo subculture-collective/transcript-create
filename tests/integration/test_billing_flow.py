@@ -1,7 +1,7 @@
 """Integration tests for billing and payment flows."""
 
 import uuid
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -177,9 +177,7 @@ class TestPlanUpgrade:
             integration_db.commit()
 
             # Simulate upgrade
-            integration_db.execute(
-                text("UPDATE users SET plan = 'pro' WHERE id = :id"), {"id": str(user_id)}
-            )
+            integration_db.execute(text("UPDATE users SET plan = 'pro' WHERE id = :id"), {"id": str(user_id)})
             integration_db.commit()
 
             # Verify upgrade
@@ -209,9 +207,7 @@ class TestPlanUpgrade:
             integration_db.commit()
 
             # Simulate downgrade
-            integration_db.execute(
-                text("UPDATE users SET plan = 'free' WHERE id = :id"), {"id": str(user_id)}
-            )
+            integration_db.execute(text("UPDATE users SET plan = 'free' WHERE id = :id"), {"id": str(user_id)})
             integration_db.commit()
 
             # Verify downgrade

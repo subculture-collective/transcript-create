@@ -7,7 +7,6 @@ import uuid
 from typing import Generator
 
 import pytest
-import requests
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool

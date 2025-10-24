@@ -75,3 +75,8 @@ exclude = [
 [tool.bandit]
 exclude_dirs = ["frontend", ".venv", "venv", "tests"]
 skips = ["B101"]  # Skip assert_used test
+
+[tool.pytest.ini_options]
+markers = [
+    "timeout: marks tests with execution timeout (deselect with '-m \"not timeout\"')",
+]

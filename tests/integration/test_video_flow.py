@@ -1,7 +1,6 @@
 """Integration tests for video and transcript workflows."""
 
 import uuid
-from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,9 +18,7 @@ class TestVideoTranscriptFlow:
         assert response.status_code == 404
 
     @pytest.mark.timeout(60)
-    def test_get_video_transcript_no_segments(
-        self, integration_client: TestClient, integration_db, clean_test_data
-    ):
+    def test_get_video_transcript_no_segments(self, integration_client: TestClient, integration_db, clean_test_data):
         """Test retrieving transcript for video with no segments."""
         # Create a job and video manually in the database
         job_id = uuid.uuid4()
@@ -209,9 +206,7 @@ class TestVideoStates:
         assert state == "pending"
 
         # Update to downloading state
-        integration_db.execute(
-            text("UPDATE videos SET state = 'downloading' WHERE id = :id"), {"id": str(video_id)}
-        )
+        integration_db.execute(text("UPDATE videos SET state = 'downloading' WHERE id = :id"), {"id": str(video_id)})
         integration_db.commit()
 
         result = integration_db.execute(text("SELECT state FROM videos WHERE id = :id"), {"id": str(video_id)})

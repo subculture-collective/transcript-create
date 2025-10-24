@@ -1,7 +1,7 @@
 """Integration tests for authentication and authorization."""
 
 import uuid
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,7 +37,9 @@ class TestAuthFlow:
 
     @pytest.mark.timeout(60)
     @patch("app.routes.auth.verify_oauth_token")
-    def test_oauth_callback_with_code(self, mock_verify, integration_client: TestClient, integration_db, clean_test_data):
+    def test_oauth_callback_with_code(
+        self, mock_verify, integration_client: TestClient, integration_db, clean_test_data
+    ):
         """Test OAuth callback with valid code (mocked)."""
         # Mock OAuth verification
         mock_verify.return_value = {
@@ -86,9 +88,7 @@ class TestQuotaEnforcement:
     """Integration tests for quota enforcement."""
 
     @pytest.mark.timeout(60)
-    def test_search_quota_enforcement(
-        self, integration_client: TestClient, integration_db, clean_test_data
-    ):
+    def test_search_quota_enforcement(self, integration_client: TestClient, integration_db, clean_test_data):
         """Test that search quota is enforced."""
         # Create a user with quota limits (if user system exists)
         user_id = uuid.uuid4()
@@ -119,9 +119,7 @@ class TestQuotaEnforcement:
             pytest.skip("Users/quota system not implemented")
 
     @pytest.mark.timeout(60)
-    def test_quota_reset_after_upgrade(
-        self, integration_client: TestClient, integration_db, clean_test_data
-    ):
+    def test_quota_reset_after_upgrade(self, integration_client: TestClient, integration_db, clean_test_data):
         """Test that quota resets/increases after plan upgrade."""
         # Would require implementing user upgrade flow
         pytest.skip("Plan upgrade flow not implemented in test")

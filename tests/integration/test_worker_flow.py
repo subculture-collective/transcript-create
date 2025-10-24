@@ -1,8 +1,6 @@
 """Integration tests for worker processing."""
 
 import uuid
-from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 from sqlalchemy import text
@@ -201,9 +199,7 @@ class TestWorkerJobExpansion:
         )
 
         # Update job state
-        integration_db.execute(
-            text("UPDATE jobs SET state = 'expanded' WHERE id = :id"), {"id": str(job_id)}
-        )
+        integration_db.execute(text("UPDATE jobs SET state = 'expanded' WHERE id = :id"), {"id": str(job_id)})
         integration_db.commit()
 
         # Verify expansion
@@ -252,9 +248,7 @@ class TestWorkerJobExpansion:
                 },
             )
 
-        integration_db.execute(
-            text("UPDATE jobs SET state = 'expanded' WHERE id = :id"), {"id": str(job_id)}
-        )
+        integration_db.execute(text("UPDATE jobs SET state = 'expanded' WHERE id = :id"), {"id": str(job_id)})
         integration_db.commit()
 
         # Verify expansion
@@ -304,9 +298,7 @@ class TestWorkerErrorHandling:
         integration_db.commit()
 
         # Verify failure state
-        result = integration_db.execute(
-            text("SELECT state, error FROM videos WHERE id = :id"), {"id": str(video_id)}
-        )
+        result = integration_db.execute(text("SELECT state, error FROM videos WHERE id = :id"), {"id": str(video_id)})
         video = result.mappings().first()
         assert video["state"] == "failed"
         assert video["error"] == error_message

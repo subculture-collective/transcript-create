@@ -1,5 +1,8 @@
 """Tests for billing routes."""
 
+import secrets
+import uuid
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -24,10 +27,6 @@ class TestBillingRoutes:
 
     def test_checkout_session_authenticated(self, client: TestClient, db_session):
         """Test checkout session with authenticated user."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -63,10 +62,6 @@ class TestBillingRoutes:
 
     def test_checkout_session_yearly_period(self, client: TestClient, db_session):
         """Test checkout session with yearly period."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -111,10 +106,6 @@ class TestBillingRoutes:
 
     def test_billing_portal_no_customer(self, client: TestClient, db_session):
         """Test billing portal for user without Stripe customer."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -138,10 +129,6 @@ class TestBillingRoutes:
 
     def test_billing_portal_with_customer(self, client: TestClient, db_session):
         """Test billing portal for user with Stripe customer."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -175,8 +162,6 @@ class TestBillingRoutes:
 
     def test_stripe_webhook_checkout_completed(self, client: TestClient, db_session):
         """Test Stripe webhook for checkout session completed."""
-        import uuid
-
         user_id = uuid.uuid4()
         customer_id = "cus_test123"
 
@@ -205,8 +190,6 @@ class TestBillingRoutes:
 
     def test_stripe_webhook_subscription_updated(self, client: TestClient, db_session):
         """Test Stripe webhook for subscription updated."""
-        import uuid
-
         user_id = uuid.uuid4()
         customer_id = "cus_test456"
 
@@ -232,8 +215,6 @@ class TestBillingRoutes:
 
     def test_stripe_webhook_subscription_deleted(self, client: TestClient, db_session):
         """Test Stripe webhook for subscription deleted."""
-        import uuid
-
         user_id = uuid.uuid4()
         customer_id = "cus_test789"
 

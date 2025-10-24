@@ -1,5 +1,8 @@
 """Tests for auth routes."""
 
+import secrets
+import uuid
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -19,10 +22,6 @@ class TestAuthRoutes:
     def test_auth_me_authenticated(self, client: TestClient, db_session):
         """Test /auth/me endpoint with authenticated user."""
         # Create a test user and session
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -50,10 +49,6 @@ class TestAuthRoutes:
 
     def test_auth_me_expired_session(self, client: TestClient, db_session):
         """Test /auth/me with expired session."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -78,10 +73,6 @@ class TestAuthRoutes:
 
     def test_auth_logout(self, client: TestClient, db_session):
         """Test logout endpoint."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -160,10 +151,6 @@ class TestAuthRoutes:
 
     def test_auth_me_free_plan_search_limit(self, client: TestClient, db_session):
         """Test that free plan users see search limit information."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -197,10 +184,6 @@ class TestAuthRoutes:
 
     def test_multiple_sessions_same_user(self, client: TestClient, db_session):
         """Test that a user can have multiple active sessions."""
-        import secrets
-        import uuid
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token1 = secrets.token_urlsafe(32)
         session_token2 = secrets.token_urlsafe(32)

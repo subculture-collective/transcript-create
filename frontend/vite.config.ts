@@ -18,5 +18,29 @@ export default defineConfig(() => {
             },
           },
     },
+    test: {
+      globals: true,
+      environment: 'happy-dom',
+      setupFiles: './src/tests/setup.ts',
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html'],
+        exclude: [
+          'node_modules/',
+          'src/tests/',
+          '**/*.test.{ts,tsx}',
+          '**/*.spec.{ts,tsx}',
+          '**/types/',
+          'vite.config.ts',
+          'eslint.config.js',
+        ],
+        thresholds: {
+          lines: 65,
+          functions: 65,
+          branches: 50,
+          statements: 65,
+        },
+      },
+    },
   }
 })

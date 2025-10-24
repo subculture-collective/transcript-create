@@ -73,19 +73,19 @@ def clean_test_data(integration_engine):
 
     # Clean up before test
     with integration_engine.begin() as conn:
-        conn.execute(text("DELETE FROM segments WHERE 1=1"))
-        conn.execute(text("DELETE FROM transcripts WHERE 1=1"))
-        conn.execute(text("DELETE FROM videos WHERE 1=1"))
-        conn.execute(text("DELETE FROM jobs WHERE 1=1"))
+        conn.execute(text("DELETE FROM segments"))
+        conn.execute(text("DELETE FROM transcripts"))
+        conn.execute(text("DELETE FROM videos"))
+        conn.execute(text("DELETE FROM jobs"))
 
     yield
 
     # Clean up after test
     with integration_engine.begin() as conn:
-        conn.execute(text("DELETE FROM segments WHERE 1=1"))
-        conn.execute(text("DELETE FROM transcripts WHERE 1=1"))
-        conn.execute(text("DELETE FROM videos WHERE 1=1"))
-        conn.execute(text("DELETE FROM jobs WHERE 1=1"))
+        conn.execute(text("DELETE FROM segments"))
+        conn.execute(text("DELETE FROM transcripts"))
+        conn.execute(text("DELETE FROM videos"))
+        conn.execute(text("DELETE FROM jobs"))
 
 
 @pytest.fixture

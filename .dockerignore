@@ -1,0 +1,82 @@
+# Git files
+.git
+.github
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.py[codz]
+*$py.class
+*.so
+.Python
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv
+venv/
+ENV/
+env/
+.pixi
+
+# IDE
+.vscode
+.idea
+
+# Testing and coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+cover/
+*.cover
+
+# Data and cache directories
+data/
+cache/
+.cache
+
+# Frontend build artifacts
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/.vite
+frontend/.eslintcache
+frontend/.tsbuildinfo
+
+# Documentation
+# Exclude all Markdown files except DEPENDENCIES.md.
+# Only DEPENDENCIES.md is needed in the image for automated dependency checks.
+*.md
+!DEPENDENCIES.md
+docs/
+
+# OS files
+.DS_Store
+*.log
+*.log.*
+
+# Environment files
+.env
+.env.*
+.envrc
+
+# Pre-commit and config files
+.pre-commit-config.yaml
+.gitleaks.toml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

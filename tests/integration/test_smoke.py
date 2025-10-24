@@ -17,21 +17,18 @@ class TestIntegrationInfrastructure:
         import tests.integration.test_video_flow
         import tests.integration.test_worker_flow
 
-        assert tests.integration.conftest is not None
-        assert tests.integration.test_auth_flow is not None
-        assert tests.integration.test_billing_flow is not None
-        assert tests.integration.test_export_flow is not None
-        assert tests.integration.test_job_flow is not None
-        assert tests.integration.test_search_flow is not None
-        assert tests.integration.test_video_flow is not None
-        assert tests.integration.test_worker_flow is not None
+        # Verify modules have expected test classes
+        assert hasattr(tests.integration.test_job_flow, "TestJobProcessingFlow")
+        assert hasattr(tests.integration.test_worker_flow, "TestWorkerVideoProcessing")
+        assert hasattr(tests.integration.test_auth_flow, "TestAuthFlow")
 
     def test_fixtures_import(self):
         """Test that fixture modules can be imported."""
         from tests.fixtures import transcript_data, youtube_metadata
 
-        assert transcript_data is not None
-        assert youtube_metadata is not None
+        # Verify fixture modules have expected data
+        assert hasattr(transcript_data, "SAMPLE_WHISPER_SEGMENTS")
+        assert hasattr(youtube_metadata, "SAMPLE_VIDEO_METADATA")
 
     def test_fixture_data_availability(self):
         """Test that fixture data is accessible."""

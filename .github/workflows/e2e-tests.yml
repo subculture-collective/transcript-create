@@ -101,7 +101,6 @@ jobs:
           FRONTEND_ORIGIN: http://localhost:5173
           LOG_LEVEL: INFO
         run: |
-          cd ..
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > api.log 2>&1 &
           echo $! > api.pid
           sleep 5

@@ -380,6 +380,51 @@ For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 4. Follow security guidelines in [SECURITY.md](SECURITY.md)
 
+## Testing
+
+This project includes comprehensive test coverage:
+
+### Unit Tests
+```bash
+# Run all unit tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=app --cov=worker --cov-report=html
+
+# Run specific test file
+pytest tests/test_routes_jobs.py -v
+```
+
+### Integration Tests
+End-to-end integration tests validate complete workflows. See [tests/integration/README.md](tests/integration/README.md) for details.
+
+```bash
+# Run all integration tests
+pytest tests/integration/ -v
+
+# Run specific integration test suite
+pytest tests/integration/test_job_flow.py -v
+
+# Run with timeouts
+pytest tests/integration/ --timeout=120 -v
+```
+
+Integration tests cover:
+- Job creation and processing workflows
+- Video transcription and export (SRT, PDF)
+- Search functionality (native and YouTube captions)
+- Worker processing and state transitions
+- Authentication and authorization flows
+- Billing and payment processing (mocked)
+- Database integrity and concurrency
+
+### CI/CD Testing
+All tests run automatically in CI on every pull request:
+- Unit tests with PostgreSQL
+- Integration tests (subset on PR, full suite nightly)
+- Security scans and linting
+
 ## Security
 
 This project follows security best practices:

@@ -2,7 +2,6 @@
 
 import uuid
 
-import pytest
 from sqlalchemy import text
 
 from app import crud

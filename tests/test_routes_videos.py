@@ -2,7 +2,6 @@
 
 import uuid
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -104,13 +103,13 @@ class TestVideosRoutes:
             (1000, 2500, "This is a test", "Speaker 2"),
             (2500, 4000, "Final segment", "Speaker 1"),
         ]
-        for start, end, text, speaker in segments_data:
+        for start, end, seg_text, speaker in segments_data:
             db_session.execute(
                 text(
                     "INSERT INTO segments (video_id, start_ms, end_ms, text, speaker_label) "
                     "VALUES (:vid, :start, :end, :text, :speaker)"
                 ),
-                {"vid": str(video_id), "start": start, "end": end, "text": text, "speaker": speaker},
+                {"vid": str(video_id), "start": start, "end": end, "text": seg_text, "speaker": speaker},
             )
         db_session.commit()
 
@@ -147,13 +146,13 @@ class TestVideosRoutes:
             (0, 1000, "First", None),
             (1000, 2000, "Second", None),
         ]
-        for start, end, text, speaker in segments_data:
+        for start, end, seg_text, speaker in segments_data:
             db_session.execute(
                 text(
                     "INSERT INTO segments (video_id, start_ms, end_ms, text, speaker_label) "
                     "VALUES (:vid, :start, :end, :text, :speaker)"
                 ),
-                {"vid": str(video_id), "start": start, "end": end, "text": text, "speaker": speaker},
+                {"vid": str(video_id), "start": start, "end": end, "text": seg_text, "speaker": speaker},
             )
         db_session.commit()
 

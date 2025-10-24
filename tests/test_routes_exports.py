@@ -2,7 +2,6 @@
 
 import uuid
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -429,7 +428,7 @@ class TestExportRoutes:
         )
 
         # Create many export events to exceed quota
-        for i in range(10):  # Assuming FREE_DAILY_EXPORT_LIMIT is less than 10
+        for _i in range(10):  # Assuming FREE_DAILY_EXPORT_LIMIT is less than 10
             db_session.execute(
                 text(
                     "INSERT INTO events (user_id, session_token, type, payload) "

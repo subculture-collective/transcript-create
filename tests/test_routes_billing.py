@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -50,7 +49,9 @@ class TestBillingRoutes:
                 with patch("stripe.checkout.Session.create") as mock_session:
                     # Mock Stripe responses
                     mock_customer.return_value = MagicMock(id="cus_test123")
-                    mock_session.return_value = MagicMock(id="cs_test123", url="https://checkout.stripe.com/pay/cs_test")
+                    mock_session.return_value = MagicMock(
+                        id="cs_test123", url="https://checkout.stripe.com/pay/cs_test"
+                    )
 
                     response = client.post(
                         "/billing/checkout-session", json={"period": "monthly"}, cookies={"tc_session": session_token}

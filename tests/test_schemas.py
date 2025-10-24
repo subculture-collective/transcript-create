@@ -47,9 +47,7 @@ class TestJobSchemas:
         """Test creating a valid JobStatus schema."""
         job_id = uuid.uuid4()
         now = datetime.utcnow()
-        status = JobStatus(
-            id=job_id, kind="single", state="pending", error=None, created_at=now, updated_at=now
-        )
+        status = JobStatus(id=job_id, kind="single", state="pending", error=None, created_at=now, updated_at=now)
         assert status.id == job_id
         assert status.state == "pending"
         assert status.error is None
@@ -139,9 +137,7 @@ class TestSearchSchemas:
 
     def test_search_hit_valid(self):
         """Test creating a valid SearchHit schema."""
-        hit = SearchHit(
-            id=123, video_id=uuid.uuid4(), start_ms=1000, end_ms=2000, snippet="Search <em>result</em>"
-        )
+        hit = SearchHit(id=123, video_id=uuid.uuid4(), start_ms=1000, end_ms=2000, snippet="Search <em>result</em>")
         assert hit.id == 123
         assert "result" in hit.snippet
 
@@ -163,9 +159,7 @@ class TestVideoSchemas:
 
     def test_video_info_valid(self):
         """Test creating a valid VideoInfo schema."""
-        video = VideoInfo(
-            id=uuid.uuid4(), youtube_id="test123", title="Test Video", duration_seconds=300
-        )
+        video = VideoInfo(id=uuid.uuid4(), youtube_id="test123", title="Test Video", duration_seconds=300)
         assert video.youtube_id == "test123"
         assert video.title == "Test Video"
         assert video.duration_seconds == 300

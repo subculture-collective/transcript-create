@@ -10,7 +10,7 @@ httpx==0.28.1
 # Linting and formatting
 ruff==0.9.1
 black==25.1.0
-isort==6.1.1
+isort==6.1.0
 mypy==1.14.1
 
 # Security scanning

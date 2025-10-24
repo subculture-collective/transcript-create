@@ -6,12 +6,29 @@ services:
       POSTGRES_DB: transcripts
     volumes:
       - dbdata:/var/lib/postgresql/data
-      # Initialize schema on first run
-      - ./sql/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      # NOTE: schema.sql is no longer applied automatically on first boot
+      # Migrations are now managed by Alembic via the 'migrations' service
+      # If you need to bootstrap from schema.sql for testing, apply it manually
     # Expose Postgres to the host for external clients (psql/DBeaver/etc.)
     # If port 5432 is already used on your host, change to something like "5434:5432".
     ports:
       - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrations:
+    image: transcript-create:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python3", "scripts/run_migrations.py", "upgrade"]
+    restart: "no"
 
   api:
     build:
@@ -36,7 +53,10 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
     volumes:
       - ./data:/data
       - ./cache:/root/.cache
@@ -68,7 +88,10 @@ services:
       # Disable OpenTelemetry SDK to avoid external telemetry posts
       OTEL_SDK_DISABLED: "true"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
     command: ["python3", "-m", "worker.loop"]
     volumes:
       - ./data:/data

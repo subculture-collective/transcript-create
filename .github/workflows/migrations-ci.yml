@@ -1,0 +1,229 @@
+name: Database Migrations - Validate
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'alembic/**'
+      - 'sql/schema.sql'
+      - 'scripts/run_migrations.py'
+      - '.github/workflows/migrations-ci.yml'
+  pull_request:
+    paths:
+      - 'alembic/**'
+      - 'sql/schema.sql'
+      - 'scripts/run_migrations.py'
+      - '.github/workflows/migrations-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-migrations-fresh:
+    name: Test Fresh Migration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: transcripts
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install alembic sqlalchemy psycopg[binary]
+          pip install -r requirements.txt
+
+      - name: Run migrations on fresh database
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          python scripts/run_migrations.py upgrade
+          echo "✓ Fresh migration successful"
+
+      - name: Verify schema tables exist
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          # Check that key tables exist
+          PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -c "\dt" | grep jobs
+          PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -c "\dt" | grep videos
+          PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -c "\dt" | grep transcripts
+          PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -c "\dt" | grep segments
+          PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -c "\dt" | grep users
+          echo "✓ Schema verification passed"
+
+      - name: Check migration history
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          python scripts/run_migrations.py current
+          python scripts/run_migrations.py history
+
+  validate-migrations-from-existing:
+    name: Test Migration from Existing Schema
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: transcripts
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install alembic sqlalchemy psycopg[binary]
+          pip install -r requirements.txt
+
+      - name: Apply existing schema.sql (simulate production)
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -f sql/schema.sql
+          echo "✓ Existing schema applied"
+
+      - name: Stamp database at baseline
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          # Stamp the database to indicate it's at the baseline migration
+          # This is what existing deployments would do to start using migrations
+          python scripts/run_migrations.py stamp head
+          echo "✓ Database stamped at baseline"
+
+      - name: Verify stamped revision
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          python scripts/run_migrations.py current | grep -E '[a-f0-9]{12}' || exit 1
+          echo "✓ Database correctly stamped"
+
+      - name: Test that no new migrations are pending
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          # After stamping, upgrade should be a no-op
+          python scripts/run_migrations.py upgrade
+          echo "✓ No pending migrations after stamping"
+
+  validate-migration-downgrade:
+    name: Test Migration Up/Down
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: transcripts
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install alembic sqlalchemy psycopg[binary]
+          pip install -r requirements.txt
+
+      - name: Apply all migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          python scripts/run_migrations.py upgrade
+          echo "✓ Migrations applied"
+
+      - name: Downgrade one revision
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          python scripts/run_migrations.py downgrade
+          echo "✓ Downgrade successful"
+
+      - name: Verify tables are dropped
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          # After downgrading from baseline, tables should not exist
+          if PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -c "\dt" | grep -q jobs; then
+            echo "✗ Tables still exist after downgrade"
+            exit 1
+          fi
+          echo "✓ Tables properly removed by downgrade"
+
+      - name: Re-apply migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          python scripts/run_migrations.py upgrade
+          echo "✓ Re-applied migrations"
+
+      - name: Verify schema after re-upgrade
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/transcripts
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d transcripts -c "\dt" | grep jobs
+          echo "✓ Schema restored after re-upgrade"

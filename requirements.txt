@@ -5,6 +5,7 @@ uvicorn[standard]==0.38.0
 # Database
 sqlalchemy==2.0.44
 psycopg[binary]==3.2.10
+alembic==1.14.0
 
 # YouTube and media processing
 yt-dlp==2025.10.14

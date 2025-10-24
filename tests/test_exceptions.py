@@ -1,7 +1,5 @@
 """Tests for custom exceptions."""
 
-import pytest
-
 from app.exceptions import (
     AppError,
     AuthenticationError,

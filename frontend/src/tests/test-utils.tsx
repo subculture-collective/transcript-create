@@ -1,6 +1,6 @@
 import { render, type RenderOptions } from '@testing-library/react'
-import { BrowserRouter } from 'react-router-dom'
 import type { ReactElement } from 'react'
+import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from '../services/auth'
 
 /**

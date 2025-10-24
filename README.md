@@ -9,6 +9,16 @@
 
 Create searchable, exportable transcripts from YouTube videos or channels. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
 
+## CI/CD Status
+
+This project has comprehensive CI/CD automation:
+- **Backend CI**: Linting (ruff, black, isort), type checking (mypy), security scanning, tests with PostgreSQL, Docker build validation
+- **Frontend CI**: ESLint, Prettier formatting, TypeScript checking, Vite build with bundle size monitoring
+- **Docker Build**: Automated builds on push to main and tags, published to GHCR with ROCm support
+- **Security**: Weekly dependency audits, secret scanning, vulnerability detection
+
+All checks must pass before merging to `main`. Typical PR checks complete in < 3 minutes. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
 ## Highlights
 
 - Ingest a single video or entire channel with yt-dlp
@@ -299,11 +309,33 @@ cd frontend && npm install && npm run dev
 
 ## Contributing
 
-- Code structure: see `app/routes/*`, `worker/*`, and `frontend/src/*`
-- Style: prefer SQLAlchemy Core and parameterized SQL; keep worker idempotent and stateful via DB
-- Small PRs welcome; please include minimal repro steps and note any env additions
+We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup instructions
+- Code quality guidelines and linting
+- CI/CD pipeline documentation
+- Pull request process
+- Branch protection requirements
 
-### Development Setup
+### Quick Start
+
+```bash
+# Install pre-commit hooks
+./scripts/setup_precommit.sh
+
+# Backend linting
+ruff check app/ worker/ scripts/
+black --check app/ worker/ scripts/
+isort --check-only app/ worker/
+
+# Frontend linting
+cd frontend
+npm run lint
+npm run format:check
+```
+
+For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Development Setup (Legacy Section - see CONTRIBUTING.md for full details)
 
 1. Install pre-commit hooks for security and code quality:
    ```bash

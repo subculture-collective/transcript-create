@@ -1,7 +1,6 @@
 """Tests for worker.whisper_runner module."""
 
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -156,7 +155,7 @@ class TestTranscribeChunkPyTorch:
         wav_path = tmp_path / "test.wav"
         wav_path.touch()
 
-        result = whisper_runner.transcribe_chunk(wav_path)
+        whisper_runner.transcribe_chunk(wav_path)
 
         # Verify transcribe was called with fp16=False
         call_kwargs = mock_model.transcribe.call_args[1]
@@ -165,7 +164,9 @@ class TestTranscribeChunkPyTorch:
     @patch("worker.whisper_runner._get_ct2_fallback_model")
     @patch("worker.whisper_runner._get_model")
     @patch("worker.whisper_runner.settings")
-    def test_transcribe_chunk_pytorch_rocm_fault_fallback(self, mock_settings, mock_get_model, mock_ct2_fallback, tmp_path):
+    def test_transcribe_chunk_pytorch_rocm_fault_fallback(
+        self, mock_settings, mock_get_model, mock_ct2_fallback, tmp_path
+    ):
         """Test fallback to CT2 on ROCm memory fault."""
         mock_settings.WHISPER_BACKEND = "whisper"
 
@@ -200,7 +201,9 @@ class TestTranscribeChunkPyTorch:
     @patch("worker.whisper_runner._get_ct2_fallback_model")
     @patch("worker.whisper_runner._get_model")
     @patch("worker.whisper_runner.settings")
-    def test_transcribe_chunk_pytorch_hipError_fallback(self, mock_settings, mock_get_model, mock_ct2_fallback, tmp_path):
+    def test_transcribe_chunk_pytorch_hip_error_fallback(
+        self, mock_settings, mock_get_model, mock_ct2_fallback, tmp_path
+    ):
         """Test fallback to CT2 on hipError."""
         mock_settings.WHISPER_BACKEND = "whisper"
 
@@ -287,7 +290,7 @@ class TestSegmentFormatting:
         """Test segment handles missing no_speech_prob gracefully."""
         mock_settings.WHISPER_BACKEND = "faster-whisper"
 
-        mock_segment = Mock(spec=['start', 'end', 'text', 'avg_logprob', 'temperature', 'tokens'])
+        mock_segment = Mock(spec=["start", "end", "text", "avg_logprob", "temperature", "tokens"])
         mock_segment.start = 0.0
         mock_segment.end = 5.0
         mock_segment.text = " Test"

@@ -2,11 +2,9 @@
 
 import json
 import uuid
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, patch
 
 import pytest
-from sqlalchemy import create_engine, text
 
 from worker import pipeline
 
@@ -463,7 +461,7 @@ class TestCaptureYouTubeCaptions:
                 }
             ]
         }
-        
+
         with patch("worker.youtube_captions.urlopen") as mock_urlopen:
             mock_response = Mock()
             mock_response.read.return_value = json.dumps(caption_data).encode()

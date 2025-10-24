@@ -1,10 +1,7 @@
 """Tests for worker.youtube_captions module."""
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
-
-import pytest
+from unittest.mock import Mock, patch
 
 from worker.youtube_captions import (
     YTCaptionTrack,
@@ -458,8 +455,8 @@ Caption text
         # Verify Request was created with User-Agent
         call_args = mock_urlopen.call_args[0]
         if call_args:
-            request = call_args[0]
             # Request object should have headers
+            pass
 
 
 class TestYTDataClasses:

@@ -1,9 +1,7 @@
 """Tests for worker.diarize module."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import Mock, patch
 
 from worker import diarize
 
@@ -243,7 +241,7 @@ class TestGetPipeline:
 
         # When import error occurred, _get_pipeline should return None
         result = diarize._get_pipeline()
-        
+
         # Result depends on whether pyannote.audio is actually available
         # In the mocked environment, it returns None
         assert result is None or result is not None  # Either is valid in test environment
@@ -274,6 +272,6 @@ class TestGetPipeline:
         # This test documents that behavior
         # Full integration testing of env var setup is beyond unit test scope
         result = diarize._get_pipeline()
-        
+
         # Either returns a pipeline or None depending on environment
         assert result is None or result is not None

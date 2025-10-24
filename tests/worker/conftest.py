@@ -3,8 +3,6 @@
 import sys
 from unittest.mock import MagicMock, Mock
 
-import pytest
-
 # Mock heavy dependencies for worker unit tests
 # These should be mocked before the modules are imported
 
@@ -18,14 +16,14 @@ mock_attention = MagicMock()
 mock_attention.sdpa_kernel = mock_sdpa_kernel
 mock_attention.SDPBackend = Mock()
 
-sys.modules['torch'] = Mock()
-sys.modules['torch.nn'] = Mock()
-sys.modules['torch.nn.attention'] = mock_attention
-sys.modules['torch.backends'] = Mock()
-sys.modules['torch.backends.cuda'] = Mock()
-sys.modules['torch.cuda'] = Mock()
-sys.modules['faster_whisper'] = Mock()
-sys.modules['whisper'] = Mock()
-sys.modules['pyannote'] = Mock()
-sys.modules['pyannote.audio'] = Mock()
+sys.modules["torch"] = Mock()
+sys.modules["torch.nn"] = Mock()
+sys.modules["torch.nn.attention"] = mock_attention
+sys.modules["torch.backends"] = Mock()
+sys.modules["torch.backends.cuda"] = Mock()
+sys.modules["torch.cuda"] = Mock()
+sys.modules["faster_whisper"] = Mock()
+sys.modules["whisper"] = Mock()
+sys.modules["pyannote"] = Mock()
+sys.modules["pyannote.audio"] = Mock()
 

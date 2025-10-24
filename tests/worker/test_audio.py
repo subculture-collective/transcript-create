@@ -1,10 +1,7 @@
 """Tests for worker.audio module."""
 
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
-
-import pytest
+from unittest.mock import patch
 
 from worker.audio import Chunk, chunk_audio, download_audio, ensure_wav_16k, get_duration_seconds
 

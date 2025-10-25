@@ -190,6 +190,7 @@ async def check_storage() -> Dict[str, Any]:
         
         # Check write permissions
         test_file = os.path.join(workdir, ".health_check_test")
+        write_error = None
         try:
             with open(test_file, "w") as f:
                 f.write("health check")

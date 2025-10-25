@@ -1,5 +1,3 @@
-import logging
-import os
 import uuid
 
 from fastapi import FastAPI, Request, status
@@ -10,13 +8,16 @@ from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 
 from .exceptions import AppError
+from .logging_config import configure_logging, get_logger, request_id_ctx, user_id_ctx
 from .settings import settings
 
-logging.basicConfig(
-    level=getattr(logging, (os.environ.get("LOG_LEVEL") or "INFO").upper(), logging.INFO),
-    format="%(asctime)s %(levelname)s [api] %(message)s",
+# Configure structured logging for API service
+configure_logging(
+    service="api",
+    level=settings.LOG_LEVEL,
+    json_format=(settings.LOG_FORMAT == "json"),
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 app = FastAPI()
 
@@ -34,17 +35,54 @@ app.add_middleware(
 SESSION_COOKIE = "tc_session"
 
 
+# Optional Sentry integration
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.SENTRY_ENVIRONMENT,
+            traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+            integrations=[
+                FastApiIntegration(),
+                SqlalchemyIntegration(),
+            ],
+        )
+        logger.info("Sentry initialized", extra={"environment": settings.SENTRY_ENVIRONMENT})
+    except ImportError:
+        logger.warning("Sentry SDK not installed. Set SENTRY_DSN to enable error tracking.")
+    except Exception as e:
+        logger.error("Failed to initialize Sentry", extra={"error": str(e)})
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Log application startup."""
+    logger.info(
+        "API service started",
+        extra={
+            "log_level": settings.LOG_LEVEL,
+            "log_format": settings.LOG_FORMAT,
+            "database_url": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "[hidden]",
+        },
+    )
+
+
 # Exception handlers
 @app.exception_handler(AppError)
 async def app_exception_handler(request: Request, exc: AppError):
     """Handle custom application exceptions."""
-    request_id = getattr(request.state, "request_id", None)
     logger.warning(
-        "Application error: %s | path=%s request_id=%s details=%s",
-        exc.message,
-        request.url.path,
-        request_id,
-        exc.details,
+        "Application error",
+        extra={
+            "error_type": type(exc).__name__,
+            "message": exc.message,
+            "path": request.url.path,
+            "details": exc.details,
+        },
     )
     return JSONResponse(
         status_code=exc.status_code,
@@ -55,7 +93,6 @@ async def app_exception_handler(request: Request, exc: AppError):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle Pydantic validation errors with user-friendly messages."""
-    request_id = getattr(request.state, "request_id", None)
     errors = []
     for error in exc.errors():
         field = ".".join(str(loc) for loc in error["loc"][1:]) if len(error["loc"]) > 1 else str(error["loc"][0])
@@ -68,10 +105,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         )
 
     logger.warning(
-        "Validation error: path=%s request_id=%s errors=%s",
-        request.url.path,
-        request_id,
-        errors,
+        "Validation error",
+        extra={
+            "path": request.url.path,
+            "errors": errors,
+        },
     )
 
     return JSONResponse(
@@ -87,12 +125,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """Handle SQLAlchemy database errors without exposing details."""
-    request_id = getattr(request.state, "request_id", None)
     logger.error(
-        "Database error: %s | path=%s request_id=%s",
-        str(exc),
-        request.url.path,
-        request_id,
+        "Database error",
+        extra={
+            "error_type": type(exc).__name__,
+            "path": request.url.path,
+        },
         exc_info=True,
     )
 
@@ -120,12 +158,12 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Handle all unhandled exceptions."""
-    request_id = getattr(request.state, "request_id", None)
     logger.error(
-        "Unhandled exception: %s | path=%s request_id=%s",
-        str(exc),
-        request.url.path,
-        request_id,
+        "Unhandled exception",
+        extra={
+            "error_type": type(exc).__name__,
+            "path": request.url.path,
+        },
         exc_info=True,
     )
     return JSONResponse(
@@ -138,15 +176,26 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Middleware for request ID tracking
+# Middleware for request ID tracking and context
 @app.middleware("http")
-async def add_request_id(request: Request, call_next):
-    """Add request ID for tracing."""
-    request_id = str(uuid.uuid4())
-    request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-    return response
+async def add_request_context(request: Request, call_next):
+    """Add request ID and user context for tracing."""
+    req_id = str(uuid.uuid4())
+    request.state.request_id = req_id
+    
+    # Set request ID in context for logging
+    request_id_ctx.set(req_id)
+    
+    # Extract user ID from session if available
+    # Note: User ID will be set by auth middleware/dependency
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = req_id
+        return response
+    finally:
+        # Clean up context
+        request_id_ctx.set(None)
+        user_id_ctx.set(None)
 
 
 from .routes.admin import router as admin_router  # noqa: E402

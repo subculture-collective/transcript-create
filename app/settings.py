@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     STRIPE_SUCCESS_URL: str = "{origin}/pricing?success=1"
     STRIPE_CANCEL_URL: str = "{origin}/pricing?canceled=1"
 
+    # Logging configuration
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"  # 'json' or 'text'
+    # Optional Sentry integration for error tracking
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = "development"
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
     model_config = SettingsConfigDict(

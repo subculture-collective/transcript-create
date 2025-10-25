@@ -1,7 +1,9 @@
-import logging
 import os
 
+from app.logging_config import get_logger
 from app.settings import settings
+
+logger = get_logger(__name__)
 
 _pipeline = None
 _pyannote_import_error = None
@@ -11,7 +13,7 @@ def _get_pipeline():
     global _pipeline
     if _pipeline is None:
         if not settings.HF_TOKEN:
-            logging.warning("HF_TOKEN missing; skipping diarization (returning Whisper segments)")
+            logger.warning("HF_TOKEN missing; skipping diarization (returning Whisper segments)")
             return None
         # Lazy import to avoid hard dependency when diarization isn't needed
         try:
@@ -19,19 +21,19 @@ def _get_pipeline():
         except Exception as ie:
             global _pyannote_import_error
             _pyannote_import_error = ie
-            logging.warning("pyannote.audio not available (%s); skipping diarization", ie)
+            logger.warning("pyannote.audio not available; skipping diarization", extra={"error": str(ie)})
             return None
         os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", settings.HF_TOKEN)
         os.environ.setdefault("HF_TOKEN", settings.HF_TOKEN)
         try:
             _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-community-1", token=settings.HF_TOKEN)
         except Exception as e:
-            logging.warning("Failed to initialize pyannote Pipeline: %s; skipping diarization", e)
+            logger.warning("Failed to initialize pyannote Pipeline; skipping diarization", extra={"error": str(e)})
             try:
                 # Fallback to older model
                 _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization", token=settings.HF_TOKEN)
             except Exception as e2:
-                logging.warning("Fallback pipeline also failed: %s; skipping diarization", e2)
+                logger.warning("Fallback pipeline also failed; skipping diarization", extra={"error": str(e2)})
                 _pipeline = None
     return _pipeline
 
@@ -40,7 +42,7 @@ def diarize_and_align(wav_path, whisper_segments):
     try:
         pipe = _get_pipeline()
         if pipe is None:
-            logging.info("Diarization pipeline not available; returning whisper segments as-is")
+            logger.info("Diarization pipeline not available; returning whisper segments as-is")
             return whisper_segments
         logging.info("Running diarization on %s", wav_path)
         # pyannote Pipeline accepts raw path or dict with key 'audio'

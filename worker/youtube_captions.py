@@ -1,9 +1,12 @@
 import json
-import logging
 import subprocess
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.request import Request, urlopen
+
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass

@@ -1,15 +1,17 @@
-import logging
 import os
 import warnings
 from typing import Any, Optional
 
 import torch
 
+from app.logging_config import get_logger
 from app.settings import settings
 
 # Suppress PyTorch weights_only FutureWarning for trusted Whisper models
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*weights_only.*")
 warnings.filterwarnings("ignore", category=FutureWarning, module="whisper")
+
+logger = get_logger(__name__)
 
 _ct2: Optional[Any] = None
 _torch_whisper: Optional[Any] = None
@@ -26,7 +28,7 @@ def _lazy_imports():
 
             _ct2 = CT2Model
         except ImportError:
-            logging.error("Failed to import faster-whisper. Ensure it is installed.")
+            logger.error("Failed to import faster-whisper. Ensure it is installed.")
             # _ct2 remains None
     if settings.WHISPER_BACKEND == "whisper" and _torch_whisper is None:
         try:
@@ -34,7 +36,7 @@ def _lazy_imports():
 
             _torch_whisper = torch_whisper
         except ImportError:
-            logging.error("Failed to import whisper. Ensure openai-whisper is installed.")
+            logger.error("Failed to import whisper. Ensure openai-whisper is installed.")
             # _torch_whisper remains None
 
 
@@ -42,7 +44,10 @@ def _try_load_ct2(model_name: str, device: str, compute_type: str):
     _lazy_imports()
     if settings.WHISPER_BACKEND == "faster-whisper" and _ct2 is None:
         raise RuntimeError("faster-whisper backend not loaded")
-    logging.info("Loading faster-whisper '%s' (device=%s, compute_type=%s)", model_name, device, compute_type)
+    logger.info(
+        "Loading faster-whisper model",
+        extra={"model": model_name, "device": device, "compute_type": compute_type},
+    )
     return _ct2(model_name, device=device, compute_type=compute_type)
 
 
@@ -55,7 +60,7 @@ def _try_load_torch(model_name: str, force_gpu: bool):
     if force_gpu and not use_cuda:
         raise RuntimeError("FORCE_GPU is true but torch.cuda is not available")
     device = torch.device("cuda" if use_cuda else "cpu")
-    logging.info("Loading openai-whisper '%s' on device=%s", model_name, device)
+    logger.info("Loading openai-whisper model", extra={"model": model_name, "device": str(device)})
 
     # Suppress weights_only FutureWarning for trusted OpenAI models
     with warnings.catch_warnings():
@@ -85,21 +90,26 @@ def _get_model():
                     for model_name in models:
                         for ctype in compute_types:
                             try:
-                                logging.info(
-                                    "FORCE_GPU is enabled. Trying device=%s model=%s compute=%s", dev, model_name, ctype
+                                logger.info(
+                                    "FORCE_GPU enabled - trying configuration",
+                                    extra={"device": dev, "model": model_name, "compute_type": ctype},
                                 )
                                 _model = _try_load_ct2(model_name, device=dev, compute_type=ctype)
-                                logging.info(
-                                    "Loaded model on GPU successfully: device=%s model=%s compute=%s",
-                                    dev,
-                                    model_name,
-                                    ctype,
+                                logger.info(
+                                    "Model loaded on GPU successfully",
+                                    extra={"device": dev, "model": model_name, "compute_type": ctype},
                                 )
                                 return _model
                             except Exception as e:
                                 last_err = e
-                                logging.warning(
-                                    "GPU load failed (device=%s model=%s compute=%s): %s", dev, model_name, ctype, e
+                                logger.warning(
+                                    "GPU load failed",
+                                    extra={
+                                        "device": dev,
+                                        "model": model_name,
+                                        "compute_type": ctype,
+                                        "error": str(e),
+                                    },
                                 )
                                 continue
                 raise RuntimeError(f"FORCE_GPU is true but no GPU configuration succeeded: {last_err}")
@@ -108,7 +118,7 @@ def _get_model():
                 try:
                     _model = _try_load_ct2(settings.WHISPER_MODEL, device="auto", compute_type="float16")
                 except Exception:
-                    logging.warning("Half precision failed; retrying with float32 on device=auto")
+                    logger.warning("Half precision failed; retrying with float32 on device=auto")
                     _model = _try_load_ct2(settings.WHISPER_MODEL, device="auto", compute_type="float32")
     return _model
 

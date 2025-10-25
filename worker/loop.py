@@ -1,23 +1,27 @@
-import logging
 import time
 
 from sqlalchemy import create_engine, text
 
+from app.logging_config import configure_logging, get_logger, job_id_ctx, video_id_ctx
 from app.settings import settings
 from worker.pipeline import capture_youtube_captions_for_unprocessed, expand_channel_if_needed, process_video
 
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 POLL_INTERVAL = 3
 
-logging.basicConfig(
-    level=logging.getLevelName((__import__("os").environ.get("LOG_LEVEL") or "INFO").upper()),
-    format="%(asctime)s %(levelname)s [worker.loop] %(message)s",
+# Configure structured logging for worker service
+configure_logging(
+    service="worker",
+    level=settings.LOG_LEVEL,
+    json_format=(settings.LOG_FORMAT == "json"),
 )
+logger = get_logger(__name__)
 
 
 def run():
+    logger.info("Worker service started")
     while True:
-        logging.debug("Polling for work: expand jobs and pick a video")
+        logger.debug("Polling for work: expand jobs and pick a video")
         with engine.begin() as conn:
             # Expand pending jobs into videos
             from worker.pipeline import expand_single_if_needed
@@ -26,19 +30,19 @@ def run():
                 expand_single_if_needed(conn)
                 expand_channel_if_needed(conn)
             except Exception as e:
-                logging.exception("Error expanding jobs: %s", e)
+                logger.exception("Error expanding jobs", extra={"error": str(e)})
 
             # Opportunistically capture YouTube captions early for videos without captions yet
             try:
                 capture_youtube_captions_for_unprocessed(conn, limit=5)
             except Exception as e:
-                logging.warning("YouTube captions capture step failed: %s", e)
+                logger.warning("YouTube captions capture step failed", extra={"error": str(e)})
 
             # Rescue stuck videos: if a video has been in a non-terminal state for too long, mark it pending again
             try:
                 rescue_seconds = int(getattr(settings, "RESCUE_STUCK_AFTER_SECONDS", 0) or 0)
                 if rescue_seconds > 0:
-                    logging.debug("Rescue check: requeue videos stuck > %ss", rescue_seconds)
+                    logger.debug("Rescue check: requeue videos stuck", extra={"threshold_seconds": rescue_seconds})
                     conn.execute(
                         text(
                             """
@@ -52,7 +56,7 @@ def run():
                         {"secs": rescue_seconds},
                     )
             except Exception as e:
-                logging.warning("Rescue check failed: %s", e)
+                logger.warning("Rescue check failed", extra={"error": str(e)})
 
             # Model upgrade requeue: reprocess completed videos if current model is larger/better
             try:
@@ -97,14 +101,16 @@ def run():
                     )
                     requeued = requeue_result.fetchall()
                     if requeued:
-                        logging.info(
-                            "Model upgrade requeue: %d videos (%s -> %s)",
-                            len(requeued),
-                            ", ".join(set(r[1] for r in requeued)),
-                            current_model,
+                        logger.info(
+                            "Model upgrade requeue",
+                            extra={
+                                "count": len(requeued),
+                                "from_models": ", ".join(set(r[1] for r in requeued)),
+                                "to_model": current_model,
+                            },
                         )
             except Exception as e:
-                logging.warning("Model upgrade requeue failed: %s", e)
+                logger.warning("Model upgrade requeue failed", extra={"error": str(e)})
 
             # Model upgrade requeue: reprocess completed videos if current model is larger/better
             try:
@@ -149,14 +155,16 @@ def run():
                     )
                     requeued = requeue_result.fetchall()
                     if requeued:
-                        logging.info(
-                            "Model upgrade requeue: %d videos (%s -> %s)",
-                            len(requeued),
-                            ", ".join(set(r[1] for r in requeued)),
-                            current_model,
+                        logger.info(
+                            "Model upgrade requeue",
+                            extra={
+                                "count": len(requeued),
+                                "from_models": ", ".join(set(r[1] for r in requeued)),
+                                "to_model": current_model,
+                            },
                         )
             except Exception as e:
-                logging.warning("Model upgrade requeue failed: %s", e)
+                logger.warning("Model upgrade requeue failed", extra={"error": str(e)})
             row = conn.execute(
                 text(
                     """
@@ -170,23 +178,30 @@ def run():
                 )
             ).first()
             if not row:
-                logging.debug("No pending videos found. Sleeping %ss", POLL_INTERVAL)
+                logger.debug("No pending videos found. Sleeping", extra={"sleep_seconds": POLL_INTERVAL})
                 time.sleep(POLL_INTERVAL)
                 continue
             video_id = row[0]
-            logging.info("Picked video %s for processing", video_id)
+            
+            # Set video context for logging
+            video_id_ctx.set(str(video_id))
+            
+            logger.info("Picked video for processing")
             conn.execute(text("UPDATE videos SET state='downloading', updated_at=now() WHERE id=:i"), {"i": video_id})
         try:
-            logging.info("Starting process_video for %s", video_id)
+            logger.info("Starting video processing")
             process_video(engine, video_id)
-            logging.info("Completed process_video for %s", video_id)
+            logger.info("Video processing completed successfully")
         except Exception as e:
-            logging.exception("Video %s failed: %s", video_id, e)
+            logger.exception("Video processing failed", extra={"error": str(e)})
             with engine.begin() as conn:
                 conn.execute(
                     text("UPDATE videos SET state='failed', error=:e, updated_at=now() WHERE id=:i"),
                     {"i": video_id, "e": str(e)[:5000]},
                 )
+        finally:
+            # Clear video context
+            video_id_ctx.set(None)
 
 
 def main():

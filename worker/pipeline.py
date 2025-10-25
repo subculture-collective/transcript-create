@@ -1,11 +1,11 @@
 import json
-import logging
 import subprocess
 import time
 from pathlib import Path
 
 from sqlalchemy import text
 
+from app.logging_config import get_logger
 from app.settings import settings
 from worker.audio import chunk_audio, download_audio, ensure_wav_16k
 from worker.diarize import diarize_and_align
@@ -14,9 +14,11 @@ from worker.youtube_captions import fetch_youtube_auto_captions
 
 WORKDIR = Path("/data")  # mount volume externally
 
+logger = get_logger(__name__)
+
 
 def expand_channel_if_needed(conn):
-    logging.debug("Checking for pending channel jobs to expand")
+    logger.debug("Checking for pending channel jobs to expand")
     jobs = (
         conn.execute(
             text(
@@ -38,12 +40,12 @@ def expand_channel_if_needed(conn):
     )
     for job in jobs:
         url = job["input_url"]
-        logging.info("Expanding channel job %s from %s", job["id"], url)
+        logger.info("Expanding channel job", extra={"job_id": str(job["id"]), "url": url})
         cmd = ["yt-dlp", "--flat-playlist", "-J", url]
         meta = subprocess.check_output(cmd)
         data = json.loads(meta)
         entries = data.get("entries", [])
-        logging.info("Channel expansion found %d entries", len(entries))
+        logger.info("Channel expansion found entries", extra={"count": len(entries)})
         for idx, e in enumerate(entries):
             yid = e["id"]
             # Extract metadata for each channel video
@@ -59,12 +61,12 @@ def expand_channel_if_needed(conn):
                 ),
                 {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration},
             )
-        logging.info("Marking job %s as downloading after expansion", job["id"])
+        logger.info("Marking job as downloading after expansion", extra={"job_id": str(job["id"])})
         conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
 
 
 def expand_single_if_needed(conn):
-    logging.debug("Checking for pending single jobs to expand")
+    logger.debug("Checking for pending single jobs to expand")
     jobs = (
         conn.execute(
             text(
@@ -86,7 +88,7 @@ def expand_single_if_needed(conn):
     )
     for job in jobs:
         url = job["input_url"]
-        logging.info("Expanding single job %s from %s", job["id"], url)
+        logger.info("Expanding single job", extra={"job_id": str(job["id"]), "url": url})
         # Use yt-dlp to robustly extract the video id for any YouTube URL form
         meta = subprocess.check_output(["yt-dlp", "-J", url])
         data = json.loads(meta)
@@ -98,12 +100,16 @@ def expand_single_if_needed(conn):
                 vid = entries[0].get("id")
         if not vid:
             raise RuntimeError(f"Unable to determine YouTube ID for URL: {url}")
-        logging.info("Job %s resolved video id %s", job["id"], vid)
+        logger.info("Job resolved video id", extra={"job_id": str(job["id"]), "youtube_id": vid})
         # Extract title and duration from metadata
         title = data.get("title", "")
         duration = data.get("duration")  # duration in seconds
-        logging.info(
-            "Video metadata: title='%s', duration=%ss", title[:50] + ("..." if len(title) > 50 else ""), duration
+        logger.info(
+            "Video metadata extracted",
+            extra={
+                "title": title[:50] + ("..." if len(title) > 50 else ""),
+                "duration_seconds": duration,
+            },
         )
         conn.execute(
             text(
@@ -115,13 +121,13 @@ def expand_single_if_needed(conn):
             ),
             {"j": job["id"], "y": vid, "idx": 0, "title": title, "dur": duration},
         )
-        logging.info("Marking job %s as downloading after single expansion", job["id"])
+        logger.info("Marking job as downloading after single expansion", extra={"job_id": str(job["id"])})
         conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
 
 
 def process_video(engine, video_id):
     t0 = time.time()
-    logging.info("process_video start %s", video_id)
+    logger.info("Video processing started")
     with engine.begin() as conn:
         v = (
             conn.execute(
@@ -135,7 +141,7 @@ def process_video(engine, video_id):
     dest_dir = WORKDIR / str(video_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    logging.info("Downloading audio for %s", youtube_id)
+    logger.info("Downloading audio", extra={"youtube_id": youtube_id, "stage": "downloading"})
     raw_path = download_audio(f"https://www.youtube.com/watch?v={youtube_id}", dest_dir)
     with engine.begin() as conn:
         conn.execute(
@@ -143,7 +149,7 @@ def process_video(engine, video_id):
             {"p": str(raw_path), "i": video_id},
         )
 
-    logging.info("Converting to wav 16k for %s", video_id)
+    logger.info("Converting to wav 16k", extra={"stage": "transcoding"})
     wav_path = ensure_wav_16k(raw_path)
     with engine.begin() as conn:
         conn.execute(
@@ -151,33 +157,41 @@ def process_video(engine, video_id):
             {"p": str(wav_path), "i": video_id},
         )
 
-    logging.info("Chunking audio (max %ss)", settings.CHUNK_SECONDS)
+    logger.info("Chunking audio", extra={"max_chunk_seconds": settings.CHUNK_SECONDS, "stage": "transcribing"})
     chunks = chunk_audio(wav_path, settings.CHUNK_SECONDS)
-    logging.info("Created %d chunk(s)", len(chunks))
+    logger.info("Audio chunks created", extra={"chunk_count": len(chunks)})
     all_segments = []
     for c in chunks:
         ct0 = time.time()
-        logging.info("Transcribing chunk %s (offset %.2fs)", c.path.name, c.offset)
+        logger.info("Transcribing chunk", extra={"chunk_file": c.path.name, "offset_seconds": c.offset})
         segs = transcribe_chunk(c.path)
         for s in segs:
             s["start"] += c.offset
             s["end"] += c.offset
         all_segments.extend(segs)
-        logging.info("Chunk %s produced %d segments in %.2fs", c.path.name, len(segs), time.time() - ct0)
+        chunk_duration = time.time() - ct0
+        logger.info(
+            "Chunk transcription complete",
+            extra={
+                "chunk_file": c.path.name,
+                "segment_count": len(segs),
+                "duration_seconds": round(chunk_duration, 2),
+            },
+        )
 
-    logging.info("Diarization phase starting (%d segments)", len(all_segments))
+    logger.info("Diarization phase starting", extra={"segment_count": len(all_segments)})
     diar_segments = diarize_and_align(wav_path, all_segments)
 
     with engine.begin() as conn:
         full_text = " ".join(s["text"] for s in diar_segments)
-        logging.info("Inserting transcript len=%d chars", len(full_text))
+        logger.info("Inserting transcript", extra={"text_length": len(full_text)})
         # Clean existing transcript/segments for idempotent reprocessing
         try:
             conn.execute(text("DELETE FROM segments WHERE video_id = :v"), {"v": video_id})
             conn.execute(text("DELETE FROM transcripts WHERE video_id = :v"), {"v": video_id})
-            logging.info("Cleared existing transcript/segments for video %s", video_id)
+            logger.info("Cleared existing transcript/segments for reprocessing")
         except Exception as e:
-            logging.warning("Failed to clear existing rows (continuing): %s", e)
+            logger.warning("Failed to clear existing rows (continuing)", extra={"error": str(e)})
         conn.execute(
             text(
                 """
@@ -187,7 +201,7 @@ def process_video(engine, video_id):
             ),
             {"v": video_id, "t": full_text, "lang": "en", "m": settings.WHISPER_MODEL},
         )
-        logging.info("Inserting %d segment rows", len(diar_segments))
+        logger.info("Inserting segments", extra={"segment_count": len(diar_segments)})
         for s in diar_segments:
             conn.execute(
                 text(
@@ -208,7 +222,7 @@ def process_video(engine, video_id):
                     "tc": s.get("token_count"),
                 },
             )
-        logging.info("Marking video %s completed", video_id)
+        logger.info("Marking video as completed")
         conn.execute(text("UPDATE videos SET state='completed', updated_at=now() WHERE id=:i"), {"i": video_id})
 
     # Cleanup large intermediates if configured
@@ -235,10 +249,15 @@ def process_video(engine, video_id):
                 except StopIteration:
                     dest_dir.rmdir()
                     removed.append(f"dir:{dest_dir.name}")
-            logging.info("Cleanup removed: %s", ", ".join(removed) if removed else "nothing")
+            logger.info("Cleanup completed", extra={"removed_files": ", ".join(removed) if removed else "none"})
         except Exception as e:
-            logging.warning("Cleanup encountered an error: %s", e)
-    logging.info("process_video end %s (%.2fs)", video_id, time.time() - t0)
+            logger.warning("Cleanup encountered an error", extra={"error": str(e)})
+    
+    processing_time = time.time() - t0
+    logger.info(
+        "Video processing completed successfully",
+        extra={"total_duration_seconds": round(processing_time, 2)},
+    )
 
     # YouTube captions are handled by a pre-processing loop step; see capture_youtube_captions_for_unprocessed
 

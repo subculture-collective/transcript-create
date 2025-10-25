@@ -1,12 +1,13 @@
 import functools
-import logging
 import time
 import uuid
 
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-logger = logging.getLogger(__name__)
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Database retry configuration
 MAX_RETRIES = 3
@@ -33,16 +34,21 @@ def _retry_on_transient_error(func):
                     if attempt < MAX_RETRIES - 1:
                         delay = RETRY_DELAY * (2**attempt)  # Exponential backoff
                         logger.warning(
-                            "Database transient error on attempt %d/%d: %s. Retrying in %.2fs...",
-                            attempt + 1,
-                            MAX_RETRIES,
-                            str(e),
-                            delay,
+                            "Database transient error - retrying",
+                            extra={
+                                "attempt": attempt + 1,
+                                "max_retries": MAX_RETRIES,
+                                "retry_delay": delay,
+                                "error": str(e),
+                            },
                         )
                         time.sleep(delay)
                         continue
                 # Not a transient error or max retries reached
-                logger.error("Database error after %d attempts: %s", attempt + 1, str(e))
+                logger.error(
+                    "Database error after retries",
+                    extra={"attempts": attempt + 1, "error": str(e)},
+                )
                 raise
             except Exception:
                 # For non-transient errors, raise immediately

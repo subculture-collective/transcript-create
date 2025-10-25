@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import json
-import logging
 import sys
 import time
 from pathlib import Path
@@ -14,9 +13,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from app.logging_config import configure_logging, get_logger
 from app.settings import settings
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [indexer] %(message)s")
+# Configure structured logging for scripts
+configure_logging(
+    service="script.opensearch-indexer",
+    level=settings.LOG_LEVEL,
+    json_format=(settings.LOG_FORMAT == "json"),
+)
+logger = get_logger(__name__)
 
 
 def ensure_index(name: str, recreate: bool = False):

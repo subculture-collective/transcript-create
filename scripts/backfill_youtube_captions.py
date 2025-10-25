@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import logging
 import sys
 from pathlib import Path
 
@@ -11,10 +10,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from app.logging_config import configure_logging, get_logger
 from app.settings import settings
 from worker.pipeline import capture_youtube_captions_for_unprocessed
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [backfill] %(message)s")
+# Configure structured logging for scripts
+configure_logging(
+    service="script.backfill-youtube-captions",
+    level=settings.LOG_LEVEL,
+    json_format=(settings.LOG_FORMAT == "json"),
+)
+logger = get_logger(__name__)
 
 
 def main(batch: int = 1):
@@ -38,7 +44,7 @@ def main(batch: int = 1):
             ).scalar()
             or 0
         )
-        logging.info("Videos without YouTube captions: %d", c)
+        logger.info("Videos without YouTube captions", extra={"count": c})
     while True:
         # Commit after each chunk. For batch=1 this means per-video commit.
         with engine.begin() as conn:
@@ -46,8 +52,8 @@ def main(batch: int = 1):
         total += processed
         if processed == 0:
             break
-        logging.info("Processed batch=%d; cumulative=%d", processed, total)
-    logging.info("Backfill complete. Total videos updated: %d", total)
+        logger.info("Processed batch", extra={"batch_size": processed, "cumulative": total})
+    logger.info("Backfill complete", extra={"total_videos_updated": total})
 
 
 if __name__ == "__main__":

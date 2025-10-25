@@ -1,7 +1,10 @@
-import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -13,7 +16,7 @@ class Chunk:
 def download_audio(url: str, dest_dir: Path) -> Path:
     out = dest_dir / "raw.m4a"
     cmd = ["yt-dlp", "-v", "-f", "bestaudio", "-o", str(out), url]
-    logging.info("Running: %s", " ".join(cmd))
+    logger.info("Running yt-dlp command", extra={"command": " ".join(cmd)})
     subprocess.check_call(cmd)
     return out
 
@@ -36,7 +39,7 @@ def ensure_wav_16k(src: Path) -> Path:
         "pcm_s16le",
         str(wav),
     ]
-    logging.info("Running: %s", " ".join(cmd))
+    logger.info("Running ffmpeg command", extra={"command": " ".join(cmd)})
     subprocess.check_call(cmd)
     return wav
 

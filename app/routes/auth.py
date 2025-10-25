@@ -1,4 +1,3 @@
-import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta
@@ -13,9 +12,10 @@ from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import set_session_cookie as _set_session_cookie
 from ..db import get_db
 from ..exceptions import ExternalServiceError, ValidationError
+from ..logging_config import get_logger, user_id_ctx
 from ..settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     from authlib.common.errors import AuthlibBaseError

@@ -252,8 +252,9 @@ async def check_worker() -> Dict[str, Any]:
                 text("""
                     SELECT COUNT(*) FROM videos 
                     WHERE state IN ('downloading', 'transcoding', 'transcribing', 'diarizing', 'persisting')
-                    AND updated_at < now() - interval '%s seconds'
-                """ % settings.RESCUE_STUCK_AFTER_SECONDS)
+                    AND updated_at < now() - interval :seconds || ' seconds'
+                """),
+                {"seconds": settings.RESCUE_STUCK_AFTER_SECONDS}
             ).scalar_one()
             
             # Check worker heartbeat

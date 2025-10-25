@@ -44,7 +44,7 @@ def diarize_and_align(wav_path, whisper_segments):
         if pipe is None:
             logger.info("Diarization pipeline not available; returning whisper segments as-is")
             return whisper_segments
-        logging.info("Running diarization on %s", wav_path)
+        logger.info("Running diarization", extra={"wav_path": str(wav_path)})
         # pyannote Pipeline accepts raw path or dict with key 'audio'
         diar = pipe({"audio": str(wav_path)}) if callable(pipe) else pipe(str(wav_path))
         diar_list = []
@@ -55,7 +55,7 @@ def diarize_and_align(wav_path, whisper_segments):
             # record first occurrence to derive stable speaker ordering
             if label not in label_first_time:
                 label_first_time[label] = seg.start
-        logging.info("Diarization produced %d speaker segments", len(diar_list))
+        logger.info("Diarization produced speaker segments", extra={"segment_count": len(diar_list)})
         # Build friendly names like "Speaker 1", "Speaker 2" based on first appearance
         ordered_labels = sorted(label_first_time.items(), key=lambda kv: kv[1])
         friendly = {raw: f"Speaker {i + 1}" for i, (raw, _t) in enumerate(ordered_labels)}
@@ -74,8 +74,11 @@ def diarize_and_align(wav_path, whisper_segments):
             w["speaker"] = speaker
             w["speaker_label"] = speaker
             diar_segments.append(w)
-        logging.info("Diarization assigned speakers to %d/%d segments", speakers_assigned, len(whisper_segments))
+        logger.info(
+            "Diarization assigned speakers to segments",
+            extra={"speakers_assigned": speakers_assigned, "total_segments": len(whisper_segments)},
+        )
         return diar_segments
     except Exception as e:
-        logging.warning("Diarization failed (%s); returning Whisper segments as-is", e)
+        logger.warning("Diarization failed; returning Whisper segments as-is", extra={"error": str(e)})
         return whisper_segments

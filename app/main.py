@@ -84,38 +84,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-@app.exception_handler(ValidationError)
-async def pydantic_validation_exception_handler(request: Request, exc: ValidationError):
-    """Handle Pydantic validation errors."""
-    request_id = getattr(request.state, "request_id", None)
-    errors = []
-    for error in exc.errors():
-        field = ".".join(str(loc) for loc in error["loc"]) if error["loc"] else "unknown"
-        errors.append(
-            {
-                "field": field,
-                "message": error["msg"],
-                "type": error["type"],
-            }
-        )
-
-    logger.warning(
-        "Pydantic validation error: path=%s request_id=%s errors=%s",
-        request.url.path,
-        request_id,
-        errors,
-    )
-
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "error": "validation_error",
-            "message": "Data validation failed",
-            "details": {"errors": errors},
-        },
-    )
-
-
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """Handle SQLAlchemy database errors without exposing details."""

@@ -5,7 +5,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from openapi_spec_validator import validate
-from openapi_spec_validator.exceptions import OpenAPIValidationError
+from openapi_spec_validator.exceptions import OpenAPISpecValidatorError
 
 
 class TestOpenAPISpec:
@@ -22,7 +22,7 @@ class TestOpenAPISpec:
         # Validate the spec
         try:
             validate(spec)
-        except OpenAPIValidationError as e:
+        except OpenAPISpecValidatorError as e:
             pytest.fail(f"OpenAPI spec validation failed: {e}")
 
     def test_openapi_spec_has_metadata(self, client: TestClient):

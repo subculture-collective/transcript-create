@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import logging
 import sys
 from pathlib import Path
 
@@ -11,9 +10,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from app.logging_config import configure_logging, get_logger
 from app.settings import settings
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [fts-backfill] %(message)s")
+# Configure structured logging for scripts
+configure_logging(
+    service="script.fts-backfill",
+    level=settings.LOG_LEVEL,
+    json_format=(settings.LOG_FORMAT == "json"),
+)
+logger = get_logger(__name__)
 
 """
 Backfill FTS tsvector columns for existing rows. Because we created triggers, inserting or updating
@@ -55,16 +61,23 @@ def main(batch: int = 10000, until_empty: bool = False, max_iterations: int | No
             seg_updated = run_pass(conn, "segments", batch)
             yt_updated = run_pass(conn, "youtube_segments", batch)
         iterations += 1
-        logging.info("pass=%d segments updated=%d youtube_segments updated=%d", iterations, seg_updated, yt_updated)
+        logger.info(
+            "FTS backfill pass completed",
+            extra={
+                "iteration": iterations,
+                "segments_updated": seg_updated,
+                "youtube_segments_updated": yt_updated,
+            },
+        )
         if not until_empty:
             break
         if (seg_updated + yt_updated) == 0:
-            logging.info("No more rows to update. Exiting.")
+            logger.info("No more rows to update. Exiting.")
             break
         if max_iterations is not None and iterations >= max_iterations:
-            logging.info("Reached max iterations (%d). Exiting.", max_iterations)
+            logger.info("Reached max iterations. Exiting.", extra={"max_iterations": max_iterations})
             break
-    logging.info("FTS backfill complete")
+    logger.info("FTS backfill complete")
 
 
 if __name__ == "__main__":

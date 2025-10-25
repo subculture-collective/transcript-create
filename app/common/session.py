@@ -6,6 +6,8 @@ from typing import Optional
 from fastapi import Request, Response
 from sqlalchemy import text
 
+from ..logging_config import user_id_ctx
+
 SESSION_COOKIE = os.environ.get("SESSION_COOKIE_NAME", "tc_session")
 
 
@@ -34,6 +36,11 @@ def get_user_from_session(db, token: Optional[str]):
         .mappings()
         .first()
     )
+    
+    # Set user context for logging if user found
+    if row:
+        user_id_ctx.set(str(row.get("id")))
+    
     return row
 
 

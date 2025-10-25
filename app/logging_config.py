@@ -13,7 +13,7 @@ import json
 import logging
 import re
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 # Context variables for request/worker tracking
@@ -68,7 +68,7 @@ class JSONFormatter(logging.Formatter):
         """Format log record as JSON."""
         # Build base log entry
         log_entry: Dict[str, Any] = {
-            "timestamp": datetime.utcfromtimestamp(record.created).isoformat() + "Z",
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "level": record.levelname,
             "service": self.service,
             "logger": record.name,

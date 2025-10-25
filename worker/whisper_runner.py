@@ -103,8 +103,7 @@ def _get_model():
                                     "Model loaded on GPU successfully",
                                     extra={"device": dev, "model": model_name, "compute_type": ctype},
                                 )
-                                load_duration = time.time() - load_start
-                                whisper_model_load_seconds.labels(model=model_name, backend=settings.WHISPER_BACKEND).observe(load_duration)
+                                # Removed duplicate metric observation to prevent double counting.
                                 return _model
                             except Exception as e:
                                 last_err = e

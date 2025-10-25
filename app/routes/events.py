@@ -5,7 +5,7 @@ from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..db import get_db
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Events"])
 
 
 @router.post("/events")

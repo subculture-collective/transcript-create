@@ -22,7 +22,7 @@ from ..db import get_db
 from ..exceptions import TranscriptNotReadyError
 from ..settings import settings
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Exports"])
 
 SESSION_COOKIE = "tc_session"
 

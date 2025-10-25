@@ -8,7 +8,7 @@ from ..db import get_db
 from ..exceptions import AuthenticationError, ExternalServiceError, ValidationError
 from ..settings import settings
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Billing"])
 stripe.api_key = settings.STRIPE_API_KEY or None
 
 

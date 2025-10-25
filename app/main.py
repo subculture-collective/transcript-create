@@ -19,7 +19,50 @@ configure_logging(
 )
 logger = get_logger(__name__)
 
-app = FastAPI()
+app = FastAPI(
+    title="Transcript Create API",
+    description="""
+YouTube video transcription service API with searchable and exportable transcripts.
+
+## Features
+
+* **Job Management** - Create and monitor transcription jobs for single videos or entire channels
+* **Video Transcripts** - Access Whisper-generated transcripts with optional speaker diarization
+* **YouTube Captions** - Retrieve and export YouTube's native closed captions
+* **Full-Text Search** - Search across transcripts using PostgreSQL or OpenSearch
+* **Export Formats** - Download transcripts in SRT, VTT, JSON, and PDF formats
+* **Authentication** - OAuth 2.0 via Google and Twitch
+* **Billing** - Stripe integration for Pro subscriptions
+* **Admin Tools** - Event analytics and user management
+
+## Authentication
+
+Most endpoints require authentication via session cookies set after OAuth login.
+Admin endpoints require additional authorization.
+    """,
+    version="0.1.0",
+    contact={
+        "name": "onnwee",
+        "url": "https://github.com/onnwee",
+    },
+    license_info={
+        "name": "TBD",
+    },
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "Jobs", "description": "Create and monitor transcription jobs"},
+        {"name": "Videos", "description": "Access video information and transcripts"},
+        {"name": "Search", "description": "Full-text search across transcripts"},
+        {"name": "Exports", "description": "Export transcripts in various formats"},
+        {"name": "Auth", "description": "OAuth authentication and session management"},
+        {"name": "Billing", "description": "Stripe subscription and payment management"},
+        {"name": "Admin", "description": "Administrative endpoints for event analytics"},
+        {"name": "Favorites", "description": "User favorite transcript segments"},
+        {"name": "Events", "description": "Client-side event tracking"},
+        {"name": "Health", "description": "Service health check"},
+    ],
+)
 
 # Allow local dev frontends to call the API
 app.add_middleware(
@@ -219,7 +262,18 @@ app.include_router(admin_router)
 app.include_router(search_router)
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Health check",
+    description="Check if the API service is running and responding to requests.",
+    responses={
+        200: {
+            "description": "Service is healthy",
+            "content": {"application/json": {"example": {"status": "ok"}}},
+        }
+    },
+)
 async def health_check():
     """Health check endpoint for monitoring and E2E tests"""
     return {"status": "ok"}

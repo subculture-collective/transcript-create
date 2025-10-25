@@ -10,7 +10,7 @@ from ..common.session import is_admin as _is_admin
 from ..db import get_db
 from ..exceptions import AuthorizationError, ValidationError
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Admin"])
 
 
 @router.get("/admin/events")

@@ -1,32 +1,109 @@
-import uuid
-from typing import Any, Dict
-
-import requests
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy import text
-from sqlalchemy import text as _text
+from fastapi import APIRouter, Depends, Query, Request
 
 from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import is_admin as _is_admin
 from ..db import get_db
 from ..exceptions import ExternalServiceError, QuotaExceededError, ValidationError
-from ..schemas import SearchHit, SearchResponse
+from ..schemas import ErrorResponse, SearchHit, SearchResponse
 from ..settings import settings
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Search"])
 
 
-@router.get("/search", response_model=SearchResponse)
+import uuid
+from typing import Any, Dict
+
+import requests
+from sqlalchemy import text
+from sqlalchemy import text as _text
+
+
+@router.get(
+    "/search",
+    response_model=SearchResponse,
+    summary="Search transcripts",
+    description="""
+    Full-text search across all transcripts with pagination and filtering.
+    
+    Search can use either PostgreSQL full-text search (default) or OpenSearch
+    backend for enhanced relevance and performance.
+    
+    **Search Sources:**
+    - `native`: Search Whisper-generated transcripts
+    - `youtube`: Search YouTube's native closed captions
+    
+    **Rate Limits:**
+    - Free plan: Limited daily searches (see /auth/me for your quota)
+    - Pro plan: Unlimited searches
+    - Unauthenticated: Not allowed
+    
+    **Search Backend:**
+    - `postgres`: Basic full-text search with tsquery
+    - `opensearch`: Advanced search with relevance scoring, highlighting, and phrase matching
+    """,
+    responses={
+        200: {
+            "description": "Search results retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "total": 42,
+                        "hits": [
+                            {
+                                "id": 12345,
+                                "video_id": "123e4567-e89b-12d3-a456-426614174000",
+                                "start_ms": 45000,
+                                "end_ms": 48500,
+                                "snippet": "This is an example of <em>search term</em> in context",
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "Validation error - empty query or invalid parameters",
+            "model": ErrorResponse,
+        },
+        401: {
+            "description": "Authentication required",
+            "model": ErrorResponse,
+        },
+        429: {
+            "description": "Rate limit exceeded for free plan",
+            "model": ErrorResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "quota_exceeded",
+                        "message": "Daily search limit of 100 reached. Upgrade to Pro for unlimited searches.",
+                        "details": {
+                            "resource": "searches",
+                            "limit": 100,
+                            "used": 100,
+                            "plan": "free",
+                        },
+                    }
+                }
+            },
+        },
+        503: {
+            "description": "Search backend unavailable",
+            "model": ErrorResponse,
+        },
+    },
+)
 def search(
     request: Request,
-    q: str,
-    source: str = "native",
-    video_id: uuid.UUID | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    q: str = Query(..., min_length=1, max_length=500, description="Search query text"),
+    source: str = Query("native", description="Search source: 'native' or 'youtube'"),
+    video_id: uuid.UUID | None = Query(None, description="Filter results to specific video"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of results to return"),
+    offset: int = Query(0, ge=0, description="Number of results to skip for pagination"),
     db=Depends(get_db),
 ):
+    """Search across transcripts with full-text search."""
     if not q or not q.strip():
         raise ValidationError("Search query cannot be empty", field="q")
     if source not in ("native", "youtube"):

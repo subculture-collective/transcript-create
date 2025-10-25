@@ -8,7 +8,7 @@ from ..common.session import get_user_from_session as _get_user_from_session
 from ..db import get_db
 from ..exceptions import AuthenticationError, ValidationError
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Favorites"])
 
 
 @router.get("/users/me/favorites")

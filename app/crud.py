@@ -1,3 +1,4 @@
+import functools
 import logging
 import time
 import uuid
@@ -15,6 +16,7 @@ RETRY_DELAY = 0.5  # seconds
 def _retry_on_transient_error(func):
     """Decorator to retry database operations on transient errors."""
 
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         last_error = None
         for attempt in range(MAX_RETRIES):

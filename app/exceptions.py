@@ -69,11 +69,14 @@ class InvalidURLError(AppError):
         message = f"Invalid URL: {url}"
         if reason:
             message += f" - {reason}"
+        default_details = {"url": url}
+        if reason is not None:
+            default_details["reason"] = reason
         super().__init__(
             error_code="invalid_url",
             message=message,
             status_code=400,
-            details=details or {"url": url, "reason": reason},
+            details=details or default_details,
         )
 
 

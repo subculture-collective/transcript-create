@@ -153,7 +153,7 @@ Added services:
   - 30-day retention
 
 - `grafana` (port 3000)
-  - Default credentials: admin/admin
+  - Default credentials: admin/admin ⚠️ **CHANGE IMMEDIATELY IN PRODUCTION**
   - Mounts provisioning configs and dashboards
   - Persistent storage with `grafana-data` volume
 
@@ -292,10 +292,37 @@ Potential additions not in scope:
 
 ## Security Considerations
 
-- Default Grafana credentials (admin/admin) should be changed in production
-- Prometheus has no authentication by default - add reverse proxy in production
-- All configuration validated with CodeQL - no vulnerabilities found
-- Metrics don't expose sensitive data (no PII in metric labels)
+⚠️ **IMPORTANT: The default configuration is NOT production-ready from a security perspective.**
+
+### Critical Security Actions Required for Production
+
+1. **Change Grafana Admin Password**
+   - Default: admin/admin
+   - Change immediately on first login or via environment variables:
+     ```yaml
+     environment:
+       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+     ```
+
+2. **Add Authentication to Prometheus**
+   - Prometheus has no authentication by default
+   - Use reverse proxy (nginx, traefik) with basic auth or OAuth
+   - Example nginx config available in docs/MONITORING.md
+
+3. **Network Isolation**
+   - Don't expose Prometheus/Grafana ports directly to internet
+   - Use internal networks or VPN access only
+   - Add firewall rules to restrict access
+
+4. **TLS/HTTPS**
+   - Configure reverse proxy with valid certificates
+   - Force HTTPS for all monitoring access
+
+### Security Validation
+- ✅ All configuration validated with CodeQL - no vulnerabilities found
+- ✅ Metrics don't expose sensitive data (no PII in metric labels)
+- ✅ Read-only mounts for configuration files
+- ✅ Dedicated volumes for data isolation
 
 ## Validation Results
 

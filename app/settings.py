@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     SENTRY_ENVIRONMENT: str = "development"
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
 
+    # Health check configuration
+    HEALTH_CHECK_TIMEOUT: float = 5.0  # seconds
+    HEALTH_CHECK_WORKER_STALE_SECONDS: int = 300  # 5 minutes
+    HEALTH_CHECK_DISK_MIN_FREE_GB: float = 10.0  # minimum free disk space in GB
+    HEALTH_CHECK_CRITICAL_COMPONENTS: str = "database"  # comma-separated: database,opensearch,storage,worker
+    WORKDIR: str = "/data"  # data directory for storage health checks
+
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
     model_config = SettingsConfigDict(

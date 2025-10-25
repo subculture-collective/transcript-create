@@ -67,8 +67,9 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON."""
         # Build base log entry
+        # Use 'Z' suffix for UTC timestamps for consistency with standard JSON formats
         log_entry: Dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).replace(tzinfo=None).isoformat() + "Z",
             "level": record.levelname,
             "service": self.service,
             "logger": record.name,

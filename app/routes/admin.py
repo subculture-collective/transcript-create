@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text as _text
 
@@ -8,6 +8,7 @@ from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import is_admin as _is_admin
 from ..db import get_db
+from ..exceptions import AuthorizationError, ValidationError
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ def admin_events(
 ):
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
-        raise HTTPException(403)
+        raise AuthorizationError("Admin access required")
     where = []
     params: dict = {}
     if type:
@@ -63,7 +64,7 @@ def admin_events_csv(
 ):
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
-        raise HTTPException(403)
+        raise AuthorizationError("Admin access required")
     where = []
     params: dict = {}
     if type:
@@ -101,7 +102,7 @@ def admin_events_csv(
 def admin_events_summary(request: Request, db=Depends(get_db), start: str | None = None, end: str | None = None):
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
-        raise HTTPException(403)
+        raise AuthorizationError("Admin access required")
     params: dict = {}
     where: list[str] = []
     if start:
@@ -127,12 +128,12 @@ def admin_events_summary(request: Request, db=Depends(get_db), start: str | None
 def admin_set_user_plan(user_id: uuid.UUID, payload: dict, request: Request, db=Depends(get_db)):
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
-        raise HTTPException(403)
+        raise AuthorizationError("Admin access required")
     from ..settings import settings as _settings
 
     plan = (payload.get("plan") or "").lower()
     if plan not in ("free", _settings.PRO_PLAN_NAME.lower()):
-        raise HTTPException(400, f"Invalid plan. Use 'free' or '{_settings.PRO_PLAN_NAME}'.")
+        raise ValidationError(f"Invalid plan. Use 'free' or '{_settings.PRO_PLAN_NAME}'.", field="plan")
     db.execute(_text("UPDATE users SET plan=:p, updated_at=now() WHERE id=:i"), {"p": plan, "i": str(user_id)})
     db.commit()
     return {"ok": True, "user_id": str(user_id), "plan": plan}

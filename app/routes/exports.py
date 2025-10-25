@@ -5,7 +5,7 @@ from datetime import datetime
 from io import BytesIO
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import LETTER
@@ -19,6 +19,7 @@ from sqlalchemy import text
 from .. import crud
 from ..common.session import get_session_token, get_user_from_session, is_admin
 from ..db import get_db
+from ..exceptions import TranscriptNotReadyError
 from ..settings import settings
 
 router = APIRouter()
@@ -82,7 +83,7 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
         return gate
     yt = crud.get_youtube_transcript(db, video_id)
     if not yt:
-        raise HTTPException(404, "No YouTube transcript")
+        raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     segs = crud.list_youtube_segments(db, yt["id"])
     lines = []
     for i, (start_ms, end_ms, textv) in enumerate(segs, start=1):
@@ -106,7 +107,7 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
         return gate
     yt = crud.get_youtube_transcript(db, video_id)
     if not yt:
-        raise HTTPException(404, "No YouTube transcript")
+        raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     segs = crud.list_youtube_segments(db, yt["id"])
 
     def vtt_time(ms: int) -> str:
@@ -136,7 +137,7 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
         return gate
     segs = crud.list_segments(db, video_id)
     if not segs:
-        raise HTTPException(404, "No segments")
+        raise TranscriptNotReadyError(str(video_id), "no_segments")
     lines = []
     for i, (start_ms, end_ms, textv, _speaker) in enumerate(segs, start=1):
         lines.append(str(i))
@@ -159,7 +160,7 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
         return gate
     segs = crud.list_segments(db, video_id)
     if not segs:
-        raise HTTPException(404, "No segments")
+        raise TranscriptNotReadyError(str(video_id), "no_segments")
 
     def vtt_time(ms: int) -> str:
         s, ms_rem = divmod(ms, 1000)
@@ -188,7 +189,7 @@ def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends
         return gate
     segs = crud.list_segments(db, video_id)
     if not segs:
-        raise HTTPException(404, "No segments")
+        raise TranscriptNotReadyError(str(video_id), "no_segments")
     payload = [{"start_ms": r[0], "end_ms": r[1], "text": r[2], "speaker_label": r[3]} for r in segs]
     _log_export(db, request, user, {"format": "json", "source": "native", "video_id": str(video_id)})
     headers = {"Content-Disposition": f"attachment; filename=video-{video_id}.json"}
@@ -205,7 +206,7 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
         return gate
     yt = crud.get_youtube_transcript(db, video_id)
     if not yt:
-        raise HTTPException(404, "No YouTube transcript")
+        raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     segs = crud.list_youtube_segments(db, yt["id"])
     payload = [{"start_ms": r[0], "end_ms": r[1], "text": r[2]} for r in segs]
     _log_export(db, request, user, {"format": "json", "source": "youtube", "video_id": str(video_id)})
@@ -223,7 +224,7 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
         return gate
     segs = crud.list_segments(db, video_id)
     if not segs:
-        raise HTTPException(404, "No segments")
+        raise TranscriptNotReadyError(str(video_id), "no_segments")
     # Build PDF in-memory
     buf = BytesIO()
     doc = SimpleDocTemplate(

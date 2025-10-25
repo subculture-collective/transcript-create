@@ -2,8 +2,7 @@ import uuid
 from typing import Any, Dict
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy import text as _text
 
@@ -11,6 +10,7 @@ from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import is_admin as _is_admin
 from ..db import get_db
+from ..exceptions import ExternalServiceError, QuotaExceededError, ValidationError
 from ..schemas import SearchHit, SearchResponse
 from ..settings import settings
 
@@ -28,11 +28,12 @@ def search(
     db=Depends(get_db),
 ):
     if not q or not q.strip():
-        raise HTTPException(400, "Missing query parameter 'q'")
+        raise ValidationError("Search query cannot be empty", field="q")
     if source not in ("native", "youtube"):
-        raise HTTPException(400, "Invalid source. Use 'native' or 'youtube'")
+        raise ValidationError("Invalid source. Must be 'native' or 'youtube'", field="source")
     if limit < 1 or limit > 200:
-        raise HTTPException(400, "limit must be between 1 and 200")
+        raise ValidationError("Limit must be between 1 and 200", field="limit")
+
     user = _get_user_from_session(db, _get_session_token(request))
     if user and not _is_admin(user):
         plan = (user.get("plan") or "free").lower()
@@ -48,15 +49,11 @@ def search(
                 {"u": str(user["id"])},
             ).scalar_one()
             if used >= settings.FREE_DAILY_SEARCH_LIMIT:
-                return JSONResponse(
-                    {
-                        "error": "quota_exceeded",
-                        "message": "Daily search limit reached. Upgrade to Pro for unlimited search.",
-                        "plan": plan,
-                        "used": used,
-                        "limit": settings.FREE_DAILY_SEARCH_LIMIT,
-                    },
-                    status_code=402,
+                raise QuotaExceededError(
+                    resource="searches",
+                    limit=settings.FREE_DAILY_SEARCH_LIMIT,
+                    used=used,
+                    plan=plan,
                 )
             db.execute(
                 _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'search_api',:p)"),
@@ -87,8 +84,21 @@ def search(
             r = requests.post(f"{settings.OPENSEARCH_URL}/{index}/_search", json=query, timeout=10)
             r.raise_for_status()
             data = r.json()
+        except requests.exceptions.Timeout:
+            raise ExternalServiceError("OpenSearch", "Request timeout")
+        except requests.exceptions.HTTPError as e:
+            # Provide detailed error message for HTTP errors
+            status_code = e.response.status_code if e.response is not None else "Unknown"
+            content = e.response.text if e.response is not None else ""
+            raise ExternalServiceError(
+                "OpenSearch",
+                f"HTTP error {status_code}: {content or str(e)}"
+            )
+        except requests.exceptions.RequestException as e:
+            raise ExternalServiceError("OpenSearch", f"Connection failed: {str(e)}")
         except Exception as e:
-            raise HTTPException(500, f"OpenSearch query failed: {e}")
+            raise ExternalServiceError("OpenSearch", str(e))
+
         hits = []
         for h in data.get("hits", {}).get("hits", []):
             src = h.get("_source", {})

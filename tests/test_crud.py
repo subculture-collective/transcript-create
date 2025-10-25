@@ -233,3 +233,24 @@ class TestSearchCrud:
         results = crud.search_segments(db_session, q="test", video_id=str(video_id), limit=10, offset=0)
         # Should not error, even if no results
         assert isinstance(results, list)
+
+
+class TestRetryDecorator:
+    """Tests for the retry decorator."""
+
+    def test_retry_decorator_preserves_function_name(self):
+        """Test that the retry decorator preserves the function's __name__."""
+        assert crud.create_job.__name__ == "create_job"
+        assert crud.fetch_job.__name__ == "fetch_job"
+        assert crud.list_segments.__name__ == "list_segments"
+
+    def test_retry_decorator_preserves_function_docstring(self):
+        """Test that the retry decorator preserves the function's __doc__."""
+        # The decorated functions don't have docstrings, so we just verify
+        # they're not replaced by the wrapper's docstring
+        assert crud.create_job.__doc__ != "Decorator to retry database operations on transient errors."
+
+    def test_retry_decorator_preserves_function_module(self):
+        """Test that the retry decorator preserves the function's __module__."""
+        assert crud.create_job.__module__ == "app.crud"
+        assert crud.fetch_job.__module__ == "app.crud"

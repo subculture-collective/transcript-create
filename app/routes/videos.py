@@ -19,7 +19,7 @@ def get_transcript(video_id: uuid.UUID, db=Depends(get_db)):
 
     segs = crud.list_segments(db, video_id)
     if not segs:
-        # Check if video is still processing
+        # No segments found; inferring that the video is still processing
         raise TranscriptNotReadyError(str(video_id), "processing")
 
     return TranscriptResponse(

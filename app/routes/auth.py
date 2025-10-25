@@ -1,3 +1,4 @@
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta
@@ -14,10 +15,16 @@ from ..db import get_db
 from ..exceptions import ExternalServiceError, ValidationError
 from ..settings import settings
 
+logger = logging.getLogger(__name__)
+
 try:
+    from authlib.common.errors import AuthlibBaseError
     from authlib.integrations.starlette_client import OAuth
+    from authlib.oauth2.rfc6749.errors import OAuth2Error
 except Exception:
     OAuth = None
+    AuthlibBaseError = None
+    OAuth2Error = None
 
 router = APIRouter()
 
@@ -122,10 +129,32 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
         avatar = userinfo.get("picture")
         if not sub:
             raise ValidationError("Missing user identifier from OAuth provider")
+    except (ValidationError, ExternalServiceError):
+        # Re-raise our custom exceptions without modification
+        raise
     except Exception as e:
-        if isinstance(e, (ValidationError, ExternalServiceError)):
-            raise
-        raise ExternalServiceError("Google OAuth", str(e))
+        # Log the original exception with full context for debugging
+        logger.error(
+            "Google OAuth callback error: %s | type=%s",
+            str(e),
+            type(e).__name__,
+            exc_info=True,
+        )
+        # Determine if it's an authlib-specific error
+        error_type = type(e).__name__
+        if AuthlibBaseError and isinstance(e, AuthlibBaseError):
+            # Provide more specific error message for OAuth protocol errors
+            raise ExternalServiceError(
+                "Google OAuth",
+                f"OAuth protocol error: {str(e)}",
+                details={"error_type": error_type, "error": str(e)},
+            )
+        # For all other exceptions, wrap with generic message
+        raise ExternalServiceError(
+            "Google OAuth",
+            f"Authentication failed: {str(e)}",
+            details={"error_type": error_type},
+        )
 
     with db.begin():
         row = (
@@ -193,10 +222,32 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
         avatar = u0.get("profile_image_url")
         if not sub:
             raise ValidationError("Missing user identifier from OAuth provider")
+    except (ValidationError, ExternalServiceError):
+        # Re-raise our custom exceptions without modification
+        raise
     except Exception as e:
-        if isinstance(e, (ValidationError, ExternalServiceError)):
-            raise
-        raise ExternalServiceError("Twitch OAuth", str(e))
+        # Log the original exception with full context for debugging
+        logger.error(
+            "Twitch OAuth callback error: %s | type=%s",
+            str(e),
+            type(e).__name__,
+            exc_info=True,
+        )
+        # Determine if it's an authlib-specific error
+        error_type = type(e).__name__
+        if AuthlibBaseError and isinstance(e, AuthlibBaseError):
+            # Provide more specific error message for OAuth protocol errors
+            raise ExternalServiceError(
+                "Twitch OAuth",
+                f"OAuth protocol error: {str(e)}",
+                details={"error_type": error_type, "error": str(e)},
+            )
+        # For all other exceptions, wrap with generic message
+        raise ExternalServiceError(
+            "Twitch OAuth",
+            f"Authentication failed: {str(e)}",
+            details={"error_type": error_type},
+        )
 
     with db.begin():
         row = (

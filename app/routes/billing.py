@@ -8,12 +8,39 @@ from ..db import get_db
 from ..exceptions import AuthenticationError, ExternalServiceError, ValidationError
 from ..settings import settings
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Billing"])
 stripe.api_key = settings.STRIPE_API_KEY or None
 
 
-@router.post("/billing/checkout-session")
+@router.post(
+    "/billing/checkout-session",
+    summary="Create Stripe checkout session",
+    description="""
+    Create a Stripe checkout session for Pro plan subscription.
+    
+    Returns a Stripe checkout URL to redirect the user to complete payment.
+    
+    **Authentication Required:** Yes  
+    **Plans:** Pro monthly or yearly subscription
+    """,
+    responses={
+        200: {
+            "description": "Checkout session created",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "cs_test_123",
+                        "url": "https://checkout.stripe.com/pay/cs_test_123",
+                    }
+                }
+            },
+        },
+        401: {"description": "Authentication required"},
+        503: {"description": "Stripe not configured"},
+    },
+)
 def create_checkout_session(payload: dict, request: Request, db=Depends(get_db)):
+    """Create a Stripe checkout session for Pro subscription."""
     if not settings.STRIPE_API_KEY:
         raise ExternalServiceError("Stripe", "Stripe billing is not configured")
 
@@ -61,8 +88,32 @@ def create_checkout_session(payload: dict, request: Request, db=Depends(get_db))
         raise ExternalServiceError("Stripe", str(e))
 
 
-@router.get("/billing/portal")
+@router.get(
+    "/billing/portal",
+    summary="Get Stripe billing portal",
+    description="""
+    Get URL to Stripe customer portal for managing subscription.
+    
+    The portal allows users to:
+    - Update payment method
+    - Cancel subscription
+    - View billing history
+    
+    **Authentication Required:** Yes  
+    **Requirements:** User must have an active Stripe subscription
+    """,
+    responses={
+        200: {
+            "description": "Portal URL retrieved",
+            "content": {"application/json": {"example": {"url": "https://billing.stripe.com/session/123"}}},
+        },
+        401: {"description": "Authentication required"},
+        400: {"description": "No Stripe customer account found"},
+        503: {"description": "Stripe not configured"},
+    },
+)
 def billing_portal(request: Request, db=Depends(get_db)):
+    """Get Stripe billing portal URL."""
     if not settings.STRIPE_API_KEY:
         raise ExternalServiceError("Stripe", "Stripe billing is not configured")
 
@@ -83,8 +134,32 @@ def billing_portal(request: Request, db=Depends(get_db)):
         raise ExternalServiceError("Stripe", str(e))
 
 
-@router.post("/stripe/webhook")
+@router.post(
+    "/stripe/webhook",
+    summary="Stripe webhook handler",
+    description="""
+    Handle incoming Stripe webhook events for subscription management.
+    
+    This endpoint is called by Stripe when subscription events occur:
+    - `checkout.session.completed`: New subscription created
+    - `customer.subscription.updated`: Subscription status changed
+    - `customer.subscription.deleted`: Subscription canceled
+    
+    Automatically updates user plan and subscription status in the database.
+    
+    **Authentication:** Validated via Stripe webhook signature
+    """,
+    responses={
+        200: {
+            "description": "Webhook processed successfully",
+            "content": {"application/json": {"example": {"received": True}}},
+        },
+        400: {"description": "Invalid webhook signature"},
+        503: {"description": "Stripe not configured"},
+    },
+)
 async def stripe_webhook(request: Request, db=Depends(get_db)):
+    """Process Stripe webhook events."""
     if not settings.STRIPE_API_KEY:
         raise ExternalServiceError("Stripe", "Stripe billing is not configured")
 

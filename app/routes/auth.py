@@ -26,7 +26,7 @@ except Exception:
     AuthlibBaseError = None
     OAuth2Error = None
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Auth"])
 
 
 def _new_oauth():
@@ -45,8 +45,43 @@ def _new_oauth():
     return oauth
 
 
-@router.get("/auth/me")
+@router.get(
+    "/auth/me",
+    summary="Get current user",
+    description="""
+    Get the currently authenticated user's profile and subscription information.
+    
+    Returns user details including plan type, daily search usage, and limits.
+    Returns `{"user": null}` if not authenticated.
+    """,
+    responses={
+        200: {
+            "description": "User information retrieved successfully",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "authenticated": {
+                            "value": {
+                                "user": {
+                                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                                    "email": "user@example.com",
+                                    "name": "John Doe",
+                                    "avatar_url": "https://example.com/avatar.jpg",
+                                    "plan": "free",
+                                    "searches_used_today": 5,
+                                    "search_limit": 100,
+                                }
+                            }
+                        },
+                        "unauthenticated": {"value": {"user": None}},
+                    }
+                }
+            },
+        }
+    },
+)
 def auth_me(request: Request, db=Depends(get_db)):
+    """Get current authenticated user information."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not user:
         return {"user": None}
@@ -79,8 +114,22 @@ def auth_me(request: Request, db=Depends(get_db)):
     }
 
 
-@router.get("/auth/login/google")
+@router.get(
+    "/auth/login/google",
+    summary="Login with Google",
+    description="""
+    Initiate OAuth 2.0 login flow with Google.
+    
+    Redirects to Google's OAuth consent screen. After authorization,
+    Google redirects back to /auth/callback/google.
+    """,
+    responses={
+        307: {"description": "Redirect to Google OAuth consent screen"},
+        503: {"description": "OAuth library not configured"},
+    },
+)
 def auth_login_google(request: Request):
+    """Initiate Google OAuth login."""
     if not OAuth:
         raise ExternalServiceError("OAuth", "Authentication library not installed")
     oauth = OAuth()
@@ -95,8 +144,22 @@ def auth_login_google(request: Request):
     return oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/auth/login/twitch")
+@router.get(
+    "/auth/login/twitch",
+    summary="Login with Twitch",
+    description="""
+    Initiate OAuth 2.0 login flow with Twitch.
+    
+    Redirects to Twitch's OAuth consent screen. After authorization,
+    Twitch redirects back to /auth/callback/twitch.
+    """,
+    responses={
+        307: {"description": "Redirect to Twitch OAuth consent screen"},
+        503: {"description": "OAuth library not configured"},
+    },
+)
 def auth_login_twitch(request: Request):
+    """Initiate Twitch OAuth login."""
     if not OAuth:
         raise ExternalServiceError("OAuth", "Authentication library not installed")
     oauth = _new_oauth()
@@ -288,8 +351,23 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
     return resp
 
 
-@router.post("/auth/logout")
+@router.post(
+    "/auth/logout",
+    summary="Logout",
+    description="""
+    Logout the current user by invalidating their session.
+    
+    Clears the session cookie and removes the session from the database.
+    """,
+    responses={
+        200: {
+            "description": "Logged out successfully",
+            "content": {"application/json": {"example": {"ok": True}}},
+        }
+    },
+)
 def auth_logout(request: Request, db=Depends(get_db)):
+    """Logout and invalidate session."""
     tok = _get_session_token(request)
     if tok:
         db.execute(text("DELETE FROM sessions WHERE token=:t"), {"t": tok})

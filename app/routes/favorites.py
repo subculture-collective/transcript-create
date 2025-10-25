@@ -8,11 +8,44 @@ from ..common.session import get_user_from_session as _get_user_from_session
 from ..db import get_db
 from ..exceptions import AuthenticationError, ValidationError
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Favorites"])
 
 
-@router.get("/users/me/favorites")
+@router.get(
+    "/users/me/favorites",
+    summary="List user favorites",
+    description="""
+    Get all favorite transcript segments for the authenticated user.
+    
+    Optionally filter by video_id to get favorites for a specific video.
+    
+    **Authentication Required:** Yes
+    """,
+    responses={
+        200: {
+            "description": "List of favorites retrieved",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "items": [
+                            {
+                                "id": "123e4567-e89b-12d3-a456-426614174000",
+                                "video_id": "987e6543-e21b-34c5-b678-426614174999",
+                                "start_ms": 10000,
+                                "end_ms": 15000,
+                                "text": "This is a favorite quote",
+                                "created_at": "2025-10-25T10:30:00Z",
+                            }
+                        ]
+                    }
+                }
+            },
+        },
+        401: {"description": "Authentication required"},
+    },
+)
 def list_favorites(request: Request, db=Depends(get_db), video_id: uuid.UUID | None = None):
+    """List favorite transcript segments."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not user:
         raise AuthenticationError()
@@ -41,8 +74,31 @@ def list_favorites(request: Request, db=Depends(get_db), video_id: uuid.UUID | N
     return {"items": rows}
 
 
-@router.post("/users/me/favorites")
+@router.post(
+    "/users/me/favorites",
+    summary="Add favorite segment",
+    description="""
+    Save a transcript segment as a favorite.
+    
+    Required fields:
+    - `video_id`: UUID of the video
+    - `start_ms`: Start time in milliseconds
+    - `end_ms`: End time in milliseconds
+    - `text`: The transcript text (optional)
+    
+    **Authentication Required:** Yes
+    """,
+    responses={
+        200: {
+            "description": "Favorite created",
+            "content": {"application/json": {"example": {"id": "123e4567-e89b-12d3-a456-426614174000"}}},
+        },
+        400: {"description": "Invalid or missing required fields"},
+        401: {"description": "Authentication required"},
+    },
+)
 def add_favorite(payload: dict, request: Request, db=Depends(get_db)):
+    """Add a favorite transcript segment."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not user:
         raise AuthenticationError()
@@ -61,8 +117,23 @@ def add_favorite(payload: dict, request: Request, db=Depends(get_db)):
     return {"id": fid}
 
 
-@router.delete("/users/me/favorites/{favorite_id}")
+@router.delete(
+    "/users/me/favorites/{favorite_id}",
+    summary="Delete favorite",
+    description="""
+    Remove a favorite transcript segment.
+    
+    **Authentication Required:** Yes  
+    **Authorization:** Can only delete your own favorites
+    """,
+    responses={
+        200: {"description": "Favorite deleted", "content": {"application/json": {"example": {"ok": True}}}},
+        401: {"description": "Authentication required"},
+        404: {"description": "Favorite not found or not owned by user"},
+    },
+)
 def delete_favorite(favorite_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Delete a favorite transcript segment."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not user:
         raise AuthenticationError()

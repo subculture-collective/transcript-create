@@ -10,10 +10,29 @@ from ..common.session import is_admin as _is_admin
 from ..db import get_db
 from ..exceptions import AuthorizationError, ValidationError
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Admin"])
 
 
-@router.get("/admin/events")
+@router.get(
+    "/admin/events",
+    summary="List events (Admin)",
+    description="""
+    List tracked events with filtering and pagination.
+    
+    **Admin Only:** Requires admin privileges
+    
+    **Filters:**
+    - `type`: Filter by event type
+    - `user_email`: Filter by user email
+    - `start`: Filter events after timestamp
+    - `end`: Filter events before timestamp
+    """,
+    responses={
+        200: {"description": "List of events"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+    },
+)
 def admin_events(
     request: Request,
     db=Depends(get_db),
@@ -24,6 +43,7 @@ def admin_events(
     limit: int = 100,
     offset: int = 0,
 ):
+    """List events with filtering (admin only)."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
         raise AuthorizationError("Admin access required")
@@ -51,7 +71,20 @@ def admin_events(
     return {"items": rows}
 
 
-@router.get("/admin/events.csv")
+@router.get(
+    "/admin/events.csv",
+    summary="Export events as CSV (Admin)",
+    description="""
+    Export tracked events to CSV format with filtering.
+    
+    **Admin Only:** Requires admin privileges
+    """,
+    responses={
+        200: {"description": "CSV file download", "content": {"text/csv": {}}},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+    },
+)
 def admin_events_csv(
     request: Request,
     db=Depends(get_db),
@@ -62,6 +95,7 @@ def admin_events_csv(
     limit: int = 1000,
     offset: int = 0,
 ):
+    """Export events as CSV (admin only)."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
         raise AuthorizationError("Admin access required")
@@ -98,8 +132,36 @@ def admin_events_csv(
     return PlainTextResponse(content=header + body, media_type="text/csv")
 
 
-@router.get("/admin/events/summary")
+@router.get(
+    "/admin/events/summary",
+    summary="Get events summary (Admin)",
+    description="""
+    Get summary statistics of tracked events.
+    
+    Returns:
+    - Event counts grouped by type
+    - Event counts grouped by day
+    
+    **Admin Only:** Requires admin privileges
+    """,
+    responses={
+        200: {
+            "description": "Events summary",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "by_type": [{"type": "search", "count": 150}],
+                        "by_day": [{"day": "2025-10-25", "count": 42}],
+                    }
+                }
+            },
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+    },
+)
 def admin_events_summary(request: Request, db=Depends(get_db), start: str | None = None, end: str | None = None):
+    """Get event summary statistics (admin only)."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
         raise AuthorizationError("Admin access required")
@@ -124,8 +186,41 @@ def admin_events_summary(request: Request, db=Depends(get_db), start: str | None
     }
 
 
-@router.post("/admin/users/{user_id}/plan")
+@router.post(
+    "/admin/users/{user_id}/plan",
+    summary="Set user plan (Admin)",
+    description="""
+    Change a user's subscription plan.
+    
+    **Admin Only:** Requires admin privileges
+    
+    Request body:
+    ```json
+    {
+        "plan": "free"  // or "pro"
+    }
+    ```
+    """,
+    responses={
+        200: {
+            "description": "Plan updated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "ok": True,
+                        "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "plan": "pro",
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid plan value"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+    },
+)
 def admin_set_user_plan(user_id: uuid.UUID, payload: dict, request: Request, db=Depends(get_db)):
+    """Set a user's plan (admin only)."""
     user = _get_user_from_session(db, _get_session_token(request))
     if not _is_admin(user):
         raise AuthorizationError("Admin access required")

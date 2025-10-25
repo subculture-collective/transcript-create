@@ -22,7 +22,7 @@ from ..db import get_db
 from ..exceptions import TranscriptNotReadyError
 from ..settings import settings
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Exports"])
 
 SESSION_COOKIE = "tc_session"
 
@@ -73,8 +73,27 @@ def _log_export(db, request: Request, user, payload: dict):
     db.commit()
 
 
-@router.get("/videos/{video_id}/youtube-transcript.srt")
+@router.get(
+    "/videos/{video_id}/youtube-transcript.srt",
+    summary="Export YouTube captions as SRT",
+    description="""
+    Download YouTube's native closed captions in SubRip (SRT) subtitle format.
+    
+    **Authentication Required:** Yes  
+    **Rate Limits:** Free plan limited to daily export quota
+    """,
+    responses={
+        200: {
+            "description": "SRT file download",
+            "content": {"text/plain": {"example": "1\n00:00:01,000 --> 00:00:03,500\nHello world\n\n"}},
+        },
+        401: {"description": "Authentication required"},
+        402: {"description": "Daily export limit reached (free plan)"},
+        503: {"description": "YouTube transcript not available"},
+    },
+)
 def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Export YouTube captions as SRT subtitle file."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
@@ -97,8 +116,24 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
     return Response(content=body, media_type="text/plain", headers=headers)
 
 
-@router.get("/videos/{video_id}/youtube-transcript.vtt")
+@router.get(
+    "/videos/{video_id}/youtube-transcript.vtt",
+    summary="Export YouTube captions as VTT",
+    description="""
+    Download YouTube's native closed captions in WebVTT subtitle format.
+    
+    **Authentication Required:** Yes  
+    **Rate Limits:** Free plan limited to daily export quota
+    """,
+    responses={
+        200: {"description": "VTT file download"},
+        401: {"description": "Authentication required"},
+        402: {"description": "Daily export limit reached (free plan)"},
+        503: {"description": "YouTube transcript not available"},
+    },
+)
 def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Export YouTube captions as WebVTT subtitle file."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
@@ -127,8 +162,24 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
     return Response(content=body, media_type="text/vtt", headers=headers)
 
 
-@router.get("/videos/{video_id}/transcript.srt")
+@router.get(
+    "/videos/{video_id}/transcript.srt",
+    summary="Export Whisper transcript as SRT",
+    description="""
+    Download Whisper-generated transcript in SubRip (SRT) subtitle format.
+    
+    **Authentication Required:** Yes  
+    **Rate Limits:** Free plan limited to daily export quota
+    """,
+    responses={
+        200: {"description": "SRT file download"},
+        401: {"description": "Authentication required"},
+        402: {"description": "Daily export limit reached (free plan)"},
+        503: {"description": "Transcript not ready"},
+    },
+)
 def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Export Whisper transcript as SRT subtitle file."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
@@ -150,8 +201,24 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
     return Response(content=body, media_type="text/plain", headers=headers)
 
 
-@router.get("/videos/{video_id}/transcript.vtt")
+@router.get(
+    "/videos/{video_id}/transcript.vtt",
+    summary="Export Whisper transcript as VTT",
+    description="""
+    Download Whisper-generated transcript in WebVTT subtitle format.
+    
+    **Authentication Required:** Yes  
+    **Rate Limits:** Free plan limited to daily export quota
+    """,
+    responses={
+        200: {"description": "VTT file download"},
+        401: {"description": "Authentication required"},
+        402: {"description": "Daily export limit reached (free plan)"},
+        503: {"description": "Transcript not ready"},
+    },
+)
 def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Export Whisper transcript as WebVTT subtitle file."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
@@ -179,8 +246,38 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
     return Response(content=body, media_type="text/vtt", headers=headers)
 
 
-@router.get("/videos/{video_id}/transcript.json")
+@router.get(
+    "/videos/{video_id}/transcript.json",
+    summary="Export Whisper transcript as JSON",
+    description="""
+    Download Whisper-generated transcript in JSON format with full segment data.
+    
+    **Authentication Required:** Yes  
+    **Rate Limits:** Free plan limited to daily export quota
+    """,
+    responses={
+        200: {
+            "description": "JSON file download",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "start_ms": 1000,
+                            "end_ms": 3500,
+                            "text": "Hello world",
+                            "speaker_label": "Speaker 1",
+                        }
+                    ]
+                }
+            },
+        },
+        401: {"description": "Authentication required"},
+        402: {"description": "Daily export limit reached (free plan)"},
+        503: {"description": "Transcript not ready"},
+    },
+)
 def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Export Whisper transcript as JSON."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
@@ -196,8 +293,24 @@ def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends
     return JSONResponse(payload, headers=headers)
 
 
-@router.get("/videos/{video_id}/youtube-transcript.json")
+@router.get(
+    "/videos/{video_id}/youtube-transcript.json",
+    summary="Export YouTube captions as JSON",
+    description="""
+    Download YouTube's native closed captions in JSON format.
+    
+    **Authentication Required:** Yes  
+    **Rate Limits:** Free plan limited to daily export quota
+    """,
+    responses={
+        200: {"description": "JSON file download"},
+        401: {"description": "Authentication required"},
+        402: {"description": "Daily export limit reached (free plan)"},
+        503: {"description": "YouTube transcript not available"},
+    },
+)
 def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Export YouTube captions as JSON."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
@@ -214,8 +327,30 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
     return JSONResponse(payload, headers=headers)
 
 
-@router.get("/videos/{video_id}/transcript.pdf")
+@router.get(
+    "/videos/{video_id}/transcript.pdf",
+    summary="Export Whisper transcript as PDF",
+    description="""
+    Download Whisper-generated transcript as a formatted PDF document.
+    
+    The PDF includes:
+    - Video title and metadata
+    - Timestamps for each segment
+    - Speaker labels (if diarization was performed)
+    - Formatted for easy reading and printing
+    
+    **Authentication Required:** Yes  
+    **Rate Limits:** Free plan limited to daily export quota
+    """,
+    responses={
+        200: {"description": "PDF file download", "content": {"application/pdf": {}}},
+        401: {"description": "Authentication required"},
+        402: {"description": "Daily export limit reached (free plan)"},
+        503: {"description": "Transcript not ready"},
+    },
+)
 def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
+    """Export Whisper transcript as formatted PDF."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"

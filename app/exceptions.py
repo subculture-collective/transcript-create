@@ -133,11 +133,14 @@ class ExternalServiceError(AppError):
     """Raised when an external service fails."""
 
     def __init__(self, service: str, message: str, details: Optional[Dict[str, Any]] = None):
+        error_details = {"service": service}
+        if details:
+            error_details.update(details)
         super().__init__(
             error_code="external_service_error",
             message=f"{service} error: {message}",
             status_code=503,
-            details=details or {"service": service},
+            details=error_details,
         )
 
 

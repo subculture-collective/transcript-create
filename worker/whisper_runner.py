@@ -69,8 +69,12 @@ def _try_load_torch(model_name: str, force_gpu: bool):
 
 
 def _get_model():
+    from worker.metrics import whisper_model_load_seconds
+    import time
+    
     global _model
     if _model is None:
+        load_start = time.time()
         if settings.WHISPER_BACKEND == "whisper":
             # PyTorch Whisper path (ROCm-compatible when torch is ROCm build)
             _model = _try_load_torch(settings.WHISPER_MODEL, settings.FORCE_GPU)
@@ -99,6 +103,8 @@ def _get_model():
                                     "Model loaded on GPU successfully",
                                     extra={"device": dev, "model": model_name, "compute_type": ctype},
                                 )
+                                load_duration = time.time() - load_start
+                                whisper_model_load_seconds.labels(model=model_name, backend=settings.WHISPER_BACKEND).observe(load_duration)
                                 return _model
                             except Exception as e:
                                 last_err = e
@@ -120,6 +126,10 @@ def _get_model():
                 except Exception:
                     logger.warning("Half precision failed; retrying with float32 on device=auto")
                     _model = _try_load_ct2(settings.WHISPER_MODEL, device="auto", compute_type="float32")
+        
+        load_duration = time.time() - load_start
+        whisper_model_load_seconds.labels(model=settings.WHISPER_MODEL, backend=settings.WHISPER_BACKEND).observe(load_duration)
+        logger.info("Model loaded", extra={"duration_seconds": round(load_duration, 2)})
     return _model
 
 

@@ -33,5 +33,8 @@ stripe==13.0.1
 # PDF export
 reportlab==4.4.4
 
+# Metrics and monitoring
+prometheus-client==0.21.0
+
 # Optional: Error tracking (set SENTRY_DSN to enable)
 # sentry-sdk==2.19.2

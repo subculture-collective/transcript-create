@@ -1,10 +1,13 @@
 import time
+from threading import Thread
 
 from sqlalchemy import create_engine, text
+from prometheus_client import start_http_server
 
 from app.logging_config import configure_logging, get_logger, job_id_ctx, video_id_ctx
 from app.settings import settings
 from worker.pipeline import capture_youtube_captions_for_unprocessed, expand_channel_if_needed, process_video
+from worker.metrics import setup_worker_info, try_collect_gpu_metrics
 
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 POLL_INTERVAL = 3
@@ -18,10 +21,71 @@ configure_logging(
 logger = get_logger(__name__)
 
 
+def update_queue_metrics():
+    """Update queue metrics from database."""
+    from worker.metrics import videos_pending, videos_in_progress
+    
+    try:
+        with engine.begin() as conn:
+            # Count pending videos
+            pending_count = conn.execute(
+                text("SELECT COUNT(*) FROM videos WHERE state = 'pending'")
+            ).scalar_one()
+            videos_pending.set(pending_count)
+            
+            # Count in-progress videos by state
+            states = conn.execute(
+                text("""
+                    SELECT state, COUNT(*) 
+                    FROM videos 
+                    WHERE state IN ('downloading', 'transcoding', 'transcribing')
+                    GROUP BY state
+                """)
+            ).all()
+            
+            # Reset all in-progress gauges first
+            for state in ['downloading', 'transcoding', 'transcribing']:
+                videos_in_progress.labels(state=state).set(0)
+            
+            # Set current counts
+            for state, count in states:
+                videos_in_progress.labels(state=state).set(count)
+    except Exception as e:
+        logger.warning("Failed to update queue metrics", extra={"error": str(e)})
+
+
+def gpu_metrics_collector():
+    """Background thread to periodically collect GPU metrics."""
+    while True:
+        try:
+            try_collect_gpu_metrics()
+        except Exception as e:
+            logger.debug("GPU metrics collection failed", extra={"error": str(e)})
+        time.sleep(30)  # Update every 30 seconds
+
+
 def run():
     logger.info("Worker service started")
-    while True:
-        logger.debug("Polling for work: expand jobs and pick a video")
+    
+    # Initialize worker info metrics
+    setup_worker_info(
+        whisper_model=settings.WHISPER_MODEL,
+        whisper_backend=settings.WHISPER_BACKEND,
+        force_gpu=settings.FORCE_GPU,
+    )
+    
+    # Start Prometheus metrics HTTP server on port 8001
+    try:
+        start_http_server(8001)
+        logger.info("Prometheus metrics server started", extra={"port": 8001})
+    except Exception as e:
+        logger.warning("Failed to start metrics server", extra={"error": str(e)})
+    
+    # Start GPU metrics collector thread
+    gpu_thread = Thread(target=gpu_metrics_collector, daemon=True)
+    gpu_thread.start()
+    
+    while True:        logger.debug("Polling for work: expand jobs and pick a video")
         with engine.begin() as conn:
             # Expand pending jobs into videos
             from worker.pipeline import expand_single_if_needed
@@ -165,6 +229,10 @@ def run():
                         )
             except Exception as e:
                 logger.warning("Model upgrade requeue failed", extra={"error": str(e)})
+            
+            # Update queue metrics
+            update_queue_metrics()
+            
             row = conn.execute(
                 text(
                     """
@@ -192,8 +260,17 @@ def run():
             logger.info("Starting video processing")
             process_video(engine, video_id)
             logger.info("Video processing completed successfully")
+            
+            # Track successful video processing
+            from worker.metrics import videos_processed_total
+            videos_processed_total.labels(result="completed").inc()
         except Exception as e:
             logger.exception("Video processing failed", extra={"error": str(e)})
+            
+            # Track failed video processing
+            from worker.metrics import videos_processed_total
+            videos_processed_total.labels(result="failed").inc()
+            
             with engine.begin() as conn:
                 conn.execute(
                     text("UPDATE videos SET state='failed', error=:e, updated_at=now() WHERE id=:i"),

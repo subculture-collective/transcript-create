@@ -66,11 +66,17 @@ def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str
 
 
 def _log_export(db, request: Request, user, payload: dict):
+    from ..metrics import exports_total
+    
     db.execute(
         text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'export',:p)"),
         {"u": str(user["id"]) if user else None, "t": get_session_token(request), "p": payload},
     )
     db.commit()
+    
+    # Track export metric
+    fmt = payload.get("format", "unknown")
+    exports_total.labels(format=fmt).inc()
 
 
 @router.get(

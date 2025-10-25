@@ -126,6 +126,15 @@ def expand_single_if_needed(conn):
 
 
 def process_video(engine, video_id):
+    from worker.metrics import (
+        download_duration_seconds,
+        transcode_duration_seconds,
+        transcription_duration_seconds,
+        diarization_duration_seconds,
+        chunk_count,
+        whisper_chunk_transcription_seconds,
+    )
+    
     t0 = time.time()
     logger.info("Video processing started")
     with engine.begin() as conn:
@@ -142,7 +151,12 @@ def process_video(engine, video_id):
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Downloading audio", extra={"youtube_id": youtube_id, "stage": "downloading"})
+    download_start = time.time()
     raw_path = download_audio(f"https://www.youtube.com/watch?v={youtube_id}", dest_dir)
+    download_duration = time.time() - download_start
+    download_duration_seconds.observe(download_duration)
+    logger.info("Download completed", extra={"duration_seconds": round(download_duration, 2)})
+    
     with engine.begin() as conn:
         conn.execute(
             text("UPDATE videos SET raw_path=:p, state='transcoding', updated_at=now() WHERE id=:i"),
@@ -150,7 +164,12 @@ def process_video(engine, video_id):
         )
 
     logger.info("Converting to wav 16k", extra={"stage": "transcoding"})
+    transcode_start = time.time()
     wav_path = ensure_wav_16k(raw_path)
+    transcode_duration = time.time() - transcode_start
+    transcode_duration_seconds.observe(transcode_duration)
+    logger.info("Transcode completed", extra={"duration_seconds": round(transcode_duration, 2)})
+    
     with engine.begin() as conn:
         conn.execute(
             text("UPDATE videos SET wav_path=:p, state='transcribing', updated_at=now() WHERE id=:i"),
@@ -160,7 +179,10 @@ def process_video(engine, video_id):
     logger.info("Chunking audio", extra={"max_chunk_seconds": settings.CHUNK_SECONDS, "stage": "transcribing"})
     chunks = chunk_audio(wav_path, settings.CHUNK_SECONDS)
     logger.info("Audio chunks created", extra={"chunk_count": len(chunks)})
+    chunk_count.observe(len(chunks))
+    
     all_segments = []
+    transcription_start = time.time()
     for c in chunks:
         ct0 = time.time()
         logger.info("Transcribing chunk", extra={"chunk_file": c.path.name, "offset_seconds": c.offset})
@@ -170,6 +192,7 @@ def process_video(engine, video_id):
             s["end"] += c.offset
         all_segments.extend(segs)
         chunk_duration = time.time() - ct0
+        whisper_chunk_transcription_seconds.labels(model=settings.WHISPER_MODEL).observe(chunk_duration)
         logger.info(
             "Chunk transcription complete",
             extra={
@@ -178,9 +201,18 @@ def process_video(engine, video_id):
                 "duration_seconds": round(chunk_duration, 2),
             },
         )
+    
+    total_transcription_duration = time.time() - transcription_start
+    transcription_duration_seconds.labels(model=settings.WHISPER_MODEL).observe(total_transcription_duration)
+    logger.info("All chunks transcribed", extra={"duration_seconds": round(total_transcription_duration, 2)})
 
     logger.info("Diarization phase starting", extra={"segment_count": len(all_segments)})
+    diarization_start = time.time()
     diar_segments = diarize_and_align(wav_path, all_segments)
+    diarization_duration = time.time() - diarization_start
+    if diarization_duration > 1.0:  # Only track if diarization actually ran
+        diarization_duration_seconds.observe(diarization_duration)
+        logger.info("Diarization completed", extra={"duration_seconds": round(diarization_duration, 2)})
 
     with engine.begin() as conn:
         full_text = " ".join(s["text"] for s in diar_segments)

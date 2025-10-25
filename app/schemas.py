@@ -1,13 +1,29 @@
+import re
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class JobCreate(BaseModel):
     url: HttpUrl
-    kind: str = "single"  # or "channel"
+    kind: Literal["single", "channel"] = "single"
+
+    @field_validator("url")
+    @classmethod
+    def validate_youtube_url(cls, v: HttpUrl) -> HttpUrl:
+        """Validate that the URL is a YouTube URL."""
+        url_str = str(v)
+        youtube_patterns = [
+            r"^https?://(www\.)?youtube\.com/watch\?v=[\w-]+",
+            r"^https?://(www\.)?youtube\.com/channel/[\w-]+",
+            r"^https?://(www\.)?youtube\.com/@[\w-]+",
+            r"^https?://youtu\.be/[\w-]+",
+        ]
+        if not any(re.match(pattern, url_str) for pattern in youtube_patterns):
+            raise ValueError("URL must be a valid YouTube video or channel URL")
+        return v
 
 
 class JobStatus(BaseModel):
@@ -63,3 +79,21 @@ class VideoInfo(BaseModel):
     youtube_id: str
     title: Optional[str] = None
     duration_seconds: Optional[int] = None
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response format."""
+
+    error: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+
+
+class SearchQuery(BaseModel):
+    """Query parameters for search endpoint."""
+
+    q: str = Field(..., min_length=1, max_length=500, description="Search query")
+    source: Literal["native", "youtube"] = "native"
+    video_id: Optional[uuid.UUID] = None
+    limit: int = Field(50, ge=1, le=200, description="Number of results to return")
+    offset: int = Field(0, ge=0, description="Offset for pagination")

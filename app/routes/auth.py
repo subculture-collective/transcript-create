@@ -1,8 +1,9 @@
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import text
 
@@ -11,12 +12,19 @@ from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import set_session_cookie as _set_session_cookie
 from ..db import get_db
+from ..exceptions import ExternalServiceError, ValidationError
 from ..settings import settings
+
+logger = logging.getLogger(__name__)
 
 try:
     from authlib.integrations.starlette_client import OAuth
+    from authlib.common.errors import AuthlibBaseError
+    from authlib.oauth2.rfc6749.errors import OAuth2Error
 except Exception:
     OAuth = None
+    AuthlibBaseError = None
+    OAuth2Error = None
 
 router = APIRouter()
 
@@ -74,7 +82,7 @@ def auth_me(request: Request, db=Depends(get_db)):
 @router.get("/auth/login/google")
 def auth_login_google(request: Request):
     if not OAuth:
-        raise HTTPException(501, "Authlib not installed")
+        raise ExternalServiceError("OAuth", "Authentication library not installed")
     oauth = OAuth()
     oauth.register(
         name="google",
@@ -90,7 +98,7 @@ def auth_login_google(request: Request):
 @router.get("/auth/login/twitch")
 def auth_login_twitch(request: Request):
     if not OAuth:
-        raise HTTPException(501, "Authlib not installed")
+        raise ExternalServiceError("OAuth", "Authentication library not installed")
     oauth = _new_oauth()
     redirect_uri = settings.OAUTH_TWITCH_REDIRECT_URI
     return oauth.twitch.authorize_redirect(request, redirect_uri)
@@ -99,26 +107,55 @@ def auth_login_twitch(request: Request):
 @router.get("/auth/callback/google")
 async def auth_callback_google(request: Request, db=Depends(get_db)):
     if not OAuth:
-        raise HTTPException(501, "Authlib not installed")
-    oauth = OAuth()
-    oauth.register(
-        name="google",
-        client_id=settings.OAUTH_GOOGLE_CLIENT_ID,
-        client_secret=settings.OAUTH_GOOGLE_CLIENT_SECRET,
-        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-        client_kwargs={"scope": "openid email profile"},
-    )
-    token = await oauth.google.authorize_access_token(request)
-    userinfo = token.get("userinfo") or {}
-    if not userinfo:
-        resp = await oauth.google.get("userinfo", token=token)
-        userinfo = resp.json()
-    sub = userinfo.get("sub")
-    email = userinfo.get("email")
-    name = userinfo.get("name")
-    avatar = userinfo.get("picture")
-    if not sub:
-        raise HTTPException(400, "Missing subject")
+        raise ExternalServiceError("OAuth", "Authentication library not installed")
+
+    try:
+        oauth = OAuth()
+        oauth.register(
+            name="google",
+            client_id=settings.OAUTH_GOOGLE_CLIENT_ID,
+            client_secret=settings.OAUTH_GOOGLE_CLIENT_SECRET,
+            server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+            client_kwargs={"scope": "openid email profile"},
+        )
+        token = await oauth.google.authorize_access_token(request)
+        userinfo = token.get("userinfo") or {}
+        if not userinfo:
+            resp = await oauth.google.get("userinfo", token=token)
+            userinfo = resp.json()
+        sub = userinfo.get("sub")
+        email = userinfo.get("email")
+        name = userinfo.get("name")
+        avatar = userinfo.get("picture")
+        if not sub:
+            raise ValidationError("Missing user identifier from OAuth provider")
+    except (ValidationError, ExternalServiceError):
+        # Re-raise our custom exceptions without modification
+        raise
+    except Exception as e:
+        # Log the original exception with full context for debugging
+        logger.error(
+            "Google OAuth callback error: %s | type=%s",
+            str(e),
+            type(e).__name__,
+            exc_info=True,
+        )
+        # Determine if it's an authlib-specific error
+        error_type = type(e).__name__
+        if AuthlibBaseError and isinstance(e, AuthlibBaseError):
+            # Provide more specific error message for OAuth protocol errors
+            raise ExternalServiceError(
+                "Google OAuth",
+                f"OAuth protocol error: {str(e)}",
+                details={"error_type": error_type, "error": str(e)},
+            )
+        # For all other exceptions, wrap with generic message
+        raise ExternalServiceError(
+            "Google OAuth",
+            f"Authentication failed: {str(e)}",
+            details={"error_type": error_type},
+        )
+
     with db.begin():
         row = (
             db.execute(text("SELECT * FROM users WHERE oauth_provider='google' AND oauth_subject=:s"), {"s": sub})
@@ -161,28 +198,57 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
 @router.get("/auth/callback/twitch")
 async def auth_callback_twitch(request: Request, db=Depends(get_db)):
     if not OAuth:
-        raise HTTPException(501, "Authlib not installed")
-    oauth = _new_oauth()
-    token = await oauth.twitch.authorize_access_token(request)
-    access_token = token.get("access_token")
-    if not access_token:
-        raise HTTPException(400, "Missing access token")
-    headers = {
-        "Client-ID": settings.OAUTH_TWITCH_CLIENT_ID,
-        "Authorization": f"Bearer {access_token}",
-    }
-    resp = await oauth.twitch.get("users", token=token, headers=headers)
-    data = resp.json()
-    users = data.get("data") or []
-    if not users:
-        raise HTTPException(400, "Failed to fetch Twitch user")
-    u0 = users[0]
-    sub = u0.get("id")
-    email = u0.get("email")
-    name = u0.get("display_name") or u0.get("login")
-    avatar = u0.get("profile_image_url")
-    if not sub:
-        raise HTTPException(400, "Missing Twitch user id")
+        raise ExternalServiceError("OAuth", "Authentication library not installed")
+
+    try:
+        oauth = _new_oauth()
+        token = await oauth.twitch.authorize_access_token(request)
+        access_token = token.get("access_token")
+        if not access_token:
+            raise ValidationError("Missing access token from OAuth provider")
+        headers = {
+            "Client-ID": settings.OAUTH_TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {access_token}",
+        }
+        resp = await oauth.twitch.get("users", token=token, headers=headers)
+        data = resp.json()
+        users = data.get("data") or []
+        if not users:
+            raise ExternalServiceError("Twitch", "Failed to fetch user information")
+        u0 = users[0]
+        sub = u0.get("id")
+        email = u0.get("email")
+        name = u0.get("display_name") or u0.get("login")
+        avatar = u0.get("profile_image_url")
+        if not sub:
+            raise ValidationError("Missing user identifier from OAuth provider")
+    except (ValidationError, ExternalServiceError):
+        # Re-raise our custom exceptions without modification
+        raise
+    except Exception as e:
+        # Log the original exception with full context for debugging
+        logger.error(
+            "Twitch OAuth callback error: %s | type=%s",
+            str(e),
+            type(e).__name__,
+            exc_info=True,
+        )
+        # Determine if it's an authlib-specific error
+        error_type = type(e).__name__
+        if AuthlibBaseError and isinstance(e, AuthlibBaseError):
+            # Provide more specific error message for OAuth protocol errors
+            raise ExternalServiceError(
+                "Twitch OAuth",
+                f"OAuth protocol error: {str(e)}",
+                details={"error_type": error_type, "error": str(e)},
+            )
+        # For all other exceptions, wrap with generic message
+        raise ExternalServiceError(
+            "Twitch OAuth",
+            f"Authentication failed: {str(e)}",
+            details={"error_type": error_type},
+        )
+
     with db.begin():
         row = (
             db.execute(text("SELECT * FROM users WHERE oauth_provider='twitch' AND oauth_subject=:s"), {"s": sub})

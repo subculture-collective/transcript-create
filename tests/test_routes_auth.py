@@ -107,14 +107,19 @@ class TestAuthRoutes:
     def test_auth_login_google_no_oauth(self, client: TestClient):
         """Test Google login when OAuth is not available."""
         response = client.get("/auth/login/google")
-        assert response.status_code == 501
-        assert "Authlib not installed" in response.json()["detail"]
+        assert response.status_code == 503
+        data = response.json()
+        assert data["error"] == "external_service_error"
+        assert "Authentication library not installed" in data["message"]
 
     @patch("app.routes.auth.OAuth", None)
     def test_auth_login_twitch_no_oauth(self, client: TestClient):
         """Test Twitch login when OAuth is not available."""
         response = client.get("/auth/login/twitch")
-        assert response.status_code == 501
+        assert response.status_code == 503
+        data = response.json()
+        assert data["error"] == "external_service_error"
+        assert "Authentication library not installed" in data["message"]
 
     @patch("app.routes.auth.OAuth")
     def test_auth_login_google_redirect(self, mock_oauth_class, client: TestClient):
@@ -179,8 +184,9 @@ class TestAuthRoutes:
         # OAuth callbacks typically require state for CSRF protection
         # This test just ensures the endpoint exists and handles missing params
         response = client.get("/auth/callback/google")
-        # Will likely fail due to missing OAuth token, but endpoint should exist
-        assert response.status_code in [400, 401, 500, 501]
+        # Will likely fail due to missing OAuth token or other OAuth errors
+        # Should return 503 (ExternalServiceError) or 422 (ValidationError)
+        assert response.status_code in [422, 503]
 
     def test_multiple_sessions_same_user(self, client: TestClient, db_session):
         """Test that a user can have multiple active sessions."""

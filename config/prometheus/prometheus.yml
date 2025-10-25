@@ -8,7 +8,8 @@ global:
   # external systems (federation, remote storage, Alertmanager).
   external_labels:
     cluster: 'transcript-create'
-    environment: 'production'
+    # Set environment via PROMETHEUS_ENVIRONMENT env var, defaults to 'development'
+    # environment: '${PROMETHEUS_ENVIRONMENT:-development}'
 
 # Alertmanager configuration
 alerting:

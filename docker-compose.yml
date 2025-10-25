@@ -157,8 +157,9 @@ services:
       - GF_INSTALL_PLUGINS=
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./config/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
     depends_on:

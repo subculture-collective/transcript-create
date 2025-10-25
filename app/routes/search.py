@@ -86,6 +86,14 @@ def search(
             data = r.json()
         except requests.exceptions.Timeout:
             raise ExternalServiceError("OpenSearch", "Request timeout")
+        except requests.exceptions.HTTPError as e:
+            # Provide detailed error message for HTTP errors
+            status_code = e.response.status_code if e.response is not None else "Unknown"
+            content = e.response.text if e.response is not None else ""
+            raise ExternalServiceError(
+                "OpenSearch",
+                f"HTTP error {status_code}: {content or str(e)}"
+            )
         except requests.exceptions.RequestException as e:
             raise ExternalServiceError("OpenSearch", f"Connection failed: {str(e)}")
         except Exception as e:

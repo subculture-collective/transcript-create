@@ -1,4 +1,6 @@
 import time
+import os
+import socket
 from threading import Thread
 
 from sqlalchemy import create_engine, text
@@ -11,6 +13,7 @@ from worker.metrics import setup_worker_info, try_collect_gpu_metrics
 
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 POLL_INTERVAL = 3
+HEARTBEAT_INTERVAL = 60  # seconds
 
 # Configure structured logging for worker service
 configure_logging(
@@ -19,6 +22,37 @@ configure_logging(
     json_format=(settings.LOG_FORMAT == "json"),
 )
 logger = get_logger(__name__)
+
+# Generate a unique worker ID based on hostname and PID
+WORKER_ID = f"{socket.gethostname()}-{os.getpid()}"
+
+
+def update_heartbeat():
+    """Update worker heartbeat in database."""
+    try:
+        with engine.begin() as conn:
+            # Upsert heartbeat record
+            conn.execute(
+                text("""
+                    INSERT INTO worker_heartbeat (worker_id, hostname, pid, last_seen, metrics)
+                    VALUES (:worker_id, :hostname, :pid, now(), :metrics)
+                    ON CONFLICT (worker_id)
+                    DO UPDATE SET
+                        last_seen = now(),
+                        hostname = EXCLUDED.hostname,
+                        pid = EXCLUDED.pid,
+                        metrics = EXCLUDED.metrics
+                """),
+                {
+                    "worker_id": WORKER_ID,
+                    "hostname": socket.gethostname(),
+                    "pid": os.getpid(),
+                    "metrics": "{}",  # Can be extended with additional metrics
+                },
+            )
+            logger.debug("Worker heartbeat updated", extra={"worker_id": WORKER_ID})
+    except Exception as e:
+        logger.warning("Failed to update worker heartbeat", extra={"error": str(e)})
 
 
 def update_queue_metrics():
@@ -64,8 +98,18 @@ def gpu_metrics_collector():
         time.sleep(30)  # Update every 30 seconds
 
 
+def heartbeat_updater():
+    """Background thread to periodically update worker heartbeat."""
+    while True:
+        try:
+            update_heartbeat()
+        except Exception as e:
+            logger.debug("Heartbeat update failed", extra={"error": str(e)})
+        time.sleep(HEARTBEAT_INTERVAL)
+
+
 def run():
-    logger.info("Worker service started")
+    logger.info("Worker service started", extra={"worker_id": WORKER_ID})
     
     # Initialize worker info metrics
     setup_worker_info(
@@ -84,6 +128,14 @@ def run():
     # Start GPU metrics collector thread
     gpu_thread = Thread(target=gpu_metrics_collector, daemon=True)
     gpu_thread.start()
+    
+    # Start heartbeat updater thread
+    heartbeat_thread = Thread(target=heartbeat_updater, daemon=True)
+    heartbeat_thread.start()
+    logger.info("Worker heartbeat thread started")
+    
+    # Initial heartbeat
+    update_heartbeat()
     
     while True:        logger.debug("Polling for work: expand jobs and pick a video")
         with engine.begin() as conn:
@@ -121,60 +173,6 @@ def run():
                     )
             except Exception as e:
                 logger.warning("Rescue check failed", extra={"error": str(e)})
-
-            # Model upgrade requeue: reprocess completed videos if current model is larger/better
-            try:
-                current_model = settings.WHISPER_MODEL
-                model_hierarchy = {
-                    "tiny": 1,
-                    "base": 2,
-                    "small": 3,
-                    "medium": 4,
-                    "large": 5,
-                    "large-v2": 6,
-                    "large-v3": 7,
-                }
-                current_rank = model_hierarchy.get(current_model, 0)
-                if current_rank > 0:
-                    requeue_result = conn.execute(
-                        text(
-                            """
-                        UPDATE videos v
-                        SET state = 'pending', updated_at = now()
-                        FROM transcripts t
-                        WHERE v.id = t.video_id
-                          AND v.state = 'completed'
-                          AND t.model IS NOT NULL
-                          AND (
-                            -- Requeue if transcript model rank is lower than current
-                            CASE
-                              WHEN t.model = 'tiny' THEN 1
-                              WHEN t.model = 'base' THEN 2
-                              WHEN t.model = 'small' THEN 3
-                              WHEN t.model = 'medium' THEN 4
-                              WHEN t.model = 'large' THEN 5
-                              WHEN t.model = 'large-v2' THEN 6
-                              WHEN t.model = 'large-v3' THEN 7
-                              ELSE 0
-                            END
-                          ) < :current_rank
-                        RETURNING v.id, t.model
-                    """
-                        ),
-                        {"current_rank": current_rank},
-                    )
-                    requeued = requeue_result.fetchall()
-                    if requeued:
-                        logger.info(
-                            "Model upgrade requeue",
-                            extra={
-                                "count": len(requeued),
-                                "from_models": ", ".join(set(r[1] for r in requeued)),
-                                "to_model": current_model,
-                            },
-                        )
-            except Exception as e:
-                logger.warning("Model upgrade requeue failed", extra={"error": str(e)})
 
             # Model upgrade requeue: reprocess completed videos if current model is larger/better
             try:

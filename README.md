@@ -254,6 +254,15 @@ Auth
 
 - `GET /auth/me`, `GET /auth/login/google`, `GET /auth/login/twitch`, callbacks, `POST /auth/logout`
 
+Health
+
+- `GET /health` → basic health check for load balancers
+- `GET /live` → Kubernetes liveness probe
+- `GET /ready` → Kubernetes readiness probe (checks critical dependencies)
+- `GET /health/detailed` → comprehensive component status (database, OpenSearch, storage, worker)
+
+See [docs/health-checks.md](docs/health-checks.md) for detailed health check documentation.
+
 All endpoints return structured JSON or a redirect/byte stream where applicable. See `app/routes/` for full definitions.
 
 ## Environment configuration

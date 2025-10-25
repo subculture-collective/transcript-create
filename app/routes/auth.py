@@ -18,8 +18,8 @@ from ..settings import settings
 logger = logging.getLogger(__name__)
 
 try:
-    from authlib.integrations.starlette_client import OAuth
     from authlib.common.errors import AuthlibBaseError
+    from authlib.integrations.starlette_client import OAuth
     from authlib.oauth2.rfc6749.errors import OAuth2Error
 except Exception:
     OAuth = None

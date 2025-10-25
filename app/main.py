@@ -103,7 +103,9 @@ if settings.SENTRY_DSN:
 
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup."""
+    """Log application startup and initialize metrics."""
+    from app.metrics import setup_app_info
+    
     logger.info(
         "API service started",
         extra={
@@ -112,6 +114,9 @@ async def startup_event():
             "database_url": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "[hidden]",
         },
     )
+    
+    # Initialize application info metric
+    setup_app_info()
 
 
 # Exception handlers
@@ -241,6 +246,47 @@ async def add_request_context(request: Request, call_next):
         user_id_ctx.set(None)
 
 
+# Middleware for Prometheus metrics collection
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Track HTTP request metrics."""
+    # Skip metrics for the metrics endpoint itself to avoid recursion
+    if request.url.path == "/metrics":
+        return await call_next(request)
+    
+    from app.metrics import http_requests_total, http_request_duration_seconds, http_requests_in_flight
+    import time
+    
+    # Normalize endpoint path for metrics (remove IDs)
+    endpoint = request.url.path
+    method = request.method
+    
+    # Track in-flight requests
+    http_requests_in_flight.labels(method=method, endpoint=endpoint).inc()
+    
+    # Track request duration
+    start_time = time.time()
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        
+        # Record metrics
+        duration = time.time() - start_time
+        http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
+        http_requests_total.labels(method=method, endpoint=endpoint, status=status_code).inc()
+        
+        return response
+    except Exception as e:
+        # Record error metrics
+        duration = time.time() - start_time
+        http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
+        http_requests_total.labels(method=method, endpoint=endpoint, status=500).inc()
+        raise
+    finally:
+        # Decrement in-flight counter
+        http_requests_in_flight.labels(method=method, endpoint=endpoint).dec()
+
+
 from .routes.admin import router as admin_router  # noqa: E402
 from .routes.auth import router as auth_router  # noqa: E402
 from .routes.billing import router as billing_router  # noqa: E402
@@ -277,3 +323,23 @@ app.include_router(search_router)
 async def health_check():
     """Health check endpoint for monitoring and E2E tests"""
     return {"status": "ok"}
+
+
+@app.get(
+    "/metrics",
+    tags=["Health"],
+    summary="Prometheus metrics",
+    description="Expose Prometheus metrics for monitoring and alerting.",
+    responses={
+        200: {
+            "description": "Prometheus metrics in text format",
+            "content": {"text/plain": {"example": "# HELP http_requests_total Total HTTP requests\n# TYPE http_requests_total counter\n"}},
+        }
+    },
+)
+async def metrics():
+    """Prometheus metrics endpoint"""
+    from prometheus_client import REGISTRY, generate_latest
+    from fastapi.responses import Response
+    
+    return Response(content=generate_latest(REGISTRY), media_type="text/plain; version=0.0.4; charset=utf-8")

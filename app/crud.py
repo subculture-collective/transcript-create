@@ -62,11 +62,17 @@ def _retry_on_transient_error(func):
 
 @_retry_on_transient_error
 def create_job(db, kind: str, url: str):
+    from app.metrics import jobs_created_total
+    
     job_id = uuid.uuid4()
     db.execute(
         text("INSERT INTO jobs (id, kind, input_url) VALUES (:i,:k,:u)"), {"i": str(job_id), "k": kind, "u": url}
     )
     db.commit()
+    
+    # Track job creation metric
+    jobs_created_total.labels(kind=kind).inc()
+    
     return job_id
 
 
@@ -135,6 +141,8 @@ def list_youtube_segments(db, youtube_transcript_id):
 
 @_retry_on_transient_error
 def search_segments(db, q: str, video_id: str | None = None, limit: int = 50, offset: int = 0):
+    from app.metrics import search_queries_total
+    
     sql = """
         SELECT id, video_id, start_ms, end_ms,
                ts_headline('english', text, websearch_to_tsquery('english', :q)) AS snippet,
@@ -151,6 +159,10 @@ def search_segments(db, q: str, video_id: str | None = None, limit: int = 50, of
         video_filter = "AND video_id = :vid"
         params["vid"] = str(video_id)
     rows = db.execute(text(sql.format(video_filter=video_filter)), params).mappings().all()
+    
+    # Track search query metric
+    search_queries_total.labels(backend="postgres").inc()
+    
     return rows
 
 

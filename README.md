@@ -67,6 +67,8 @@ docker compose up -d
 
 - API available at http://localhost:8000
 - Postgres exposed on host port 5434 (inside network: db:5432)
+- Prometheus metrics at http://localhost:9090
+- Grafana dashboards at http://localhost:3000 (admin/admin)
 - If your host ROCm version ≠ 6.0, use a different build arg, e.g.:
 
 ```bash
@@ -300,6 +302,35 @@ cd frontend && npm install && npm run dev
 - Compose includes OpenSearch and Dashboards on ports 9200/5601 with security disabled for local dev
 - Configure `SEARCH_BACKEND=opensearch` and run `scripts/opensearch_indexer.py` to create/populate indices
 - Synonyms live in `config/opensearch/analysis/synonyms.txt`
+
+## Monitoring (Prometheus & Grafana)
+
+The application includes comprehensive monitoring with Prometheus metrics and Grafana dashboards.
+
+**Quick Access:**
+- Grafana dashboards: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+- API metrics: http://localhost:8000/metrics
+- Worker metrics: http://localhost:8001/metrics
+
+**Pre-configured Dashboards:**
+1. **Overview**: Service health, request rates, job statistics, queue depth
+2. **API Performance**: Request rates, latency percentiles, error rates, concurrent requests
+3. **Transcription Pipeline**: Processing durations, queue status, model performance
+
+**Key Metrics:**
+- HTTP request rates and latency
+- Job creation and completion rates
+- Video processing pipeline stages
+- Whisper model load and transcription times
+- Database query performance
+- GPU memory usage (when available)
+
+For detailed documentation, see [docs/MONITORING.md](docs/MONITORING.md) including:
+- Adding custom metrics
+- Alert configuration
+- Troubleshooting
+- Performance tuning
 
 ## Troubleshooting
 

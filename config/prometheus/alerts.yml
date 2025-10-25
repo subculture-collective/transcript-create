@@ -1,0 +1,143 @@
+groups:
+  - name: api_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) 
+            / 
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} over the last 5 minutes (threshold: 5%)"
+
+      # Slow response time alert
+      - alert: SlowResponseTime
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Slow API response time"
+          description: "95th percentile response time for {{ $labels.endpoint }} is {{ $value }}s (threshold: 1s)"
+
+      # API service down
+      - alert: APIServiceDown
+        expr: up{job="api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API service is down"
+          description: "The API service has been down for more than 2 minutes"
+
+  - name: worker_alerts
+    interval: 30s
+    rules:
+      # No jobs completed in 1 hour
+      - alert: NoJobsCompleted
+        expr: |
+          (
+            time() - max(timestamp(rate(videos_processed_total{result="completed"}[1h]) > 0))
+          ) > 3600
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "No jobs completed recently"
+          description: "No transcription jobs have completed in the last hour"
+
+      # Worker service down
+      - alert: WorkerServiceDown
+        expr: up{job="worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Worker service is down"
+          description: "The worker service has been down for more than 2 minutes"
+
+      # High number of failed jobs
+      - alert: HighJobFailureRate
+        expr: |
+          (
+            sum(rate(videos_processed_total{result="failed"}[15m]))
+            /
+            sum(rate(videos_processed_total[15m]))
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "High job failure rate"
+          description: "Job failure rate is {{ $value | humanizePercentage }} over the last 15 minutes (threshold: 20%)"
+
+      # Jobs stuck in queue
+      - alert: JobsStuckInQueue
+        expr: videos_pending > 50
+        for: 30m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Many jobs stuck in queue"
+          description: "{{ $value }} videos have been pending for more than 30 minutes"
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # Disk space low (if node_exporter is added)
+      # - alert: LowDiskSpace
+      #   expr: |
+      #     (
+      #       node_filesystem_avail_bytes{mountpoint="/data"} 
+      #       / 
+      #       node_filesystem_size_bytes{mountpoint="/data"}
+      #     ) < 0.1
+      #   for: 5m
+      #   labels:
+      #     severity: warning
+      #     component: system
+      #   annotations:
+      #     summary: "Low disk space on /data volume"
+      #     description: "Only {{ $value | humanizePercentage }} disk space remaining on /data"
+
+      # Database connection errors
+      - alert: HighDatabaseErrors
+        expr: rate(db_errors_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database error rate"
+          description: "Database error rate is {{ $value }} errors/second"
+
+  - name: business_alerts
+    interval: 1m
+    rules:
+      # Monitor export rate
+      - alert: UnusualExportActivity
+        expr: rate(exports_total[5m]) > 10
+        for: 10m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Unusual export activity detected"
+          description: "Export rate is {{ $value }} exports/second (typically <1/s)"

@@ -293,10 +293,12 @@ from .routes.billing import router as billing_router  # noqa: E402
 from .routes.events import router as events_router  # noqa: E402
 from .routes.exports import router as exports_router  # noqa: E402
 from .routes.favorites import router as favorites_router  # noqa: E402
+from .routes.health import router as health_router  # noqa: E402
 from .routes.jobs import router as jobs_router  # noqa: E402
 from .routes.search import router as search_router  # noqa: E402
 from .routes.videos import router as videos_router  # noqa: E402
 
+app.include_router(health_router)
 app.include_router(exports_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
@@ -306,23 +308,6 @@ app.include_router(favorites_router)
 app.include_router(events_router)
 app.include_router(admin_router)
 app.include_router(search_router)
-
-
-@app.get(
-    "/health",
-    tags=["Health"],
-    summary="Health check",
-    description="Check if the API service is running and responding to requests.",
-    responses={
-        200: {
-            "description": "Service is healthy",
-            "content": {"application/json": {"example": {"status": "ok"}}},
-        }
-    },
-)
-async def health_check():
-    """Health check endpoint for monitoring and E2E tests"""
-    return {"status": "ok"}
 
 
 @app.get(

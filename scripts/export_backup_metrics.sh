@@ -160,10 +160,11 @@ fi
 # Check for recent verification failures
 verification_failures=0
 if [[ -d "${BACKUP_DIR}/logs" ]]; then
-    # Look for verification errors in recent logs
+    # Look for verification errors in recent logs (within last 24 hours)
     recent_logs=$(find "${BACKUP_DIR}/logs" -name "*.log" -type f -mtime -1 2>/dev/null || echo "")
     if [[ -n "$recent_logs" ]]; then
-        verification_failures=$(grep -c "Checksum verification failed\|Gzip integrity check failed\|Checksum FAILED" ${recent_logs} 2>/dev/null || echo 0)
+        # Use xargs to safely handle filenames with spaces
+        verification_failures=$(echo "${recent_logs}" | xargs grep -c "Checksum verification failed\|Gzip integrity check failed\|Checksum FAILED" 2>/dev/null || echo 0)
     fi
 fi
 add_metric "backup_verification_failures" "gauge" "Number of failed backup verifications" "${verification_failures}"

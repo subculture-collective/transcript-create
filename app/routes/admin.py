@@ -9,6 +9,7 @@ from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import is_admin as _is_admin
 from ..db import get_db
 from ..exceptions import AuthorizationError, ValidationError
+from ..security import ROLE_ADMIN, require_role
 
 router = APIRouter(prefix="", tags=["Admin"])
 
@@ -36,6 +37,7 @@ router = APIRouter(prefix="", tags=["Admin"])
 def admin_events(
     request: Request,
     db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
     type: str | None = None,
     user_email: str | None = None,
     start: str | None = None,
@@ -44,9 +46,6 @@ def admin_events(
     offset: int = 0,
 ):
     """List events with filtering (admin only)."""
-    user = _get_user_from_session(db, _get_session_token(request))
-    if not _is_admin(user):
-        raise AuthorizationError("Admin access required")
     where = []
     params: dict = {}
     if type:

@@ -237,3 +237,42 @@ class SearchQuery(BaseModel):
     video_id: Optional[uuid.UUID] = None
     limit: int = Field(50, ge=1, le=200, description="Number of results to return")
     offset: int = Field(0, ge=0, description="Offset for pagination")
+
+
+class PageInfo(BaseModel):
+    """Pagination information for cursor-based pagination."""
+    
+    has_next_page: bool = Field(..., description="Whether there are more results available")
+    has_previous_page: bool = Field(..., description="Whether there are previous results available")
+    next_cursor: Optional[str] = Field(None, description="Cursor for fetching the next page")
+    previous_cursor: Optional[str] = Field(None, description="Cursor for fetching the previous page")
+    total_count: Optional[int] = Field(None, description="Total number of items (may be None for performance)")
+
+
+class PaginatedVideos(BaseModel):
+    """Paginated list of videos."""
+    
+    items: List[VideoInfo] = Field(..., description="List of videos in current page")
+    page_info: PageInfo = Field(..., description="Pagination information")
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "items": [
+                    {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "youtube_id": "dQw4w9WgXcQ",
+                        "title": "Example Video",
+                        "duration_seconds": 212,
+                    }
+                ],
+                "page_info": {
+                    "has_next_page": True,
+                    "has_previous_page": False,
+                    "next_cursor": "eyJpZCI6IjEyMyIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxIn0=",
+                    "previous_cursor": None,
+                    "total_count": 100,
+                }
+            }
+        }
+    }

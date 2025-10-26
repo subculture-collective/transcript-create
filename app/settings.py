@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     OPENSEARCH_USER: str = ""
     OPENSEARCH_PASSWORD: str = ""
 
+    # Redis caching configuration
+    REDIS_URL: str = ""  # e.g., "redis://localhost:6379/0" or empty to disable caching
+    ENABLE_CACHING: bool = True  # Enable/disable caching layer
+    CACHE_DEFAULT_TTL: int = 300  # Default cache TTL in seconds (5 minutes)
+    CACHE_VIDEO_TTL: int = 300  # Video metadata cache TTL (5 minutes)
+    CACHE_TRANSCRIPT_TTL: int = 3600  # Transcript segments cache TTL (1 hour)
+    CACHE_SEARCH_TTL: int = 600  # Search results cache TTL (10 minutes)
+
     # Frontend origin for CORS/redirects
     FRONTEND_ORIGIN: str = "http://localhost:5173"
     # Session and OAuth
@@ -107,6 +115,9 @@ class Settings(BaseSettings):
     WAL_ARCHIVE_DIR: str = "/backups/wal_archive"  # PostgreSQL WAL archive directory
     MEDIA_BACKUP_DIR: str = "/backups/media"  # Media files backup directory
     MEDIA_RETENTION_DAYS: int = 30  # Days to keep media backups
+
+    # Metrics and monitoring configuration
+    ENABLE_METRICS: bool = True  # Enable Prometheus metrics collection
 
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.

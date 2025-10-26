@@ -106,6 +106,29 @@ db_errors_total = Counter(
     ["error_type"],
 )
 
+# Cache Metrics
+cache_hits_total = Counter(
+    "cache_hits_total",
+    "Total number of cache hits",
+    ["cache_type"],  # video, segments, search, etc.
+)
+
+cache_misses_total = Counter(
+    "cache_misses_total",
+    "Total number of cache misses",
+    ["cache_type"],
+)
+
+cache_size_bytes = Gauge(
+    "cache_size_bytes",
+    "Current cache size in bytes",
+)
+
+cache_keys_total = Gauge(
+    "cache_keys_total",
+    "Total number of keys in cache",
+)
+
 # System Metrics (Application-level)
 app_info = Gauge(
     "app_info",

@@ -285,7 +285,7 @@ class TestSearchHistory:
             },
         )
         db_session.execute(
-            text("INSERT INTO user_searches (user_id, query, result_count) " "VALUES (:uid, :query, :count)"),
+            text("INSERT INTO user_searches (user_id, query, result_count) VALUES (:uid, :query, :count)"),
             {"uid": str(user_id), "query": "test query", "count": 5},
         )
         db_session.commit()

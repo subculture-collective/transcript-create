@@ -36,7 +36,7 @@ export function renderWithProviders(
 /**
  * Mock API response helper for ky
  */
-export function mockAPIResponse(data: any, status = 200) {
+export function mockAPIResponse(data: unknown, status = 200) {
   return {
     json: async () => data,
     status,
@@ -47,7 +47,9 @@ export function mockAPIResponse(data: any, status = 200) {
 /**
  * Mock API error helper
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mockAPIError(status: number, data?: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const error: any = new Error('HTTP Error')
   error.response = {
     status,

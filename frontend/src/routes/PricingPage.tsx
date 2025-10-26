@@ -17,7 +17,7 @@ export default function PricingPage() {
   }, [user?.plan, redirect, navigate]);
   async function startCheckout(period?: 'monthly' | 'yearly') {
     try {
-      const body: any = {};
+      const body: { period?: string; redirect?: string } = {};
       if (period) body.period = period;
       if (redirect) body.redirect = redirect;
       const { url } = await http

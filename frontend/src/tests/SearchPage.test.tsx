@@ -22,7 +22,7 @@ vi.mock('react-router-dom', async () => {
       const setParams = vi.fn()
       return [params, setParams]
     }),
-    Link: ({ to, children, ...props }: any) => <a href={to} {...props}>{children}</a>,
+    Link: ({ to, children, ...props }: { to: string; children: React.ReactNode; [key: string]: unknown }) => <a href={to} {...props}>{children}</a>,
   }
 })
 

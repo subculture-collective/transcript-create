@@ -8,7 +8,7 @@ type Props = {
 };
 
 export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) {
-  function guard(e: React.MouseEvent, payload: any) {
+  function guard(e: React.MouseEvent, payload: Record<string, unknown>) {
     if (!isPro) {
       e.preventDefault();
       onRequireUpgrade();

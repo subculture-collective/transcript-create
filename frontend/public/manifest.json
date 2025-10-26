@@ -1,0 +1,18 @@
+{
+  "name": "Transcript Search",
+  "short_name": "Transcript",
+  "description": "Search and explore YouTube video transcripts",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1c1917",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

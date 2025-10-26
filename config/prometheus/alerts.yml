@@ -146,7 +146,7 @@ groups:
       # Backup too old - critical if daily backup hasn't run
       # Threshold: 26 hours (24h + 2h buffer for scheduled 2 AM UTC backup)
       - alert: BackupTooOld
-        expr: time() - backup_last_success_timestamp{type="database"} > 93600  # 26 hours (26 * 3600 seconds)
+        expr: time() - backup_last_success_timestamp{type="database"} > 26 * 3600  # 26 hours
         for: 5m
         labels:
           severity: critical

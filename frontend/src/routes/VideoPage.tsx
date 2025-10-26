@@ -302,7 +302,7 @@ export default function VideoPage() {
                     aria-label={`Play from ${msToHms(seg.start_ms)}`}
                   >
                     <div className="mb-1 text-xs text-stone-500 font-mono">
-                      <time dateTime={`PT${Math.floor(seg.start_ms / 1000)}S`}>
+                      <time dateTime={msToHms(seg.start_ms)}>
                         {msToHms(seg.start_ms)}
                       </time>
                     </div>

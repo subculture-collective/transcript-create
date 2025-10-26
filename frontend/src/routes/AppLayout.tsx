@@ -90,7 +90,7 @@ export default function AppLayout() {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden p-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            className="md:hidden p-2 min-h-[44px] min-w-[44px] text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={mobileMenuOpen}
@@ -107,9 +107,15 @@ export default function AppLayout() {
         </div>
 
         {/* Mobile Navigation Menu */}
-        {mobileMenuOpen && (
-          <nav id="mobile-menu" className="md:hidden border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900" aria-label="Mobile navigation">
-            <div className="px-4 py-3 space-y-3">
+        <nav 
+          id="mobile-menu" 
+          className={`md:hidden border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 overflow-hidden transition-all duration-300 ease-in-out motion-reduce:transition-none ${
+            mobileMenuOpen ? 'max-h-screen overflow-y-auto opacity-100' : 'max-h-0 opacity-0'
+          }`}
+          aria-label="Mobile navigation"
+          aria-hidden={!mobileMenuOpen}
+        >
+          <div className="px-4 py-3 space-y-3">
               <Link 
                 to="/" 
                 className="block py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
@@ -200,8 +206,7 @@ export default function AppLayout() {
               )}
             </div>
           </nav>
-        )}
-      </header>
+        </header>
 
       <main id="main-content" className="mx-auto max-w-7xl p-4" role="main">
         <Outlet />

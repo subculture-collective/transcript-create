@@ -213,7 +213,7 @@ export default function SearchPage() {
                 {group.slice(0, 5).map((h) => (
                   <li key={h.id} className="rounded-md border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 p-3 sm:p-4">
                     <div className="mb-2 text-sm text-stone-600 dark:text-stone-400">
-                      <time dateTime={`PT${Math.floor(h.start_ms / 1000)}S`}>
+                      <time dateTime={msToTimestamp(h.start_ms)}>
                         {msToTimestamp(h.start_ms)}–{msToTimestamp(h.end_ms)}
                       </time>
                       {' • '}

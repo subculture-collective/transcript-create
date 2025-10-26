@@ -131,13 +131,15 @@ if [[ "$VERIFY_ONLY" == "true" ]]; then
     
     for backup_type in daily weekly monthly; do
         log "Verifying ${backup_type} backups..."
-        for backup_file in "${BACKUP_DIR}/${backup_type}"/*.sql.gz 2>/dev/null; do
+        shopt -s nullglob
+        for backup_file in "${BACKUP_DIR}/${backup_type}"/*.sql.gz "${BACKUP_DIR}/${backup_type}"/*.sql.gz.gpg; do
             [[ -e "$backup_file" ]] || continue
             total=$((total + 1))
             if ! verify_backup "${backup_file}"; then
                 failed=$((failed + 1))
             fi
         done
+        shopt -u nullglob
     done
     
     log "=== Verification Summary ==="

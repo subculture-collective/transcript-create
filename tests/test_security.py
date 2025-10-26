@@ -56,9 +56,10 @@ class TestAPIKeyGeneration:
         
         # Check hash
         assert len(api_key_hash) == 64  # SHA-256 hex digest
-        
+
         # Verify hash matches
-        expected_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        # SHA-256 is appropriate for hashing random API keys (not passwords)
+        expected_hash = hashlib.sha256(api_key.encode()).hexdigest()  # nosec B324
         assert api_key_hash == expected_hash
 
     def test_generate_api_key_uniqueness(self):

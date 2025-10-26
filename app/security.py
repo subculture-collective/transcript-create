@@ -111,12 +111,19 @@ def generate_api_key() -> tuple[str, str]:
         tuple[str, str]: (api_key, api_key_hash)
         - api_key: The plaintext key to show to the user (only once)
         - api_key_hash: The hashed key to store in the database
+
+    Note:
+        SHA-256 is appropriate here because we're hashing cryptographically-random
+        API keys (not user passwords). API keys are generated with secrets.token_urlsafe()
+        and have 256 bits of entropy, making them resistant to brute force attacks.
+        For user passwords, use bcrypt, scrypt, or argon2 instead.
     """
     # Generate a secure random API key (32 bytes = 256 bits)
     api_key = f"tc_{secrets.token_urlsafe(32)}"
 
     # Hash the API key for storage
-    api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    # SHA-256 is safe for hashing random tokens (not passwords)
+    api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()  # nosec B324
 
     return api_key, api_key_hash
 
@@ -136,7 +143,8 @@ def verify_api_key(db, api_key: str) -> Optional[dict]:
         return None
 
     # Hash the provided key
-    api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    # SHA-256 is safe for hashing random tokens (not passwords)
+    api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()  # nosec B324
 
     # Look up the key in the database
     result = db.execute(

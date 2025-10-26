@@ -127,7 +127,7 @@ class PathMatcherBuilder:
         # First escape the entire path, then replace escaped placeholder
         pattern = re.escape(base_path)
         # Match escaped curly braces with content: \{anything\}
-        pattern = re.sub(r'\\{[^}]+\\}', PathMatcherBuilder.UUID_PATTERN, pattern)
+        pattern = re.sub(r"\\{[^}]+\\}", PathMatcherBuilder.UUID_PATTERN, pattern)
         return PathMatcher(f"^{pattern}$")
 
     @staticmethod
@@ -151,7 +151,7 @@ class PathMatcherBuilder:
         # Replace {param} with UUID pattern and add suffix
         pattern = re.escape(base_path)
         # Match escaped curly braces with content: \{anything\}
-        pattern = re.sub(r'\\{[^}]+\\}', PathMatcherBuilder.UUID_PATTERN, pattern)
+        pattern = re.sub(r"\\{[^}]+\\}", PathMatcherBuilder.UUID_PATTERN, pattern)
         pattern += re.escape(suffix)
         return PathMatcher(f"^{pattern}$")
 
@@ -173,8 +173,7 @@ class CommonMatchers:
 
     # Video metadata (info and list, excluding transcripts)
     VIDEO_METADATA = MultiPathMatcher(
-        r"^/videos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-        r"^/videos$"
+        r"^/videos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", r"^/videos$"
     )
 
     # Search endpoints
@@ -182,12 +181,7 @@ class CommonMatchers:
     SEARCH_SUGGESTIONS = PathMatcherBuilder.exact("/search/suggestions")
 
     # Health check endpoints
-    HEALTH_CHECKS = MultiPathMatcher(
-        r"^/health$",
-        r"^/live$",
-        r"^/ready$",
-        r"^/metrics$"
-    )
+    HEALTH_CHECKS = MultiPathMatcher(r"^/health$", r"^/live$", r"^/ready$", r"^/metrics$")
 
     # Static assets (if any)
     STATIC_ASSETS = PathMatcher(r"^/static/.*$")

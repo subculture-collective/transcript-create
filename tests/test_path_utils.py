@@ -56,10 +56,7 @@ class TestMultiPathMatcher:
 
     def test_multiple_patterns(self):
         """Test matching against multiple patterns."""
-        matcher = MultiPathMatcher(
-            r"^/videos$",
-            r"^/videos/[0-9a-f-]{36}$"
-        )
+        matcher = MultiPathMatcher(r"^/videos$", r"^/videos/[0-9a-f-]{36}$")
         assert matcher.matches("/videos")
         assert matcher.matches("/videos/123e4567-e89b-12d3-a456-426614174000")
         assert not matcher.matches("/videos/123e4567-e89b-12d3-a456-426614174000/transcript")
@@ -142,30 +139,22 @@ class TestCommonMatchers:
         assert not CommonMatchers.VIDEO_YOUTUBE_TRANSCRIPT.matches(
             "/videos/123e4567-e89b-12d3-a456-426614174000/transcript"
         )
-        assert not CommonMatchers.VIDEO_YOUTUBE_TRANSCRIPT.matches(
-            "/videos/123e4567-e89b-12d3-a456-426614174000"
-        )
+        assert not CommonMatchers.VIDEO_YOUTUBE_TRANSCRIPT.matches("/videos/123e4567-e89b-12d3-a456-426614174000")
 
     def test_video_transcripts(self):
         """Test VIDEO_TRANSCRIPTS matcher (both transcript types)."""
-        assert CommonMatchers.VIDEO_TRANSCRIPTS.matches(
-            "/videos/123e4567-e89b-12d3-a456-426614174000/transcript"
-        )
+        assert CommonMatchers.VIDEO_TRANSCRIPTS.matches("/videos/123e4567-e89b-12d3-a456-426614174000/transcript")
         assert CommonMatchers.VIDEO_TRANSCRIPTS.matches(
             "/videos/123e4567-e89b-12d3-a456-426614174000/youtube-transcript"
         )
-        assert not CommonMatchers.VIDEO_TRANSCRIPTS.matches(
-            "/videos/123e4567-e89b-12d3-a456-426614174000"
-        )
+        assert not CommonMatchers.VIDEO_TRANSCRIPTS.matches("/videos/123e4567-e89b-12d3-a456-426614174000")
         assert not CommonMatchers.VIDEO_TRANSCRIPTS.matches("/videos")
 
     def test_video_metadata(self):
         """Test VIDEO_METADATA matcher (info and list, not transcripts)."""
         assert CommonMatchers.VIDEO_METADATA.matches("/videos")
         assert CommonMatchers.VIDEO_METADATA.matches("/videos/123e4567-e89b-12d3-a456-426614174000")
-        assert not CommonMatchers.VIDEO_METADATA.matches(
-            "/videos/123e4567-e89b-12d3-a456-426614174000/transcript"
-        )
+        assert not CommonMatchers.VIDEO_METADATA.matches("/videos/123e4567-e89b-12d3-a456-426614174000/transcript")
         assert not CommonMatchers.VIDEO_METADATA.matches(
             "/videos/123e4567-e89b-12d3-a456-426614174000/youtube-transcript"
         )

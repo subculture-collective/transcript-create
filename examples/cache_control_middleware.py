@@ -50,11 +50,7 @@ class PreciseCacheControlMiddleware(BaseHTTPMiddleware):
         self.transcript_matcher = CommonMatchers.VIDEO_TRANSCRIPTS
 
         # Medium cache for search results (10 minutes)
-        self.search_matcher = MultiPathMatcher(
-            r"^/search$",
-            r"^/search/suggestions$",
-            r"^/search/history$"
-        )
+        self.search_matcher = MultiPathMatcher(r"^/search$", r"^/search/suggestions$", r"^/search/history$")
 
         # Short cache for user-specific data
         self.user_data_matcher = PathMatcherBuilder.exact("/auth/me")
@@ -108,12 +104,13 @@ class PreciseCacheControlMiddleware(BaseHTTPMiddleware):
 
 # Additional examples of creating custom matchers for specific use cases
 
+
 def create_export_matchers():
     """Create matchers for export endpoints with file extensions."""
     # Match export endpoints like /videos/{uuid}/transcript.srt
     return MultiPathMatcher(
         r"^/videos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/transcript\.(srt|vtt|json|pdf)$",
-        r"^/videos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/youtube-transcript\.(srt|vtt|json)$"
+        r"^/videos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/youtube-transcript\.(srt|vtt|json)$",
     )
 
 
@@ -124,7 +121,7 @@ def create_admin_matchers():
         r"^/admin/events$",
         r"^/admin/events\.csv$",
         r"^/admin/events/summary$",
-        r"^/admin/users/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/plan$"
+        r"^/admin/users/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/plan$",
     )
 
 
@@ -155,7 +152,7 @@ if __name__ == "__main__":
         result = "✓ MATCH" if matcher.matches(path) else "✗ no match"
         print(f"  {result:12} {path}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Note: String-based '/videos/' in path would incorrectly match")
     print("paths like '/videos/meta' and '/api/videos/something'")
-    print("="*60)
+    print("=" * 60)

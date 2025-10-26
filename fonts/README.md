@@ -1,3 +1,5 @@
+# Fonts
+
 Place TTF font files here for PDF export.
 
 Recommended: DejaVu Serif (DejaVuSerif.ttf) or EB Garamond (EBGaramond-Regular.ttf).

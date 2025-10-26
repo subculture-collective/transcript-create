@@ -1,0 +1,10 @@
+{
+    "MD013": false,
+    "MD024": false,
+    "MD040": false,
+    "MD029": false,
+    "MD036": false,
+    "options": {
+        "files": ["*.md", "docs/**/*.md"]
+    }
+}

@@ -5,13 +5,16 @@ This document provides a comprehensive guide to working with database migrations
 ## Quick Start
 
 ### For New Installations
+
 ```bash
 # Apply all migrations
 python scripts/run_migrations.py upgrade
 ```
 
 ### For Existing Installations
+
 If you have a database that was created from `sql/schema.sql`:
+
 ```bash
 # Stamp the database as being at the baseline
 python scripts/run_migrations.py stamp head
@@ -38,26 +41,31 @@ With Alembic migrations, we get:
 ## Common Operations
 
 ### Check Current Migration
+
 ```bash
 python scripts/run_migrations.py current
 ```
 
 ### View Migration History
+
 ```bash
 python scripts/run_migrations.py history
 ```
 
 ### Apply All Pending Migrations
+
 ```bash
 python scripts/run_migrations.py upgrade
 ```
 
 ### Rollback One Migration
+
 ```bash
 python scripts/run_migrations.py downgrade
 ```
 
 ### Create New Migration
+
 ```bash
 alembic revision -m "descriptive_name"
 ```
@@ -132,19 +140,25 @@ Examples include:
 ## Troubleshooting
 
 ### "Table already exists"
+
 Database created from schema.sql - stamp it:
+
 ```bash
 python scripts/run_migrations.py stamp head
 ```
 
 ### Migration Conflicts
+
 Two migrations created simultaneously:
+
 1. Pull latest main
 2. Update your migration's `down_revision`
 3. Test and commit
 
 ### Failed Migration
+
 Either fix forward or rollback:
+
 ```bash
 # Rollback
 python scripts/run_migrations.py downgrade <previous_revision>

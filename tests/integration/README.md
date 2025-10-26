@@ -9,6 +9,7 @@ Integration tests validate complete workflows from job creation to export, ensur
 ## Test Categories
 
 ### Job Processing Flow
+
 - **test_job_flow.py**: Tests for job creation, status polling, and concurrent operations
   - Single video job creation
   - Channel job creation
@@ -17,6 +18,7 @@ Integration tests validate complete workflows from job creation to export, ensur
   - Error handling for invalid URLs
 
 ### Video & Transcript Flow
+
 - **test_video_flow.py**: Tests for video and transcript workflows
   - Video transcript retrieval
   - Segment ordering and formatting
@@ -24,6 +26,7 @@ Integration tests validate complete workflows from job creation to export, ensur
   - Database integrity checks
 
 ### Export Flow
+
 - **test_export_flow.py**: Tests for export functionality
   - SRT format export
   - PDF format export
@@ -31,6 +34,7 @@ Integration tests validate complete workflows from job creation to export, ensur
   - Timestamp format validation
 
 ### Search Flow
+
 - **test_search_flow.py**: Tests for search functionality
   - Native transcript search
   - YouTube caption search
@@ -38,6 +42,7 @@ Integration tests validate complete workflows from job creation to export, ensur
   - Performance validation
 
 ### Worker Flow
+
 - **test_worker_flow.py**: Tests for worker processing
   - Video picking with SKIP LOCKED
   - Job expansion (single and channel)
@@ -46,6 +51,7 @@ Integration tests validate complete workflows from job creation to export, ensur
   - Large channel processing
 
 ### Auth Flow
+
 - **test_auth_flow.py**: Tests for authentication and authorization
   - OAuth login (mocked)
   - Session management
@@ -53,6 +59,7 @@ Integration tests validate complete workflows from job creation to export, ensur
   - Quota enforcement
 
 ### Billing Flow
+
 - **test_billing_flow.py**: Tests for billing and payments
   - Stripe checkout sessions (mocked)
   - Webhook handling
@@ -64,12 +71,14 @@ Integration tests validate complete workflows from job creation to export, ensur
 ### Prerequisites
 
 1. Install dependencies:
+
    ```bash
    pip install -r requirements-dev.txt
    pip install -r requirements.txt
    ```
 
 2. Set up PostgreSQL:
+
    ```bash
    # Using Docker
    docker compose up -d db migrations
@@ -80,6 +89,7 @@ Integration tests validate complete workflows from job creation to export, ensur
    ```
 
 3. Set environment variables:
+
    ```bash
    export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
    export SESSION_SECRET=test-secret-key
@@ -168,6 +178,7 @@ Each test runs in its own transaction that is rolled back, ensuring test isolati
 ## CI Integration
 
 Integration tests run automatically on:
+
 - Every pull request
 - Push to main branch
 - Nightly (full test suite)
@@ -212,6 +223,7 @@ psql $DATABASE_URL -c "SELECT * FROM videos;"
 ### View Logs
 
 Check logs in `/tmp/*.log` or docker logs:
+
 ```bash
 docker compose logs api
 docker compose logs worker
@@ -284,6 +296,7 @@ def test_new_feature(self, integration_client, integration_db, clean_test_data):
 ### Database Connection Errors
 
 Ensure PostgreSQL is running and DATABASE_URL is correct:
+
 ```bash
 psql $DATABASE_URL -c "SELECT 1"
 ```
@@ -291,6 +304,7 @@ psql $DATABASE_URL -c "SELECT 1"
 ### Import Errors
 
 Install all dependencies:
+
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 ```
@@ -298,6 +312,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 ### Timeout Errors
 
 Increase timeout or run tests individually:
+
 ```bash
 pytest tests/integration/test_slow.py --timeout=300
 ```
@@ -305,6 +320,7 @@ pytest tests/integration/test_slow.py --timeout=300
 ### Permission Errors
 
 Check database permissions:
+
 ```bash
 psql $DATABASE_URL -c "GRANT ALL PRIVILEGES ON DATABASE postgres TO postgres;"
 ```
@@ -322,6 +338,7 @@ When adding new features, please add corresponding integration tests:
 ## Support
 
 For questions or issues with integration tests:
+
 - Check existing tests for examples
 - Review test output and logs
 - Ask in pull request or issue comments

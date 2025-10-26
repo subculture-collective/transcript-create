@@ -12,7 +12,7 @@ services:
     # Expose Postgres to the host for external clients (psql/DBeaver/etc.)
     # If port 5432 is already used on your host, change to something like "5434:5432".
     ports:
-      - "5434:5432"
+      - "${DB_HOST_PORT:-5434}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -51,7 +51,7 @@ services:
       # Disable OpenTelemetry SDK to avoid external telemetry posts
       OTEL_SDK_DISABLED: "true"
     ports:
-      - "8000:8000"
+      - "${API_HOST_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -117,31 +117,31 @@ services:
         soft: -1
         hard: -1
     ports:
-      - "9200:9200"
+      - "${OPENSEARCH_HOST_PORT:-9200}:9200"
 
   dashboards:
     image: opensearchproject/opensearch-dashboards:2.12.0
     environment:
       - OPENSEARCH_HOSTS=["http://opensearch:9200"]
     ports:
-      - "5601:5601"
+      - "${DASHBOARDS_HOST_PORT:-5601}:5601"
     depends_on:
       - opensearch
 
   prometheus:
     image: prom/prometheus:v2.55.0
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=30d'
-      - '--storage.tsdb.retention.size=10GB'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=10GB"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
     volumes:
       - ./config/prometheus:/etc/prometheus
       - prometheus-data:/prometheus
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_HOST_PORT:-9090}:9090"
     depends_on:
       - api
       - worker
@@ -161,7 +161,7 @@ services:
       - ./config/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3000:3000"
+      - "${GRAFANA_HOST_PORT:-3000}:3000"
     depends_on:
       - prometheus
     restart: unless-stopped

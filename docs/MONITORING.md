@@ -5,6 +5,7 @@ This document describes the monitoring infrastructure for the Transcript Create 
 ## Overview
 
 The monitoring stack consists of:
+
 - **Prometheus**: Time-series database for metrics collection
 - **Grafana**: Visualization and dashboarding platform
 - **Application Metrics**: Custom metrics exposed by API and Worker services
@@ -23,10 +24,10 @@ docker compose ps prometheus grafana
 
 ### Accessing the Dashboards
 
-- **Grafana**: http://localhost:3000
+- **Grafana**: <http://localhost:3000>
   - Username: `admin`
   - Password: `admin` (change on first login)
-- **Prometheus**: http://localhost:9090
+- **Prometheus**: <http://localhost:9090>
 
 ### Pre-configured Dashboards
 
@@ -59,11 +60,13 @@ Three dashboards are automatically provisioned:
 ### API Metrics
 
 #### HTTP Request Metrics
+
 - `http_requests_total` (counter): Total HTTP requests by method, endpoint, and status
 - `http_request_duration_seconds` (histogram): Request latency distribution
 - `http_requests_in_flight` (gauge): Current concurrent requests
 
 #### Business Metrics
+
 - `jobs_created_total` (counter): Jobs created by type (single/channel)
 - `jobs_completed_total` (counter): Successfully completed jobs
 - `jobs_failed_total` (counter): Failed jobs
@@ -72,6 +75,7 @@ Three dashboards are automatically provisioned:
 - `exports_total` (counter): Exports by format (srt/vtt/json/pdf)
 
 #### Database Metrics
+
 - `db_connections_active` (gauge): Active database connections
 - `db_query_duration_seconds` (histogram): Query duration distribution
 - `db_errors_total` (counter): Database errors by type
@@ -79,22 +83,26 @@ Three dashboards are automatically provisioned:
 ### Worker Metrics
 
 #### Processing Metrics
+
 - `transcription_duration_seconds` (histogram): Total transcription time by model
 - `download_duration_seconds` (histogram): Audio download time
 - `transcode_duration_seconds` (histogram): Audio transcoding time
 - `diarization_duration_seconds` (histogram): Speaker diarization time
 
 #### Queue Metrics
+
 - `videos_pending` (gauge): Videos waiting to be processed
 - `videos_in_progress` (gauge): Videos currently being processed by state
 - `videos_processed_total` (counter): Completed/failed video count
 
 #### Whisper Model Metrics
+
 - `whisper_model_load_seconds` (histogram): Model loading time by model and backend
 - `whisper_chunk_transcription_seconds` (histogram): Per-chunk transcription time
 - `chunk_count` (histogram): Number of audio chunks per video
 
 #### GPU Metrics (Optional)
+
 - `gpu_memory_used_bytes` (gauge): GPU memory in use by device
 - `gpu_memory_total_bytes` (gauge): Total GPU memory by device
 
@@ -105,17 +113,20 @@ Three dashboards are automatically provisioned:
 Alerts are defined in `/config/prometheus/alerts.yml`:
 
 #### API Alerts
+
 - **HighErrorRate**: API error rate >5% for 5 minutes
 - **SlowResponseTime**: p95 latency >1s for 5 minutes
 - **APIServiceDown**: API service unavailable for 2 minutes
 
 #### Worker Alerts
+
 - **NoJobsCompleted**: No jobs completed in 1 hour
 - **WorkerServiceDown**: Worker service unavailable for 2 minutes
 - **HighJobFailureRate**: Job failure rate >20% for 10 minutes
 - **JobsStuckInQueue**: >50 videos pending for 30 minutes
 
 #### Database Alerts
+
 - **HighDatabaseErrors**: Database error rate >1/sec for 5 minutes
 
 ### Setting Up Alertmanager (Optional)
@@ -123,6 +134,7 @@ Alerts are defined in `/config/prometheus/alerts.yml`:
 To receive alert notifications:
 
 1. Add Alertmanager to `docker-compose.yml`:
+
 ```yaml
 alertmanager:
   image: prom/alertmanager:v0.27.0
@@ -135,6 +147,7 @@ alertmanager:
 ```
 
 2. Create `/config/alertmanager/alertmanager.yml`:
+
 ```yaml
 global:
   slack_api_url: 'YOUR_SLACK_WEBHOOK_URL'
@@ -161,6 +174,7 @@ receivers:
 ### In the API
 
 1. Define metric in `app/metrics.py`:
+
 ```python
 from prometheus_client import Counter
 
@@ -172,6 +186,7 @@ my_metric = Counter(
 ```
 
 2. Use metric in your code:
+
 ```python
 from app.metrics import my_metric
 
@@ -181,6 +196,7 @@ my_metric.labels(label1="value1", label2="value2").inc()
 ### In the Worker
 
 1. Define metric in `worker/metrics.py`:
+
 ```python
 from prometheus_client import Histogram
 
@@ -192,6 +208,7 @@ my_worker_metric = Histogram(
 ```
 
 2. Use metric in your code:
+
 ```python
 from worker.metrics import my_worker_metric
 import time
@@ -218,6 +235,7 @@ my_worker_metric.observe(duration)
 ### Metrics Not Appearing
 
 1. **Check service health**:
+
 ```bash
 # API metrics endpoint
 curl http://localhost:8000/metrics
@@ -227,10 +245,11 @@ curl http://localhost:8001/metrics
 ```
 
 2. **Check Prometheus targets**:
-   - Visit http://localhost:9090/targets
+   - Visit <http://localhost:9090/targets>
    - Ensure all targets are "UP"
 
 3. **Check container logs**:
+
 ```bash
 docker compose logs api worker prometheus grafana
 ```
@@ -240,6 +259,7 @@ docker compose logs api worker prometheus grafana
 Prometheus stores metrics in memory and on disk. To reduce memory:
 
 1. Decrease retention period in `config/prometheus/prometheus.yml`:
+
 ```yaml
 storage:
   tsdb:
@@ -248,6 +268,7 @@ storage:
 ```
 
 2. Reduce scrape frequency:
+
 ```yaml
 global:
   scrape_interval: 30s  # Default is 15s
@@ -256,6 +277,7 @@ global:
 ### Dashboard Not Loading
 
 1. **Check Grafana logs**:
+
 ```bash
 docker compose logs grafana
 ```
@@ -273,12 +295,14 @@ docker compose logs grafana
 Metrics collection overhead is typically <1% CPU and <100MB RAM.
 
 To verify:
+
 ```bash
 # Check resource usage
 docker stats api worker prometheus grafana
 ```
 
 If overhead is high:
+
 - Reduce scrape frequency
 - Decrease histogram bucket count
 - Remove unused metrics
@@ -304,6 +328,7 @@ docker compose start prometheus
 Dashboards are version-controlled in `config/grafana/dashboards/` and automatically provisioned.
 
 To export a modified dashboard:
+
 1. Go to Dashboard Settings → JSON Model
 2. Copy JSON
 3. Save to `config/grafana/dashboards/`
@@ -315,6 +340,7 @@ To export a modified dashboard:
 To send metrics to Grafana Cloud:
 
 1. Add remote write to `config/prometheus/prometheus.yml`:
+
 ```yaml
 remote_write:
   - url: https://prometheus-us-central1.grafana.net/api/prom/push
@@ -340,6 +366,7 @@ To send metrics to Datadog:
    - Add authentication to Prometheus
 
 2. **Network isolation**:
+
 ```yaml
 # In docker-compose.yml
 networks:

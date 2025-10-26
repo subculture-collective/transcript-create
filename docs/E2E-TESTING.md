@@ -227,11 +227,13 @@ await expect(page.locator('.item')).toHaveCount(5);
 ## CI/CD
 
 Tests run automatically on:
+
 - **Pull Requests**: Critical tests (auth, job creation, search)
 - **Main Branch**: Full suite (all browsers)
 - **Nightly**: Full suite + mobile tests
 
 View results:
+
 1. Go to PR or commit in GitHub
 2. Click "Details" on E2E Tests check
 3. Download artifacts for screenshots/videos
@@ -259,6 +261,7 @@ export CI=true
 ## Best Practices
 
 ✅ **Do:**
+
 - Use data-testid for stable selectors
 - Mock external services (YouTube, Stripe)
 - Test user workflows, not implementation
@@ -266,6 +269,7 @@ export CI=true
 - Use proper waiting mechanisms
 
 ❌ **Don't:**
+
 - Use fixed timeouts (await page.waitForTimeout())
 - Depend on test execution order
 - Test implementation details

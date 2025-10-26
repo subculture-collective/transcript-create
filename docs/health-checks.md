@@ -22,6 +22,7 @@ The API provides four health check endpoints with different purposes:
 **Purpose:** Simple endpoint for load balancers and uptime monitoring.
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -30,14 +31,17 @@ The API provides four health check endpoints with different purposes:
 ```
 
 **Status Codes:**
+
 - `200 OK`: Service is running
 
 **Usage:**
+
 - Load balancer health checks
 - Uptime monitoring services
 - Quick connectivity tests
 
 **Characteristics:**
+
 - No authentication required
 - Minimal overhead (no DB queries)
 - Always returns 200 if service is running
@@ -51,6 +55,7 @@ The API provides four health check endpoints with different purposes:
 **Purpose:** Kubernetes liveness probe to check if the process is alive.
 
 **Response:**
+
 ```json
 {
   "status": "alive",
@@ -59,13 +64,16 @@ The API provides four health check endpoints with different purposes:
 ```
 
 **Status Codes:**
+
 - `200 OK`: Process is alive and responding
 
 **Usage:**
+
 - Kubernetes liveness probe
 - Container orchestration health checks
 
 **Kubernetes Configuration:**
+
 ```yaml
 livenessProbe:
   httpGet:
@@ -78,6 +86,7 @@ livenessProbe:
 ```
 
 **Characteristics:**
+
 - No authentication required
 - No dependency checks
 - Minimal overhead
@@ -92,6 +101,7 @@ livenessProbe:
 **Purpose:** Check if service can accept traffic by verifying critical dependencies.
 
 **Response (Ready):**
+
 ```json
 {
   "status": "ready",
@@ -108,6 +118,7 @@ livenessProbe:
 ```
 
 **Response (Not Ready):**
+
 ```json
 {
   "status": "not_ready",
@@ -123,14 +134,17 @@ livenessProbe:
 ```
 
 **Status Codes:**
+
 - `200 OK`: Service is ready to accept traffic
 - `503 Service Unavailable`: Dependencies are unavailable
 
 **Usage:**
+
 - Kubernetes readiness probe
 - Load balancer backend pool decisions
 
 **Kubernetes Configuration:**
+
 ```yaml
 readinessProbe:
   httpGet:
@@ -143,12 +157,14 @@ readinessProbe:
 ```
 
 **Checks Performed:**
+
 - Database connectivity (always)
 - OpenSearch (if configured as critical)
 - Storage (if configured as critical)
 
 **Configuration:**
 Set critical components via environment variable:
+
 ```bash
 HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ```
@@ -162,6 +178,7 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 **Purpose:** Comprehensive health check of all system components.
 
 **Response (Healthy):**
+
 ```json
 {
   "status": "healthy",
@@ -199,6 +216,7 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ```
 
 **Response (Degraded):**
+
 ```json
 {
   "status": "degraded",
@@ -231,6 +249,7 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ```
 
 **Response (Unhealthy):**
+
 ```json
 {
   "status": "unhealthy",
@@ -257,15 +276,18 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ```
 
 **Status Codes:**
+
 - `200 OK`: All components healthy or degraded
 - `503 Service Unavailable`: One or more critical components are unhealthy
 
 **Overall Status Logic:**
+
 - `healthy`: All components are healthy
 - `degraded`: Some components degraded but none unhealthy
 - `unhealthy`: One or more critical components are unhealthy
 
 **Usage:**
+
 - Monitoring dashboards
 - Alerting systems
 - Troubleshooting
@@ -278,16 +300,19 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ### Database
 
 **What it checks:**
+
 - Connection to PostgreSQL database
 - Read permissions (`SELECT COUNT(*) FROM jobs`)
 - Query latency
 - Connection pool status
 
 **Healthy criteria:**
+
 - Can connect and query successfully
 - Query completes within timeout
 
 **Response fields:**
+
 - `status`: "healthy" or "unhealthy"
 - `latency_ms`: Query latency in milliseconds
 - `pool_size`: Total connection pool size
@@ -299,14 +324,17 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ### OpenSearch
 
 **What it checks:**
+
 - Cluster health API
 - Response time
 
 **Healthy criteria:**
+
 - Cluster status is "green" or "yellow"
 - API responds within timeout
 
 **Response fields:**
+
 - `status`: "healthy", "degraded", "unhealthy", or "disabled"
 - `latency_ms`: API call latency
 - `cluster_status`: "green", "yellow", or "red"
@@ -320,14 +348,17 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ### Storage
 
 **What it checks:**
+
 - Disk space on `/data` volume
 - Write permissions
 
 **Healthy criteria:**
+
 - Free space ≥ `HEALTH_CHECK_DISK_MIN_FREE_GB` (default: 10 GB)
 - Can write test file to workdir
 
 **Response fields:**
+
 - `status`: "healthy" or "unhealthy"
 - `free_gb`: Free disk space in GB
 - `total_gb`: Total disk space in GB
@@ -340,15 +371,18 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 ### Worker
 
 **What it checks:**
+
 - Worker heartbeat freshness
 - Pending job count
 - Stuck job count (jobs in progress states too long)
 
 **Healthy criteria:**
+
 - Heartbeat within last 5 minutes (configurable)
 - Worker is actively processing jobs
 
 **Response fields:**
+
 - `status`: "healthy", "degraded", or "unhealthy"
 - `jobs_pending`: Number of pending jobs
 - `jobs_stuck`: Number of stuck jobs
@@ -358,6 +392,7 @@ HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
 - `error`: Error message (if degraded/unhealthy)
 
 **Worker Heartbeat:**
+
 - Workers update `worker_heartbeat` table every 60 seconds
 - Stale threshold: 300 seconds (5 minutes) by default
 - Worker ID format: `{hostname}-{pid}`
@@ -403,6 +438,7 @@ WORKDIR="/data"
 The health check endpoints expose metrics for monitoring:
 
 ### `health_check_status`
+
 **Type:** Gauge  
 **Labels:** `component`  
 **Values:** 1 = healthy, 0 = unhealthy  
@@ -415,6 +451,7 @@ health_check_status{component="worker"} 1
 ```
 
 ### `health_check_duration_seconds`
+
 **Type:** Histogram  
 **Labels:** `component`  
 **Description:** Duration of health checks in seconds
@@ -427,6 +464,7 @@ health_check_duration_seconds_count{component="database"} 50
 ```
 
 ### `health_check_total`
+
 **Type:** Counter  
 **Labels:** `component`, `status`  
 **Description:** Total number of health checks performed
@@ -444,16 +482,19 @@ health_check_total{component="worker",status="degraded"} 12
 ### Database Unhealthy
 
 **Symptoms:**
+
 - `/ready` returns 503
 - Database check shows "Connection refused"
 
 **Possible causes:**
+
 1. PostgreSQL is not running
 2. Incorrect DATABASE_URL
 3. Network connectivity issues
 4. Connection pool exhausted
 
 **Resolution:**
+
 ```bash
 # Check PostgreSQL status
 docker compose ps db
@@ -473,15 +514,18 @@ psql $DATABASE_URL -c "SELECT 1"
 ### Worker Degraded
 
 **Symptoms:**
+
 - Worker check shows "Worker heartbeat is stale"
 - `seconds_since_heartbeat` > 300
 
 **Possible causes:**
+
 1. Worker process crashed or stopped
 2. Worker is stuck processing a job
 3. Database connection issues preventing heartbeat updates
 
 **Resolution:**
+
 ```bash
 # Check worker status
 docker compose ps worker
@@ -501,14 +545,17 @@ psql $DATABASE_URL -c "SELECT * FROM videos WHERE state IN ('downloading', 'tran
 ### Storage Unhealthy
 
 **Symptoms:**
+
 - Storage check shows "Low disk space" or "Cannot write to workdir"
 
 **Possible causes:**
+
 1. Disk full or nearly full
 2. `/data` volume not mounted
 3. Permission issues
 
 **Resolution:**
+
 ```bash
 # Check disk space
 df -h /data
@@ -528,15 +575,18 @@ du -sh *
 ### OpenSearch Unhealthy
 
 **Symptoms:**
+
 - OpenSearch check shows cluster_status "red"
 - API timeout errors
 
 **Possible causes:**
+
 1. OpenSearch not running
 2. Cluster unhealthy
 3. Network issues
 
 **Resolution:**
+
 ```bash
 # Check OpenSearch status
 curl -u admin:admin http://localhost:9200/_cluster/health
@@ -559,6 +609,7 @@ docker compose restart opensearch
 - Alert on sustained unhealthy status (not transient failures)
 
 Example Prometheus alert:
+
 ```yaml
 - alert: DatabaseUnhealthy
   expr: health_check_status{component="database"} == 0
@@ -584,6 +635,7 @@ Example Prometheus alert:
 ### 4. Development vs Production
 
 **Development:**
+
 ```bash
 # Relax health check requirements
 HEALTH_CHECK_CRITICAL_COMPONENTS="database"
@@ -591,6 +643,7 @@ HEALTH_CHECK_WORKER_STALE_SECONDS=600
 ```
 
 **Production:**
+
 ```bash
 # Strict health checks
 HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage,worker"

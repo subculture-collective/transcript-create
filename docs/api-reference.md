@@ -15,6 +15,7 @@ All endpoints use HTTPS. The API accepts JSON request bodies and returns JSON re
 Most endpoints require authentication via session cookies. See [Authentication Guide](authentication.md) for details.
 
 Include cookies in requests:
+
 - JavaScript: `credentials: 'include'`
 - cURL: `-H "Cookie: tc_session=..."`
 - Python requests: Use `Session()` object
@@ -43,6 +44,7 @@ Check if the API service is running.
 **Authentication:** Not required
 
 **Response 200:**
+
 ```json
 {
   "status": "ok"
@@ -62,6 +64,7 @@ Create a new transcription job.
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -70,10 +73,12 @@ Create a new transcription job.
 ```
 
 **Parameters:**
+
 - `url` (string, required): YouTube video or channel URL
 - `kind` (string, optional): `"single"` or `"channel"` (default: `"single"`)
 
 **Response 200:**
+
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
@@ -86,12 +91,14 @@ Create a new transcription job.
 ```
 
 **Job States:**
+
 - `pending`: Job created, waiting to be processed
 - `expanded`: Videos identified (for channel jobs)
 - `completed`: All videos transcribed
 - `failed`: An error occurred
 
 **Errors:**
+
 - `422`: Invalid URL or parameters
 
 ### GET /jobs/{job_id}
@@ -101,9 +108,11 @@ Get the status of a transcription job.
 **Authentication:** Required
 
 **Path Parameters:**
+
 - `job_id` (UUID): Job identifier
 
 **Response 200:**
+
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
@@ -116,6 +125,7 @@ Get the status of a transcription job.
 ```
 
 **Errors:**
+
 - `404`: Job not found
 
 ---
@@ -131,10 +141,12 @@ List all videos with pagination.
 **Authentication:** Required
 
 **Query Parameters:**
+
 - `limit` (integer, optional): Max results (1-100, default: 50)
 - `offset` (integer, optional): Pagination offset (default: 0)
 
 **Response 200:**
+
 ```json
 [
   {
@@ -153,9 +165,11 @@ Get information about a specific video.
 **Authentication:** Required
 
 **Path Parameters:**
+
 - `video_id` (UUID): Video identifier
 
 **Response 200:**
+
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
@@ -166,6 +180,7 @@ Get information about a specific video.
 ```
 
 **Errors:**
+
 - `404`: Video not found
 
 ### GET /videos/{video_id}/transcript
@@ -175,9 +190,11 @@ Get Whisper-generated transcript for a video.
 **Authentication:** Required
 
 **Path Parameters:**
+
 - `video_id` (UUID): Video identifier
 
 **Response 200:**
+
 ```json
 {
   "video_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -193,6 +210,7 @@ Get Whisper-generated transcript for a video.
 ```
 
 **Errors:**
+
 - `404`: Video not found
 - `503`: Transcript not ready (still processing)
 
@@ -203,9 +221,11 @@ Get YouTube's native closed captions.
 **Authentication:** Required
 
 **Path Parameters:**
+
 - `video_id` (UUID): Video identifier
 
 **Response 200:**
+
 ```json
 {
   "video_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -223,6 +243,7 @@ Get YouTube's native closed captions.
 ```
 
 **Errors:**
+
 - `404`: Video not found
 - `503`: YouTube captions not available
 
@@ -239,6 +260,7 @@ Search transcripts with filtering and pagination.
 **Authentication:** Required
 
 **Query Parameters:**
+
 - `q` (string, required): Search query (1-500 chars)
 - `source` (string, optional): `"native"` or `"youtube"` (default: `"native"`)
 - `video_id` (UUID, optional): Filter to specific video
@@ -246,6 +268,7 @@ Search transcripts with filtering and pagination.
 - `offset` (integer, optional): Pagination offset (default: 0)
 
 **Response 200:**
+
 ```json
 {
   "total": 42,
@@ -262,11 +285,13 @@ Search transcripts with filtering and pagination.
 ```
 
 **Errors:**
+
 - `400`: Empty query or invalid parameters
 - `429`: Rate limit exceeded (free plan)
 - `503`: Search backend unavailable
 
 **Rate Limits:**
+
 - Free plan: 100 searches per day
 - Pro plan: Unlimited
 
@@ -286,6 +311,7 @@ Export Whisper transcript as SubRip subtitle file.
 **Response 200:** Text file download
 
 **Errors:**
+
 - `401`: Authentication required
 - `402`: Export quota exceeded (free plan)
 - `503`: Transcript not ready
@@ -307,6 +333,7 @@ Export Whisper transcript as JSON.
 **Format:** JSON
 
 **Response 200:**
+
 ```json
 [
   {
@@ -328,6 +355,7 @@ Export Whisper transcript as formatted PDF document.
 **Response 200:** PDF file download
 
 **Features:**
+
 - Timestamps for each segment
 - Speaker labels
 - Video metadata (title, duration)
@@ -352,6 +380,7 @@ Export YouTube captions as JSON.
 **Authentication:** Required
 
 **Rate Limits:**
+
 - Free plan: Limited exports per day
 - Pro plan: Unlimited
 
@@ -368,6 +397,7 @@ Get current authenticated user information.
 **Authentication:** Optional
 
 **Response 200 (authenticated):**
+
 ```json
 {
   "user": {
@@ -383,6 +413,7 @@ Get current authenticated user information.
 ```
 
 **Response 200 (not authenticated):**
+
 ```json
 {
   "user": null
@@ -428,6 +459,7 @@ Logout and invalidate session.
 **Authentication:** Required
 
 **Response 200:**
+
 ```json
 {
   "ok": true
@@ -447,6 +479,7 @@ Create Stripe checkout session for Pro subscription.
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "period": "monthly"
@@ -454,9 +487,11 @@ Create Stripe checkout session for Pro subscription.
 ```
 
 **Parameters:**
+
 - `period` (string, optional): `"monthly"` or `"yearly"` (default: `"monthly"`)
 
 **Response 200:**
+
 ```json
 {
   "id": "cs_test_123",
@@ -465,6 +500,7 @@ Create Stripe checkout session for Pro subscription.
 ```
 
 **Errors:**
+
 - `401`: Authentication required
 - `503`: Stripe not configured
 
@@ -475,6 +511,7 @@ Get Stripe customer portal URL for managing subscription.
 **Authentication:** Required
 
 **Response 200:**
+
 ```json
 {
   "url": "https://billing.stripe.com/session/123"
@@ -482,6 +519,7 @@ Get Stripe customer portal URL for managing subscription.
 ```
 
 **Errors:**
+
 - `400`: No Stripe customer account
 - `401`: Authentication required
 - `503`: Stripe not configured
@@ -495,6 +533,7 @@ Stripe webhook endpoint for subscription events.
 **Request Body:** Stripe event payload
 
 **Response 200:**
+
 ```json
 {
   "received": true
@@ -502,6 +541,7 @@ Stripe webhook endpoint for subscription events.
 ```
 
 **Errors:**
+
 - `400`: Invalid webhook signature
 - `503`: Stripe not configured
 
@@ -518,9 +558,11 @@ List user's favorite segments.
 **Authentication:** Required
 
 **Query Parameters:**
+
 - `video_id` (UUID, optional): Filter by video
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -543,6 +585,7 @@ Add a favorite segment.
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "video_id": "987e6543-e21b-34c5-b678-426614174999",
@@ -553,6 +596,7 @@ Add a favorite segment.
 ```
 
 **Response 200:**
+
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000"
@@ -560,6 +604,7 @@ Add a favorite segment.
 ```
 
 **Errors:**
+
 - `400`: Missing required fields
 - `401`: Authentication required
 
@@ -570,9 +615,11 @@ Delete a favorite segment.
 **Authentication:** Required
 
 **Path Parameters:**
+
 - `favorite_id` (UUID): Favorite identifier
 
 **Response 200:**
+
 ```json
 {
   "ok": true
@@ -592,6 +639,7 @@ Track a single event.
 **Authentication:** Optional (associates with user if authenticated)
 
 **Request Body:**
+
 ```json
 {
   "type": "video_view",
@@ -602,6 +650,7 @@ Track a single event.
 ```
 
 **Response 200:**
+
 ```json
 {
   "ok": true
@@ -615,6 +664,7 @@ Track multiple events in one request.
 **Authentication:** Optional
 
 **Request Body:**
+
 ```json
 {
   "events": [
@@ -631,6 +681,7 @@ Track multiple events in one request.
 ```
 
 **Response 200:**
+
 ```json
 {
   "ok": true,
@@ -651,6 +702,7 @@ List tracked events with filtering.
 **Authentication:** Admin required
 
 **Query Parameters:**
+
 - `type` (string, optional): Filter by event type
 - `user_email` (string, optional): Filter by user email
 - `start` (string, optional): Filter after timestamp
@@ -659,6 +711,7 @@ List tracked events with filtering.
 - `offset` (integer, optional): Pagination offset (default: 0)
 
 **Response 200:**
+
 ```json
 {
   "items": [...]
@@ -666,6 +719,7 @@ List tracked events with filtering.
 ```
 
 **Errors:**
+
 - `403`: Admin access required
 
 ### GET /admin/events.csv
@@ -685,10 +739,12 @@ Get event statistics.
 **Authentication:** Admin required
 
 **Query Parameters:**
+
 - `start` (string, optional): Filter after timestamp
 - `end` (string, optional): Filter before timestamp
 
 **Response 200:**
+
 ```json
 {
   "by_type": [
@@ -707,9 +763,11 @@ Set a user's subscription plan.
 **Authentication:** Admin required
 
 **Path Parameters:**
+
 - `user_id` (UUID): User identifier
 
 **Request Body:**
+
 ```json
 {
   "plan": "pro"
@@ -717,9 +775,11 @@ Set a user's subscription plan.
 ```
 
 **Parameters:**
+
 - `plan` (string): `"free"` or `"pro"`
 
 **Response 200:**
+
 ```json
 {
   "ok": true,
@@ -729,6 +789,7 @@ Set a user's subscription plan.
 ```
 
 **Errors:**
+
 - `400`: Invalid plan value
 - `403`: Admin access required
 

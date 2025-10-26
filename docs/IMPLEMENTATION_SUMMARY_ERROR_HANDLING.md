@@ -25,6 +25,7 @@ Created 12 custom exception classes:
 - `DuplicateJobError` - For duplicate resources (409)
 
 **Error Format:**
+
 ```json
 {
   "error": "error_code",
@@ -45,23 +46,27 @@ Registered 4 global exception handlers:
 4. **General Exception Handler** - Catches all unhandled exceptions
 
 **Request Tracking Middleware:**
+
 - Adds unique `X-Request-ID` header to every response
 - Enables request tracing across logs
 
 ### 3. Enhanced Schemas (`app/schemas.py`) ✅
 
 **JobCreate Schema:**
+
 - YouTube URL validation with regex patterns
 - Literal types for `kind` field (single/channel)
 - Custom validator ensures only YouTube URLs accepted
 
 **SearchQuery Schema:**
+
 - Query length validation (1-500 chars)
 - Source validation (native/youtube)
 - Limit validation (1-200)
 - Offset validation (>= 0)
 
 **ErrorResponse Schema:**
+
 - Standard error response model for documentation
 
 ### 4. Route Updates ✅
@@ -80,12 +85,14 @@ Updated 8 route files to use custom exceptions:
 | `admin.py` | AuthorizationError, ValidationError |
 
 **Before:**
+
 ```python
 if not job:
     raise HTTPException(404)
 ```
 
 **After:**
+
 ```python
 if not job:
     raise JobNotFoundError(str(job_id))
@@ -94,17 +101,20 @@ if not job:
 ### 5. Database Error Handling (`app/crud.py`) ✅
 
 **Retry Decorator:**
+
 - Automatically retries transient database errors
 - Up to 3 attempts with exponential backoff (0.5s, 1s, 2s)
 - Detects: connection errors, timeouts, deadlocks
 - Logs retry attempts for debugging
 
 **Applied to all CRUD functions:**
+
 - `create_job`, `fetch_job`, `list_segments`, `get_video`, etc.
 
 ### 6. Structured Logging ✅
 
 **Error Logging:**
+
 ```python
 logger.warning(
     "Application error: %s | path=%s request_id=%s details=%s",
@@ -116,6 +126,7 @@ logger.warning(
 ```
 
 **Security:**
+
 - No SQL details exposed to users
 - Authentication tokens not logged
 - Stack traces only in server logs
@@ -123,11 +134,13 @@ logger.warning(
 ### 7. Comprehensive Testing ✅
 
 **Unit Tests (`tests/test_exceptions.py`):**
+
 - 23 tests covering all exception types
 - Tests error codes, status codes, serialization
 - 100% test coverage of exceptions module
 
 **Integration Tests (`tests/test_error_handling.py`):**
+
 - Tests error response format across endpoints
 - Validates HTTP status codes
 - Tests request ID tracking
@@ -135,11 +148,13 @@ logger.warning(
 - Tests transcript error scenarios
 
 **Schema Tests (`tests/test_schemas.py`):**
+
 - 25 tests for schema validation
 - Tests valid and invalid inputs
 - Tests edge cases
 
 **Test Results:**
+
 - 48 tests passing
 - 0 failures
 - All critical paths covered
@@ -147,6 +162,7 @@ logger.warning(
 ### 8. Documentation ✅
 
 **Created `docs/ERROR_HANDLING.md`:**
+
 - Architecture overview
 - Exception reference table
 - Usage examples
@@ -199,6 +215,7 @@ All requirements from the issue have been met:
 ## Example Error Responses
 
 **Job Not Found:**
+
 ```json
 {
   "error": "job_not_found",
@@ -210,6 +227,7 @@ All requirements from the issue have been met:
 ```
 
 **Validation Error:**
+
 ```json
 {
   "error": "validation_error",
@@ -227,6 +245,7 @@ All requirements from the issue have been met:
 ```
 
 **Quota Exceeded:**
+
 ```json
 {
   "error": "quota_exceeded",
@@ -243,12 +262,14 @@ All requirements from the issue have been met:
 ## Files Changed
 
 **New Files:**
+
 - `app/exceptions.py` - Custom exception definitions
 - `docs/ERROR_HANDLING.md` - Comprehensive documentation
 - `tests/test_exceptions.py` - Exception unit tests
 - `tests/test_error_handling.py` - Error handling integration tests
 
 **Modified Files:**
+
 - `app/main.py` - Exception handlers and middleware
 - `app/schemas.py` - Enhanced validation
 - `app/crud.py` - Database retry logic
@@ -265,6 +286,7 @@ All requirements from the issue have been met:
 ## Testing
 
 All tests pass:
+
 ```bash
 $ pytest tests/test_exceptions.py tests/test_error_handling.py tests/test_schemas.py -v
 ================================================== 48 passed ==================================================
@@ -280,12 +302,14 @@ $ pytest tests/test_exceptions.py tests/test_error_handling.py tests/test_schema
 ## Migration Notes
 
 **For Developers:**
+
 1. Use custom exceptions instead of `HTTPException`
 2. Import from `app.exceptions`
 3. Provide helpful error messages
 4. Include relevant context in `details`
 
 **Example:**
+
 ```python
 from app.exceptions import JobNotFoundError
 
@@ -312,6 +336,7 @@ def get_job(job_id: uuid.UUID, db=Depends(get_db)):
 ## Next Steps
 
 Potential future enhancements:
+
 1. Add per-endpoint rate limiting
 2. Integrate error monitoring service (Sentry)
 3. Add error analytics dashboard

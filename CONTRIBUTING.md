@@ -69,6 +69,7 @@ xdg-open htmlcov/index.html  # Linux
 ```
 
 **Test Structure:**
+
 - `tests/conftest.py` - Shared fixtures (database, test client)
 - `tests/test_crud.py` - CRUD operation tests
 - `tests/test_routes_*.py` - API endpoint tests
@@ -175,6 +176,7 @@ def downgrade() -> None:
 ### Migration Guidelines
 
 1. **Always test both upgrade and downgrade**
+
    ```bash
    # Test upgrade
    python scripts/run_migrations.py upgrade
@@ -293,6 +295,7 @@ We maintain high code quality standards through automated linting, formatting, a
 ### Python (Backend & Worker)
 
 **Linting:**
+
 ```bash
 # Check code quality
 ruff check app/ worker/ scripts/
@@ -302,6 +305,7 @@ ruff check --fix app/ worker/ scripts/
 ```
 
 **Formatting:**
+
 ```bash
 # Check formatting
 black --check app/ worker/ scripts/
@@ -311,6 +315,7 @@ black app/ worker/ scripts/
 ```
 
 **Import Sorting:**
+
 ```bash
 # Check imports
 isort --check-only app/ worker/
@@ -320,12 +325,14 @@ isort app/ worker/
 ```
 
 **Type Checking:**
+
 ```bash
 # Run type checks
 mypy app/ worker/
 ```
 
 **Configuration:**
+
 - Line length: 120 characters
 - Target Python version: 3.11+
 - Configuration in `pyproject.toml`
@@ -333,12 +340,14 @@ mypy app/ worker/
 ### TypeScript (Frontend)
 
 **Linting:**
+
 ```bash
 cd frontend
 npm run lint
 ```
 
 **Formatting:**
+
 ```bash
 cd frontend
 # Check formatting
@@ -349,12 +358,14 @@ npm run format
 ```
 
 **Type Checking:**
+
 ```bash
 cd frontend
 npx tsc --noEmit
 ```
 
 **Building:**
+
 ```bash
 cd frontend
 npm run build
@@ -373,6 +384,7 @@ pre-commit run --all-files
 ```
 
 The hooks automatically run:
+
 - **ruff**: Fast Python linter
 - **black**: Code formatter
 - **isort**: Import sorting
@@ -387,6 +399,7 @@ All pull requests and pushes to main automatically trigger our CI/CD pipeline.
 ### Backend CI (`backend-ci.yml`)
 
 Runs on changes to:
+
 - `app/**`
 - `worker/**`
 - `*.py` files
@@ -394,6 +407,7 @@ Runs on changes to:
 - `pyproject.toml`
 
 **Jobs:**
+
 1. **Lint & Format Check** (Python 3.11, 3.12)
    - ruff check
    - black check
@@ -419,9 +433,11 @@ Runs on changes to:
 ### Frontend CI (`frontend-ci.yml`)
 
 Runs on changes to:
+
 - `frontend/**`
 
 **Jobs:**
+
 1. **Lint & Type Check** (Node 20, 22)
    - ESLint (informational - some errors pre-existing)
    - Prettier formatting (enforced)
@@ -435,11 +451,13 @@ Runs on changes to:
 ### Docker Build & Publish (`docker-build.yml`)
 
 Runs on:
+
 - Push to `main`
 - Tags matching `v*`
 - Manual workflow dispatch
 
 **Features:**
+
 - Builds Docker image with ROCm support
 - Publishes to GitHub Container Registry (ghcr.io)
 - Multiple tagging strategies (latest, semver, sha)
@@ -450,11 +468,13 @@ Runs on:
 ### Security Audit (`security-audit.yml`)
 
 Runs on:
+
 - Push/PR to main/develop (when dependency files change)
 - Weekly schedule (Mondays at 9 AM UTC)
 - Manual workflow dispatch
 
 **Checks:**
+
 - Dependency vulnerabilities (pip-audit, safety)
 - Secret scanning (gitleaks)
 
@@ -471,6 +491,7 @@ Runs on:
    - Add tests if applicable
 
 3. **Test locally**
+
    ```bash
    # Backend
    pytest tests/
@@ -485,6 +506,7 @@ Runs on:
    ```
 
 4. **Run pre-commit hooks**
+
    ```bash
    pre-commit run --all-files
    ```
@@ -510,6 +532,7 @@ The `main` branch is protected with the following requirements:
 Before merging to `main`, the following checks must pass:
 
 **Backend CI:**
+
 - ✅ Lint & Format Check (Python 3.11)
 - ✅ Lint & Format Check (Python 3.12)
 - ✅ Security Scan
@@ -517,6 +540,7 @@ Before merging to `main`, the following checks must pass:
 - ✅ Docker Build
 
 **Frontend CI:**
+
 - ✅ Lint & Type Check (Node 20)
 - ✅ Lint & Type Check (Node 22)
 - ✅ Build Verification
@@ -534,6 +558,7 @@ Before merging to `main`, the following checks must pass:
 ### Workflow Timing
 
 Our CI/CD is designed for fast feedback:
+
 - **Target**: Most checks complete in < 5 minutes
 - **Docker builds**: < 5 min with layer caching, < 15 min cold
 - **Full test suite**: < 3 minutes
@@ -543,6 +568,7 @@ If checks take significantly longer, please report as an issue.
 ## Security
 
 Please review [SECURITY.md](SECURITY.md) for:
+
 - Reporting security vulnerabilities
 - Secrets management guidelines
 - Production security checklist
@@ -551,6 +577,7 @@ Please review [SECURITY.md](SECURITY.md) for:
 ## Questions?
 
 If you have questions or need help:
+
 1. Check the [README.md](README.md) for project documentation
 2. Search existing issues for similar questions
 3. Open a new issue with the `question` label

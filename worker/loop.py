@@ -137,7 +137,8 @@ def run():
     # Initial heartbeat
     update_heartbeat()
     
-    while True:        logger.debug("Polling for work: expand jobs and pick a video")
+    while True:
+        logger.debug("Polling for work: expand jobs and pick a video")
         with engine.begin() as conn:
             # Expand pending jobs into videos
             from worker.pipeline import expand_single_if_needed

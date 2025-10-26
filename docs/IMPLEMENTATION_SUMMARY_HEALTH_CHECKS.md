@@ -1,6 +1,7 @@
 # Health Check Endpoints Implementation Summary
 
 ## Overview
+
 Comprehensive health check endpoints have been implemented for monitoring, load balancing, and Kubernetes deployment support. This includes four distinct endpoints, component health checks, worker heartbeat monitoring, Prometheus metrics integration, and extensive documentation.
 
 ## What Was Implemented
@@ -19,23 +20,27 @@ Four endpoints serving different purposes:
 Each component provides detailed status information:
 
 **Database:**
+
 - Connection test with `SELECT 1`
 - Query latency measurement
 - Connection pool status
 - Read permission verification
 
 **OpenSearch (optional):**
+
 - Cluster health API check
 - Response time measurement
 - Cluster status (green/yellow/red)
 - Node count
 
 **Storage:**
+
 - Disk space measurement (free/total/used GB)
 - Write permission test
 - Configurable minimum free space threshold
 
 **Worker:**
+
 - Heartbeat freshness check
 - Pending job count
 - Stuck job detection
@@ -99,6 +104,7 @@ health_check_total{component="...", status="healthy|degraded|unhealthy"}
 ### 7. Comprehensive Testing
 
 25 test cases covering:
+
 - All four health endpoints
 - Individual component health checks
 - Prometheus metrics integration
@@ -112,6 +118,7 @@ All tests passing ✅
 ### 8. Documentation
 
 Complete documentation created:
+
 - **docs/health-checks.md** (750+ lines) - Full reference guide
 - **README.md** - Updated API reference section
 - Inline code documentation in `app/routes/health.py`
@@ -119,12 +126,14 @@ Complete documentation created:
 ## Files Changed
 
 ### New Files (4)
+
 1. `app/routes/health.py` (585 lines)
 2. `alembic/versions/20251025_2302_90627b497f59_add_worker_heartbeat_table.py`
 3. `tests/test_routes_health.py` (344 lines)
 4. `docs/health-checks.md` (750+ lines)
 
 ### Modified Files (4)
+
 1. `app/main.py` - Added health router, removed old endpoint
 2. `app/settings.py` - Added health check settings
 3. `worker/loop.py` - Added heartbeat mechanism, removed duplicate code
@@ -146,18 +155,21 @@ Complete documentation created:
 ## Usage Examples
 
 ### Basic Health Check
+
 ```bash
 curl http://localhost:8000/health
 # {"status": "healthy", "timestamp": "2025-10-25T23:00:00Z"}
 ```
 
 ### Detailed Health Check
+
 ```bash
 curl http://localhost:8000/health/detailed | jq
 # Shows status for database, opensearch, storage, worker
 ```
 
 ### Kubernetes Configuration
+
 ```yaml
 livenessProbe:
   httpGet:
@@ -175,6 +187,7 @@ readinessProbe:
 ```
 
 ### Prometheus Alerting
+
 ```yaml
 - alert: DatabaseUnhealthy
   expr: health_check_status{component="database"} == 0
@@ -188,11 +201,13 @@ readinessProbe:
 For existing deployments:
 
 1. Apply database migration:
+
    ```bash
    alembic upgrade head
    ```
 
 2. Optional: Configure critical components:
+
    ```bash
    export HEALTH_CHECK_CRITICAL_COMPONENTS="database,opensearch,storage"
    ```
@@ -206,6 +221,7 @@ For existing deployments:
 ## Response Examples
 
 ### Healthy System
+
 ```json
 {
   "status": "healthy",
@@ -237,6 +253,7 @@ For existing deployments:
 ```
 
 ### Degraded System
+
 ```json
 {
   "status": "degraded",
@@ -251,6 +268,7 @@ For existing deployments:
 ```
 
 ### Unhealthy System
+
 ```json
 {
   "status": "unhealthy",

@@ -69,7 +69,7 @@ Each log entry is a JSON object with the following structure:
 
 - `timestamp`: ISO 8601 UTC timestamp
 - `level`: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `service`: Service name (api, worker, script.*) 
+- `service`: Service name (api, worker, script.*)
 - `logger`: Python module name
 - `message`: Human-readable log message (sanitized)
 
@@ -196,11 +196,13 @@ fields @timestamp, level, message, extra
 To enable error tracking:
 
 1. Install Sentry SDK:
+
    ```bash
    pip install sentry-sdk==2.19.2
    ```
 
 2. Configure in `.env`:
+
    ```bash
    SENTRY_DSN=https://your-key@sentry.io/project-id
    SENTRY_ENVIRONMENT=production
@@ -287,17 +289,20 @@ From logs, you can extract:
 ### Sample Queries
 
 **Failed jobs in last hour:**
+
 ```
 level: ERROR AND message: "failed" AND @timestamp >= now-1h
 ```
 
 **Processing times by video:**
+
 ```
 message: "Video processing completed" 
 | stats avg(extra.total_duration_seconds) by video_id
 ```
 
 **Top errors:**
+
 ```
 level: ERROR 
 | stats count() by exc_type, service
@@ -313,6 +318,7 @@ pytest tests/test_logging.py -v
 ```
 
 Tests cover:
+
 - JSON formatting
 - Context propagation
 - Sensitive data redaction
@@ -322,6 +328,7 @@ Tests cover:
 ## Best Practices
 
 1. **Use Structured Extra Fields**: Instead of string formatting, use extra:
+
    ```python
    # Good
    logger.info("Job completed", extra={"job_id": job_id, "duration": 42})
@@ -331,6 +338,7 @@ Tests cover:
    ```
 
 2. **Set Context Early**: Set context vars at the start of operations:
+
    ```python
    video_id_ctx.set(str(video_id))
    try:
@@ -341,6 +349,7 @@ Tests cover:
    ```
 
 3. **Include Useful Metadata**: Add performance metrics, counts, IDs:
+
    ```python
    logger.info(
        "Batch processed",
@@ -354,6 +363,7 @@ Tests cover:
    ```
 
 4. **Log Boundaries**: Always log at operation start/end:
+
    ```python
    logger.info("Video processing started")
    try:
@@ -388,6 +398,7 @@ logger.info("Job created", extra={"job_id": str(job_id), "url": url})
 ```
 
 Benefits:
+
 - Searchable by field (e.g., filter by job_id)
 - Type-safe (no formatting errors)
 - Parseable by log aggregators
@@ -398,6 +409,7 @@ Benefits:
 ### Logs not appearing
 
 Check LOG_LEVEL in .env:
+
 ```bash
 echo $LOG_LEVEL  # Should be INFO or DEBUG
 ```
@@ -405,6 +417,7 @@ echo $LOG_LEVEL  # Should be INFO or DEBUG
 ### JSON parsing errors
 
 Ensure LOG_FORMAT=json:
+
 ```bash
 cat app.log | jq .  # Should parse without errors
 ```
@@ -427,7 +440,7 @@ request_id_ctx.set(request_id)
 
 ## See Also
 
-- Python logging docs: https://docs.python.org/3/library/logging.html
-- Structured logging best practices: https://www.structlog.org/
-- Sentry Python SDK: https://docs.sentry.io/platforms/python/
-- CloudWatch Logs Insights: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/
+- Python logging docs: <https://docs.python.org/3/library/logging.html>
+- Structured logging best practices: <https://www.structlog.org/>
+- Sentry Python SDK: <https://docs.sentry.io/platforms/python/>
+- CloudWatch Logs Insights: <https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/>

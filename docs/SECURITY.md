@@ -30,11 +30,13 @@ All secrets must be stored in environment variables, never hardcoded in source c
 ### Setup Instructions
 
 1. Copy the example environment file:
+
    ```bash
    cp .env.example .env
    ```
 
 2. Generate a secure session secret:
+
    ```bash
    openssl rand -hex 32
    ```
@@ -59,6 +61,7 @@ pre-commit run --all-files
 ```
 
 The hooks include:
+
 - **Gitleaks**: Scans for secrets and sensitive data
 - **detect-private-key**: Detects private keys
 - Code quality checks (black, isort, flake8)
@@ -68,6 +71,7 @@ The hooks include:
 ### Pinned Dependencies
 
 All Python dependencies are pinned to specific versions in `requirements.txt` to ensure:
+
 - Reproducible builds
 - Protection against supply chain attacks
 - Controlled updates with security review
@@ -101,6 +105,7 @@ PyTorch and related GPU packages are installed separately in the Dockerfile to s
 ### Secret Scanning
 
 Enable GitHub's secret scanning for this repository:
+
 1. Go to Settings → Security → Code security and analysis
 2. Enable "Secret scanning"
 3. Enable "Push protection" to prevent secret commits
@@ -108,6 +113,7 @@ Enable GitHub's secret scanning for this repository:
 ### Dependabot
 
 Consider enabling Dependabot for automated dependency updates:
+
 1. Go to Settings → Security → Code security and analysis
 2. Enable "Dependabot alerts"
 3. Enable "Dependabot security updates"
@@ -128,11 +134,12 @@ Consider enabling Dependabot for automated dependency updates:
 ### OpenSearch Security
 
 For production OpenSearch deployments:
+
 - Enable security plugin
 - Use strong admin password
 - Configure TLS/SSL
 - Set up proper access controls
-- See: https://opensearch.org/docs/latest/security/
+- See: <https://opensearch.org/docs/latest/security/>
 
 ### Stripe Integration Security
 
@@ -144,6 +151,7 @@ For production OpenSearch deployments:
 ## Docker Security
 
 When deploying with Docker:
+
 - Use specific image tags, not `latest`
 - Scan images for vulnerabilities: `docker scan <image>`
 - Run containers as non-root user where possible
@@ -161,6 +169,7 @@ When deploying with Docker:
 ## Incident Response
 
 If a security incident occurs:
+
 1. Immediately rotate affected credentials
 2. Review access logs for suspicious activity
 3. Assess scope of potential data exposure

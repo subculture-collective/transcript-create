@@ -122,6 +122,7 @@ npm run test:ui
 ```
 
 This opens a GUI where you can:
+
 - See all tests
 - Run individual tests
 - Watch tests execute
@@ -267,6 +268,7 @@ expect(content).toContain('expected content');
 #### Flaky Tests
 
 1. **Timing issues**: Use proper waiting mechanisms:
+
    ```typescript
    // Good: Wait for element
    await expect(page.locator('text=Result')).toBeVisible();
@@ -276,6 +278,7 @@ expect(content).toContain('expected content');
    ```
 
 2. **Network delays**: Increase timeouts for slow operations:
+
    ```typescript
    await expect(page.locator('text=Result')).toBeVisible({ timeout: 10000 });
    ```
@@ -293,6 +296,7 @@ npx playwright test --debug
 ```
 
 Features:
+
 - Step through tests
 - Inspect element locators
 - View console logs
@@ -307,6 +311,7 @@ npx playwright show-trace test-results/path-to-trace.zip
 ```
 
 Features:
+
 - Timeline of test execution
 - DOM snapshots at each step
 - Network activity
@@ -316,6 +321,7 @@ Features:
 #### Screenshots and Videos
 
 Configured to capture on failure:
+
 - Screenshots: `test-results/*/screenshot.png`
 - Videos: `test-results/*/video.webm`
 
@@ -330,6 +336,7 @@ npm run show-report
 ### GitHub Actions Workflow
 
 Tests run automatically on:
+
 - Pull requests (critical tests only)
 - Push to main (full suite)
 - Nightly schedule (full suite + mobile)
@@ -363,6 +370,7 @@ Tests run automatically on:
 ### Do's ✅
 
 1. **Use meaningful test descriptions**:
+
    ```typescript
    test('should show validation error for invalid YouTube URL', async ({ page }) => {
      // ...
@@ -370,6 +378,7 @@ Tests run automatically on:
    ```
 
 2. **Group related tests**:
+
    ```typescript
    test.describe('Authentication Flow', () => {
      // Related auth tests
@@ -379,6 +388,7 @@ Tests run automatically on:
 3. **Mock external services**: Don't depend on real YouTube API, Stripe, etc.
 
 4. **Use data-testid for stable selectors**:
+
    ```typescript
    await page.locator('[data-testid="submit-button"]').click();
    ```
@@ -390,6 +400,7 @@ Tests run automatically on:
 7. **Run tests in parallel**: Playwright does this by default
 
 8. **Use proper assertions**:
+
    ```typescript
    // Good
    await expect(page.locator('text=Success')).toBeVisible();
@@ -417,6 +428,7 @@ Tests run automatically on:
 ### Performance Tips
 
 1. **Reuse authentication state**:
+
    ```typescript
    test.use({ storageState: 'auth.json' });
    ```

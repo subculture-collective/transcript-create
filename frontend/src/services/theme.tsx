@@ -17,19 +17,22 @@ function getSystemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
-    const stored = localStorage.getItem(THEME_PREFERENCE_KEY) as ThemePreference | null;
-    return stored || 'auto';
-  });
+function getStoredPreference(): ThemePreference {
+  const stored = localStorage.getItem(THEME_PREFERENCE_KEY) as ThemePreference | null;
+  return stored || 'auto';
+}
 
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem(THEME_PREFERENCE_KEY) as ThemePreference | null;
-    if (stored === 'light' || stored === 'dark') {
-      return stored;
-    }
-    return getSystemTheme();
-  });
+function getInitialTheme(): Theme {
+  const preference = getStoredPreference();
+  if (preference === 'light' || preference === 'dark') {
+    return preference;
+  }
+  return getSystemTheme();
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [themePreference, setThemePreference] = useState<ThemePreference>(getStoredPreference);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
     // Apply theme to document

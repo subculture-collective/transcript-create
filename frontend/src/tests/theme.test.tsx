@@ -128,7 +128,7 @@ describe('theme service', () => {
       Object.defineProperty(window, 'matchMedia', {
         writable: true,
         value: vi.fn().mockImplementation((query: string) => ({
-          matches: query === '(prefers-color-scheme: dark)' ? false : false,
+          matches: false,
           media: query,
           onchange: null,
           addEventListener: vi.fn((event: string, handler: (e: MediaQueryListEvent) => void) => {
@@ -175,7 +175,7 @@ describe('theme service', () => {
       Object.defineProperty(window, 'matchMedia', {
         writable: true,
         value: vi.fn().mockImplementation((query: string) => ({
-          matches: query === '(prefers-color-scheme: dark)' ? false : false,
+          matches: false,
           media: query,
           onchange: null,
           addEventListener: vi.fn((event: string, handler: (e: MediaQueryListEvent) => void) => {

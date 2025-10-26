@@ -94,6 +94,20 @@ class Settings(BaseSettings):
     MAX_LOGIN_ATTEMPTS: int = 5  # Max failed login attempts before rate limiting
     LOGIN_ATTEMPT_WINDOW_MINUTES: int = 15  # Time window for tracking login attempts
 
+    # Backup and disaster recovery configuration
+    BACKUP_DIR: str = "/backups"  # Root directory for all backups
+    BACKUP_ENCRYPT: bool = False  # Enable GPG encryption for backups
+    BACKUP_GPG_RECIPIENT: str = ""  # GPG recipient email for backup encryption
+    BACKUP_RETENTION_DAILY: int = 7  # Days to keep daily backups
+    BACKUP_RETENTION_WEEKLY: int = 4  # Weeks to keep weekly backups (28 days)
+    BACKUP_RETENTION_MONTHLY: int = 12  # Months to keep monthly backups (360 days)
+    BACKUP_S3_BUCKET: str = ""  # S3 bucket for remote backup storage
+    BACKUP_GCS_BUCKET: str = ""  # GCS bucket for remote backup storage
+    BACKUP_AZURE_CONTAINER: str = ""  # Azure container for remote backup storage
+    WAL_ARCHIVE_DIR: str = "/backups/wal_archive"  # PostgreSQL WAL archive directory
+    MEDIA_BACKUP_DIR: str = "/backups/media"  # Media files backup directory
+    MEDIA_RETENTION_DAYS: int = 30  # Days to keep media backups
+
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
     model_config = SettingsConfigDict(

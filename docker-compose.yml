@@ -166,7 +166,42 @@ services:
       - prometheus
     restart: unless-stopped
 
+  backup:
+    image: postgres:16
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+      BACKUP_DIR: /backups
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: transcripts
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - dbdata:/var/lib/postgresql/data:ro
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+      - ./data:/data:ro
+    # Run backup daily at 2 AM UTC
+    # Use 'supercronic' for better cron handling in containers
+    command: >
+      sh -c "
+      apt-get update && apt-get install -y cron rsync &&
+      echo '0 2 * * * cd /scripts && ./backup_db.sh >> /backups/logs/cron.log 2>&1' > /etc/cron.d/backup &&
+      echo '0 3 * * * cd /scripts && ./backup_media.sh >> /backups/logs/cron.log 2>&1' >> /etc/cron.d/backup &&
+      echo '0 4 * * 0 cd /scripts && ./verify_backup.sh >> /backups/logs/cron.log 2>&1' >> /etc/cron.d/backup &&
+      chmod 0644 /etc/cron.d/backup &&
+      crontab /etc/cron.d/backup &&
+      echo 'Backup service started. Backups scheduled for 2 AM UTC daily.' &&
+      cron -f
+      "
+    restart: unless-stopped
+
 volumes:
   dbdata:
   prometheus-data:
   grafana-data:
+

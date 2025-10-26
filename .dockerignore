@@ -54,6 +54,14 @@ frontend/.tsbuildinfo
 !DEPENDENCIES.md
 docs/
 
+# Tests (not needed in production image)
+tests/
+e2e/
+*.test.js
+*.spec.js
+*.test.py
+*.spec.py
+
 # OS files
 .DS_Store
 *.log
@@ -80,3 +88,36 @@ temp/
 build/
 dist/
 *.egg-info/
+
+# CI/CD and development tools
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+azure-pipelines.yml
+
+# Kubernetes and deployment configs (use specific copies if needed)
+k8s/
+charts/
+helm/
+
+# Backup and temporary working directories
+backups/
+*.sql
+*.sql.gz
+*.dump
+
+# Editor backup files
+*~
+*.bak
+*.orig
+
+# Large test/example files
+examples/
+openai_whisper-*.tar.gz
+*.tar.gz
+*.zip
+
+# Additional Python artifacts
+.hypothesis/
+.benchmarks/

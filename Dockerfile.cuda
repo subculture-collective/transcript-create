@@ -1,35 +1,35 @@
 # =============================================================================
-# Multi-Stage Dockerfile for transcript-create (ROCm variant)
+# Multi-Stage Dockerfile for transcript-create (CUDA variant)
 # =============================================================================
-# This Dockerfile implements multi-stage builds for optimal image size and
-# build time through layer caching.
+# NVIDIA CUDA-accelerated build for GPU inference on NVIDIA hardware.
 #
 # Build stages:
-#   1. base       - System dependencies and ROCm base
+#   1. base       - CUDA runtime and system dependencies
 #   2. python-deps - Python packages installation
 #   3. app        - Final application stage
 #
-# Target image size: <2.5GB (down from ~3GB)
-# Build time: <10 min with cache
+# Target image size: ~2.5GB
+# Use cases: NVIDIA GPU deployments, CUDA-accelerated inference
 # =============================================================================
 
 # =============================================================================
 # Stage 1: Base image with system dependencies
 # =============================================================================
-FROM rocm/dev-ubuntu-22.04:6.0.2 AS base
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04 AS base
 
-# Build argument for PyTorch ROCm wheel index
-ARG ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.0
+# Build argument for PyTorch CUDA wheel index
+ARG CUDA_WHEEL_INDEX=https://download.pytorch.org/whl/cu121
 
 # Set environment variables for non-interactive installs
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Install system dependencies in a single layer
-# Combine apt-get update, install, and cleanup to minimize layer size
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -37,6 +37,7 @@ RUN apt-get update && \
         python3-pip \
         git \
         curl \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -54,12 +55,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --no-cache-dir -r requirements.txt && \
     # Remove any torch variants pulled in by other dependencies
     (pip3 uninstall -y torch torchvision torchaudio || true) && \
-    # Install ROCm PyTorch wheels explicitly
-    pip3 install --no-cache-dir --index-url ${ROCM_WHEEL_INDEX} \
-        torch==2.4.1+rocm6.0 torchaudio==2.4.1+rocm6.0
+    # Install CUDA PyTorch wheels explicitly
+    pip3 install --no-cache-dir --index-url ${CUDA_WHEEL_INDEX} \
+        torch==2.4.1+cu121 torchaudio==2.4.1+cu121
 
 # Verify PyTorch installation
-RUN python3 -c "import torch; print('Torch version:', torch.__version__); print('HIP version:', getattr(torch.version, 'hip', None)); print('cuda.is_available:', torch.cuda.is_available())"
+RUN python3 -c "import torch; print('Torch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda if hasattr(torch.version, 'cuda') else 'N/A')"
 
 # =============================================================================
 # Stage 3: Final application stage
@@ -83,7 +84,9 @@ RUN python3 -m compileall -q /app
 ENV PDF_FONT_PATH=/app/fonts/DejaVuSerif.ttf \
     HF_HOME=/root/.cache/hf \
     HF_HUB_CACHE=/root/.cache/hf/hub \
-    TRANSFORMERS_CACHE=/root/.cache/hf/transformers
+    TRANSFORMERS_CACHE=/root/.cache/hf/transformers \
+    FORCE_GPU=true \
+    WHISPER_BACKEND=whisper
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \

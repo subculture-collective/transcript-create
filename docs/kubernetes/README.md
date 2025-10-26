@@ -24,8 +24,12 @@ Before deploying transcript-create on Kubernetes, ensure you have:
 
 - **kubectl** (v1.25+): Kubernetes command-line tool
   ```bash
-  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+  KUBECTL_VERSION="$(curl -L -s https://dl.k8s.io/release/stable.txt)"
+  curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+  echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
   chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+  rm -f kubectl.sha256
   ```
 
 - **Helm** (v3.10+): Kubernetes package manager

@@ -214,7 +214,7 @@ groups:
       # WAL archiving not active (no recent archives)
       # Threshold: 2 hours - WAL archive_timeout is 5 minutes, allow time for idle systems
       - alert: WALArchivingInactive
-        expr: time() - wal_last_archive_timestamp > 7200  # 2 hours (2 * 3600 seconds)
+        expr: time() - wal_last_archive_timestamp > 2 * 3600  # 2 hours (2 * 3600 seconds)
         for: 10m
         labels:
           severity: warning

@@ -608,3 +608,153 @@ def get_search_analytics(
         avg_results_per_query=avg_results,
         total_searches=total,
     )
+
+
+@router.get(
+    "/search/export",
+    summary="Export search results",
+    description="""
+    Export search results to CSV or JSON format.
+
+    Supports the same filters as the main search endpoint.
+    Export format is determined by the `format` parameter.
+    """,
+    responses={
+        200: {
+            "description": "Search results exported successfully",
+            "content": {
+                "text/csv": {},
+                "application/json": {},
+            },
+        },
+    },
+)
+def export_search_results(
+    request: Request,
+    q: str = Query(..., min_length=1, max_length=500, description="Search query text"),
+    format: str = Query("csv", description="Export format: 'csv' or 'json'"),
+    source: str = Query("native", description="Search source: 'native' or 'youtube'"),
+    video_id: uuid.UUID | None = Query(None, description="Filter results to specific video"),
+    limit: int = Query(500, ge=1, le=1000, description="Maximum number of results to export"),
+    # Advanced filters
+    date_from: str | None = Query(None, description="Filter videos uploaded after this date (ISO format)"),
+    date_to: str | None = Query(None, description="Filter videos uploaded before this date (ISO format)"),
+    min_duration: int | None = Query(None, ge=0, description="Minimum video duration in seconds"),
+    max_duration: int | None = Query(None, ge=0, description="Maximum video duration in seconds"),
+    channel: str | None = Query(None, description="Filter by channel name"),
+    language: str | None = Query(None, description="Filter by language code (e.g., 'en', 'es')"),
+    has_speaker_labels: bool | None = Query(None, description="Filter videos with speaker diarization"),
+    sort_by: str = Query("relevance", description="Sort results by: relevance, date_asc, date_desc"),
+    db=Depends(get_db),
+):
+    """Export search results to CSV or JSON."""
+    if not q or not q.strip():
+        raise ValidationError("Search query cannot be empty", field="q")
+    if source not in ("native", "youtube"):
+        raise ValidationError("Invalid source. Must be 'native' or 'youtube'", field="source")
+    if format not in ("csv", "json"):
+        raise ValidationError("Invalid format. Must be 'csv' or 'json'", field="format")
+
+    _get_user_from_session(db, _get_session_token(request))
+
+    # Build filter parameters
+    filters = {}
+    if date_from:
+        filters["date_from"] = date_from
+    if date_to:
+        filters["date_to"] = date_to
+    if min_duration is not None:
+        filters["min_duration"] = min_duration
+    if max_duration is not None:
+        filters["max_duration"] = max_duration
+    if channel:
+        filters["channel"] = channel
+    if language:
+        filters["language"] = language
+    if has_speaker_labels is not None:
+        filters["has_speaker_labels"] = has_speaker_labels
+
+    from .. import crud
+
+    if source == "native":
+        rows = crud.search_segments_advanced(
+            db,
+            q=q,
+            video_id=str(video_id) if video_id else None,
+            limit=limit,
+            offset=0,
+            sort_by=sort_by,
+            filters=filters,
+        )
+    else:
+        rows = crud.search_youtube_segments_advanced(
+            db,
+            q=q,
+            video_id=str(video_id) if video_id else None,
+            limit=limit,
+            offset=0,
+            sort_by=sort_by,
+            filters=filters,
+        )
+
+    # Get video details for each result
+    video_details = {}
+    for r in rows:
+        vid = str(r["video_id"])
+        if vid not in video_details:
+            video_row = (
+                db.execute(
+                    _text("SELECT youtube_id, title, duration_seconds FROM videos WHERE id = :vid"), {"vid": vid}
+                )
+                .mappings()
+                .first()
+            )
+            if video_row:
+                video_details[vid] = video_row
+
+    if format == "json":
+        from fastapi.responses import JSONResponse
+
+        results = []
+        for r in rows:
+            vid = str(r["video_id"])
+            video_info = video_details.get(vid, {})
+            results.append(
+                {
+                    "segment_id": r["id"],
+                    "video_id": vid,
+                    "youtube_id": video_info.get("youtube_id"),
+                    "title": video_info.get("title"),
+                    "start_ms": r["start_ms"],
+                    "end_ms": r["end_ms"],
+                    "text": r["snippet"],
+                }
+            )
+
+        return JSONResponse(content={"query": q, "source": source, "results": results, "count": len(results)})
+    else:  # CSV
+        from fastapi.responses import PlainTextResponse
+
+        def esc(x):
+            s = str(x) if x is not None else ""
+            if any(c in s for c in [",", '"', "\n"]):
+                s = '"' + s.replace('"', '""') + '"'
+            return s
+
+        # Build CSV
+        header = "segment_id,video_id,youtube_id,title,start_ms,end_ms,text\n"
+        body = ""
+        for r in rows:
+            vid = str(r["video_id"])
+            video_info = video_details.get(vid, {})
+            body += (
+                f"{esc(r['id'])},"
+                f"{esc(vid)},"
+                f"{esc(video_info.get('youtube_id'))},"
+                f"{esc(video_info.get('title'))},"
+                f"{esc(r['start_ms'])},"
+                f"{esc(r['end_ms'])},"
+                f"{esc(r['snippet'])}\n"
+            )
+
+        return PlainTextResponse(content=header + body, media_type="text/csv")

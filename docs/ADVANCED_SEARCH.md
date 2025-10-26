@@ -309,21 +309,21 @@ Planned but not yet implemented:
 - **Spelling Correction**: "Did you mean?" suggestions
 - **Caching**: Redis layer for frequently searched terms
 - **Advanced Syntax**: Boolean operators, phrase search, field-specific queries
-- **KWIC View**: Enhanced keyword-in-context display with configurable window
+- **KWIC (Keyword In Context) View**: Enhanced display with configurable context window
 
 ## Migration
 
 To apply the database changes:
 
 ```bash
-# Using Alembic
+# Using Alembic (recommended)
 alembic upgrade head
 
-# Or apply manually
+# Or for fresh installations
 psql $DATABASE_URL -f sql/schema.sql
 ```
 
-The migration adds:
+The migration (`alembic/versions/20251026_0227_94e8fe9e40fa_add_search_enhancements_tables.py`) adds:
 - New tables for suggestions and history
 - New columns on videos table
 - Indexes for performance
@@ -366,7 +366,7 @@ GET /admin/search/analytics?days=90
 
 ## API Reference
 
-All endpoints are documented in the OpenAPI specification at `/docs` when the API is running.
+All endpoints are documented in the interactive OpenAPI specification, accessible at `/docs` when the API server is running (if enabled in your deployment).
 
 ### Search Endpoints
 

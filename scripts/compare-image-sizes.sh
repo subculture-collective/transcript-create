@@ -36,7 +36,27 @@ get_size() {
 get_size_bytes() {
     local image=$1
     if docker images "$image" --format "{{.Size}}" 2>/dev/null | grep -q .; then
-        docker images "$image" --format "{{.Size}}" | sed 's/GB/*1073741824/;s/MB/*1048576/;s/KB/*1024/' | bc 2>/dev/null || echo "0"
+        local size=$(docker images "$image" --format "{{.Size}}")
+        # Convert to bytes using awk (more portable than bc)
+        echo "$size" | awk '{
+            # Split value and unit
+            if (NF == 1) {
+                # Format like "123MB" - need to separate
+                match($0, /^[0-9.]+/);
+                val = substr($0, RSTART, RLENGTH);
+                unit = substr($0, RLENGTH + 1);
+            } else {
+                # Format like "123 MB"
+                val = $1;
+                unit = $2;
+            }
+            # Convert to bytes
+            if (unit == "GB") printf "%.0f", val * 1073741824;
+            else if (unit == "MB") printf "%.0f", val * 1048576;
+            else if (unit == "KB") printf "%.0f", val * 1024;
+            else if (unit == "B") printf "%.0f", val;
+            else print 0;
+        }'
     else
         echo "0"
     fi
@@ -113,7 +133,8 @@ if [ "$ROCM_SIZE" != "N/A" ] && [ "$OLD_SIZE" != "N/A" ] && [ "$ROCM_BYTES" -gt 
     SAVINGS=$((OLD_BYTES - ROCM_BYTES))
     SAVINGS_PERCENT=$((SAVINGS * 100 / OLD_BYTES))
     if [ "$SAVINGS" -gt 0 ]; then
-        SAVINGS_GB=$(echo "scale=2; $SAVINGS / 1073741824" | bc)
+        # Use awk for floating point division
+        SAVINGS_GB=$(echo "$SAVINGS" | awk '{printf "%.2f", $1 / 1073741824}')
         echo -e "${GREEN}Space saved (ROCm vs Original): ${SAVINGS_GB}GB (${SAVINGS_PERCENT}%)${NC}"
     fi
 fi

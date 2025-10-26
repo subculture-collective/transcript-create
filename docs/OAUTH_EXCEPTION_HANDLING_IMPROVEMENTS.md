@@ -16,6 +16,7 @@ except Exception as e:
 ```
 
 This approach had several issues:
+
 1. The original exception type was lost
 2. No logging of the actual error for debugging
 3. All errors got the same generic treatment
@@ -103,11 +104,13 @@ class ExternalServiceError(AppError):
 ### 1. Better Debugging
 
 The original exception type is now:
+
 - Logged to server logs with full stack trace
 - Included in error details as `error_type` field
 - Visible to developers debugging issues
 
 Example error response:
+
 ```json
 {
   "error": "external_service_error",
@@ -123,12 +126,14 @@ Example error response:
 ### 2. Specific Error Messages
 
 Different error messages for different scenarios:
+
 - **OAuth protocol errors**: "OAuth protocol error: {specific error}"
 - **General failures**: "Authentication failed: {error}"
 
 ### 3. Comprehensive Logging
 
 Server logs now include:
+
 ```
 ERROR Google OAuth callback error: state mismatch | type=MismatchingStateError
 Traceback (most recent call last):
@@ -139,6 +144,7 @@ authlib.common.errors.MismatchingStateError: state mismatch
 ### 4. Cleaner Code
 
 The explicit exception ordering makes the code's intent clear:
+
 1. First, let our custom exceptions through unchanged
 2. Then, catch and log all other exceptions
 3. Provide specific handling for OAuth errors
@@ -181,5 +187,5 @@ def test_auth_login_google_no_oauth(self, client: TestClient):
 
 ## Related Issues
 
-- Addresses review comment on PR #80: https://github.com/subculture-collective/transcript-create/pull/80#discussion_r2462339927
+- Addresses review comment on PR #80: <https://github.com/subculture-collective/transcript-create/pull/80#discussion_r2462339927>
 - Based on comprehensive error handling system in PR #80

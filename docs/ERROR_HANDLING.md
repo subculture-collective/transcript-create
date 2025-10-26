@@ -279,6 +279,6 @@ Potential enhancements:
 
 ## References
 
-- FastAPI Error Handling: https://fastapi.tiangolo.com/tutorial/handling-errors/
-- RFC 7807 Problem Details: https://tools.ietf.org/html/rfc7807
-- Pydantic Validation: https://docs.pydantic.dev/latest/concepts/validators/
+- FastAPI Error Handling: <https://fastapi.tiangolo.com/tutorial/handling-errors/>
+- RFC 7807 Problem Details: <https://tools.ietf.org/html/rfc7807>
+- Pydantic Validation: <https://docs.pydantic.dev/latest/concepts/validators/>

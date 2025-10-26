@@ -13,6 +13,7 @@ Create searchable, exportable transcripts from YouTube videos or channels. The s
 ## CI/CD Status
 
 This project has comprehensive CI/CD automation:
+
 - **Backend CI**: Linting (ruff, black, isort), type checking (mypy), security scanning, tests with PostgreSQL, Docker build validation
 - **Frontend CI**: ESLint, Prettier formatting, TypeScript checking, Vite build with bundle size monitoring
 - **E2E Tests**: Playwright tests across Chromium, Firefox, WebKit, and mobile viewports (255 tests)
@@ -65,10 +66,10 @@ docker compose build
 docker compose up -d
 ```
 
-- API available at http://localhost:8000
+- API available at <http://localhost:8000>
 - Postgres exposed on host port 5434 (inside network: db:5432)
-- Prometheus metrics at http://localhost:9090
-- Grafana dashboards at http://localhost:3000 (admin/admin)
+- Prometheus metrics at <http://localhost:9090>
+- Grafana dashboards at <http://localhost:3000> (admin/admin)
 - If your host ROCm version ≠ 6.0, use a different build arg, e.g.:
 
 ```bash
@@ -84,7 +85,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173.
+Open <http://localhost:5173>.
 
 4. Ingest a video
 
@@ -145,6 +146,7 @@ services:
 ### Build Configuration
 
 Images are built with:
+
 - Planned: Multi-stage optimization for smaller size
 - Layer caching for faster rebuilds (< 5 min with cache)
 - SBOM (Software Bill of Materials) for security
@@ -317,17 +319,20 @@ cd frontend && npm install && npm run dev
 The application includes comprehensive monitoring with Prometheus metrics and Grafana dashboards.
 
 **Quick Access:**
-- Grafana dashboards: http://localhost:3000 (admin/admin)
-- Prometheus: http://localhost:9090
-- API metrics: http://localhost:8000/metrics
-- Worker metrics: http://localhost:8001/metrics
+
+- Grafana dashboards: <http://localhost:3000> (admin/admin)
+- Prometheus: <http://localhost:9090>
+- API metrics: <http://localhost:8000/metrics>
+- Worker metrics: <http://localhost:8001/metrics>
 
 **Pre-configured Dashboards:**
+
 1. **Overview**: Service health, request rates, job statistics, queue depth
 2. **API Performance**: Request rates, latency percentiles, error rates, concurrent requests
 3. **Transcription Pipeline**: Processing durations, queue status, model performance
 
 **Key Metrics:**
+
 - HTTP request rates and latency
 - Job creation and completion rates
 - Video processing pipeline stages
@@ -336,6 +341,7 @@ The application includes comprehensive monitoring with Prometheus metrics and Gr
 - GPU memory usage (when available)
 
 For detailed documentation, see [docs/MONITORING.md](docs/MONITORING.md) including:
+
 - Adding custom metrics
 - Alert configuration
 - Troubleshooting
@@ -354,6 +360,7 @@ For detailed documentation, see [docs/MONITORING.md](docs/MONITORING.md) includi
 ### Unit Tests
 
 **Backend (Python + pytest)**:
+
 ```bash
 # Run all backend tests
 pytest tests/
@@ -366,6 +373,7 @@ pytest --cov=app --cov=worker tests/
 ```
 
 **Frontend (Vitest)**:
+
 ```bash
 cd frontend
 
@@ -415,6 +423,7 @@ npm run test:critical      # Fast critical tests only
 ```
 
 **Coverage**: 255 E2E tests across:
+
 - Authentication & sessions
 - Job creation & processing
 - Search with filters & deeplinks
@@ -429,6 +438,7 @@ See [docs/E2E-TESTING.md](docs/E2E-TESTING.md) for comprehensive guide and [e2e/
 ## Contributing
 
 We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
 - Development setup instructions
 - Code quality guidelines and linting
 - CI/CD pipeline documentation
@@ -457,6 +467,7 @@ For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 ### Development Setup (Legacy Section - see CONTRIBUTING.md for full details)
 
 1. Install pre-commit hooks for security and code quality:
+
    ```bash
    # Quick setup (recommended)
    ./scripts/setup_precommit.sh
@@ -474,6 +485,7 @@ For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
    - Additional checks for trailing whitespace, YAML/JSON/TOML syntax, etc.
 
 2. Manual linting and formatting:
+
    ```bash
    # Check all Python files
    ruff check app/ worker/ scripts/
@@ -492,6 +504,7 @@ For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
    All linting tools are configured in `pyproject.toml` with line-length=120 and consistent rules.
 
 3. Before committing, ensure security checks pass:
+
    ```bash
    pre-commit run --all-files
    pip-audit -r requirements.txt
@@ -504,6 +517,7 @@ For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 This project includes comprehensive test coverage:
 
 ### Unit Tests
+
 ```bash
 # Run all unit tests
 pytest tests/ -v
@@ -516,6 +530,7 @@ pytest tests/test_routes_jobs.py -v
 ```
 
 ### Integration Tests
+
 End-to-end integration tests validate complete workflows. See [tests/integration/README.md](tests/integration/README.md) for details.
 
 ```bash
@@ -530,6 +545,7 @@ pytest tests/integration/ --timeout=120 -v
 ```
 
 Integration tests cover:
+
 - Job creation and processing workflows
 - Video transcription and export (SRT, PDF)
 - Search functionality (native and YouTube captions)
@@ -539,7 +555,9 @@ Integration tests cover:
 - Database integrity and concurrency
 
 ### CI/CD Testing
+
 All tests run automatically in CI on every pull request:
+
 - Unit tests with PostgreSQL
 - Integration tests (subset on PR, full suite nightly)
 - Security scans and linting
@@ -547,12 +565,14 @@ All tests run automatically in CI on every pull request:
 ## Security
 
 This project follows security best practices:
+
 - All dependencies are pinned with specific versions
 - Automated vulnerability scanning via GitHub Actions
 - Pre-commit hooks prevent accidental secret commits
 - Secrets managed via environment variables only
 
 See [SECURITY.md](SECURITY.md) for:
+
 - Reporting security vulnerabilities
 - Secrets management guidelines
 - Production security checklist

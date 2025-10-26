@@ -24,12 +24,14 @@ This directory contains comprehensive unit tests for the FastAPI backend applica
 ### Prerequisites
 
 1. Install test dependencies:
+
    ```bash
    pip install -r requirements-dev.txt
    pip install -r requirements.txt
    ```
 
 2. Set up a PostgreSQL test database:
+
    ```bash
    # Using Docker
    docker run --name test-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:15
@@ -135,11 +137,13 @@ def test_stripe_integration(self, mock_stripe, client):
 ## CI Integration
 
 Tests run automatically in GitHub Actions on:
+
 - Push to `main` branch
 - Pull requests
 - Manual workflow dispatch
 
 The CI pipeline:
+
 1. Sets up Python 3.11 and 3.12
 2. Installs dependencies
 3. Starts PostgreSQL service
@@ -153,6 +157,7 @@ The CI pipeline:
 ### Database Connection Errors
 
 If you see "OperationalError: could not connect to server":
+
 - Ensure PostgreSQL is running
 - Check DATABASE_URL environment variable
 - Verify PostgreSQL is listening on port 5432
@@ -160,12 +165,14 @@ If you see "OperationalError: could not connect to server":
 ### Schema Errors
 
 If you see "ProgrammingError: relation does not exist":
+
 - Apply the database schema: `psql $DATABASE_URL -f sql/schema.sql`
 - The test fixture handles missing schema gracefully in CI
 
 ### Import Errors
 
 If you see "ModuleNotFoundError":
+
 - Ensure you're in the repository root directory
 - Install all dependencies: `pip install -r requirements.txt -r requirements-dev.txt`
 

@@ -3,6 +3,7 @@
 This repository provides an end-to-end pipeline to create transcripts from YouTube videos or channels using FastAPI + PostgreSQL + a background worker that runs Whisper (ROCm GPU) and optional pyannote diarization.
 
 ## Architecture overview
+
 - API (FastAPI): `app/main.py` exposes:
   - POST `/jobs` to enqueue a job (single or channel). Uses `app/crud.py` and `sqlalchemy`.
   - GET `/jobs/{id}` to check status.
@@ -22,6 +23,7 @@ This repository provides an end-to-end pipeline to create transcripts from YouTu
 Why this structure: Database-backed job/queue with SKIP LOCKED enables simple horizontal scaling of workers without extra infra. Chunking controls memory/runtime; diarization post-process keeps speaker labels coherent across the whole audio.
 
 ## Key settings and conventions
+
 - Settings live in `app/settings.py` and are read from `.env` via `pydantic-settings`.
   - `WHISPER_BACKEND` = `faster-whisper` (CT2) or `whisper` (PyTorch). Default is CT2.
   - ROCm-friendly GPU control: `FORCE_GPU`, `GPU_DEVICE_PREFERENCE`, `GPU_COMPUTE_TYPES`, `GPU_MODEL_FALLBACKS`.
@@ -33,6 +35,7 @@ Why this structure: Database-backed job/queue with SKIP LOCKED enables simple ho
 - Reprocessing: Worker auto-requeues completed videos when `settings.WHISPER_MODEL` ranks higher than prior `transcripts.model`.
 
 ## Build and run workflows
+
 - Local (host):
   - API: `uvicorn app.main:app --reload --port 8000`
   - Worker: `python -m worker.loop`
@@ -43,6 +46,7 @@ Why this structure: Database-backed job/queue with SKIP LOCKED enables simple ho
 - DB schema: auto-applied on first Postgres start via compose; or apply manually with `psql $DATABASE_URL -f sql/schema.sql`.
 
 ## Coding patterns to follow
+
 - DB access uses SQLAlchemy Core with parameterized `text()` and manual transactions (`engine.begin()` or `SessionLocal`). See `app/crud.py`, `worker/pipeline.py`.
 - Job/video locking: always use `FOR UPDATE SKIP LOCKED` when selecting work to avoid contention.
 - File I/O: all media lives under `/data/<video_uuid>` (volume-mounted). Use `worker/pipeline.WORKDIR` and `pathlib.Path`.
@@ -52,6 +56,7 @@ Why this structure: Database-backed job/queue with SKIP LOCKED enables simple ho
 - Diarization assigns human-friendly labels like "Speaker 1" ordered by first appearance; both `speaker` and `speaker_label` are set on segment dicts.
 
 ## Integration specifics
+
 - YouTube metadata extraction uses `yt-dlp -J` (single) or `--flat-playlist -J` (channel). Insert `videos(job_id, youtube_id, idx, title, duration_seconds)` once per entry.
 - State updates must update `updated_at=now()` consistently.
 - API responses:
@@ -59,11 +64,13 @@ Why this structure: Database-backed job/queue with SKIP LOCKED enables simple ho
   - `TranscriptResponse` returns `segments` sorted by `start_ms`.
 
 ## Useful file references
+
 - API: `app/main.py`, `app/crud.py`, `app/db.py`, `app/schemas.py`, `app/settings.py`
 - Worker: `worker/loop.py`, `worker/pipeline.py`, `worker/audio.py`, `worker/whisper_runner.py`, `worker/diarize.py`
 - Infra: `docker-compose.yml`, `Dockerfile`, `sql/schema.sql`, `scripts/run_worker.sh`
 
 ## Make agents effective
+
 - Prefer updating `app/settings.py` for new env flags or behavior toggles.
 - When adding new pipeline stages, ensure idempotency and clear state progression; clean existing transcript/segments before reinserting on reprocess.
 - Keep long-running calls (yt-dlp, ffmpeg, model loads) logged at INFO with concise command echoes.

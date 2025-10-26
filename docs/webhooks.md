@@ -5,6 +5,7 @@ This guide explains how to integrate and handle Stripe webhooks for subscription
 ## Overview
 
 Transcript Create uses Stripe webhooks to automatically update user subscription status when:
+
 - A user completes checkout
 - A subscription is created or updated
 - A subscription is canceled or expires
@@ -61,6 +62,7 @@ PRO_PLAN_NAME=pro
 Triggered when a user successfully completes checkout.
 
 **What it does:**
+
 1. Identifies the customer by Stripe customer ID
 2. Updates user's plan to "pro"
 3. Sets subscription status to "active"
@@ -70,6 +72,7 @@ Triggered when a user successfully completes checkout.
 Triggered when a new subscription is created.
 
 **What it does:**
+
 - Sets user plan based on subscription status
 - Active or trialing subscriptions → "pro" plan
 - Other statuses → no plan change
@@ -79,6 +82,7 @@ Triggered when a new subscription is created.
 Triggered when subscription status changes (e.g., payment updated, plan changed).
 
 **What it does:**
+
 - Updates user plan based on new subscription status
 - Handles transitions between active/inactive states
 
@@ -87,6 +91,7 @@ Triggered when subscription status changes (e.g., payment updated, plan changed)
 Triggered when a subscription is canceled or expires.
 
 **What it does:**
+
 1. Sets user plan back to "free"
 2. Sets subscription status to "canceled"
 
@@ -201,6 +206,7 @@ curl -X POST https://api.example.com/stripe/webhook \
 ### Webhook Validation Errors
 
 **400 Bad Request** - Invalid signature
+
 ```json
 {
   "error": "validation_error",
@@ -210,6 +216,7 @@ curl -X POST https://api.example.com/stripe/webhook \
 ```
 
 **400 Bad Request** - Malformed event
+
 ```json
 {
   "error": "validation_error",
@@ -221,6 +228,7 @@ curl -X POST https://api.example.com/stripe/webhook \
 ### Configuration Errors
 
 **503 Service Unavailable** - Stripe not configured
+
 ```json
 {
   "error": "external_service_error",
@@ -302,7 +310,8 @@ Webhook handlers should be idempotent (safe to run multiple times):
 
 **Cause:** Webhook secret mismatch
 
-**Solution:** 
+**Solution:**
+
 1. Copy correct secret from Stripe Dashboard
 2. Update `STRIPE_WEBHOOK_SECRET` in `.env`
 3. Restart API server
@@ -325,6 +334,7 @@ customer = stripe.Customer.create(
 **Cause:** Event not handled or database transaction failed
 
 **Solution:**
+
 1. Check application logs for errors
 2. Verify event type is in handled list
 3. Check database connection

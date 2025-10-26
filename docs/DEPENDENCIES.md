@@ -28,6 +28,7 @@ All production dependencies are explicitly pinned to specific versions:
 ### Full Dependency Tree (constraints.txt)
 
 Contains all transitive dependencies with exact versions for:
+
 - Reproducible builds across environments
 - Security auditing
 - Compatibility verification
@@ -37,6 +38,7 @@ Contains all transitive dependencies with exact versions for:
 ### Why Special Handling?
 
 PyTorch and related packages (torch, torchaudio) have different builds for:
+
 - **CUDA**: NVIDIA GPUs
 - **ROCm**: AMD GPUs
 - **CPU**: No GPU acceleration
@@ -48,16 +50,19 @@ These cannot coexist and must be installed separately based on the target hardwa
 The Dockerfile implements a two-stage installation:
 
 1. **Install general dependencies** from requirements.txt
+
    ```dockerfile
    pip3 install -r requirements.txt
    ```
 
 2. **Remove any conflicting torch packages** that may have been installed as transitive dependencies
+
    ```dockerfile
    pip3 uninstall -y torch torchvision torchaudio
    ```
 
 3. **Install ROCm-specific PyTorch** from the appropriate wheel index
+
    ```dockerfile
    pip3 install --index-url ${ROCM_WHEEL_INDEX} \
        torch==2.4.1+rocm6.0 torchaudio==2.4.1+rocm6.0
@@ -71,6 +76,7 @@ The Dockerfile implements a two-stage installation:
   - ROCm 6.2: `https://download.pytorch.org/whl/rocm6.2`
 
 Example for different ROCm version:
+
 ```bash
 docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.1
 ```
@@ -80,11 +86,13 @@ docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/w
 To use NVIDIA GPUs instead:
 
 1. Change base image in Dockerfile:
+
    ```dockerfile
    FROM nvidia/cuda:12.8.0-cudnn8-runtime-ubuntu22.04
    ```
 
 2. Change PyTorch installation:
+
    ```dockerfile
    pip3 install --index-url https://download.pytorch.org/whl/cu124 \
        torch==2.4.1+cu124 torchaudio==2.4.1+cu124
@@ -101,6 +109,7 @@ pip3 install torch==2.4.1 torchaudio==2.4.1
 ```
 
 Set in .env:
+
 ```bash
 FORCE_GPU=false
 ```
@@ -110,12 +119,14 @@ FORCE_GPU=false
 ### Security Updates
 
 1. Check for vulnerabilities:
+
    ```bash
    pip-audit -r requirements.txt
    safety check -r requirements.txt
    ```
 
 2. Update specific package:
+
    ```bash
    pip install --upgrade package-name==NEW_VERSION
    pip freeze | grep package-name
@@ -124,6 +135,7 @@ FORCE_GPU=false
 3. Test thoroughly in development
 
 4. Update both requirements.txt and constraints.txt:
+
    ```bash
    # In a clean virtual environment
    pip install -r requirements.txt
@@ -145,6 +157,7 @@ When updating to new major versions:
 ### Automated Scanning
 
 GitHub Actions automatically runs security scans:
+
 - On push to main/develop branches
 - On pull requests
 - Weekly schedule (Mondays at 9 AM UTC)
@@ -165,6 +178,7 @@ The `constraints.txt` file captures the complete resolved dependency tree. This 
 ### When to Update
 
 Update constraints.txt when:
+
 - Adding new dependencies to requirements.txt
 - Updating existing dependency versions
 - After security updates
@@ -206,7 +220,7 @@ pip freeze > constraints.txt
 
 - Base image: `rocm/dev-ubuntu-22.04:6.0.2`
 - PyTorch ROCm wheels: version must match base image
-- Verify compatibility: https://pytorch.org/get-started/locally/
+- Verify compatibility: <https://pytorch.org/get-started/locally/>
 
 ## Troubleshooting
 
@@ -231,6 +245,7 @@ python3 -c "import torch; print(torch.version.hip)"
 ```
 
 Expected output for ROCm:
+
 - `cuda.is_available()`: True
 - `version.hip`: "6.0" or similar
 
@@ -276,15 +291,16 @@ docker compose build --no-cache api worker
 
 ## Resources
 
-- PyTorch Installation: https://pytorch.org/get-started/locally/
-- ROCm Documentation: https://rocm.docs.amd.com/
-- pip-audit: https://github.com/pypa/pip-audit
-- Safety: https://github.com/pyupio/safety
-- Gitleaks: https://github.com/gitleaks/gitleaks
+- PyTorch Installation: <https://pytorch.org/get-started/locally/>
+- ROCm Documentation: <https://rocm.docs.amd.com/>
+- pip-audit: <https://github.com/pypa/pip-audit>
+- Safety: <https://github.com/pyupio/safety>
+- Gitleaks: <https://github.com/gitleaks/gitleaks>
 
 ## Questions?
 
 For dependency-related issues:
+
 1. Check this document first
 2. Review Dockerfile for GPU installation logic
 3. Check GitHub Issues for similar problems

@@ -5,6 +5,7 @@ This guide explains how authentication works in the Transcript Create API.
 ## Overview
 
 Transcript Create uses OAuth 2.0 for user authentication with support for:
+
 - Google OAuth
 - Twitch OAuth
 
@@ -33,6 +34,7 @@ GET /auth/callback/google?code=...&state=...
 ```
 
 The API automatically:
+
 1. Exchanges the authorization code for an access token
 2. Fetches user profile information
 3. Creates or updates the user in the database
@@ -54,11 +56,13 @@ This cookie is automatically sent with subsequent requests to authenticate the u
 The Twitch OAuth flow works identically to Google:
 
 #### 1. Initiate Login
+
 ```
 GET /auth/login/twitch
 ```
 
 #### 2. OAuth Callback
+
 ```
 GET /auth/callback/twitch?code=...&state=...
 ```
@@ -77,6 +81,7 @@ curl https://api.example.com/auth/me \
 ```
 
 Response when authenticated:
+
 ```json
 {
   "user": {
@@ -92,6 +97,7 @@ Response when authenticated:
 ```
 
 Response when not authenticated:
+
 ```json
 {
   "user": null
@@ -108,6 +114,7 @@ curl -X POST https://api.example.com/auth/logout \
 ```
 
 Response:
+
 ```json
 {
   "ok": true
@@ -121,22 +128,26 @@ This clears the session cookie and removes the session from the database.
 Users have one of two plans:
 
 ### Free Plan
+
 - Limited daily searches (100 by default)
 - Limited daily exports
 - Full transcription access
 
 ### Pro Plan
+
 - Unlimited searches
 - Unlimited exports
 - Priority processing
 - Managed via Stripe subscription
 
 Check plan details:
+
 ```bash
 curl https://api.example.com/auth/me
 ```
 
 The response includes:
+
 - `plan`: "free" or "pro"
 - `searches_used_today`: Current daily usage (free only)
 - `search_limit`: Daily quota (free only)
@@ -186,6 +197,7 @@ FRONTEND_ORIGIN=https://app.example.com
 ### Session Tokens
 
 Session tokens are:
+
 - 32-byte URL-safe random strings
 - Stored securely in the database
 - Expire after 7 days of inactivity
@@ -196,6 +208,7 @@ Session tokens are:
 ### User Data
 
 User information stored includes:
+
 - OAuth provider (Google/Twitch)
 - OAuth subject ID (unique user identifier from provider)
 - Email address
@@ -217,6 +230,7 @@ CORS_ORIGINS = [settings.FRONTEND_ORIGIN]
 ### Authentication Errors
 
 **401 Unauthorized** - Authentication required
+
 ```json
 {
   "error": "authentication_required",
@@ -226,6 +240,7 @@ CORS_ORIGINS = [settings.FRONTEND_ORIGIN]
 ```
 
 **403 Forbidden** - Insufficient permissions
+
 ```json
 {
   "error": "authorization_error",
@@ -237,6 +252,7 @@ CORS_ORIGINS = [settings.FRONTEND_ORIGIN]
 ### OAuth Errors
 
 **503 Service Unavailable** - OAuth library not configured
+
 ```json
 {
   "error": "external_service_error",
@@ -248,6 +264,7 @@ CORS_ORIGINS = [settings.FRONTEND_ORIGIN]
 ```
 
 **500 Internal Server Error** - OAuth flow failed
+
 ```json
 {
   "error": "external_service_error",

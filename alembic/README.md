@@ -5,6 +5,7 @@ This directory contains Alembic database migrations for managing schema evolutio
 ## Overview
 
 We use [Alembic](https://alembic.sqlalchemy.org/) for database migrations to:
+
 - Track schema changes over time
 - Enable safe schema evolution across environments
 - Provide repeatable, testable database deployments
@@ -23,6 +24,7 @@ alembic/
 ## Migration Files
 
 Migration files are stored in `versions/` and follow this naming pattern:
+
 ```
 YYYYMMDD_HHMM_<revision_id>_<description>.py
 ```
@@ -30,6 +32,7 @@ YYYYMMDD_HHMM_<revision_id>_<description>.py
 Example: `20251024_1740_5cd038a8f131_initial_schema_baseline.py`
 
 Each migration file contains:
+
 - **Metadata**: Revision ID, parent revision, creation date
 - **upgrade()**: Function to apply schema changes
 - **downgrade()**: Function to revert schema changes
@@ -39,13 +42,17 @@ Each migration file contains:
 The baseline migration (`5cd038a8f131_initial_schema_baseline.py`) captures the existing schema from `sql/schema.sql`. This serves as the foundation for all future migrations.
 
 ### For New Deployments
+
 Simply run migrations on an empty database:
+
 ```bash
 python scripts/run_migrations.py upgrade
 ```
 
 ### For Existing Deployments
+
 If you have an existing database created from `sql/schema.sql`, stamp it at the baseline:
+
 ```bash
 python scripts/run_migrations.py stamp head
 ```
@@ -55,6 +62,7 @@ This tells Alembic your database is already at the baseline, preventing it from 
 ## Creating Migrations
 
 See the [Database Migrations](../CONTRIBUTING.md#database-migrations) section in CONTRIBUTING.md for detailed guidelines on:
+
 - Creating new migrations
 - Testing migrations
 - Best practices
@@ -64,6 +72,7 @@ See the [Database Migrations](../CONTRIBUTING.md#database-migrations) section in
 ## CI/CD Integration
 
 Migrations are automatically validated in CI via `.github/workflows/migrations-ci.yml`:
+
 - Fresh database test (empty → fully migrated)
 - Existing schema test (stamp → no-op upgrade)
 - Up/down test (upgrade → downgrade → upgrade)
@@ -83,26 +92,31 @@ The `migrations` service runs `python scripts/run_migrations.py upgrade` before 
 ## Manual Migration Operations
 
 ### Check Current Revision
+
 ```bash
 python scripts/run_migrations.py current
 ```
 
 ### View Migration History
+
 ```bash
 python scripts/run_migrations.py history
 ```
 
 ### Upgrade to Latest
+
 ```bash
 python scripts/run_migrations.py upgrade
 ```
 
 ### Downgrade One Revision
+
 ```bash
 python scripts/run_migrations.py downgrade
 ```
 
 ### Create New Migration
+
 ```bash
 alembic revision -m "descriptive_name"
 ```
@@ -119,19 +133,25 @@ alembic revision -m "descriptive_name"
 ## Troubleshooting
 
 ### "Table already exists" error
+
 Your database may have been created from `sql/schema.sql`. Stamp it:
+
 ```bash
 python scripts/run_migrations.py stamp head
 ```
 
 ### "Can't locate revision" error
+
 The `alembic_version` table may be out of sync. Check current revision:
+
 ```bash
 python scripts/run_migrations.py current
 ```
 
 ### Migration conflicts
+
 If multiple people create migrations simultaneously, you may need to merge them:
+
 1. Rebase your branch
 2. Update the `down_revision` in your migration to point to the latest
 3. Test the migration sequence

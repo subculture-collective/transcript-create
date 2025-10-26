@@ -30,8 +30,8 @@ See [docs/MONITORING.md](../docs/MONITORING.md) for comprehensive monitoring doc
 
 The monitoring stack is automatically started with `docker compose up -d`:
 
-- **Grafana**: http://localhost:3000 (admin/admin)
-- **Prometheus**: http://localhost:9090
+- **Grafana**: <http://localhost:3000> (admin/admin)
+- **Prometheus**: <http://localhost:9090>
 
 ### Configuration Files
 

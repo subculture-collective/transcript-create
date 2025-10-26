@@ -9,6 +9,7 @@ Successfully implemented Alembic-based database migration system for the transcr
 ### 1. Core Infrastructure
 
 **Alembic Configuration:**
+
 - Added `alembic==1.14.0` to requirements.txt
 - Initialized Alembic in the repository with `alembic init alembic`
 - Configured `alembic.ini` with:
@@ -21,6 +22,7 @@ Successfully implemented Alembic-based database migration system for the transcr
   - Use target_metadata=None (manual migrations, not auto-generate)
 
 **Baseline Migration:**
+
 - Created initial migration `5cd038a8f131_initial_schema_baseline.py`
 - Captures complete schema from `sql/schema.sql` including:
   - pgcrypto extension
@@ -31,6 +33,7 @@ Successfully implemented Alembic-based database migration system for the transcr
 - Implements both upgrade() and downgrade() functions for rollback support
 
 **Sample Migration:**
+
 - Created example migration `b7c3b2171954_add_videos_thumbnail_url_example.py`
 - Demonstrates adding a column with index
 - Shows proper idempotent SQL with IF EXISTS/IF NOT EXISTS
@@ -39,6 +42,7 @@ Successfully implemented Alembic-based database migration system for the transcr
 ### 2. Helper Tools
 
 **Migration Script (`scripts/run_migrations.py`):**
+
 - Wrapper around Alembic commands for ease of use
 - Supports common operations:
   - `upgrade` - Apply pending migrations
@@ -52,6 +56,7 @@ Successfully implemented Alembic-based database migration system for the transcr
 ### 3. Docker Integration
 
 **Updated docker-compose.yml:**
+
 - Added `migrations` service that runs before API/worker
 - Added health check to postgres service
 - Updated service dependencies:
@@ -87,6 +92,7 @@ Three comprehensive test jobs:
    - Confirms re-upgrade works correctly
 
 All jobs:
+
 - Use PostgreSQL 16 service container
 - Run on Python 3.11
 - Include explicit permissions (contents: read) for security
@@ -95,6 +101,7 @@ All jobs:
 ### 5. Testing
 
 **Test Suite (`tests/test_migrations.py`):**
+
 - Comprehensive pytest suite covering:
   - Fresh migration application
   - Complete downgrade to base
@@ -110,6 +117,7 @@ All jobs:
 ### 6. Documentation
 
 **CONTRIBUTING.md Updates:**
+
 - Added "Database Migrations" section to table of contents
 - Comprehensive migration guidelines including:
   - Understanding migrations
@@ -123,6 +131,7 @@ All jobs:
   - CI/CD validation details
 
 **alembic/README.md:**
+
 - Overview of migration system
 - Directory structure explanation
 - Initial migration details
@@ -134,6 +143,7 @@ All jobs:
 - Advanced topics (branching, offline SQL, custom functions)
 
 **docs/MIGRATIONS.md:**
+
 - Quick start guide for new and existing installations
 - Why migrations matter (benefits over direct SQL)
 - Common operations reference
@@ -145,18 +155,21 @@ All jobs:
 
 ## Migration Workflow
 
-### For New Installations:
+### For New Installations
+
 ```bash
 python scripts/run_migrations.py upgrade
 ```
 
-### For Existing Databases:
+### For Existing Databases
+
 ```bash
 # Stamp at baseline to indicate schema already exists
 python scripts/run_migrations.py stamp head
 ```
 
-### Creating New Migrations:
+### Creating New Migrations
+
 ```bash
 # 1. Create migration file
 alembic revision -m "descriptive_name"
@@ -197,19 +210,22 @@ python scripts/run_migrations.py upgrade
 ## Breaking Changes
 
 **Note for existing deployments:**
+
 - `docker-compose.yml` no longer auto-applies `sql/schema.sql`
 - Existing databases must be stamped: `python scripts/run_migrations.py stamp head`
 - New deployments automatically run migrations via the `migrations` service
 
 ## Maintenance
 
-### Adding New Migrations:
+### Adding New Migrations
+
 1. Create migration: `alembic revision -m "description"`
 2. Implement upgrade() and downgrade()
 3. Test both directions locally
 4. Commit (CI validates automatically)
 
-### Reviewing Migrations:
+### Reviewing Migrations
+
 - Review as you would any code change
 - Check upgrade() for correctness
 - Verify downgrade() properly reverts changes
@@ -219,6 +235,7 @@ python scripts/run_migrations.py upgrade
 ## Files Modified/Created
 
 **Created:**
+
 - `.github/workflows/migrations-ci.yml` - CI validation workflow
 - `alembic.ini` - Alembic configuration
 - `alembic/` - Migration system directory
@@ -232,6 +249,7 @@ python scripts/run_migrations.py upgrade
 - `docs/MIGRATIONS.md` - User-facing migration guide
 
 **Modified:**
+
 - `requirements.txt` - Added alembic==1.14.0
 - `docker-compose.yml` - Added migrations service, updated dependencies
 - `CONTRIBUTING.md` - Added comprehensive migration guidelines
@@ -250,11 +268,13 @@ python scripts/run_migrations.py upgrade
 ## Next Steps
 
 **For Deployment:**
+
 1. Merge PR when approved
 2. For existing production databases: Run `python scripts/run_migrations.py stamp head`
 3. Future schema changes: Create migrations instead of modifying schema.sql
 
 **For Development:**
+
 1. Use migrations for all schema changes
 2. Test both upgrade and downgrade
 3. Follow documented best practices

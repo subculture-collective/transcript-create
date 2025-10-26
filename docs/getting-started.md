@@ -41,6 +41,7 @@ curl -X POST https://api.example.com/jobs \
 ```
 
 Response:
+
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
@@ -62,6 +63,7 @@ curl https://api.example.com/jobs/123e4567-e89b-12d3-a456-426614174000 \
 ```
 
 Job states:
+
 - `pending` - Job created, waiting to be processed
 - `expanded` - Videos identified (for channel jobs)
 - `completed` - Transcription finished successfully
@@ -77,6 +79,7 @@ curl https://api.example.com/videos/{video_id}/transcript \
 ```
 
 Response:
+
 ```json
 {
   "video_id": "987e6543-e21b-34c5-b678-426614174999",
@@ -119,6 +122,7 @@ The API provides two types of transcripts:
 All API requests (except health check) require authentication via session cookies set during OAuth login.
 
 Free plan users have daily quotas for:
+
 - Search requests
 - Export downloads
 
@@ -134,6 +138,7 @@ Download transcripts in multiple formats:
 - **PDF** - Formatted document with metadata
 
 Example:
+
 ```bash
 curl https://api.example.com/videos/{video_id}/transcript.srt \
   -H "Cookie: tc_session=your_session_token" \
@@ -150,6 +155,7 @@ curl "https://api.example.com/search?q=hello+world&source=native&limit=10" \
 ```
 
 Parameters:
+
 - `q` - Search query (required)
 - `source` - `native` or `youtube` (default: `native`)
 - `video_id` - Filter to specific video (optional)
@@ -159,16 +165,19 @@ Parameters:
 ## Rate Limits
 
 ### Free Plan
+
 - 100 searches per day
 - Limited exports per day
 - Full transcription access
 
 ### Pro Plan
+
 - Unlimited searches
 - Unlimited exports
 - Priority processing
 
 Check your current usage:
+
 ```bash
 curl https://api.example.com/auth/me \
   -H "Cookie: tc_session=your_session_token"
@@ -178,10 +187,11 @@ curl https://api.example.com/auth/me \
 
 Explore the full API interactively at:
 
-- **Swagger UI**: https://api.example.com/docs
-- **ReDoc**: https://api.example.com/redoc
+- **Swagger UI**: <https://api.example.com/docs>
+- **ReDoc**: <https://api.example.com/redoc>
 
 Both interfaces provide:
+
 - Complete endpoint documentation
 - Request/response examples
 - Try-it-out functionality
@@ -197,5 +207,6 @@ Both interfaces provide:
 ## Support
 
 For issues or questions:
-- GitHub: https://github.com/subculture-collective/transcript-create
+
+- GitHub: <https://github.com/subculture-collective/transcript-create>
 - Contact: [@onnwee](https://github.com/onnwee)

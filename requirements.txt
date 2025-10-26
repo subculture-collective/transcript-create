@@ -12,7 +12,8 @@ yt-dlp==2025.10.14
 
 # Whisper transcription backends
 faster-whisper==1.2.0
-openai-whisper==20250625
+# Using 20240930 - latest working PyPI version
+openai-whisper==20240930
 
 # Speaker diarization (optional, requires HF_TOKEN)
 pyannote.audio==4.0.1

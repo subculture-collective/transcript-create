@@ -94,7 +94,7 @@ docker run -p 8000:8000 \
 ```
 
 **Features:**
-- Smallest image size (~800MB-1GB)
+- Image size ~8GB by default (can be reduced by using requirements-minimal.txt and excluding optional dependencies)
 - No GPU dependencies
 - Faster build times
 - Ideal for development

@@ -1,8 +1,25 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
 
+type YouTubePlayer = {
+  destroy?: () => void;
+  seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
+};
+
+type YouTubePlayerConstructor = {
+  new (element: HTMLElement, config: {
+    height: string;
+    width: string;
+    videoId: string;
+    playerVars: { start: number; autoplay: number };
+    events: { onReady: () => void };
+  }): YouTubePlayer;
+};
+
 declare global {
   interface Window {
-    YT?: any;
+    YT?: {
+      Player?: YouTubePlayerConstructor;
+    };
     onYouTubeIframeAPIReady?: () => void;
   }
 }
@@ -18,7 +35,7 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
   ref
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -32,7 +49,7 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
       });
     }
     loadApi().then(() => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || !window.YT?.Player) return;
       playerRef.current = new window.YT.Player(containerRef.current, {
         height: '390',
         width: '640',
@@ -46,15 +63,19 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
     return () => {
       try {
         playerRef.current?.destroy?.();
-      } catch {}
+      } catch {
+        // Suppress errors on cleanup
+      }
     };
-  }, [videoId]);
+  }, [videoId, start]);
 
   useEffect(() => {
     if (ready && start) {
       try {
         playerRef.current?.seekTo?.(start, true);
-      } catch {}
+      } catch {
+        // Suppress errors during seek
+      }
     }
   }, [ready, start]);
 
@@ -62,7 +83,9 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
     seekTo(seconds: number) {
       try {
         playerRef.current?.seekTo?.(seconds, true);
-      } catch {}
+      } catch {
+        // Suppress errors during seek
+      }
     },
   }));
 

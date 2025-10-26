@@ -22,7 +22,9 @@ function TestComponent() {
 describe('auth service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (window as any).location
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     window.location = { href: '' } as any
   })
 

@@ -49,7 +49,7 @@ export default function SearchPage() {
       .search(query, { source })
       .then((res: { hits: SearchHit[] }) => setHits(res.hits))
       .catch(async (err: unknown) => {
-        const e = err as any;
+        const e = err as { response?: { status?: number; json: () => Promise<{ limit?: number; used?: number; message?: string }> } };
         if (e?.response?.status === 402) {
           const data = await e.response.json().catch(() => null);
           if (data?.limit != null)
@@ -84,7 +84,7 @@ export default function SearchPage() {
         />
         <select
           value={source}
-          onChange={(e) => setSource(e.target.value as any)}
+          onChange={(e) => setSource(e.target.value as 'native' | 'youtube')}
           className="rounded-md border px-2 py-2 text-sm"
         >
           <option value="native">Our Transcript</option>

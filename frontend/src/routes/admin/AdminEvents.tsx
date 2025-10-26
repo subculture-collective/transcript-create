@@ -7,7 +7,7 @@ type EventRow = {
   user_id?: string | null;
   session_token?: string | null;
   type: string;
-  payload: any;
+  payload: Record<string, unknown>;
 };
 
 export default function AdminEvents() {
@@ -38,13 +38,17 @@ export default function AdminEvents() {
     if (end) params.set('end', end);
     const res = await http
       .get('admin/events/summary', { searchParams: params })
-      .json<typeof summary>();
-    setSummary(res as any);
+      .json<{
+        by_type: Array<{ type: string; count: number }>;
+        by_day: Array<{ day: string; count: number }>;
+      }>();
+    setSummary(res);
   }
 
   useEffect(() => {
     fetchEvents();
     fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

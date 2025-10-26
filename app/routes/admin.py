@@ -19,9 +19,9 @@ router = APIRouter(prefix="", tags=["Admin"])
     summary="List events (Admin)",
     description="""
     List tracked events with filtering and pagination.
-    
+
     **Admin Only:** Requires admin privileges
-    
+
     **Filters:**
     - `type`: Filter by event type
     - `user_email`: Filter by user email
@@ -75,7 +75,7 @@ def admin_events(
     summary="Export events as CSV (Admin)",
     description="""
     Export tracked events to CSV format with filtering.
-    
+
     **Admin Only:** Requires admin privileges
     """,
     responses={
@@ -136,11 +136,11 @@ def admin_events_csv(
     summary="Get events summary (Admin)",
     description="""
     Get summary statistics of tracked events.
-    
+
     Returns:
     - Event counts grouped by type
     - Event counts grouped by day
-    
+
     **Admin Only:** Requires admin privileges
     """,
     responses={
@@ -190,9 +190,9 @@ def admin_events_summary(request: Request, db=Depends(get_db), start: str | None
     summary="Set user plan (Admin)",
     description="""
     Change a user's subscription plan.
-    
+
     **Admin Only:** Requires admin privileges
-    
+
     Request body:
     ```json
     {

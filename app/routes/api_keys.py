@@ -55,7 +55,7 @@ class CreateAPIKeyResponse(BaseModel):
     summary="List API keys",
     description="""
     List all API keys for the authenticated user.
-    
+
     Returns a list of API keys with their metadata. The full key value is never
     returned after creation for security reasons.
     """,
@@ -64,7 +64,7 @@ class CreateAPIKeyResponse(BaseModel):
 def list_api_keys(request: Request, db=Depends(get_db), user=Depends(get_user_required)):
     """List all API keys for the current user."""
     user_id = user.get("id")
-    
+
     result = db.execute(
         text("""
             SELECT id, name, key_prefix, created_at, expires_at, last_used_at, revoked_at, scopes
@@ -74,7 +74,7 @@ def list_api_keys(request: Request, db=Depends(get_db), user=Depends(get_user_re
         """),
         {"user_id": str(user_id)}
     ).mappings().all()
-    
+
     return [dict(row) for row in result]
 
 
@@ -83,7 +83,7 @@ def list_api_keys(request: Request, db=Depends(get_db), user=Depends(get_user_re
     summary="Create API key",
     description="""
     Create a new API key for the authenticated user.
-    
+
     **Important:** The full API key is only returned once at creation time.
     Store it securely - you won't be able to retrieve it again.
     """,
@@ -98,11 +98,11 @@ def create_api_key(
 ):
     """Create a new API key for the current user."""
     user_id = user.get("id")
-    
+
     # Generate the API key
     api_key, api_key_hash = generate_api_key()
     key_prefix = api_key[:10] + "..."  # Show first 10 chars
-    
+
     # Calculate expiration
     expires_at = None
     if body.expires_days:
@@ -110,7 +110,7 @@ def create_api_key(
     elif settings.API_KEY_EXPIRE_DAYS:
         # Use default expiration from settings
         expires_at = datetime.utcnow() + timedelta(days=settings.API_KEY_EXPIRE_DAYS)
-    
+
     # Insert into database
     key_id = uuid.uuid4()
     db.execute(
@@ -129,7 +129,7 @@ def create_api_key(
         }
     )
     db.commit()
-    
+
     # Log audit event
     log_audit_from_request(
         db, request,
@@ -139,7 +139,7 @@ def create_api_key(
         resource_id=str(key_id),
         details={"name": body.name, "expires_at": expires_at.isoformat() if expires_at else None}
     )
-    
+
     logger.info(
         "API key created",
         extra={
@@ -148,7 +148,7 @@ def create_api_key(
             "name": body.name,
         }
     )
-    
+
     # Retrieve the created key
     key_data = db.execute(
         text("""
@@ -158,7 +158,7 @@ def create_api_key(
         """),
         {"id": str(key_id)}
     ).mappings().first()
-    
+
     return {
         "api_key": api_key,
         "key": dict(key_data),
@@ -170,7 +170,7 @@ def create_api_key(
     summary="Revoke API key",
     description="""
     Revoke an API key, making it unusable for future requests.
-    
+
     This operation cannot be undone. Revoked keys cannot be reactivated.
     """,
 )
@@ -182,7 +182,7 @@ def revoke_api_key(
 ):
     """Revoke an API key."""
     user_id = user.get("id")
-    
+
     # Verify the key belongs to the user
     key = db.execute(
         text("""
@@ -192,16 +192,16 @@ def revoke_api_key(
         """),
         {"id": key_id}
     ).mappings().first()
-    
+
     if not key:
         raise NotFoundError("API key not found")
-    
+
     if str(key["user_id"]) != str(user_id):
         raise AuthorizationError("You don't have permission to revoke this API key")
-    
+
     if key["revoked_at"]:
         raise ValidationError("API key is already revoked")
-    
+
     # Revoke the key
     db.execute(
         text("""
@@ -212,7 +212,7 @@ def revoke_api_key(
         {"id": key_id}
     )
     db.commit()
-    
+
     # Log audit event
     log_audit_from_request(
         db, request,
@@ -222,7 +222,7 @@ def revoke_api_key(
         resource_id=key_id,
         details={"name": key["name"]}
     )
-    
+
     logger.info(
         "API key revoked",
         extra={
@@ -231,5 +231,5 @@ def revoke_api_key(
             "name": key["name"],
         }
     )
-    
+
     return {"ok": True, "message": "API key revoked successfully"}

@@ -38,7 +38,7 @@ def log_audit_event(
 ):
     """
     Log an audit event to the audit_logs table.
-    
+
     Args:
         db: Database session
         action: Action type (e.g., "login_success", "api_key_created")
@@ -53,9 +53,12 @@ def log_audit_event(
     try:
         db.execute(
             text("""
-                INSERT INTO audit_logs 
+                INSERT INTO audit_logs
                 (user_id, action, resource_type, resource_id, success, details, ip_address, user_agent)
-                VALUES (:user_id, :action, :resource_type, :resource_id, :success, :details::jsonb, :ip_address, :user_agent)
+                VALUES (
+                    :user_id, :action, :resource_type, :resource_id,
+                    :success, :details::jsonb, :ip_address, :user_agent
+                )
             """),
             {
                 "user_id": str(user_id) if user_id else None,
@@ -69,7 +72,7 @@ def log_audit_event(
             }
         )
         db.commit()
-        
+
         logger.info(
             "Audit event logged",
             extra={
@@ -103,7 +106,7 @@ def log_audit_from_request(
 ):
     """
     Log an audit event, extracting request metadata automatically.
-    
+
     Args:
         db: Database session
         request: FastAPI request object
@@ -116,7 +119,7 @@ def log_audit_from_request(
     """
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    
+
     log_audit_event(
         db=db,
         action=action,
@@ -140,7 +143,7 @@ def get_audit_logs(
 ):
     """
     Retrieve audit logs with optional filtering.
-    
+
     Args:
         db: Database session
         user_id: Filter by user ID
@@ -148,35 +151,35 @@ def get_audit_logs(
         resource_type: Filter by resource type
         limit: Maximum number of records to return
         offset: Number of records to skip
-    
+
     Returns:
         List of audit log records
     """
     query = """
-        SELECT 
+        SELECT
             id, created_at, user_id, action, resource_type, resource_id,
             ip_address, user_agent, success, details
         FROM audit_logs
         WHERE 1=1
     """
     params = {}
-    
+
     if user_id:
         query += " AND user_id = :user_id"
         params["user_id"] = str(user_id)
-    
+
     if action:
         query += " AND action = :action"
         params["action"] = action
-    
+
     if resource_type:
         query += " AND resource_type = :resource_type"
         params["resource_type"] = resource_type
-    
+
     query += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
     params["limit"] = limit
     params["offset"] = offset
-    
+
     result = db.execute(text(query), params).mappings().all()
     return [dict(row) for row in result]
 
@@ -184,14 +187,14 @@ def get_audit_logs(
 def cleanup_old_audit_logs(db, days_to_keep: int = 90):
     """
     Remove audit logs older than the specified number of days.
-    
+
     This should be called periodically (e.g., via a scheduled task) to prevent
     the audit logs table from growing indefinitely.
-    
+
     Args:
         db: Database session
         days_to_keep: Number of days to retain audit logs (default: 90)
-    
+
     Returns:
         Number of records deleted
     """
@@ -206,12 +209,12 @@ def cleanup_old_audit_logs(db, days_to_keep: int = 90):
         )
         deleted_count = result.rowcount
         db.commit()
-        
+
         logger.info(
             "Cleaned up old audit logs",
             extra={"deleted_count": deleted_count, "days_to_keep": days_to_keep}
         )
-        
+
         return deleted_count
     except Exception as e:
         logger.error(

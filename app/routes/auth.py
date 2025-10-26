@@ -14,7 +14,7 @@ from ..common.session import refresh_session, should_refresh_session
 from ..common.session import set_session_cookie as _set_session_cookie
 from ..db import get_db
 from ..exceptions import ExternalServiceError, ValidationError
-from ..logging_config import get_logger, user_id_ctx
+from ..logging_config import get_logger
 from ..security import generate_nonce, generate_oauth_state
 from ..settings import settings
 
@@ -53,7 +53,7 @@ def _new_oauth():
     summary="Get current user",
     description="""
     Get the currently authenticated user's profile and subscription information.
-    
+
     Returns user details including plan type, daily search usage, and limits.
     Returns `{"user": null}` if not authenticated.
     """,
@@ -87,11 +87,11 @@ def auth_me(request: Request, db=Depends(get_db)):
     """Get current authenticated user information."""
     token = _get_session_token(request)
     user = _get_user_from_session(db, token)
-    
+
     # Check if session should be refreshed
     if user and token and should_refresh_session(db, token):
         refresh_session(db, token)
-    
+
     if not user:
         return {"user": None}
     plan = user.get("plan") or "free"
@@ -128,7 +128,7 @@ def auth_me(request: Request, db=Depends(get_db)):
     summary="Login with Google",
     description="""
     Initiate OAuth 2.0 login flow with Google.
-    
+
     Redirects to Google's OAuth consent screen. After authorization,
     Google redirects back to /auth/callback/google.
     """,
@@ -150,14 +150,14 @@ def auth_login_google(request: Request):
         client_kwargs={"scope": "openid email profile"},
     )
     redirect_uri = settings.OAUTH_GOOGLE_REDIRECT_URI
-    
+
     # Generate and store state parameter for CSRF protection
     if settings.OAUTH_STATE_VALIDATION:
         state = generate_oauth_state()
         request.session["oauth_state"] = state
         request.session["oauth_nonce"] = generate_nonce()
         return oauth.google.authorize_redirect(request, redirect_uri, state=state)
-    
+
     return oauth.google.authorize_redirect(request, redirect_uri)
 
 
@@ -166,7 +166,7 @@ def auth_login_google(request: Request):
     summary="Login with Twitch",
     description="""
     Initiate OAuth 2.0 login flow with Twitch.
-    
+
     Redirects to Twitch's OAuth consent screen. After authorization,
     Twitch redirects back to /auth/callback/twitch.
     """,
@@ -181,14 +181,14 @@ def auth_login_twitch(request: Request):
         raise ExternalServiceError("OAuth", "Authentication library not installed")
     oauth = _new_oauth()
     redirect_uri = settings.OAUTH_TWITCH_REDIRECT_URI
-    
+
     # Generate and store state parameter for CSRF protection
     if settings.OAUTH_STATE_VALIDATION:
         state = generate_oauth_state()
         request.session["oauth_state"] = state
         request.session["oauth_nonce"] = generate_nonce()
         return oauth.twitch.authorize_redirect(request, redirect_uri, state=state)
-    
+
     return oauth.twitch.authorize_redirect(request, redirect_uri)
 
 
@@ -201,7 +201,7 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
     if settings.OAUTH_STATE_VALIDATION:
         state = request.query_params.get("state")
         stored_state = request.session.get("oauth_state")
-        
+
         if not state or not stored_state or state != stored_state:
             logger.warning(
                 "OAuth state validation failed",
@@ -216,7 +216,7 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
                 details={"provider": "google", "reason": "state_validation_failed"}
             )
             raise ValidationError("Invalid OAuth state parameter")
-        
+
         # Clear state after use
         request.session.pop("oauth_state", None)
         request.session.pop("oauth_nonce", None)
@@ -310,14 +310,14 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
                 "exp": expires,
             },
         )
-        
+
         # Log successful login
         log_audit_from_request(
             db, request, ACTION_LOGIN_SUCCESS,
             user_id=user_id,
             details={"provider": "google", "email": email}
         )
-    
+
     resp = RedirectResponse(url=f"{settings.FRONTEND_ORIGIN}")
     _set_session_cookie(resp, session_token)
     return resp
@@ -332,7 +332,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
     if settings.OAUTH_STATE_VALIDATION:
         state = request.query_params.get("state")
         stored_state = request.session.get("oauth_state")
-        
+
         if not state or not stored_state or state != stored_state:
             logger.warning(
                 "OAuth state validation failed",
@@ -347,7 +347,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
                 details={"provider": "twitch", "reason": "state_validation_failed"}
             )
             raise ValidationError("Invalid OAuth state parameter")
-        
+
         # Clear state after use
         request.session.pop("oauth_state", None)
         request.session.pop("oauth_nonce", None)
@@ -451,14 +451,14 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
                 "exp": expires,
             },
         )
-        
+
         # Log successful login
         log_audit_from_request(
             db, request, ACTION_LOGIN_SUCCESS,
             user_id=user_id,
             details={"provider": "twitch", "email": email}
         )
-    
+
     resp = RedirectResponse(url=f"{settings.FRONTEND_ORIGIN}")
     _set_session_cookie(resp, session_token)
     return resp
@@ -469,7 +469,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
     summary="Logout",
     description="""
     Logout the current user by invalidating their session.
-    
+
     Clears the session cookie and removes the session from the database.
     """,
     responses={
@@ -483,18 +483,18 @@ def auth_logout(request: Request, db=Depends(get_db)):
     """Logout and invalidate session."""
     tok = _get_session_token(request)
     user = _get_user_from_session(db, tok) if tok else None
-    
+
     if tok:
         db.execute(text("DELETE FROM sessions WHERE token=:t"), {"t": tok})
         db.commit()
-        
+
         # Log successful logout
         if user:
             log_audit_from_request(
                 db, request, ACTION_LOGOUT,
                 user_id=user.get("id")
             )
-    
+
     resp = JSONResponse({"ok": True})
     _clear_session_cookie(resp)
     return resp

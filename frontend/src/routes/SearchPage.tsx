@@ -84,7 +84,7 @@ export default function SearchPage() {
     <div className="space-y-6">
       <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-bold mb-2">Search Transcripts</h1>
-        <p className="text-stone-600">Search through millions of YouTube video transcripts</p>
+        <p className="text-stone-600 dark:text-stone-400">Search through millions of YouTube video transcripts</p>
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2">
@@ -95,7 +95,7 @@ export default function SearchPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search transcripts…"
-            className="w-full rounded-md border border-stone-300 px-3 py-3 pr-10 focus:border-blue-600 focus:ring-2 focus:ring-blue-600"
+            className="w-full rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-3 pr-10 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-600 dark:focus:ring-blue-400"
             aria-label="Search transcripts"
             autoComplete="off"
           />
@@ -103,7 +103,7 @@ export default function SearchPage() {
             <button
               type="button"
               onClick={clearSearch}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-stone-400 hover:text-stone-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300"
               aria-label="Clear search"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -115,7 +115,7 @@ export default function SearchPage() {
         <select
           value={source}
           onChange={(e) => setSource(e.target.value as 'native' | 'youtube')}
-          className="rounded-md border border-stone-300 px-3 py-3 text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600"
+          className="rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 px-3 py-3 text-sm focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-600 dark:focus:ring-blue-400"
           aria-label="Select transcript source"
         >
           <option value="native">Our Transcript</option>
@@ -139,30 +139,30 @@ export default function SearchPage() {
 
       {!q && (
         <div className="text-center py-12">
-          <svg className="w-16 h-16 mx-auto mb-4 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg className="w-16 h-16 mx-auto mb-4 text-stone-300 dark:text-stone-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <p className="text-stone-500 text-lg">Enter a query to search.</p>
+          <p className="text-stone-500 dark:text-stone-400 text-lg">Enter a query to search.</p>
         </div>
       )}
 
       {q && loading && (
         <div className="text-center py-12" role="status" aria-live="polite">
           <div className="inline-block animate-spin text-4xl mb-4" aria-hidden="true">⟳</div>
-          <p className="text-stone-500 text-lg">Searching…</p>
+          <p className="text-stone-500 dark:text-stone-400 text-lg">Searching…</p>
         </div>
       )}
 
       {q && !loading && (
         <div className="space-y-6">
           {quotaError && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-800" role="alert">
+            <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4 text-amber-800 dark:text-amber-200" role="alert">
               <div className="mb-2 font-medium">Daily search limit reached</div>
               <div className="text-sm">
                 You used {quotaError.used}/{quotaError.limit} searches today. Upgrade to Pro for
                 unlimited search and exports.
               </div>
-              <Link to="/pricing" className="mt-2 inline-block text-blue-600 hover:underline">
+              <Link to="/pricing" className="mt-2 inline-block text-blue-600 dark:text-blue-400 hover:underline">
                 See pricing
               </Link>
             </div>
@@ -170,26 +170,26 @@ export default function SearchPage() {
           
           {grouped.length === 0 && !quotaError && (
             <div className="text-center py-12">
-              <svg className="w-16 h-16 mx-auto mb-4 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="w-16 h-16 mx-auto mb-4 text-stone-300 dark:text-stone-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-stone-500 text-lg">No results found for "{q}"</p>
-              <p className="text-stone-400 text-sm mt-2">Try different keywords or check your spelling</p>
+              <p className="text-stone-500 dark:text-stone-400 text-lg">No results found for "{q}"</p>
+              <p className="text-stone-400 dark:text-stone-500 text-sm mt-2">Try different keywords or check your spelling</p>
             </div>
           )}
 
           {grouped.map(([videoId, group]) => (
-            <article key={videoId} className="rounded-lg border border-stone-200 p-4 sm:p-6 bg-white">
+            <article key={videoId} className="rounded-lg border border-stone-200 dark:border-stone-800 p-4 sm:p-6 bg-white dark:bg-stone-900">
               <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <Link to={`/v/${videoId}`} className="font-semibold text-lg hover:underline focus:underline">
                   Video {videoId.slice(0, 8)}…
                 </Link>
-                <span className="text-sm text-stone-500">{group.length} {group.length === 1 ? 'match' : 'matches'}</span>
+                <span className="text-sm text-stone-500 dark:text-stone-400">{group.length} {group.length === 1 ? 'match' : 'matches'}</span>
               </div>
               <ul className="space-y-3" role="list">
                 {group.slice(0, 5).map((h) => (
-                  <li key={h.id} className="rounded-md border border-stone-200 bg-stone-50 p-3 sm:p-4">
-                    <div className="mb-2 text-sm text-stone-600">
+                  <li key={h.id} className="rounded-md border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 p-3 sm:p-4">
+                    <div className="mb-2 text-sm text-stone-600 dark:text-stone-400">
                       <time dateTime={`PT${Math.floor(h.start_ms / 1000)}S`}>
                         {msToTimestamp(h.start_ms)}–{msToTimestamp(h.end_ms)}
                       </time>
@@ -197,13 +197,13 @@ export default function SearchPage() {
                       <span>{source === 'native' ? 'Our Transcript' : 'YouTube'}</span>
                     </div>
                     <div
-                      className="prose prose-sm max-w-none"
+                      className="prose prose-sm dark:prose-invert max-w-none"
                       dangerouslySetInnerHTML={{ __html: h.snippet }}
                     />
                     <div className="mt-3 flex flex-wrap gap-3 text-sm">
                       <Link
                         to={`/v/${videoId}?t=${Math.floor(h.start_ms / 1000)}#seg-${h.id}`}
-                        className="text-blue-600 hover:underline focus:underline"
+                        className="text-blue-600 dark:text-blue-400 hover:underline focus:underline"
                         onClick={() =>
                           track({
                             type: 'result_click',
@@ -219,7 +219,7 @@ export default function SearchPage() {
                           const deep = `${location.origin}/v/${videoId}?t=${Math.floor(h.start_ms / 1000)}#seg-${h.id}`;
                           navigator.clipboard?.writeText(deep);
                         }}
-                        className="text-stone-600 hover:text-stone-900"
+                        className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                         aria-label="Copy link to this segment"
                         title="Copy link"
                       >
@@ -232,7 +232,7 @@ export default function SearchPage() {
                   <li>
                     <Link
                       to={`/v/${videoId}?q=${encodeURIComponent(q)}`}
-                      className="text-blue-600 hover:underline focus:underline"
+                      className="text-blue-600 dark:text-blue-400 hover:underline focus:underline"
                     >
                       Show {group.length - 5} more {group.length - 5 === 1 ? 'hit' : 'hits'} in this video
                     </Link>

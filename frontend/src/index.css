@@ -8,10 +8,28 @@
   --tab-size-github: 8;
 }
 
+/* Dark mode support */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #0c0a09;
+  color: #fafaf9;
+}
+
 /* Accessibility: Enhanced focus indicators */
 *:focus-visible {
   outline: 2px solid theme('colors.blue.600');
   outline-offset: 2px;
+}
+
+.dark *:focus-visible {
+  outline-color: theme('colors.blue.400');
 }
 
 /* Screen reader only utility */
@@ -70,6 +88,18 @@
     &:focus-visible {
       outline: 2px solid theme('colors.blue.600');
       outline-offset: 2px;
+    }
+  }
+
+  .dark .btn {
+    background-color: theme('colors.blue.500');
+    
+    &:hover {
+      background-color: theme('colors.blue.600');
+    }
+
+    &:disabled {
+      background-color: theme('colors.blue.500');
     }
   }
 }

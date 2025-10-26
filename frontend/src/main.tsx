@@ -11,7 +11,7 @@ import Protected from './routes/Protected';
 import AdminLayout from './routes/admin/AdminLayout';
 import AdminEvents from './routes/admin/AdminEvents';
 import AdminUsers from './routes/admin/AdminUsers';
-import { AuthProvider } from './services/auth';
+import { AuthProvider, ThemeProvider } from './services';
 import PricingPage from './routes/PricingPage';
 import UpgradePage from './routes/UpgradePage';
 
@@ -61,8 +61,10 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>
 );

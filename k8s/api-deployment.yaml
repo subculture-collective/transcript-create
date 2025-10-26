@@ -1,0 +1,199 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transcript-api
+  labels:
+    app: transcript-create
+    component: api
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: transcript-create
+      component: api
+  template:
+    metadata:
+      labels:
+        app: transcript-create
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: api
+        image: transcript-create:latest
+        imagePullPolicy: IfNotPresent
+        command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: redis-url
+        - name: OPENSEARCH_URL
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: opensearch-url
+        - name: WHISPER_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: whisper-model
+        - name: WHISPER_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: whisper-backend
+        - name: SEARCH_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: search-backend
+        - name: FRONTEND_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: frontend-origin
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: session-secret
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: hf-token
+              optional: true
+        - name: OAUTH_GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: oauth-google-client-id
+              optional: true
+        - name: OAUTH_GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: oauth-google-client-secret
+              optional: true
+        - name: OAUTH_TWITCH_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: oauth-twitch-client-id
+              optional: true
+        - name: OAUTH_TWITCH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: oauth-twitch-client-secret
+              optional: true
+        - name: STRIPE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: stripe-api-key
+              optional: true
+        - name: STRIPE_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: stripe-webhook-secret
+              optional: true
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: log-level
+        - name: LOG_FORMAT
+          value: "json"
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: transcript-config
+              key: environment
+        - name: ENABLE_METRICS
+          value: "true"
+        - name: WORKDIR
+          value: "/data"
+        - name: HF_HOME
+          value: "/cache/hf"
+        - name: HF_HUB_CACHE
+          value: "/cache/hf/hub"
+        - name: TRANSFORMERS_CACHE
+          value: "/cache/hf/transformers"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        startupProbe:
+          httpGet:
+            path: /live
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 12
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: cache
+          mountPath: /cache
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: transcript-data
+      - name: cache
+        persistentVolumeClaim:
+          claimName: transcript-cache

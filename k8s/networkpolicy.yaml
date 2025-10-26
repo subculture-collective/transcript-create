@@ -1,0 +1,177 @@
+---
+# Default deny all traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transcript-default-deny
+  labels:
+    app: transcript-create
+spec:
+  podSelector:
+    matchLabels:
+      app: transcript-create
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Allow API to receive traffic from ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transcript-api-ingress
+  labels:
+    app: transcript-create
+    component: api
+spec:
+  podSelector:
+    matchLabels:
+      app: transcript-create
+      component: api
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow from Prometheus
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8000
+---
+# Allow API to connect to database, Redis, and OpenSearch
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transcript-api-egress
+  labels:
+    app: transcript-create
+    component: api
+spec:
+  podSelector:
+    matchLabels:
+      app: transcript-create
+      component: api
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow database access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow Redis access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow OpenSearch access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: opensearch
+    ports:
+    - protocol: TCP
+      port: 9200
+  # Allow HTTPS for external services (YouTube, OAuth, Stripe)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# Allow Worker to connect to database and OpenSearch
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transcript-worker-egress
+  labels:
+    app: transcript-create
+    component: worker
+spec:
+  podSelector:
+    matchLabels:
+      app: transcript-create
+      component: worker
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow database access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow OpenSearch access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: opensearch
+    ports:
+    - protocol: TCP
+      port: 9200
+  # Allow HTTPS for YouTube downloads and HuggingFace model downloads
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+---
+# Allow Prometheus to scrape worker metrics
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transcript-worker-ingress
+  labels:
+    app: transcript-create
+    component: worker
+spec:
+  podSelector:
+    matchLabels:
+      app: transcript-create
+      component: worker
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from Prometheus
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8001

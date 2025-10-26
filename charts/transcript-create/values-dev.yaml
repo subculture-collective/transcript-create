@@ -1,0 +1,88 @@
+# Development environment values
+# Override default values for local/dev deployment
+
+global:
+  environment: development
+  domain: localhost
+
+image:
+  tag: latest
+  pullPolicy: Never  # Don't pull from registry in dev
+
+api:
+  replicaCount: 1
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  autoscaling:
+    enabled: false
+  
+  podDisruptionBudget:
+    enabled: false
+  
+  ingress:
+    enabled: false  # Use port-forward or NodePort in dev
+
+worker:
+  replicaCount: 1
+  
+  gpu:
+    enabled: false  # Disable GPU in dev unless available
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  
+  autoscaling:
+    enabled: false
+  
+  podDisruptionBudget:
+    enabled: false
+
+postgresql:
+  enabled: true  # Deploy PostgreSQL in dev
+  persistence:
+    size: 10Gi
+
+redis:
+  enabled: true  # Deploy Redis in dev
+
+opensearch:
+  enabled: true  # Deploy OpenSearch in dev
+  persistence:
+    size: 10Gi
+
+persistence:
+  data:
+    size: 50Gi
+  cache:
+    size: 10Gi
+
+config:
+  logging:
+    level: DEBUG
+  
+  security:
+    enableRateLimiting: false
+  
+  cleanup:
+    afterProcess: false  # Keep files for debugging
+
+monitoring:
+  serviceMonitor:
+    enabled: false
+  podMonitor:
+    enabled: false
+
+networkPolicy:
+  enabled: false  # Simplify networking in dev

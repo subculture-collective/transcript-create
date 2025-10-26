@@ -1,0 +1,116 @@
+---
+# HPA for API service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: transcript-api-hpa
+  labels:
+    app: transcript-create
+    component: api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: transcript-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Custom metrics (requires metrics server and prometheus adapter)
+  # - type: Pods
+  #   pods:
+  #     metric:
+  #       name: http_requests_per_second
+  #     target:
+  #       type: AverageValue
+  #       averageValue: "1000"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Min
+---
+# HPA for Worker service (scaled based on queue depth)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: transcript-worker-hpa
+  labels:
+    app: transcript-create
+    component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: transcript-worker
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  # Scale based on pending videos count (custom metric)
+  # Requires Prometheus Adapter with the following configuration:
+  # - seriesQuery: 'videos_pending'
+  #   resources:
+  #     overrides:
+  #       namespace: {resource: "namespace"}
+  #   name:
+  #     matches: "^videos_pending$"
+  #     as: "videos_pending"
+  #   metricsQuery: 'avg(videos_pending{<<.LabelMatchers>>})'
+  - type: Pods
+    pods:
+      metric:
+        name: videos_pending
+      target:
+        type: AverageValue
+        averageValue: "5"  # Scale up if more than 5 pending videos per worker
+  # CPU as secondary metric
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 120
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Wait 10 minutes before scaling down
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 180
+      selectPolicy: Min

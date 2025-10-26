@@ -1,0 +1,30 @@
+---
+# PodDisruptionBudget for API to ensure availability during disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: transcript-api-pdb
+  labels:
+    app: transcript-create
+    component: api
+spec:
+  minAvailable: 2  # At least 2 API pods must remain available
+  selector:
+    matchLabels:
+      app: transcript-create
+      component: api
+---
+# PodDisruptionBudget for Worker
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: transcript-worker-pdb
+  labels:
+    app: transcript-create
+    component: worker
+spec:
+  minAvailable: 1  # At least 1 worker must remain available
+  selector:
+    matchLabels:
+      app: transcript-create
+      component: worker

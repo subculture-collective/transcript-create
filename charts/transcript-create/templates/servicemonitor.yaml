@@ -1,0 +1,36 @@
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "transcript-create.fullname" . }}-api
+  labels:
+    {{- include "transcript-create.api.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "transcript-create.api.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
+    scrapeTimeout: 10s
+{{- end }}
+{{- if .Values.monitoring.podMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "transcript-create.fullname" . }}-worker
+  labels:
+    {{- include "transcript-create.worker.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "transcript-create.worker.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: {{ .Values.monitoring.podMonitor.interval }}
+    scrapeTimeout: 10s
+{{- end }}

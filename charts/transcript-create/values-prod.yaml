@@ -1,0 +1,193 @@
+# Production environment values
+# Secure, scalable configuration for production deployment
+
+global:
+  environment: production
+  domain: your-production-domain.com
+
+image:
+  repository: ghcr.io/subculture-collective/transcript-create
+  tag: "1.0.0"  # Use specific version tags, not 'latest'
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: ghcr-pull-secret
+
+api:
+  replicaCount: 5
+  
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 5
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 70
+  
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 3
+  
+  service:
+    sessionAffinity: ClientIP  # Enable sticky sessions
+  
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/limit-rps: "1000"
+      nginx.ingress.kubernetes.io/limit-connections: "100"
+      nginx.ingress.kubernetes.io/enable-cors: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+      # Production rate limiting
+      nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+      # Security headers
+      nginx.ingress.kubernetes.io/configuration-snippet: |
+        more_set_headers "X-Content-Type-Options: nosniff";
+        more_set_headers "X-Frame-Options: DENY";
+        more_set_headers "X-XSS-Protection: 1; mode=block";
+        more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+    hosts:
+      - host: api.your-production-domain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: transcript-prod-tls-cert
+        hosts:
+          - api.your-production-domain.com
+
+worker:
+  replicaCount: 3
+  
+  gpu:
+    enabled: true
+    type: amd
+    nodeSelector:
+      workload-type: gpu
+      node-type: high-memory
+  
+  resources:
+    requests:
+      cpu: 4000m
+      memory: 16Gi
+      amd.com/gpu: 1
+    limits:
+      cpu: 8000m
+      memory: 32Gi
+      amd.com/gpu: 1
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+  
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+# Use managed services in production
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+opensearch:
+  enabled: false
+
+externalServices:
+  database:
+    enabled: true
+    # URL should be in secrets
+  redis:
+    enabled: true
+    url: redis://redis-prod.cache.svc.cluster.local:6379/0
+  opensearch:
+    enabled: true
+    url: https://opensearch-prod.search.svc.cluster.local:9200
+
+persistence:
+  data:
+    enabled: true
+    storageClass: fast-ssd-replicated
+    size: 1000Gi
+  cache:
+    enabled: true
+    storageClass: fast-ssd-replicated
+    size: 100Gi
+
+config:
+  whisper:
+    model: large-v3
+  
+  cleanup:
+    afterProcess: true
+    deleteRaw: true
+    deleteWav: true
+    deleteChunks: true
+  
+  cache:
+    defaultTtl: 600
+    videoTtl: 600
+    transcriptTtl: 7200
+    searchTtl: 1200
+  
+  quotas:
+    freeDailySearchLimit: 5
+    freeDailyExportLimit: 1
+  
+  security:
+    enableRateLimiting: true
+    sessionExpireHours: 24
+    oauthStateValidation: true
+  
+  logging:
+    level: INFO
+    format: json
+  
+  monitoring:
+    enabled: true
+
+secrets:
+  existingSecret: transcript-prod-secrets
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+  
+  podMonitor:
+    enabled: true
+    interval: 15s
+  
+  grafanaDashboard:
+    enabled: true
+
+networkPolicy:
+  enabled: true
+
+# Production affinity rules
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - transcript-create
+        topologyKey: kubernetes.io/hostname

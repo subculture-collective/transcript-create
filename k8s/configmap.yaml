@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transcript-config
+  labels:
+    app: transcript-create
+data:
+  # Database and cache endpoints
+  redis-url: "redis://redis:6379/0"
+  opensearch-url: "http://opensearch:9200"
+  
+  # Whisper configuration
+  whisper-model: "large-v3"
+  whisper-backend: "faster-whisper"
+  whisper-backend-worker: "whisper"
+  chunk-seconds: "900"
+  gpu-device-preference: "cuda,hip"
+  gpu-compute-types: "float16,int8_float16,bfloat16,float32"
+  
+  # Search backend
+  search-backend: "opensearch"
+  
+  # Frontend and environment
+  frontend-origin: "https://your-domain.com"
+  environment: "production"
+  
+  # Logging
+  log-level: "INFO"
+  
+  # Cleanup settings
+  cleanup-after-process: "true"
+  cleanup-delete-raw: "true"
+  cleanup-delete-wav: "true"
+  cleanup-delete-chunks: "true"
+  
+  # Cache TTLs
+  cache-default-ttl: "300"
+  cache-video-ttl: "300"
+  cache-transcript-ttl: "3600"
+  cache-search-ttl: "600"
+  
+  # Quotas
+  free-daily-search-limit: "10"
+  free-daily-export-limit: "2"
+  pro-plan-name: "pro"
+  
+  # Security
+  enable-rate-limiting: "true"
+  session-expire-hours: "24"
+  oauth-state-validation: "true"
+  
+  # Health check configuration
+  health-check-timeout: "5.0"
+  health-check-worker-stale-seconds: "300"
+  health-check-disk-min-free-gb: "10.0"
+  health-check-critical-components: "database,storage"
+  
+  # Monitoring
+  enable-metrics: "true"

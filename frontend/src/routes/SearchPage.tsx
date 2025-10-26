@@ -126,7 +126,7 @@ export default function SearchPage() {
             <button
               type="button"
               onClick={clearSearch}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 min-w-[44px] min-h-[44px] text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300"
               aria-label="Clear search"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

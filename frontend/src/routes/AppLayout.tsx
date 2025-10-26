@@ -110,7 +110,7 @@ export default function AppLayout() {
         <nav 
           id="mobile-menu" 
           className={`md:hidden border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 overflow-hidden transition-all duration-300 ease-in-out motion-reduce:transition-none ${
-            mobileMenuOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+            mobileMenuOpen ? 'max-h-screen overflow-y-auto opacity-100' : 'max-h-0 opacity-0'
           }`}
           aria-label="Mobile navigation"
           aria-hidden={!mobileMenuOpen}

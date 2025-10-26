@@ -83,6 +83,17 @@ class Settings(BaseSettings):
     HEALTH_CHECK_CRITICAL_COMPONENTS: str = "database"  # comma-separated: database,opensearch,storage,worker
     WORKDIR: str = "/data"  # data directory for storage health checks
 
+    # Security configuration
+    ENVIRONMENT: str = "development"  # development, staging, production
+    ENABLE_RATE_LIMITING: bool = True  # Enable rate limiting middleware
+    SESSION_EXPIRE_HOURS: int = 24  # Session expiration in hours
+    SESSION_REFRESH_THRESHOLD_HOURS: int = 12  # Refresh session if older than this
+    API_KEY_EXPIRE_DAYS: int = 365  # Default API key expiration in days
+    OAUTH_STATE_VALIDATION: bool = True  # Enable OAuth state parameter validation
+    CORS_ALLOW_ORIGINS: str = ""  # Comma-separated allowed origins; empty = use FRONTEND_ORIGIN only
+    MAX_LOGIN_ATTEMPTS: int = 5  # Max failed login attempts before rate limiting
+    LOGIN_ATTEMPT_WINDOW_MINUTES: int = 15  # Time window for tracking login attempts
+
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
     model_config = SettingsConfigDict(

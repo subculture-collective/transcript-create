@@ -9,6 +9,7 @@ from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import is_admin as _is_admin
 from ..db import get_db
 from ..exceptions import AuthorizationError, ValidationError
+from ..security import ROLE_ADMIN, require_role
 
 router = APIRouter(prefix="", tags=["Admin"])
 
@@ -18,9 +19,9 @@ router = APIRouter(prefix="", tags=["Admin"])
     summary="List events (Admin)",
     description="""
     List tracked events with filtering and pagination.
-    
+
     **Admin Only:** Requires admin privileges
-    
+
     **Filters:**
     - `type`: Filter by event type
     - `user_email`: Filter by user email
@@ -36,6 +37,7 @@ router = APIRouter(prefix="", tags=["Admin"])
 def admin_events(
     request: Request,
     db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
     type: str | None = None,
     user_email: str | None = None,
     start: str | None = None,
@@ -44,9 +46,6 @@ def admin_events(
     offset: int = 0,
 ):
     """List events with filtering (admin only)."""
-    user = _get_user_from_session(db, _get_session_token(request))
-    if not _is_admin(user):
-        raise AuthorizationError("Admin access required")
     where = []
     params: dict = {}
     if type:
@@ -76,7 +75,7 @@ def admin_events(
     summary="Export events as CSV (Admin)",
     description="""
     Export tracked events to CSV format with filtering.
-    
+
     **Admin Only:** Requires admin privileges
     """,
     responses={
@@ -137,11 +136,11 @@ def admin_events_csv(
     summary="Get events summary (Admin)",
     description="""
     Get summary statistics of tracked events.
-    
+
     Returns:
     - Event counts grouped by type
     - Event counts grouped by day
-    
+
     **Admin Only:** Requires admin privileges
     """,
     responses={
@@ -191,9 +190,9 @@ def admin_events_summary(request: Request, db=Depends(get_db), start: str | None
     summary="Set user plan (Admin)",
     description="""
     Change a user's subscription plan.
-    
+
     **Admin Only:** Requires admin privileges
-    
+
     Request body:
     ```json
     {

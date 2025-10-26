@@ -164,7 +164,7 @@ if [[ -d "${BACKUP_DIR}/logs" ]]; then
     recent_logs=$(find "${BACKUP_DIR}/logs" -name "*.log" -type f -mtime -1 2>/dev/null || echo "")
     if [[ -n "$recent_logs" ]]; then
         # Use xargs to safely handle filenames with spaces
-        verification_failures=$(echo "${recent_logs}" | xargs grep -c "Checksum verification failed\|Gzip integrity check failed\|Checksum FAILED" 2>/dev/null || echo 0)
+        verification_failures=$(echo "${recent_logs}" | xargs grep -c "Checksum verification failed\|Gzip integrity FAILED\|Checksum FAILED" 2>/dev/null || echo 0)
     fi
 fi
 add_metric "backup_verification_failures" "gauge" "Number of failed backup verifications" "${verification_failures}"

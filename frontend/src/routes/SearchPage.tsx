@@ -68,7 +68,13 @@ export default function SearchPage() {
   // Keyboard shortcut: / to focus search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+      const target = document.activeElement;
+      const isEditableElement = 
+        target?.tagName === 'INPUT' || 
+        target?.tagName === 'TEXTAREA' || 
+        (target as HTMLElement)?.isContentEditable;
+      
+      if (e.key === '/' && !isEditableElement) {
         e.preventDefault();
         document.getElementById('search-input')?.focus();
       }
@@ -98,8 +104,8 @@ export default function SearchPage() {
         <h1 className="text-3xl md:text-4xl font-bold mb-2">Search Transcripts</h1>
         <p className="text-stone-600 dark:text-stone-400">
           Search through millions of YouTube video transcripts
-          <span className="ml-2 text-sm text-stone-500 dark:text-stone-500">
-            (Press <kbd className="px-1.5 py-0.5 text-xs rounded bg-stone-200 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 font-mono">/</kbd> to focus search)
+          <span className="ml-2 text-sm text-stone-500 dark:text-stone-400">
+            (Press <kbd className="px-1.5 py-0.5 text-xs rounded bg-stone-200 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 font-mono">/ </kbd> to focus search)
           </span>
         </p>
       </div>

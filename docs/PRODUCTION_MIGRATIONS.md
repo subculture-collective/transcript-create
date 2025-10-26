@@ -267,12 +267,12 @@ down_revision = "xyz789"
 def upgrade() -> None:
     # Get connection and set isolation level
     connection = op.get_bind()
-    connection.execute("COMMIT")  # End current transaction
+    connection.execute("COMMIT")  # Commit to enable autocommit mode (required for CREATE INDEX CONCURRENTLY)
     connection.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_videos_created ON videos(created_at)")
 
 def downgrade() -> None:
     connection = op.get_bind()
-    connection.execute("COMMIT")
+    connection.execute("COMMIT")  # Commit to enable autocommit mode (required for DROP INDEX CONCURRENTLY)
     connection.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_videos_created")
 ```
 

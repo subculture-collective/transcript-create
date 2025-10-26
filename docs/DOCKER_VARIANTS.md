@@ -64,7 +64,7 @@ docker run -p 8000:8000 \
 
 **Base Image:** `python:3.11-slim`
 
-**Target Size:** <1GB
+**Target Size:** ~8GB (Note: Larger than 1GB due to comprehensive dependencies. For minimal image, use requirements-minimal.txt excluding pyannote and other optional features)
 
 **Use Cases:**
 - Development and testing
@@ -244,11 +244,15 @@ This enables:
 
 | Variant | Image Size | Build Time (no cache) | Build Time (cached) | Inference Speed |
 |---------|-----------|----------------------|-------------------|----------------|
-| ROCm 6.0 | ~2.3GB | 15-20 min | 2-5 min | Fast (GPU) |
-| CPU | ~900MB | 8-12 min | 1-3 min | Slow (CPU) |
-| CUDA 12.1 | ~2.4GB | 15-20 min | 2-5 min | Fastest (GPU) |
+| ROCm 6.0 | ~2.3GB* | 15-20 min | 2-5 min | Fast (GPU) |
+| CPU | ~8GB** | 8-12 min | 1-3 min | Slow (CPU) |
+| CUDA 12.1 | ~2.4GB* | 15-20 min | 2-5 min | Fastest (GPU) |
 
-*Note: Times measured on GitHub Actions runners with BuildKit caching*
+*Note: Image sizes depend on the dependencies in requirements.txt. The GPU variants (ROCm/CUDA) are optimized but include necessary libraries.*
+
+**Note: The CPU variant is larger than initially targeted (<1GB) due to the comprehensive dependencies in requirements.txt, which include pyannote.audio and other heavy packages. For a truly minimal CPU image (<1GB), consider creating a requirements-minimal.txt that excludes diarization and other optional features.*
+
+*Build times measured on GitHub Actions runners with BuildKit caching*
 
 ## CI/CD Integration
 

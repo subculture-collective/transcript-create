@@ -46,6 +46,7 @@ class TestSecurityHeaders:
 
         # Should be a valid UUID format
         import uuid
+
         try:
             uuid.UUID(request_id)
         except ValueError:
@@ -77,7 +78,7 @@ class TestRateLimiting:
             headers={
                 "Origin": "http://localhost:5173",
                 "Access-Control-Request-Method": "GET",
-            }
+            },
         )
 
         # CORS headers should be present
@@ -117,20 +118,14 @@ class TestCORSConfiguration:
 
     def test_cors_allowed_origin(self, client: TestClient):
         """Test that configured origins are allowed."""
-        response = client.get(
-            "/auth/me",
-            headers={"Origin": "http://localhost:5173"}
-        )
+        response = client.get("/auth/me", headers={"Origin": "http://localhost:5173"})
 
         # Should allow the request
         assert response.status_code in [200, 401]  # Auth may fail but CORS should pass
 
     def test_cors_disallowed_origin(self, client: TestClient):
         """Test that non-configured origins are blocked."""
-        response = client.get(
-            "/auth/me",
-            headers={"Origin": "https://evil.com"}
-        )
+        response = client.get("/auth/me", headers={"Origin": "https://evil.com"})
 
         # CORS should block this
         # FastAPI's CORSMiddleware may still return 200 but without CORS headers
@@ -146,7 +141,7 @@ class TestCORSConfiguration:
             headers={
                 "Origin": "http://localhost:5173",
                 "Access-Control-Request-Method": "TRACE",
-            }
+            },
         )
 
         # TRACE should not be in allowed methods

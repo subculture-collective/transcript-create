@@ -1,25 +1,21 @@
 # =============================================================================
-# Multi-Stage Dockerfile for transcript-create (ROCm variant)
+# Multi-Stage Dockerfile for transcript-create (CPU-only variant)
 # =============================================================================
-# This Dockerfile implements multi-stage builds for optimal image size and
-# build time through layer caching.
+# Lightweight CPU-only build for development, testing, and non-GPU deployments.
 #
 # Build stages:
-#   1. base       - System dependencies and ROCm base
+#   1. base       - System dependencies
 #   2. python-deps - Python packages installation
 #   3. app        - Final application stage
 #
-# Target image size: <2.5GB (down from ~3GB)
-# Build time: <10 min with cache
+# Target image size: <1GB
+# Use cases: Development, CI/CD testing, CPU-based inference
 # =============================================================================
 
 # =============================================================================
 # Stage 1: Base image with system dependencies
 # =============================================================================
-FROM rocm/dev-ubuntu-22.04:6.0.2 AS base
-
-# Build argument for PyTorch ROCm wheel index
-ARG ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.0
+FROM python:3.11-slim AS base
 
 # Set environment variables for non-interactive installs
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -29,14 +25,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install system dependencies in a single layer
-# Combine apt-get update, install, and cleanup to minimize layer size
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
-        python3 \
-        python3-pip \
         git \
         curl \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -49,17 +43,17 @@ FROM base AS python-deps
 COPY requirements.txt constraints.txt* ./
 
 # Install Python dependencies with pip cache mount for faster rebuilds
-# Use BuildKit cache mount to persist pip cache across builds
+# Use CPU-only PyTorch (smaller, no CUDA/ROCm)
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --no-cache-dir -r requirements.txt && \
     # Remove any torch variants pulled in by other dependencies
     (pip3 uninstall -y torch torchvision torchaudio || true) && \
-    # Install ROCm PyTorch wheels explicitly
-    pip3 install --no-cache-dir --index-url ${ROCM_WHEEL_INDEX} \
-        torch==2.4.1+rocm6.0 torchaudio==2.4.1+rocm6.0
+    # Install CPU-only PyTorch (much smaller)
+    pip3 install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.4.1+cpu torchaudio==2.4.1+cpu
 
 # Verify PyTorch installation
-RUN python3 -c "import torch; print('Torch version:', torch.__version__); print('HIP version:', getattr(torch.version, 'hip', None)); print('cuda.is_available:', torch.cuda.is_available())"
+RUN python3 -c "import torch; print('Torch version:', torch.__version__); print('CPU-only build')"
 
 # =============================================================================
 # Stage 3: Final application stage
@@ -67,7 +61,7 @@ RUN python3 -c "import torch; print('Torch version:', torch.__version__); print(
 FROM base AS app
 
 # Copy Python packages from deps stage
-COPY --from=python-deps /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=python-deps /usr/local/bin /usr/local/bin
 
 # Set working directory
@@ -83,7 +77,9 @@ RUN python3 -m compileall -q /app
 ENV PDF_FONT_PATH=/app/fonts/DejaVuSerif.ttf \
     HF_HOME=/root/.cache/hf \
     HF_HUB_CACHE=/root/.cache/hf/hub \
-    TRANSFORMERS_CACHE=/root/.cache/hf/transformers
+    TRANSFORMERS_CACHE=/root/.cache/hf/transformers \
+    FORCE_GPU=false \
+    WHISPER_BACKEND=faster-whisper
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \

@@ -632,5 +632,5 @@ def downgrade() -> None:
 
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [PostgreSQL ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)
-- [Production Migration Guide](./PRODUCTION_MIGRATIONS.md)
+- [Production Migration Guide](../docs/PRODUCTION_MIGRATIONS.md)
 - [Contributing Guidelines](../CONTRIBUTING.md#database-migrations)

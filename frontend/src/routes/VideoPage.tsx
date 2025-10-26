@@ -175,7 +175,7 @@ export default function VideoPage() {
   const [matchCursor, setMatchCursor] = useState(0);
   useEffect(() => {
     setMatchCursor(0);
-  }, [matchIndices]);
+  }, [JSON.stringify(matchIndices)]);
   function gotoMatch(direction: 1 | -1) {
     if (matchIndices.length === 0) return;
     const next = (matchCursor + direction + matchIndices.length) % matchIndices.length;

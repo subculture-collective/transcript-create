@@ -74,7 +74,7 @@ Use this procedure to restore the database from a full backup.
 
 1. **List available backups:**
    ```bash
-   cd /home/runner/work/transcript-create/transcript-create
+   cd /path/to/transcript-create
    ./scripts/restore_db.sh --list-backups
    ```
 

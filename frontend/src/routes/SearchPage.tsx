@@ -65,6 +65,18 @@ export default function SearchPage() {
       .finally(() => setLoading(false));
   }, [params, source]);
 
+  // Keyboard shortcut: / to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        document.getElementById('search-input')?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const next = new URLSearchParams(params);
@@ -84,7 +96,12 @@ export default function SearchPage() {
     <div className="space-y-6">
       <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-bold mb-2">Search Transcripts</h1>
-        <p className="text-stone-600 dark:text-stone-400">Search through millions of YouTube video transcripts</p>
+        <p className="text-stone-600 dark:text-stone-400">
+          Search through millions of YouTube video transcripts
+          <span className="ml-2 text-sm text-stone-500 dark:text-stone-500">
+            (Press <kbd className="px-1.5 py-0.5 text-xs rounded bg-stone-200 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 font-mono">/</kbd> to focus search)
+          </span>
+        </p>
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2">

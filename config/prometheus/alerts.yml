@@ -139,3 +139,98 @@ groups:
         annotations:
           summary: "Unusual export activity detected"
           description: "Export rate is {{ $value }} exports/second (typically <1/s)"
+
+  - name: backup_alerts
+    interval: 5m
+    rules:
+      # Backup too old - critical if daily backup hasn't run
+      # Threshold: 26 hours (24h + 2h buffer for scheduled 2 AM UTC backup)
+      - alert: BackupTooOld
+        expr: time() - backup_last_success_timestamp{type="database"} > 26 * 3600  # 26 hours
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+        annotations:
+          summary: "Database backup is too old"
+          description: "Last successful database backup was {{ $value | humanizeDuration }} ago (threshold: 26 hours)"
+
+      # Backup failed
+      - alert: BackupFailed
+        expr: backup_last_status{type="database"} != 0
+        for: 5m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Database backup job failed"
+          description: "Last backup job exited with status {{ $value }} (non-zero indicates failure)"
+
+      # Backup size increased significantly (possible data anomaly or attack)
+      - alert: BackupSizeIncreaseSignificant
+        expr: |
+          (
+            backup_size_bytes{type="database"}
+            - backup_size_bytes{type="database"} offset 7d
+          ) / backup_size_bytes{type="database"} offset 7d > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Backup size increased significantly"
+          description: "Database backup size increased by {{ $value | humanizePercentage }} compared to last week"
+
+      # Backup size decreased significantly (possible data loss)
+      - alert: BackupSizeDecreaseSignificant
+        expr: |
+          (
+            backup_size_bytes{type="database"} offset 7d
+            - backup_size_bytes{type="database"}
+          ) / backup_size_bytes{type="database"} offset 7d > 0.3
+        for: 15m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Backup size decreased significantly"
+          description: "Database backup size decreased by {{ $value | humanizePercentage }} compared to last week"
+
+      # Backup storage low
+      - alert: BackupStorageLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/backups"}
+            / node_filesystem_size_bytes{mountpoint="/backups"}
+          ) < 0.1
+        for: 15m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Backup storage running low"
+          description: "Only {{ $value | humanizePercentage }} storage available on /backups volume"
+
+      # WAL archiving not active (no recent archives)
+      # Threshold: 2 hours - WAL archive_timeout is 5 minutes, allow time for idle systems
+      - alert: WALArchivingInactive
+        expr: time() - wal_last_archive_timestamp > 2 * 3600  # 2 hours (2 * 3600 seconds)
+        for: 10m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "WAL archiving appears inactive"
+          description: "No WAL archives created in the last {{ $value | humanizeDuration }} (system may be idle or archiving failed)"
+
+      # Backup verification failed
+      - alert: BackupVerificationFailed
+        expr: backup_verification_failures > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Backup verification failed"
+          description: "{{ $value }} backup(s) failed integrity verification"
+

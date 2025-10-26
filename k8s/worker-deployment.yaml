@@ -30,8 +30,14 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
-        # GPU access requires supplemental groups
-        supplementalGroups: [44, 104, 107]  # video, render groups
+        # GPU access requires supplemental groups.
+        # The group IDs below correspond to:
+        #   44  - "video" group (commonly 44 on Ubuntu, may differ on other distros)
+        #   104 - "render" group (commonly 104 on Ubuntu, may differ on other distros)
+        #   107 - "kfd" group (commonly 107 on Ubuntu, may differ on other distros)
+        # WARNING: These group IDs are distribution-specific and may not match your node OS.
+        #          Please verify the group IDs on your nodes (e.g., via /etc/group) and update as needed.
+        supplementalGroups: [44, 104, 107]  # video, render, kfd groups
         seccompProfile:
           type: RuntimeDefault
       # GPU node selector

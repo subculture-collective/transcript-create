@@ -131,7 +131,7 @@ spec:
           mountPath: /data
         - name: cache
           mountPath: /cache
-        {{- if .Values.worker.gpu.enabled }}
+        {{- if and .Values.worker.gpu.enabled (eq .Values.worker.gpu.type "amd") }}
         - name: dev-kfd
           mountPath: /dev/kfd
         - name: dev-dri
@@ -146,7 +146,7 @@ spec:
       - name: cache
         persistentVolumeClaim:
           claimName: {{ include "transcript-create.fullname" . }}-cache
-      {{- if .Values.worker.gpu.enabled }}
+      {{- if and .Values.worker.gpu.enabled (eq .Values.worker.gpu.type "amd") }}
       - name: dev-kfd
         hostPath:
           path: /dev/kfd

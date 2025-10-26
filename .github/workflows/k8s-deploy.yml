@@ -156,11 +156,14 @@ jobs:
         run: |
           kubectl wait --for=condition=available deployment/transcript-create-api -n transcript-create --timeout=5m
           
-          # Get API endpoint
-          API_URL=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          # Get API endpoint (try hostname first, fall back to IP)
+          API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$API_HOST" ]; then
+            API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          fi
           
           # Test health endpoint
-          curl -f "http://${API_URL}/health" || exit 1
+          curl -f "http://${API_HOST}/health" || exit 1
           echo "Smoke tests passed!"
 
   deploy-production:
@@ -214,12 +217,15 @@ jobs:
           # Wait for pods to be ready
           kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=transcript-create -n transcript-create --timeout=5m
           
-          # Get API endpoint
-          API_URL=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          # Get API endpoint (try hostname first, fall back to IP)
+          API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$API_HOST" ]; then
+            API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          fi
           
           # Test health endpoints
-          curl -f "https://${API_URL}/health" || exit 1
-          curl -f "https://${API_URL}/ready" || exit 1
+          curl -f "https://${API_HOST}/health" || exit 1
+          curl -f "https://${API_HOST}/ready" || exit 1
           
           echo "Health checks passed!"
 

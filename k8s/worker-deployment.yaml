@@ -140,13 +140,13 @@ spec:
           requests:
             cpu: 2000m
             memory: 8Gi
-            # For AMD ROCm
+            # For AMD ROCm GPU
             amd.com/gpu: 1
           limits:
             cpu: 4000m
             memory: 16Gi
             amd.com/gpu: 1
-          # For NVIDIA, uncomment instead:
+          # For NVIDIA GPU, replace the above with:
           # requests:
           #   cpu: 2000m
           #   memory: 8Gi

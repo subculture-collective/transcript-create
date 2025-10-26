@@ -98,10 +98,7 @@ function SimpleBarChart({ data, labels }: { data: number[]; labels: string[] }) 
             </div>
             <div className="flex-1">
               <div className="h-6 w-full rounded bg-stone-100">
-                <div
-                  className="h-full rounded bg-blue-500"
-                  style={{ width: `${percentage}%` }}
-                />
+                <div className="h-full rounded bg-blue-500" style={{ width: `${percentage}%` }} />
               </div>
             </div>
             <div className="w-12 text-right text-sm font-medium">{value}</div>
@@ -149,7 +146,7 @@ function SimpleLineChart({ data, labels }: { data: number[]; labels: string[] })
   const points = data
     .map((value, idx) => {
       const x = padding + (idx * (chartWidth - 2 * padding)) / (data.length - 1 || 1);
-      const y = chartHeight - padding - ((value / maxValue) * (chartHeight - 2 * padding));
+      const y = chartHeight - padding - (value / maxValue) * (chartHeight - 2 * padding);
       return `${x},${y}`;
     })
     .join(' ');
@@ -157,24 +154,15 @@ function SimpleLineChart({ data, labels }: { data: number[]; labels: string[] })
   return (
     <div className="overflow-x-auto">
       <svg width={chartWidth} height={chartHeight} className="border-b border-l border-stone-200">
-        <polyline
-          points={points}
-          fill="none"
-          stroke="#3b82f6"
-          strokeWidth="2"
-        />
+        <polyline points={points} fill="none" stroke="#3b82f6" strokeWidth="2" />
         {data.map((value, idx) => {
           const x = padding + (idx * (chartWidth - 2 * padding)) / (data.length - 1 || 1);
-          const y = chartHeight - padding - ((value / maxValue) * (chartHeight - 2 * padding));
+          const y = chartHeight - padding - (value / maxValue) * (chartHeight - 2 * padding);
           return (
-            <circle
-              key={idx}
-              cx={x}
-              cy={y}
-              r="3"
-              fill="#3b82f6"
-            >
-              <title>{labels[idx]}: {value}</title>
+            <circle key={idx} cx={x} cy={y} r="3" fill="#3b82f6">
+              <title>
+                {labels[idx]}: {value}
+              </title>
             </circle>
           );
         })}
@@ -280,10 +268,7 @@ export default function AdminDashboard() {
             value={metrics.users.total.toLocaleString()}
             subtitle={`${metrics.users.pro} pro, ${metrics.users.free} free`}
           />
-          <MetricCard
-            title="Active Sessions"
-            value={metrics.sessions.active.toLocaleString()}
-          />
+          <MetricCard title="Active Sessions" value={metrics.sessions.active.toLocaleString()} />
           <MetricCard
             title="Searches Today"
             value={metrics.searches.today.toLocaleString()}
@@ -397,10 +382,7 @@ export default function AdminDashboard() {
           {jobStatusBreakdown && jobStatusBreakdown.data.length > 0 && (
             <div className="rounded-lg border bg-white p-4 shadow-sm">
               <h3 className="mb-3 font-semibold">Job Status Breakdown</h3>
-              <SimplePieChart
-                data={jobStatusBreakdown.data}
-                labels={jobStatusBreakdown.labels}
-              />
+              <SimplePieChart data={jobStatusBreakdown.data} labels={jobStatusBreakdown.labels} />
             </div>
           )}
 

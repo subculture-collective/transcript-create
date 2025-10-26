@@ -18,8 +18,8 @@ class TestSearchRoutes:
     def test_search_empty_query(self, client: TestClient):
         """Test search with empty query string."""
         response = client.get("/search?q=")
-        assert response.status_code == 400
-        assert "Missing query parameter" in response.json()["detail"]
+        # FastAPI validates min_length at pydantic level, returns 422
+        assert response.status_code == 422
 
     def test_search_whitespace_query(self, client: TestClient):
         """Test search with whitespace-only query."""
@@ -195,3 +195,152 @@ class TestSearchRoutes:
         """Test search with Unicode characters."""
         response = client.get("/search?q=café")
         assert response.status_code == 200
+
+    def test_search_with_filters(self, client: TestClient):
+        """Test search with advanced filters."""
+        response = client.get("/search?q=test&min_duration=60&max_duration=300&language=en&sort_by=date_desc")
+        assert response.status_code == 200
+        data = response.json()
+        assert "hits" in data
+        assert "query_time_ms" in data
+
+    def test_search_with_speaker_filter(self, client: TestClient):
+        """Test search with speaker labels filter."""
+        response = client.get("/search?q=test&has_speaker_labels=true")
+        assert response.status_code == 200
+        data = response.json()
+        assert "hits" in data
+
+    def test_search_invalid_sort_by(self, client: TestClient):
+        """Test search with invalid sort_by parameter."""
+        response = client.get("/search?q=test&sort_by=invalid")
+        assert response.status_code == 400
+        assert "Invalid sort_by" in response.json()["detail"]
+
+    def test_search_query_time_tracking(self, client: TestClient):
+        """Test that search returns query time."""
+        response = client.get("/search?q=test")
+        assert response.status_code == 200
+        data = response.json()
+        assert "query_time_ms" in data
+        assert isinstance(data["query_time_ms"], int)
+
+
+class TestSearchSuggestions:
+    """Tests for /search/suggestions endpoint."""
+
+    def test_suggestions_missing_query(self, client: TestClient):
+        """Test suggestions without query parameter."""
+        response = client.get("/search/suggestions")
+        assert response.status_code == 422
+
+    def test_suggestions_success(self, client: TestClient, db_session):
+        """Test getting search suggestions."""
+        # Insert some test suggestions
+        db_session.execute(
+            text("INSERT INTO search_suggestions (term, frequency) VALUES (:term, :freq)"),
+            {"term": "artificial intelligence", "freq": 10},
+        )
+        db_session.commit()
+
+        response = client.get("/search/suggestions?q=artif")
+        assert response.status_code == 200
+        data = response.json()
+        assert "suggestions" in data
+        assert isinstance(data["suggestions"], list)
+
+    def test_suggestions_limit(self, client: TestClient):
+        """Test suggestions limit parameter."""
+        response = client.get("/search/suggestions?q=test&limit=5")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["suggestions"]) <= 5
+
+
+class TestSearchHistory:
+    """Tests for /search/history endpoint."""
+
+    def test_history_unauthenticated(self, client: TestClient):
+        """Test search history without authentication."""
+        response = client.get("/search/history")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert len(data["items"]) == 0
+
+    def test_history_with_data(self, client: TestClient, db_session):
+        """Test search history with user data."""
+        # Create a test user and search history
+        user_id = uuid.uuid4()
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject) "
+                "VALUES (:id, :email, :provider, :subject)"
+            ),
+            {
+                "id": str(user_id),
+                "email": "test@example.com",
+                "provider": "google",
+                "subject": "test123",
+            },
+        )
+        db_session.execute(
+            text("INSERT INTO user_searches (user_id, query, result_count) VALUES (:uid, :query, :count)"),
+            {"uid": str(user_id), "query": "test query", "count": 5},
+        )
+        db_session.commit()
+
+        # Note: This test would need proper authentication setup to work fully
+        response = client.get("/search/history")
+        assert response.status_code == 200
+
+
+class TestPopularSearches:
+    """Tests for /search/popular endpoint."""
+
+    def test_popular_searches_success(self, client: TestClient):
+        """Test getting popular searches."""
+        response = client.get("/search/popular")
+        assert response.status_code == 200
+        data = response.json()
+        assert "suggestions" in data
+        assert isinstance(data["suggestions"], list)
+
+    def test_popular_searches_limit(self, client: TestClient):
+        """Test popular searches limit parameter."""
+        response = client.get("/search/popular?limit=10")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["suggestions"]) <= 10
+
+
+class TestSearchExport:
+    """Tests for /search/export endpoint."""
+
+    def test_export_csv_format(self, client: TestClient):
+        """Test exporting search results as CSV."""
+        response = client.get("/search/export?q=test&format=csv")
+        assert response.status_code == 200
+        assert "text/csv" in response.headers.get("content-type", "")
+
+    def test_export_json_format(self, client: TestClient):
+        """Test exporting search results as JSON."""
+        response = client.get("/search/export?q=test&format=json")
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert "query" in data
+        assert "count" in data
+
+    def test_export_invalid_format(self, client: TestClient):
+        """Test export with invalid format."""
+        response = client.get("/search/export?q=test&format=xml")
+        assert response.status_code == 400
+        assert "Invalid format" in response.json()["detail"]
+
+    def test_export_with_filters(self, client: TestClient):
+        """Test export with filters."""
+        response = client.get("/search/export?q=test&format=json&min_duration=60&max_duration=300")
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data

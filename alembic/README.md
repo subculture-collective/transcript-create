@@ -61,6 +61,13 @@ This tells Alembic your database is already at the baseline, preventing it from 
 
 ## Creating Migrations
 
+For comprehensive migration examples and templates, see:
+- **[Migration Template Guide](MIGRATION_TEMPLATE.md)** - Detailed examples for all migration types
+- **[Production Runbook](../docs/PRODUCTION_MIGRATIONS.md)** - Production deployment procedures
+- **[CONTRIBUTING.md](../CONTRIBUTING.md#database-migrations)** - Development workflow
+
+### Quick Start
+
 See the [Database Migrations](../CONTRIBUTING.md#database-migrations) section in CONTRIBUTING.md for detailed guidelines on:
 
 - Creating new migrations
@@ -68,6 +75,17 @@ See the [Database Migrations](../CONTRIBUTING.md#database-migrations) section in
 - Best practices
 - Common scenarios
 - Example code
+
+### Production Deployments
+
+For production migration procedures, see:
+- **[Production Migration Runbook](../docs/PRODUCTION_MIGRATIONS.md)**
+  - Pre-migration checklist
+  - Step-by-step execution
+  - Rollback procedures
+  - Zero-downtime patterns
+  - Blue-green deployment
+  - Performance considerations
 
 ## CI/CD Integration
 
@@ -158,6 +176,8 @@ If multiple people create migrations simultaneously, you may need to merge them:
 
 ## Resources
 
-- [Alembic Documentation](https://alembic.sqlalchemy.org/)
+- [Migration Template Guide](MIGRATION_TEMPLATE.md)
+- [Production Migration Runbook](../docs/PRODUCTION_MIGRATIONS.md)
 - [Contributing Guidelines](../CONTRIBUTING.md)
 - [Migration CI Workflow](../.github/workflows/migrations-ci.yml)
+- [Alembic Documentation](https://alembic.sqlalchemy.org/)

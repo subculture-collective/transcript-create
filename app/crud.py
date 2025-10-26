@@ -63,16 +63,16 @@ def _retry_on_transient_error(func):
 @_retry_on_transient_error
 def create_job(db, kind: str, url: str):
     from app.metrics import jobs_created_total
-    
+
     job_id = uuid.uuid4()
     db.execute(
         text("INSERT INTO jobs (id, kind, input_url) VALUES (:i,:k,:u)"), {"i": str(job_id), "k": kind, "u": url}
     )
     db.commit()
-    
+
     # Track job creation metric
     jobs_created_total.labels(kind=kind).inc()
-    
+
     return job_id
 
 
@@ -142,7 +142,7 @@ def list_youtube_segments(db, youtube_transcript_id):
 @_retry_on_transient_error
 def search_segments(db, q: str, video_id: str | None = None, limit: int = 50, offset: int = 0):
     from app.metrics import search_queries_total
-    
+
     sql = """
         SELECT id, video_id, start_ms, end_ms,
                ts_headline('english', text, websearch_to_tsquery('english', :q)) AS snippet,
@@ -159,10 +159,10 @@ def search_segments(db, q: str, video_id: str | None = None, limit: int = 50, of
         video_filter = "AND video_id = :vid"
         params["vid"] = str(video_id)
     rows = db.execute(text(sql.format(video_filter=video_filter)), params).mappings().all()
-    
+
     # Track search query metric
     search_queries_total.labels(backend="postgres").inc()
-    
+
     return rows
 
 
@@ -185,4 +185,179 @@ def search_youtube_segments(db, q: str, video_id: str | None = None, limit: int 
         video_filter = "AND yt.video_id = :vid"
         params["vid"] = str(video_id)
     rows = db.execute(text(sql.format(video_filter=video_filter)), params).mappings().all()
+    return rows
+
+
+@_retry_on_transient_error
+def search_segments_advanced(
+    db,
+    q: str,
+    video_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = "relevance",
+    filters: dict | None = None,
+):
+    """Search segments with advanced filters and sorting."""
+    from app.metrics import search_queries_total
+
+    filters = filters or {}
+
+    # Build WHERE clause with filters
+    where_clauses = ["text_tsv @@ websearch_to_tsquery('english', :q)"]
+    params = {"q": q, "limit": limit, "offset": offset}
+
+    if video_id:
+        where_clauses.append("s.video_id = :vid")
+        params["vid"] = str(video_id)
+
+    # Join with videos table for filter support
+    needs_video_join = any(
+        k in filters for k in ["date_from", "date_to", "min_duration", "max_duration", "channel", "language"]
+    )
+
+    if needs_video_join:
+        if filters.get("date_from"):
+            where_clauses.append("v.uploaded_at >= :date_from")
+            params["date_from"] = filters["date_from"]
+        if filters.get("date_to"):
+            where_clauses.append("v.uploaded_at <= :date_to")
+            params["date_to"] = filters["date_to"]
+        if filters.get("min_duration") is not None:
+            where_clauses.append("v.duration_seconds >= :min_duration")
+            params["min_duration"] = filters["min_duration"]
+        if filters.get("max_duration") is not None:
+            where_clauses.append("v.duration_seconds <= :max_duration")
+            params["max_duration"] = filters["max_duration"]
+        if filters.get("channel"):
+            where_clauses.append("v.channel_name ILIKE :channel")
+            params["channel"] = f"%{filters['channel']}%"
+        if filters.get("language"):
+            where_clauses.append("v.language = :language")
+            params["language"] = filters["language"]
+
+    # Speaker labels filter
+    if filters.get("has_speaker_labels") is not None:
+        if filters["has_speaker_labels"]:
+            where_clauses.append("s.speaker_label IS NOT NULL")
+        else:
+            where_clauses.append("s.speaker_label IS NULL")
+
+    # Build ORDER BY clause
+    if sort_by == "date_desc":
+        order_by = "v.uploaded_at DESC NULLS LAST, s.start_ms ASC"
+    elif sort_by == "date_asc":
+        order_by = "v.uploaded_at ASC NULLS LAST, s.start_ms ASC"
+    elif sort_by == "duration_desc":
+        order_by = "v.duration_seconds DESC NULLS LAST, s.start_ms ASC"
+    elif sort_by == "duration_asc":
+        order_by = "v.duration_seconds ASC NULLS LAST, s.start_ms ASC"
+    else:  # relevance (default)
+        order_by = "rank DESC, s.start_ms ASC"
+
+    # Build query
+    from_clause = "segments s"
+    select_fields = (
+        "s.id, s.video_id, s.start_ms, s.end_ms, "
+        "ts_headline('english', s.text, websearch_to_tsquery('english', :q)) AS snippet, "
+        "ts_rank_cd(s.text_tsv, websearch_to_tsquery('english', :q)) AS rank"
+    )
+
+    if needs_video_join:
+        from_clause = "segments s JOIN videos v ON s.video_id = v.id"
+
+    sql = f"""
+        SELECT {select_fields}
+        FROM {from_clause}
+        WHERE {' AND '.join(where_clauses)}
+        ORDER BY {order_by}
+        LIMIT :limit OFFSET :offset
+    """
+
+    rows = db.execute(text(sql), params).mappings().all()
+
+    # Track search query metric
+    search_queries_total.labels(backend="postgres").inc()
+
+    return rows
+
+
+@_retry_on_transient_error
+def search_youtube_segments_advanced(
+    db,
+    q: str,
+    video_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = "relevance",
+    filters: dict | None = None,
+):
+    """Search YouTube segments with advanced filters and sorting."""
+    filters = filters or {}
+
+    # Build WHERE clause with filters
+    where_clauses = ["ys.text_tsv @@ websearch_to_tsquery('english', :q)"]
+    params = {"q": q, "limit": limit, "offset": offset}
+
+    if video_id:
+        where_clauses.append("yt.video_id = :vid")
+        params["vid"] = str(video_id)
+
+    # Join with videos table for filter support
+    needs_video_join = any(
+        k in filters for k in ["date_from", "date_to", "min_duration", "max_duration", "channel", "language"]
+    )
+
+    if needs_video_join:
+        if filters.get("date_from"):
+            where_clauses.append("v.uploaded_at >= :date_from")
+            params["date_from"] = filters["date_from"]
+        if filters.get("date_to"):
+            where_clauses.append("v.uploaded_at <= :date_to")
+            params["date_to"] = filters["date_to"]
+        if filters.get("min_duration") is not None:
+            where_clauses.append("v.duration_seconds >= :min_duration")
+            params["min_duration"] = filters["min_duration"]
+        if filters.get("max_duration") is not None:
+            where_clauses.append("v.duration_seconds <= :max_duration")
+            params["max_duration"] = filters["max_duration"]
+        if filters.get("channel"):
+            where_clauses.append("v.channel_name ILIKE :channel")
+            params["channel"] = f"%{filters['channel']}%"
+        if filters.get("language"):
+            where_clauses.append("v.language = :language")
+            params["language"] = filters["language"]
+
+    # Build ORDER BY clause
+    if sort_by == "date_desc":
+        order_by = "v.uploaded_at DESC NULLS LAST, ys.start_ms ASC"
+    elif sort_by == "date_asc":
+        order_by = "v.uploaded_at ASC NULLS LAST, ys.start_ms ASC"
+    elif sort_by == "duration_desc":
+        order_by = "v.duration_seconds DESC NULLS LAST, ys.start_ms ASC"
+    elif sort_by == "duration_asc":
+        order_by = "v.duration_seconds ASC NULLS LAST, ys.start_ms ASC"
+    else:  # relevance (default)
+        order_by = "rank DESC, ys.start_ms ASC"
+
+    # Build query
+    from_clause = "youtube_segments ys JOIN youtube_transcripts yt ON yt.id = ys.youtube_transcript_id"
+    select_fields = (
+        "ys.id, yt.video_id, ys.start_ms, ys.end_ms, "
+        "ts_headline('english', ys.text, websearch_to_tsquery('english', :q)) AS snippet, "
+        "ts_rank_cd(ys.text_tsv, websearch_to_tsquery('english', :q)) AS rank"
+    )
+
+    if needs_video_join:
+        from_clause += " JOIN videos v ON yt.video_id = v.id"
+
+    sql = f"""
+        SELECT {select_fields}
+        FROM {from_clause}
+        WHERE {' AND '.join(where_clauses)}
+        ORDER BY {order_by}
+        LIMIT :limit OFFSET :offset
+    """
+
+    rows = db.execute(text(sql), params).mappings().all()
     return rows

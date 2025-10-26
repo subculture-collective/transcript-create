@@ -41,10 +41,18 @@ CREATE TABLE IF NOT EXISTS videos (
     state job_state NOT NULL DEFAULT 'pending',
     error TEXT,
     idx INT,
+    uploaded_at TIMESTAMPTZ,
+    channel_name TEXT,
+    language TEXT,
+    category TEXT,
     UNIQUE (job_id, youtube_id)
 );
 CREATE INDEX IF NOT EXISTS videos_job_id_idx ON videos(job_id);
 CREATE INDEX IF NOT EXISTS videos_state_idx ON videos(state);
+CREATE INDEX IF NOT EXISTS videos_uploaded_at_idx ON videos(uploaded_at);
+CREATE INDEX IF NOT EXISTS videos_duration_idx ON videos(duration_seconds);
+CREATE INDEX IF NOT EXISTS videos_channel_name_idx ON videos(channel_name);
+CREATE INDEX IF NOT EXISTS videos_language_idx ON videos(language);
 
 CREATE TABLE IF NOT EXISTS transcripts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -193,3 +201,30 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_created_idx ON events(created_at);
 CREATE INDEX IF NOT EXISTS events_type_idx ON events(type);
+
+-- ---
+-- Search enhancements: suggestions and search history
+-- ---
+
+CREATE TABLE IF NOT EXISTS search_suggestions (
+    id BIGSERIAL PRIMARY KEY,
+    term TEXT NOT NULL,
+    frequency INT NOT NULL DEFAULT 1,
+    last_used TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS search_suggestions_term_idx ON search_suggestions(LOWER(term));
+CREATE INDEX IF NOT EXISTS search_suggestions_frequency_idx ON search_suggestions(frequency DESC);
+
+CREATE TABLE IF NOT EXISTS user_searches (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    query TEXT NOT NULL,
+    filters JSONB DEFAULT '{}'::jsonb,
+    result_count INT,
+    query_time_ms INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS user_searches_user_id_idx ON user_searches(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS user_searches_query_idx ON user_searches(query);
+CREATE INDEX IF NOT EXISTS user_searches_created_at_idx ON user_searches(created_at DESC);

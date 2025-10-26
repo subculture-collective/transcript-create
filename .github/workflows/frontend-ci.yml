@@ -78,7 +78,6 @@ jobs:
         run: |
           cd frontend
           npm run lint
-        continue-on-error: true
 
       - name: Check Prettier formatting
         run: |

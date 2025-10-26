@@ -4,6 +4,7 @@
 
 [![Backend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml)
 [![Frontend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml)
+[![Database Migrations](https://github.com/subculture-collective/transcript-create/actions/workflows/migrations-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/migrations-ci.yml)
 [![E2E Tests](https://github.com/subculture-collective/transcript-create/actions/workflows/e2e-tests.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/e2e-tests.yml)
 [![Docker Build](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml)
 [![Docker Image Version](https://ghcr-badge.egpl.dev/onnwee/transcript-create/latest_tag?trim=major&label=latest)](https://github.com/onnwee/transcript-create/pkgs/container/transcript-create)
@@ -13,12 +14,12 @@ Create searchable, exportable transcripts from YouTube videos or channels. The s
 ## CI/CD Status
 
 This project has comprehensive CI/CD automation:
-
--   **Backend CI**: Linting (ruff, black, isort), type checking (mypy), security scanning, tests with PostgreSQL, Docker build validation
--   **Frontend CI**: ESLint, Prettier formatting, TypeScript checking, Vite build with bundle size monitoring
--   **E2E Tests**: Playwright tests across Chromium, Firefox, WebKit, and mobile viewports (255 tests)
--   **Docker Build**: Automated builds on push to main and tags, published to GHCR with ROCm support
--   **Security**: Weekly dependency audits, secret scanning, vulnerability detection
+- **Backend CI**: Linting (ruff, black, isort), type checking (mypy), security scanning, tests with PostgreSQL, Docker build validation
+- **Frontend CI**: ESLint, Prettier formatting, TypeScript checking, Vite build with bundle size monitoring
+- **Database Migrations**: Alembic migration validation on fresh and existing databases, up/down testing
+- **E2E Tests**: Playwright tests across Chromium, Firefox, WebKit, and mobile viewports (255 tests)
+- **Docker Build**: Automated builds on push to main and tags, published to GHCR with ROCm support
+- **Security**: Weekly dependency audits, secret scanning, vulnerability detection
 
 All checks must pass before merging to `main`. Typical PR checks complete in < 3 minutes. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
@@ -170,12 +171,16 @@ Images are built with:
 
 ## Repository layout
 
--   Backend: `app/` (routers in `app/routes/`, settings in `app/settings.py`)
--   Worker: `worker/` (pipeline + whisper runner + diarization)
--   Frontend: `frontend/` (Vite + React + Tailwind)
--   SQL schema: `sql/schema.sql` (auto-applied on first compose up)
--   Data storage: `data/VIDEO_UUID/` mounted as `/data` in containers
--   OpenSearch analysis: `config/opensearch/analysis/`
+- Backend: `app/` (routers in `app/routes/`, settings in `app/settings.py`)
+- Worker: `worker/` (pipeline + whisper runner + diarization)
+- Frontend: `frontend/` (Vite + React + Tailwind)
+- Database migrations: `alembic/` (Alembic migrations for schema versioning)
+- SQL schema: `sql/schema.sql` (reference schema; migrations are applied via Alembic)
+- Data storage: `data/VIDEO_UUID/` mounted as `/data` in containers
+- OpenSearch analysis: `config/opensearch/analysis/`
+- Documentation: `docs/` (guides for migrations, logging, monitoring, etc.)
+
+See [docs/MIGRATIONS.md](docs/MIGRATIONS.md) for database migration details.
 
 ## Pipeline overview
 

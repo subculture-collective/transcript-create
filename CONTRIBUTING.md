@@ -251,36 +251,25 @@ All migrations are automatically validated in CI:
 
 See `.github/workflows/migrations-ci.yml` for details.
 
-### Common Scenarios
+### Migration Templates and Examples
 
-#### Adding a new table
+For detailed migration examples and templates, see:
 
+- **[Migration Template Guide](alembic/MIGRATION_TEMPLATE.md)** - Comprehensive examples for all migration types
+- **[Production Migration Runbook](docs/PRODUCTION_MIGRATIONS.md)** - Production deployment procedures
+
+#### Quick Examples
+
+**Adding a column:**
 ```python
 def upgrade() -> None:
-    op.execute("""
-        CREATE TABLE new_table (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            name TEXT NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        )
-    """)
-
-def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS new_table CASCADE")
-```
-
-#### Adding a column
-
-```python
-def upgrade() -> None:
-    op.execute("ALTER TABLE videos ADD COLUMN thumbnail_url TEXT")
+    op.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS thumbnail_url TEXT")
 
 def downgrade() -> None:
     op.execute("ALTER TABLE videos DROP COLUMN IF EXISTS thumbnail_url")
 ```
 
-#### Creating an index
-
+**Creating an index:**
 ```python
 def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS idx_videos_youtube_id ON videos(youtube_id)")
@@ -289,22 +278,15 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS idx_videos_youtube_id")
 ```
 
-#### Data migration
+For more examples including:
+- Adding tables
+- Data migrations
+- Enum modifications
+- Triggers and functions
+- Concurrent indexes
+- Constraint additions
 
-```python
-def upgrade() -> None:
-    # First add the column
-    op.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
-    
-    # Then migrate existing data
-    op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
-    
-    # Finally add NOT NULL constraint
-    op.execute("ALTER TABLE users ALTER COLUMN status SET NOT NULL")
-
-def downgrade() -> None:
-    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS status")
-```
+See [alembic/MIGRATION_TEMPLATE.md](alembic/MIGRATION_TEMPLATE.md).
 
 ## Code Quality
 

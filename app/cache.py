@@ -228,7 +228,11 @@ def get_cache_stats() -> dict:
             "connected_clients": info.get("connected_clients"),
             "uptime_seconds": info.get("uptime_in_seconds"),
             "hit_rate": (
-                info.get("keyspace_hits", 0) / max(info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0), 1)
+                (
+                    0.0
+                    if (info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0)) == 0
+                    else info.get("keyspace_hits", 0) / (info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0))
+                )
                 if "keyspace_hits" in info else None
             ),
         }

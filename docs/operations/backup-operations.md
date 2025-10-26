@@ -69,7 +69,7 @@ du -sh /backups/
 
 **Basic usage:**
 ```bash
-cd /home/runner/work/transcript-create/transcript-create
+cd /path/to/transcript-create   # Change this to your project root directory
 export DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/transcripts"
 ./scripts/backup_db.sh
 ```

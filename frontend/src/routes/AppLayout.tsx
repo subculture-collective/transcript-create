@@ -38,7 +38,7 @@ export default function AppLayout() {
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+              className="p-2 min-h-[44px] min-w-[44px] text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
               aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
               title={theme === 'light' ? 'Dark mode' : 'Light mode'}
             >

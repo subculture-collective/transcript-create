@@ -5,6 +5,7 @@ import { createRef } from 'react'
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer'
 
 describe('YouTubePlayer', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockPlayer: any
 
   beforeEach(() => {
@@ -17,6 +18,7 @@ describe('YouTubePlayer', () => {
     }
 
     window.YT = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Player: vi.fn(function (this: any, _element: any, config: any) {
         this.seekTo = mockPlayer.seekTo
         this.destroy = mockPlayer.destroy
@@ -24,6 +26,7 @@ describe('YouTubePlayer', () => {
         setTimeout(() => config.events.onReady(), 0)
         return this
       }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any
   })
 
@@ -48,6 +51,7 @@ describe('YouTubePlayer', () => {
       expect(window.YT!.Player).toHaveBeenCalled()
     })
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const call = (window.YT!.Player as any).mock.calls[0]
     const config = call[1]
 

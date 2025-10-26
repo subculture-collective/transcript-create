@@ -15,7 +15,9 @@ function load(): FavoriteItem[] {
 function save(items: FavoriteItem[]) {
   try {
     localStorage.setItem(KEY, JSON.stringify(items));
-  } catch {}
+  } catch {
+    // Suppress localStorage errors (e.g., quota exceeded)
+  }
 }
 
 let cache = load();

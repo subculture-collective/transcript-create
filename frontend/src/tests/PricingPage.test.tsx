@@ -17,7 +17,9 @@ vi.mock('react-router-dom', async () => {
 describe('PricingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (window as any).location
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     window.location = { href: '' } as any
 
     // Mock auth/me to return no user by default
@@ -151,6 +153,7 @@ describe('PricingPage', () => {
 
   it('shows success message when checkout succeeds', async () => {
     const { useSearchParams } = await import('react-router-dom')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(useSearchParams as any).mockReturnValue([
       new URLSearchParams('success=true'),
       vi.fn(),
@@ -167,6 +170,7 @@ describe('PricingPage', () => {
 
   it('shows canceled message when checkout is canceled', async () => {
     const { useSearchParams } = await import('react-router-dom')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(useSearchParams as any).mockReturnValue([
       new URLSearchParams('canceled=true'),
       vi.fn(),
@@ -184,6 +188,7 @@ describe('PricingPage', () => {
   it('shows redirect info when redirect parameter is present', async () => {
     const { useSearchParams } = await import('react-router-dom')
     const params = new URLSearchParams('redirect=/v/video123')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(useSearchParams as any).mockReturnValue([params, vi.fn()])
 
     const getMock = vi.fn().mockReturnValue({
@@ -204,6 +209,7 @@ describe('PricingPage', () => {
   it('includes redirect in checkout request when present', async () => {
     const user = userEvent.setup()
     const { useSearchParams } = await import('react-router-dom')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(useSearchParams as any).mockReturnValue([
       new URLSearchParams('redirect=/v/video123'),
       vi.fn(),
@@ -234,6 +240,7 @@ describe('PricingPage', () => {
     const user = userEvent.setup()
     // Mock alert on window
     const alertMock = vi.fn()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).alert = alertMock
     
     const getMock = vi.fn().mockReturnValue({
@@ -264,6 +271,7 @@ describe('PricingPage', () => {
     const user = userEvent.setup()
     // Mock alert on window
     const alertMock = vi.fn()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).alert = alertMock
     
     let callCount = 0

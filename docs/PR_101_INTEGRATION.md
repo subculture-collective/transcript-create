@@ -103,7 +103,8 @@ def __init__(self, app):
     self.transcript_matcher = CommonMatchers.VIDEO_TRANSCRIPTS
     self.search_matcher = MultiPathMatcher(
         r"^/search$",
-        r"^/search/suggestions$"
+        r"^/search/suggestions$",
+        r"^/search/history$"
     )
 ```
 

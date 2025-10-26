@@ -1,7 +1,6 @@
 """Security middleware for headers, rate limiting, and request validation."""
 
 import gzip
-import io
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
@@ -159,30 +158,30 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 class CompressionMiddleware(BaseHTTPMiddleware):
     """Middleware to compress responses using gzip."""
-    
+
     MIN_SIZE = 1024  # Only compress responses > 1KB
-    
+
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # Check if client accepts gzip
         accept_encoding = request.headers.get("accept-encoding", "")
         if "gzip" not in accept_encoding.lower():
             return response
-        
+
         # Skip compression for already compressed content
         if response.headers.get("content-encoding"):
             return response
-        
+
         # Skip compression for streaming responses
         if hasattr(response, "body_iterator"):
             return response
-        
+
         # Get response body
         body = b""
         async for chunk in response.body_iterator:
             body += chunk
-        
+
         # Only compress if body is large enough
         if len(body) < self.MIN_SIZE:
             return Response(
@@ -191,10 +190,10 @@ class CompressionMiddleware(BaseHTTPMiddleware):
                 headers=dict(response.headers),
                 media_type=response.media_type,
             )
-        
+
         # Compress the body
         compressed_body = gzip.compress(body, compresslevel=6)
-        
+
         # Only use compressed version if it's actually smaller
         if len(compressed_body) < len(body):
             response.headers["Content-Encoding"] = "gzip"
@@ -205,7 +204,7 @@ class CompressionMiddleware(BaseHTTPMiddleware):
                 headers=dict(response.headers),
                 media_type=response.media_type,
             )
-        
+
         # Return uncompressed if compression didn't help
         return Response(
             content=body,
@@ -217,50 +216,50 @@ class CompressionMiddleware(BaseHTTPMiddleware):
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
     """Middleware to add Cache-Control headers based on endpoint patterns."""
-    
+
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # Don't cache error responses
         if response.status_code >= 400:
             response.headers["Cache-Control"] = "no-store"
             return response
-        
+
         path = request.url.path
-        
+
         # Static assets (if any) - long cache
         if path.startswith("/static/"):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             return response
-        
+
         # Health check - no cache
         if path in ["/health", "/metrics"]:
             response.headers["Cache-Control"] = "no-store"
             return response
-        
+
         # Video metadata - moderate cache with revalidation
         if "/videos/" in path and not path.endswith("/transcript") and not path.endswith("/youtube-transcript"):
             response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
             return response
-        
+
         # Transcript data - longer cache with revalidation
         if path.endswith("/transcript") or path.endswith("/youtube-transcript"):
             response.headers["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=300"
             return response
-        
+
         # Search results - short cache
         if path.startswith("/search"):
             response.headers["Cache-Control"] = "public, max-age=600, stale-while-revalidate=60"
             return response
-        
+
         # User-specific data - private cache
         if any(path.startswith(p) for p in ["/auth/", "/favorites/", "/admin/"]):
             response.headers["Cache-Control"] = "private, max-age=60"
             return response
-        
+
         # Default: short cache with must-revalidate
         response.headers["Cache-Control"] = "public, max-age=60, must-revalidate"
-        
+
         return response
 
 
@@ -292,10 +291,10 @@ def setup_security_middleware(app):
     """
     # Add compression middleware
     app.add_middleware(CompressionMiddleware)
-    
+
     # Add cache control middleware
     app.add_middleware(CacheControlMiddleware)
-    
+
     # Add security headers
     app.add_middleware(SecurityHeadersMiddleware)
 

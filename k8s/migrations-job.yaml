@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: transcript-migrations
+  labels:
+    app: transcript-create
+    component: migrations
+  annotations:
+    # Helm hook annotations for pre-install and pre-upgrade
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 300  # Clean up job after 5 minutes
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: transcript-create
+        component: migrations
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: migrations
+        image: transcript-create:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python3", "scripts/run_migrations.py", "upgrade"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: transcript-secrets
+              key: database-url
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL

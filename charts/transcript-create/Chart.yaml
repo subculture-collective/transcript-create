@@ -1,0 +1,20 @@
+apiVersion: v2
+name: transcript-create
+description: A Helm chart for transcript-create - YouTube video transcription service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - transcription
+  - youtube
+  - whisper
+  - ai
+  - speech-to-text
+home: https://github.com/subculture-collective/transcript-create
+sources:
+  - https://github.com/subculture-collective/transcript-create
+maintainers:
+  - name: onnwee
+    url: https://github.com/onnwee
+icon: https://raw.githubusercontent.com/subculture-collective/transcript-create/main/frontend/public/logo.png
+dependencies: []

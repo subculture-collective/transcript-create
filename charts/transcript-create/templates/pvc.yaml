@@ -1,0 +1,38 @@
+{{- if .Values.persistence.data.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "transcript-create.fullname" . }}-data
+  labels:
+    {{- include "transcript-create.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+  - {{ .Values.persistence.data.accessMode }}
+  {{- if .Values.persistence.data.storageClass }}
+  storageClassName: {{ .Values.persistence.data.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.data.size }}
+{{- end }}
+{{- if .Values.persistence.cache.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "transcript-create.fullname" . }}-cache
+  labels:
+    {{- include "transcript-create.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+  - {{ .Values.persistence.cache.accessMode }}
+  {{- if .Values.persistence.cache.storageClass }}
+  storageClassName: {{ .Values.persistence.cache.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.cache.size }}
+{{- end }}

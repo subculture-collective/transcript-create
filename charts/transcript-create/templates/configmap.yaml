@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "transcript-create.fullname" . }}-config
+  labels:
+    {{- include "transcript-create.labels" . | nindent 4 }}
+data:
+  # Service endpoints
+  redis-url: {{ include "transcript-create.redisUrl" . | quote }}
+  opensearch-url: {{ include "transcript-create.opensearchUrl" . | quote }}
+  
+  # Whisper configuration
+  whisper-model: {{ .Values.config.whisper.model | quote }}
+  whisper-backend: {{ .Values.config.whisper.backend | quote }}
+  whisper-backend-worker: {{ .Values.config.whisper.backendWorker | quote }}
+  chunk-seconds: {{ .Values.config.whisper.chunkSeconds | quote }}
+  gpu-device-preference: {{ .Values.config.whisper.gpuDevicePreference | quote }}
+  gpu-compute-types: {{ .Values.config.whisper.gpuComputeTypes | quote }}
+  
+  # Search backend
+  search-backend: {{ .Values.config.search.backend | quote }}
+  
+  # Frontend and environment
+  frontend-origin: "https://{{ .Values.global.domain }}"
+  environment: {{ .Values.global.environment | quote }}
+  
+  # Logging
+  log-level: {{ .Values.config.logging.level | quote }}
+  
+  # Cleanup settings
+  cleanup-after-process: {{ .Values.config.cleanup.afterProcess | quote }}
+  cleanup-delete-raw: {{ .Values.config.cleanup.deleteRaw | quote }}
+  cleanup-delete-wav: {{ .Values.config.cleanup.deleteWav | quote }}
+  cleanup-delete-chunks: {{ .Values.config.cleanup.deleteChunks | quote }}
+  
+  # Cache TTLs
+  cache-default-ttl: {{ .Values.config.cache.defaultTtl | quote }}
+  cache-video-ttl: {{ .Values.config.cache.videoTtl | quote }}
+  cache-transcript-ttl: {{ .Values.config.cache.transcriptTtl | quote }}
+  cache-search-ttl: {{ .Values.config.cache.searchTtl | quote }}
+  
+  # Quotas
+  free-daily-search-limit: {{ .Values.config.quotas.freeDailySearchLimit | quote }}
+  free-daily-export-limit: {{ .Values.config.quotas.freeDailyExportLimit | quote }}
+  pro-plan-name: {{ .Values.config.quotas.proPlanName | quote }}
+  
+  # Security
+  enable-rate-limiting: {{ .Values.config.security.enableRateLimiting | quote }}
+  session-expire-hours: {{ .Values.config.security.sessionExpireHours | quote }}
+  oauth-state-validation: {{ .Values.config.security.oauthStateValidation | quote }}
+  
+  # Health check configuration
+  health-check-timeout: {{ .Values.config.healthCheck.timeout | quote }}
+  health-check-worker-stale-seconds: {{ .Values.config.healthCheck.workerStaleSeconds | quote }}
+  health-check-disk-min-free-gb: {{ .Values.config.healthCheck.diskMinFreeGb | quote }}
+  health-check-critical-components: {{ .Values.config.healthCheck.criticalComponents | quote }}
+  
+  # Monitoring
+  enable-metrics: {{ .Values.config.monitoring.enabled | quote }}

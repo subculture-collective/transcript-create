@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transcript-api
+  labels:
+    app: transcript-create
+    component: api
+spec:
+  type: ClusterIP
+  # Session affinity for sticky sessions (optional - if needed for OAuth flows)
+  # sessionAffinity: ClientIP
+  # sessionAffinityConfig:
+  #   clientIP:
+  #     timeoutSeconds: 10800
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: transcript-create
+    component: api

@@ -1,0 +1,32 @@
+---
+# PVC for shared data storage (videos, audio files, etc.)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: transcript-data
+  labels:
+    app: transcript-create
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteMany  # Required for multiple workers to access the same data
+  storageClassName: fast-ssd  # Use your cluster's fast SSD storage class
+  resources:
+    requests:
+      storage: 500Gi
+---
+# PVC for model cache (Whisper models, HuggingFace models)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: transcript-cache
+  labels:
+    app: transcript-create
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteMany  # Shared across API and workers for model caching
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi

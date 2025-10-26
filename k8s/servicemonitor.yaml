@@ -1,0 +1,37 @@
+# ServiceMonitor for Prometheus Operator to scrape API metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: transcript-api
+  labels:
+    app: transcript-create
+    component: api
+spec:
+  selector:
+    matchLabels:
+      app: transcript-create
+      component: api
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# PodMonitor for Worker metrics (workers don't have a service)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: transcript-worker
+  labels:
+    app: transcript-create
+    component: worker
+spec:
+  selector:
+    matchLabels:
+      app: transcript-create
+      component: worker
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s

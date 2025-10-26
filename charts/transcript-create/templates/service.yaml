@@ -1,0 +1,25 @@
+{{- if .Values.api.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "transcript-create.fullname" . }}-api
+  labels:
+    {{- include "transcript-create.api.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.api.service.type }}
+  {{- if .Values.api.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.api.service.sessionAffinity }}
+  {{- if eq .Values.api.service.sessionAffinity "ClientIP" }}
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  {{- end }}
+  {{- end }}
+  ports:
+  - name: http
+    port: {{ .Values.api.service.port }}
+    targetPort: http
+    protocol: TCP
+  selector:
+    {{- include "transcript-create.api.selectorLabels" . | nindent 4 }}
+{{- end }}

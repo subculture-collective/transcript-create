@@ -297,6 +297,7 @@ async def metrics_middleware(request: Request, call_next):
 
 
 from .routes.admin import router as admin_router  # noqa: E402
+from .routes.analytics import router as analytics_router  # noqa: E402
 from .routes.api_keys import router as api_keys_router  # noqa: E402
 from .routes.auth import router as auth_router  # noqa: E402
 from .routes.billing import router as billing_router  # noqa: E402
@@ -318,6 +319,7 @@ app.include_router(videos_router)
 app.include_router(favorites_router)
 app.include_router(events_router)
 app.include_router(admin_router)
+app.include_router(analytics_router)
 app.include_router(search_router)
 
 

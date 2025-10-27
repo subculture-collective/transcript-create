@@ -125,10 +125,10 @@ def get_dashboard_metrics(
         {"week_ago": week_ago}
     ).scalar()
 
-    # Active sessions (sessions created in last 24h or updated recently)
+    # Active sessions (sessions not expired)
     sessions_active = db.execute(
-        text("SELECT COUNT(*) FROM sessions WHERE created_at >= :day_ago OR expires_at > :now"),
-        {"day_ago": now - timedelta(days=1), "now": now}
+        text("SELECT COUNT(*) FROM sessions WHERE expires_at > :now"),
+        {"now": now}
     ).scalar()
 
     # Search queries from events table

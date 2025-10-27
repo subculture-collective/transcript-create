@@ -11,6 +11,22 @@
 
 Create searchable, exportable transcripts from YouTube videos or channels. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
 
+## 🚀 API Client SDKs
+
+Integrate Transcript Create into your applications with our official client libraries:
+
+- **[Python SDK](clients/python)** - Async client with full type hints
+  ```bash
+  pip install transcript-create-client
+  ```
+
+- **[JavaScript/TypeScript SDK](clients/javascript)** - Universal client for Node.js and browsers
+  ```bash
+  npm install @transcript-create/sdk
+  ```
+
+See the [SDK documentation](clients/) for detailed usage examples and API reference.
+
 ## CI/CD Status
 
 This project has comprehensive CI/CD automation:

@@ -116,7 +116,7 @@ class TestBillingRoutes:
                 json={"period": "quarterly"},
                 cookies={"tc_session": session_token},
             )
-            assert response.status_code == 400
+            assert response.status_code == 422  # ValidationError returns 422
             assert "Invalid period" in response.json()["detail"]
 
     def test_checkout_session_default_period(self, client: TestClient, db_session):

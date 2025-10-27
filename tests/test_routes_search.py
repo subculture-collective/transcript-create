@@ -344,3 +344,185 @@ class TestSearchExport:
         assert response.status_code == 200
         data = response.json()
         assert "results" in data
+
+
+class TestSearchAnalytics:
+    """Tests for /admin/search/analytics endpoint."""
+
+    def test_analytics_unauthenticated(self, client: TestClient):
+        """Test analytics without authentication."""
+        response = client.get("/admin/search/analytics")
+        assert response.status_code == 403  # Not admin
+
+    def test_analytics_non_admin(self, client: TestClient, db_session):
+        """Test analytics with non-admin user."""
+        import secrets
+        from datetime import datetime, timedelta
+
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject, role) "
+                "VALUES (:id, :email, 'google', 'test123', 'user')"
+            ),
+            {"id": str(user_id), "email": "user@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+        db_session.commit()
+
+        response = client.get("/admin/search/analytics", cookies={"tc_session": session_token})
+        assert response.status_code == 403
+
+    def test_analytics_admin_success(self, client: TestClient, db_session):
+        """Test analytics with admin user."""
+        import secrets
+        from datetime import datetime, timedelta
+
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject, role) "
+                "VALUES (:id, :email, 'google', 'test123', 'admin')"
+            ),
+            {"id": str(user_id), "email": "admin@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+        db_session.commit()
+
+        response = client.get("/admin/search/analytics?days=30", cookies={"tc_session": session_token})
+        assert response.status_code == 200
+        data = response.json()
+        assert "popular_terms" in data
+        assert "zero_result_searches" in data
+        assert "search_volume" in data
+        assert "avg_results_per_query" in data
+        assert "total_searches" in data
+
+    def test_analytics_avg_results_none_when_no_data(self, client: TestClient, db_session):
+        """Test that avg_results_per_query is None when there's no search data."""
+        import secrets
+        from datetime import datetime, timedelta
+
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject, role) "
+                "VALUES (:id, :email, 'google', 'test123', 'admin')"
+            ),
+            {"id": str(user_id), "email": "admin2@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+        db_session.commit()
+
+        # Clear any existing user_searches data
+        db_session.execute(text("DELETE FROM user_searches"))
+        db_session.commit()
+
+        response = client.get("/admin/search/analytics?days=30", cookies={"tc_session": session_token})
+        assert response.status_code == 200
+        data = response.json()
+        # When there's no data, avg_results_per_query should be None, not 0
+        assert data["avg_results_per_query"] is None
+        assert data["total_searches"] == 0
+
+    def test_analytics_avg_results_zero_vs_none(self, client: TestClient, db_session):
+        """Test that avg_results_per_query correctly distinguishes between 0 and None."""
+        import secrets
+        from datetime import datetime, timedelta
+
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject, role) "
+                "VALUES (:id, :email, 'google', 'test123', 'admin')"
+            ),
+            {"id": str(user_id), "email": "admin3@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+
+        # Create a search with 0 results
+        db_session.execute(
+            text(
+                "INSERT INTO user_searches (user_id, query, filters, result_count, query_time_ms) "
+                "VALUES (:uid, 'test query', '{}', 0, 100)"
+            ),
+            {"uid": str(user_id)},
+        )
+        db_session.commit()
+
+        response = client.get("/admin/search/analytics?days=30", cookies={"tc_session": session_token})
+        assert response.status_code == 200
+        data = response.json()
+        # When there are searches with 0 results, avg should be 0.0, not None
+        assert data["avg_results_per_query"] == 0.0
+        assert data["total_searches"] >= 1
+
+    def test_analytics_invalid_days_too_low(self, client: TestClient, db_session):
+        """Test analytics with days parameter below minimum."""
+        import secrets
+        from datetime import datetime, timedelta
+
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject, role) "
+                "VALUES (:id, :email, 'google', 'test123', 'admin')"
+            ),
+            {"id": str(user_id), "email": "admin4@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+        db_session.commit()
+
+        response = client.get("/admin/search/analytics?days=0", cookies={"tc_session": session_token})
+        # FastAPI validation should reject this with 422
+        assert response.status_code == 422
+
+    def test_analytics_invalid_days_too_high(self, client: TestClient, db_session):
+        """Test analytics with days parameter above maximum."""
+        import secrets
+        from datetime import datetime, timedelta
+
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject, role) "
+                "VALUES (:id, :email, 'google', 'test123', 'admin')"
+            ),
+            {"id": str(user_id), "email": "admin5@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+        db_session.commit()
+
+        response = client.get("/admin/search/analytics?days=1000", cookies={"tc_session": session_token})
+        # FastAPI validation should reject this with 422
+        assert response.status_code == 422

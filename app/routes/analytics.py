@@ -93,7 +93,7 @@ def get_dashboard_metrics(
         {"week_ago": week_ago}
     ).scalar()
     jobs_pending = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state IN ('pending', 'downloading', 'transcoding', 'transcribing')")
+        text("SELECT COUNT(*) FROM videos WHERE state = 'pending'")
     ).scalar()
     jobs_in_progress = db.execute(
         text("SELECT COUNT(*) FROM videos WHERE state IN ('downloading', 'transcoding', 'transcribing')")

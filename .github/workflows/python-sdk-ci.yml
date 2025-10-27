@@ -42,7 +42,6 @@ jobs:
       
       - name: Run mypy
         run: mypy transcript_create_client
-        continue-on-error: true
 
   test:
     name: Test Python SDK

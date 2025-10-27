@@ -112,10 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: javascript-sdk-dist
-          path: |
-            clients/javascript/dist/
-            clients/javascript/package.json
-            clients/javascript/README.md
+          path: clients/javascript/dist/
 
   publish:
     name: Publish to npm

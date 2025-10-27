@@ -9,6 +9,7 @@ import LoginPage from './routes/LoginPage';
 import FavoritesPage from './routes/FavoritesPage';
 import Protected from './routes/Protected';
 import AdminLayout from './routes/admin/AdminLayout';
+import AdminDashboard from './routes/admin/AdminDashboard';
 import AdminEvents from './routes/admin/AdminEvents';
 import AdminUsers from './routes/admin/AdminUsers';
 import { AuthProvider, ThemeProvider } from './services';
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
         path: 'admin',
         element: <AdminLayout />,
         children: [
+          { path: 'dashboard', element: <AdminDashboard /> },
           { path: 'events', element: <AdminEvents /> },
           { path: 'users', element: <AdminUsers /> },
         ],

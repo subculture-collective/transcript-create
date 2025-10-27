@@ -1,72 +1,67 @@
 # Prometheus configuration for transcript-create monitoring
 global:
-  scrape_interval: 15s  # How frequently to scrape targets
-  evaluation_interval: 15s  # How frequently to evaluate rules
-  # scrape_timeout is set to the global default (10s).
+    scrape_interval: 15s # How frequently to scrape targets
+    evaluation_interval: 15s # How frequently to evaluate rules
+    # scrape_timeout is set to the global default (10s).
 
-  # Attach these labels to any time series or alerts when communicating with
-  # external systems (federation, remote storage, Alertmanager).
-  external_labels:
-    cluster: 'transcript-create'
-    # Set environment via PROMETHEUS_ENVIRONMENT env var, defaults to 'development'
-    # environment: '${PROMETHEUS_ENVIRONMENT:-development}'
+    # Attach these labels to any time series or alerts when communicating with
+    # external systems (federation, remote storage, Alertmanager).
+    external_labels:
+        cluster: 'transcript-create'
+        # Set environment via PROMETHEUS_ENVIRONMENT env var, defaults to 'development'
+        # environment: '${PROMETHEUS_ENVIRONMENT:-development}'
 
 # Alertmanager configuration
 alerting:
-  alertmanagers:
-    - static_configs:
-        - targets:
-          # - alertmanager:9093
+    alertmanagers:
+        - static_configs:
+              - targets:
+                # - alertmanager:9093
 
 # Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
 rule_files:
-  - "alerts.yml"
-  # - "first_rules.yml"
-  # - "second_rules.yml"
+    - 'alerts.yml'
+    # - "first_rules.yml"
+    # - "second_rules.yml"
 
 # A scrape configuration containing exactly one endpoint to scrape:
 # Here it's Prometheus itself.
 scrape_configs:
-  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
-  - job_name: 'prometheus'
-    # metrics_path defaults to '/metrics'
-    # scheme defaults to 'http'.
-    static_configs:
-      - targets: ['localhost:9090']
+    # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+    - job_name: 'prometheus'
+      # metrics_path defaults to '/metrics'
+      # scheme defaults to 'http'.
+      static_configs:
+          - targets: ['localhost:9090']
 
-  # API service metrics
-  - job_name: 'api'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['api:8000']
-        labels:
-          service: 'api'
-          component: 'fastapi'
+    # API service metrics
+    - job_name: 'api'
+      scrape_interval: 15s
+      scrape_timeout: 10s
+      metrics_path: '/metrics'
+      static_configs:
+          - targets: ['api:8000']
+            labels:
+                service: 'api'
+                component: 'fastapi'
 
-  # Worker service metrics
-  - job_name: 'worker'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['worker:8001']
-        labels:
-          service: 'worker'
-          component: 'transcription'
+    # Worker service metrics
+    - job_name: 'worker'
+      scrape_interval: 15s
+      scrape_timeout: 10s
+      metrics_path: '/metrics'
+      static_configs:
+          - targets: ['worker:8001']
+            labels:
+                service: 'worker'
+                component: 'transcription'
 
-  # PostgreSQL exporter (optional, uncomment if added)
-  # - job_name: 'postgres'
-  #   static_configs:
-  #     - targets: ['postgres-exporter:9187']
-  #       labels:
-  #         service: 'database'
-
-# Storage configuration
-storage:
-  tsdb:
-    # Data retention period
-    retention.time: 30d
-    # Maximum size of the TSDB
-    retention.size: 10GB
+    # PostgreSQL exporter (optional, uncomment if added)
+    # - job_name: 'postgres'
+    #   static_configs:
+    #     - targets: ['postgres-exporter:9187']
+    #       labels:
+    #         service: 'database'
+# Storage configuration:
+# Retention is configured via CLI flags in docker-compose.yml
+# (--storage.tsdb.retention.time and --storage.tsdb.retention.size)

@@ -125,10 +125,12 @@ python scripts/run_migrations.py upgrade
 ## Common Scenarios
 
 For detailed migration examples and templates, see:
+
 - **[Migration Template Guide](../alembic/MIGRATION_TEMPLATE.md)** - Comprehensive examples for all migration types
 - **[CONTRIBUTING.md - Database Migrations](../CONTRIBUTING.md#database-migrations)** - Development workflow
 
 Examples include:
+
 - Adding tables
 - Adding columns
 - Creating indexes
@@ -168,6 +170,7 @@ python scripts/run_migrations.py upgrade
 ```
 
 For production issues and detailed recovery procedures, see:
+
 - **[Production Migration Runbook](PRODUCTION_MIGRATIONS.md)** - Comprehensive production procedures
 - **[Rollback Procedures](PRODUCTION_MIGRATIONS.md#rollback-procedures)** - Emergency recovery steps
 

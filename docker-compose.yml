@@ -87,6 +87,12 @@ services:
       PYTHONWARNINGS: "ignore::FutureWarning"
       # Disable OpenTelemetry SDK to avoid external telemetry posts
       OTEL_SDK_DISABLED: "true"
+      # Optional: yt-dlp tuning
+      # Point to a cookies file inside the container to access age-restricted/private videos
+      # Example: put cookies at ./cache/yt-dlp/cookies.txt and set YTDLP_COOKIES=/root/.cache/yt-dlp/cookies.txt in .env
+      YTDLP_COOKIES: ${YTDLP_COOKIES:-}
+      # Extra args passed verbatim to yt-dlp (space-separated)
+      YTDLP_EXTRA_ARGS: ${YTDLP_EXTRA_ARGS:-}
     depends_on:
       db:
         condition: service_healthy

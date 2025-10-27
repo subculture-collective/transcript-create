@@ -582,6 +582,7 @@ def get_search_analytics(
         _text(
             """
             SELECT AVG(result_count) as avg_results
+            -- Note: ::float cast removed; cast to float is now done in Python (see line 594) to preserve NULL as None
             FROM user_searches
             WHERE created_at >= now() - INTERVAL ':days days'
               AND result_count IS NOT NULL

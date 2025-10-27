@@ -16,6 +16,9 @@ export default function AdminLayout() {
     <ProtectedAdmin>
       <div className="mx-auto max-w-7xl p-4">
         <nav className="mb-4 flex gap-4">
+          <Link className="text-stone-700 hover:underline" to="/admin/dashboard">
+            Dashboard
+          </Link>
           <Link className="text-stone-700 hover:underline" to="/admin/events">
             Events
           </Link>

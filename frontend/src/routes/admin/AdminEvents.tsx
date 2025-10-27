@@ -36,12 +36,10 @@ export default function AdminEvents() {
     const params = new URLSearchParams();
     if (start) params.set('start', start);
     if (end) params.set('end', end);
-    const res = await http
-      .get('admin/events/summary', { searchParams: params })
-      .json<{
-        by_type: Array<{ type: string; count: number }>;
-        by_day: Array<{ day: string; count: number }>;
-      }>();
+    const res = await http.get('admin/events/summary', { searchParams: params }).json<{
+      by_type: Array<{ type: string; count: number }>;
+      by_day: Array<{ day: string; count: number }>;
+    }>();
     setSummary(res);
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { http } from '../../services/api';
 
 type DashboardMetrics = {
@@ -143,9 +143,12 @@ function SimpleLineChart({ data, labels }: { data: number[]; labels: string[] })
   const chartWidth = 400;
   const padding = 10;
 
+  // Avoid division by zero or negative values for empty/single-item arrays
+  const divisor = Math.max(data.length - 1, 1);
+
   const points = data
     .map((value, idx) => {
-      const x = padding + (idx * (chartWidth - 2 * padding)) / (data.length - 1 || 1);
+      const x = padding + (idx * (chartWidth - 2 * padding)) / divisor;
       const y = chartHeight - padding - (value / maxValue) * (chartHeight - 2 * padding);
       return `${x},${y}`;
     })
@@ -156,7 +159,7 @@ function SimpleLineChart({ data, labels }: { data: number[]; labels: string[] })
       <svg width={chartWidth} height={chartHeight} className="border-b border-l border-stone-200">
         <polyline points={points} fill="none" stroke="#3b82f6" strokeWidth="2" />
         {data.map((value, idx) => {
-          const x = padding + (idx * (chartWidth - 2 * padding)) / (data.length - 1 || 1);
+          const x = padding + (idx * (chartWidth - 2 * padding)) / divisor;
           const y = chartHeight - padding - (value / maxValue) * (chartHeight - 2 * padding);
           return (
             <circle key={idx} cx={x} cy={y} r="3" fill="#3b82f6">
@@ -187,7 +190,7 @@ export default function AdminDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
       const [metricsRes, healthRes, jobsRes, statusRes, exportRes, searchRes] = await Promise.all([
         http.get('admin/dashboard/metrics').json<DashboardMetrics>(),
@@ -208,11 +211,11 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     }
-  }
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -222,7 +225,7 @@ export default function AdminDashboard() {
     }, 10000); // Auto-refresh every 10 seconds
 
     return () => clearInterval(interval);
-  }, [autoRefresh]);
+  }, [autoRefresh, fetchData]);
 
   if (!metrics || !health) {
     return <div className="p-6">Loading dashboard...</div>;

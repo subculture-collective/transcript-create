@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { http } from '../../services/api';
 
 type EventRow = {
@@ -21,7 +21,7 @@ export default function AdminEvents() {
     by_day: Array<{ day: string; count: number }>;
   } | null>(null);
 
-  async function fetchEvents() {
+  const fetchEvents = useCallback(async () => {
     const params = new URLSearchParams();
     if (type) params.set('type', type);
     if (email) params.set('user_email', email);
@@ -31,8 +31,9 @@ export default function AdminEvents() {
       .get('admin/events', { searchParams: params })
       .json<{ items: EventRow[] }>();
     setItems(res.items);
-  }
-  async function fetchSummary() {
+  }, [type, email, start, end]);
+
+  const fetchSummary = useCallback(async () => {
     const params = new URLSearchParams();
     if (start) params.set('start', start);
     if (end) params.set('end', end);
@@ -41,13 +42,12 @@ export default function AdminEvents() {
       by_day: Array<{ day: string; count: number }>;
     }>();
     setSummary(res);
-  }
+  }, [start, end]);
 
   useEffect(() => {
     fetchEvents();
     fetchSummary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchEvents, fetchSummary]);
 
   return (
     <div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { http } from '../../services/api';
 
 type UserRow = {
@@ -13,19 +13,18 @@ export default function AdminUsers() {
   const [items, setItems] = useState<UserRow[]>([]);
   const [q, setQ] = useState('');
 
-  async function fetchUsers() {
+  const fetchUsers = useCallback(async () => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     const res = await http
       .get('admin/users', { searchParams: params })
       .json<{ items: UserRow[] }>();
     setItems(res.items);
-  }
+  }, [q]);
 
   useEffect(() => {
     fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchUsers]);
 
   return (
     <div>

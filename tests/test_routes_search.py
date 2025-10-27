@@ -1,6 +1,8 @@
 """Tests for search routes."""
 
+import secrets
 import uuid
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -356,9 +358,6 @@ class TestSearchAnalytics:
 
     def test_analytics_non_admin(self, client: TestClient, db_session):
         """Test analytics with non-admin user."""
-        import secrets
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -380,9 +379,6 @@ class TestSearchAnalytics:
 
     def test_analytics_admin_success(self, client: TestClient, db_session):
         """Test analytics with admin user."""
-        import secrets
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -410,9 +406,6 @@ class TestSearchAnalytics:
 
     def test_analytics_avg_results_none_when_no_data(self, client: TestClient, db_session):
         """Test that avg_results_per_query is None when there's no search data."""
-        import secrets
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -442,9 +435,6 @@ class TestSearchAnalytics:
 
     def test_analytics_avg_results_zero_vs_none(self, client: TestClient, db_session):
         """Test that avg_results_per_query correctly distinguishes between 0 and None."""
-        import secrets
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -479,9 +469,6 @@ class TestSearchAnalytics:
 
     def test_analytics_invalid_days_too_low(self, client: TestClient, db_session):
         """Test analytics with days parameter below minimum."""
-        import secrets
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 
@@ -504,9 +491,6 @@ class TestSearchAnalytics:
 
     def test_analytics_invalid_days_too_high(self, client: TestClient, db_session):
         """Test analytics with days parameter above maximum."""
-        import secrets
-        from datetime import datetime, timedelta
-
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
 

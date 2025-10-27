@@ -61,18 +61,20 @@ openssl rand -hex 32  # Copy this value to SESSION_SECRET in .env
 
 **Security Note**: See [SECURITY.md](SECURITY.md) for detailed security practices and secrets management.
 
-2. Start services with Docker Compose (Postgres + API + Worker; OpenSearch optional)
+2. Start services with Docker Compose (Postgres + API + Worker + Backup; OpenSearch optional)
 
 ```bash
 docker compose build
 docker compose up -d
 ```
 
-- API available at <http://localhost:8000>
-- Postgres exposed on host port 5434 (inside network: db:5432)
-- Prometheus metrics at <http://localhost:9090>
-- Grafana dashboards at <http://localhost:3000> (admin/admin)
-- If your host ROCm version ≠ 6.0, use a different build arg, e.g.:
+-   API available at <http://localhost:8000>
+-   Postgres exposed on host port 5434 (inside network: db:5432)
+-   Prometheus metrics at <http://localhost:9090>
+-   Grafana dashboards at <http://localhost:3000> (admin/admin)
+-   Automated backups: Daily at 2 AM UTC (database) and 3 AM UTC (media)
+-   Backup verification: Weekly on Sundays at 4 AM UTC
+-   If your host ROCm version ≠ 6.0, use a different build arg, e.g.:
 
 ```bash
 docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.1
@@ -179,9 +181,13 @@ Images are built with:
 - SQL schema: `sql/schema.sql` (reference schema; migrations are applied via Alembic)
 - Data storage: `data/VIDEO_UUID/` mounted as `/data` in containers
 - OpenSearch analysis: `config/opensearch/analysis/`
-- Documentation: `docs/` (guides for migrations, logging, monitoring, etc.)
+- Documentation: `docs/` (guides for migrations, logging, monitoring, disaster recovery, etc.)
+  - [Database Migrations](docs/MIGRATIONS.md) - Schema versioning with Alembic
+  - [Backup & Disaster Recovery](docs/operations/disaster-recovery.md) - Automated backups, PITR, recovery procedures
+  - [Backup Operations](docs/operations/backup-operations.md) - Daily operations, troubleshooting, maintenance
 
 See [docs/MIGRATIONS.md](docs/MIGRATIONS.md) for database migration details.
+See [docs/operations/disaster-recovery.md](docs/operations/disaster-recovery.md) for backup and recovery procedures.
 
 ## Pipeline overview
 

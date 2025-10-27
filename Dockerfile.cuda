@@ -1,0 +1,99 @@
+# =============================================================================
+# Multi-Stage Dockerfile for transcript-create (CUDA variant)
+# =============================================================================
+# NVIDIA CUDA-accelerated build for GPU inference on NVIDIA hardware.
+#
+# Build stages:
+#   1. base       - CUDA runtime and system dependencies
+#   2. python-deps - Python packages installation
+#   3. app        - Final application stage
+#
+# Target image size: ~2.5GB
+# Use cases: NVIDIA GPU deployments, CUDA-accelerated inference
+# =============================================================================
+
+# =============================================================================
+# Stage 1: Base image with system dependencies
+# =============================================================================
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04 AS base
+
+# Build argument for PyTorch CUDA wheel index
+ARG CUDA_WHEEL_INDEX=https://download.pytorch.org/whl/cu121
+
+# Set environment variables for non-interactive installs
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# Install system dependencies in a single layer
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg \
+        python3 \
+        python3-pip \
+        git \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# =============================================================================
+# Stage 2: Python dependencies
+# =============================================================================
+FROM base AS python-deps
+
+# Copy only requirements files to leverage layer caching
+COPY requirements.txt constraints.txt* ./
+
+# Install Python dependencies with pip cache mount for faster rebuilds
+# Use BuildKit cache mount to persist pip cache across builds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    # Remove any torch variants pulled in by other dependencies
+    (pip3 uninstall -y torch torchvision torchaudio || true) && \
+    # Install CUDA PyTorch wheels explicitly
+    pip3 install --no-cache-dir --index-url ${CUDA_WHEEL_INDEX} \
+        torch==2.4.1+cu121 torchaudio==2.4.1+cu121
+
+# Verify PyTorch installation
+RUN python3 -c "import torch; print('Torch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda if hasattr(torch.version, 'cuda') else 'N/A')"
+
+# =============================================================================
+# Stage 3: Final application stage
+# =============================================================================
+FROM base AS app
+
+# Copy Python packages from deps stage
+COPY --from=python-deps /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+COPY --from=python-deps /usr/local/bin /usr/local/bin
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code (excluding files in .dockerignore)
+COPY . /app
+
+# Pre-compile Python files for faster startup
+RUN python3 -m compileall -q /app
+
+# Set optimal environment variables for production
+ENV PDF_FONT_PATH=/app/fonts/DejaVuSerif.ttf \
+    HF_HOME=/root/.cache/hf \
+    HF_HUB_CACHE=/root/.cache/hf/hub \
+    TRANSFORMERS_CACHE=/root/.cache/hf/transformers \
+    FORCE_GPU=true \
+    WHISPER_BACKEND=whisper
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose API port
+EXPOSE 8000
+
+# Default command
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

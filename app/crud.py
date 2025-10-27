@@ -5,7 +5,9 @@ import uuid
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
+from app.cache import cache, invalidate_cache, invalidate_cache_pattern
 from app.logging_config import get_logger
+from app.settings import settings
 
 logger = get_logger(__name__)
 
@@ -83,6 +85,7 @@ def fetch_job(db, job_id):
 
 
 @_retry_on_transient_error
+@cache(prefix="segments", ttl=settings.CACHE_TRANSCRIPT_TTL if settings.ENABLE_CACHING else 0)
 def list_segments(db, video_id):
     rows = db.execute(
         text("SELECT start_ms,end_ms,text,speaker_label FROM segments WHERE video_id=:v ORDER BY start_ms"),
@@ -92,6 +95,7 @@ def list_segments(db, video_id):
 
 
 @_retry_on_transient_error
+@cache(prefix="video", ttl=settings.CACHE_VIDEO_TTL if settings.ENABLE_CACHING else 0)
 def get_video(db, video_id: uuid.UUID):
     return (
         db.execute(text("SELECT id, youtube_id, title, duration_seconds FROM videos WHERE id=:v"), {"v": str(video_id)})

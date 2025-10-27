@@ -158,12 +158,14 @@ CREATE TABLE IF NOT EXISTS users (
     oauth_provider TEXT,
     oauth_subject TEXT,
     plan TEXT NOT NULL DEFAULT 'free',
+    role TEXT NOT NULL DEFAULT 'user', -- user, pro, admin
     stripe_customer_id TEXT,
     stripe_subscription_status TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (oauth_provider, oauth_subject)
 );
+CREATE INDEX IF NOT EXISTS users_role_idx ON users(role);
 
 CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -228,3 +230,38 @@ CREATE TABLE IF NOT EXISTS user_searches (
 CREATE INDEX IF NOT EXISTS user_searches_user_id_idx ON user_searches(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS user_searches_query_idx ON user_searches(query);
 CREATE INDEX IF NOT EXISTS user_searches_created_at_idx ON user_searches(created_at DESC);
+
+-- ---
+-- Security: API keys and audit logs
+-- ---
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE, -- SHA-256 hash of the API key
+    key_prefix TEXT NOT NULL, -- First 8 chars for display (e.g., "tc_abc12...")
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ, -- NULL = never expires
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    scopes TEXT -- Comma-separated API scopes for future use
+);
+CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys(user_id);
+CREATE INDEX IF NOT EXISTS api_keys_key_hash_idx ON api_keys(key_hash);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL, -- login_success, login_failed, api_key_created, etc.
+    resource_type TEXT, -- Type of resource affected (video, job, etc.)
+    resource_id TEXT, -- ID of resource affected
+    ip_address TEXT,
+    user_agent TEXT,
+    success BOOLEAN NOT NULL DEFAULT true,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS audit_logs_user_id_idx ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS audit_logs_action_idx ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at);

@@ -216,3 +216,18 @@ class DuplicateJobError(AppError):
             status_code=409,
             details=error_details,
         )
+
+
+class NotFoundError(AppError):
+    """Raised when a resource is not found."""
+
+    def __init__(self, message: str, resource_type: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+        error_details = details or {}
+        if resource_type:
+            error_details["resource_type"] = resource_type
+        super().__init__(
+            error_code="not_found",
+            message=message,
+            status_code=404,
+            details=error_details,
+        )

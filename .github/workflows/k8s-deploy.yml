@@ -1,0 +1,304 @@
+name: Kubernetes Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      version:
+        description: 'Image tag/version to deploy'
+        required: true
+        default: 'latest'
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Restrict default permissions
+permissions:
+  contents: read
+
+env:
+  HELM_VERSION: '3.12.0'
+  KUBECTL_VERSION: '1.27.0'
+
+jobs:
+  validate:
+    name: Validate Manifests and Helm Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Validate Kubernetes manifests
+        run: |
+          # Install kubectl
+          curl -LO "https://dl.k8s.io/release/v${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+          # Validate manifests with dry-run
+          echo "Validating Kubernetes manifests..."
+          for manifest in k8s/*.yaml; do
+            echo "Validating $manifest"
+            kubectl apply --dry-run=client -f "$manifest" || exit 1
+          done
+
+      - name: Lint Helm chart
+        run: |
+          echo "Linting Helm chart..."
+          helm lint charts/transcript-create
+
+      - name: Validate Helm chart rendering
+        run: |
+          echo "Testing Helm chart rendering for dev..."
+          helm template transcript-create charts/transcript-create \
+            -f charts/transcript-create/values-dev.yaml \
+            --debug > /tmp/rendered-dev.yaml
+
+          echo "Testing Helm chart rendering for prod..."
+          helm template transcript-create charts/transcript-create \
+            -f charts/transcript-create/values-prod.yaml \
+            --set secrets.databaseUrl="postgresql://test:test@localhost/test" \
+            --set secrets.sessionSecret="test-secret-key" \
+            --debug > /tmp/rendered-prod.yaml
+
+      - name: Check for common issues
+        run: |
+          echo "Checking for hardcoded secrets..."
+          if grep -r "password:" k8s/ charts/ | grep -v "CHANGEME" | grep -v "example" | grep -v "#"; then
+            echo "ERROR: Found hardcoded secrets!"
+            exit 1
+          fi
+
+          echo "Checking for missing resource limits..."
+          if ! grep -q "limits:" k8s/api-deployment.yaml; then
+            echo "ERROR: Missing resource limits in api-deployment.yaml"
+            exit 1
+          fi
+
+          echo "All validation checks passed!"
+
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.inputs.environment == 'dev' || github.ref == 'refs/heads/main'
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write  # For OIDC authentication with cloud providers
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_DEV }}" | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install transcript-create charts/transcript-create \
+            -f charts/transcript-create/values-dev.yaml \
+            --set image.tag="${{ github.event.inputs.version || 'latest' }}" \
+            --namespace transcript-create \
+            --create-namespace \
+            --wait \
+            --timeout 10m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/transcript-create-api -n transcript-create
+          kubectl rollout status deployment/transcript-create-worker -n transcript-create
+          kubectl get pods -n transcript-create
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.inputs.environment == 'staging'
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write  # For OIDC authentication with cloud providers
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install transcript-create charts/transcript-create \
+            -f charts/transcript-create/values-prod.yaml \
+            --set global.environment=staging \
+            --set image.tag="${{ github.event.inputs.version }}" \
+            --namespace transcript-create \
+            --create-namespace \
+            --wait \
+            --timeout 15m
+
+      - name: Run smoke tests
+        run: |
+          kubectl wait --for=condition=available deployment/transcript-create-api -n transcript-create --timeout=5m
+          
+          # Get API endpoint (try hostname first, fall back to IP)
+          API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$API_HOST" ]; then
+            API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          fi
+          
+          # Test health endpoint
+          curl -f "http://${API_HOST}/health" || exit 1
+          echo "Smoke tests passed!"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.inputs.environment == 'production' || startsWith(github.ref, 'refs/tags/v')
+    environment: production
+    permissions:
+      contents: read
+      id-token: write  # For OIDC authentication with cloud providers
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+
+      - name: Extract version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Backup current deployment
+        run: |
+          helm get values transcript-create -n transcript-create > /tmp/backup-values.yaml
+          kubectl get all -n transcript-create -o yaml > /tmp/backup-resources.yaml
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install transcript-create charts/transcript-create \
+            -f charts/transcript-create/values-prod.yaml \
+            --set image.tag="${{ github.event.inputs.version || env.VERSION }}" \
+            --namespace transcript-create \
+            --create-namespace \
+            --wait \
+            --timeout 20m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/transcript-create-api -n transcript-create
+          kubectl rollout status deployment/transcript-create-worker -n transcript-create
+
+      - name: Run health checks
+        run: |
+          # Wait for pods to be ready
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=transcript-create -n transcript-create --timeout=5m
+          
+          # Get API endpoint (try hostname first, fall back to IP)
+          API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$API_HOST" ]; then
+            API_HOST=$(kubectl get ingress transcript-create -n transcript-create -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          fi
+          
+          # Test health endpoints
+          curl -f "https://${API_HOST}/health" || exit 1
+          curl -f "https://${API_HOST}/ready" || exit 1
+          
+          echo "Health checks passed!"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed! Rolling back..."
+          helm rollback transcript-create -n transcript-create
+          kubectl rollout status deployment/transcript-create-api -n transcript-create
+          kubectl rollout status deployment/transcript-create-worker -n transcript-create
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Production deployment successful!"
+          echo "Version: ${{ github.event.inputs.version || env.VERSION }}"
+          kubectl get pods -n transcript-create
+
+  helm-package:
+    name: Package and Publish Helm Chart
+    runs-on: ubuntu-latest
+    needs: validate
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write  # For creating GitHub releases
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Extract version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Update Chart version
+        run: |
+          sed -i "s/^version:.*/version: ${VERSION}/" charts/transcript-create/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" charts/transcript-create/Chart.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm package charts/transcript-create -d /tmp/charts
+
+      - name: Upload chart artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: helm-chart
+          path: /tmp/charts/*.tgz
+
+      # Optional: Publish to Helm repository or GitHub Releases
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: /tmp/charts/*.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

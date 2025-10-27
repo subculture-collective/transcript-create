@@ -9,9 +9,10 @@ import LoginPage from './routes/LoginPage';
 import FavoritesPage from './routes/FavoritesPage';
 import Protected from './routes/Protected';
 import AdminLayout from './routes/admin/AdminLayout';
+import AdminDashboard from './routes/admin/AdminDashboard';
 import AdminEvents from './routes/admin/AdminEvents';
 import AdminUsers from './routes/admin/AdminUsers';
-import { AuthProvider } from './services/auth';
+import { AuthProvider, ThemeProvider } from './services';
 import PricingPage from './routes/PricingPage';
 import UpgradePage from './routes/UpgradePage';
 
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
         path: 'admin',
         element: <AdminLayout />,
         children: [
+          { path: 'dashboard', element: <AdminDashboard /> },
           { path: 'events', element: <AdminEvents /> },
           { path: 'users', element: <AdminUsers /> },
         ],
@@ -45,10 +47,26 @@ const router = createBrowserRouter([
   },
 ]);
 
+// Register Service Worker for PWA support
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => {
+        console.log('Service Worker registered:', registration);
+      })
+      .catch((error) => {
+        console.log('Service Worker registration failed:', error);
+      });
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>
 );

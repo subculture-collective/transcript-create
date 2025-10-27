@@ -28,6 +28,7 @@ requests==2.32.5
 
 # Authentication
 Authlib==1.6.5
+itsdangerous==2.2.0  # Required for session middleware
 
 # Billing
 stripe==13.0.1
@@ -37,6 +38,12 @@ reportlab==4.4.4
 
 # Metrics and monitoring
 prometheus-client==0.21.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# Redis caching
+redis==5.2.1
 
 # Optional: Error tracking (set SENTRY_DSN to enable)
 # sentry-sdk==2.19.2

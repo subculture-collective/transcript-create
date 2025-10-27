@@ -1,0 +1,92 @@
+# =============================================================================
+# Multi-Stage Dockerfile for transcript-create (CPU-only variant)
+# =============================================================================
+# Lightweight CPU-only build for development, testing, and non-GPU deployments.
+#
+# Build stages:
+#   1. base       - System dependencies
+#   2. python-deps - Python packages installation
+#   3. app        - Final application stage
+#
+# Target image size: <1GB
+# Use cases: Development, CI/CD testing, CPU-based inference
+# =============================================================================
+
+# =============================================================================
+# Stage 1: Base image with system dependencies
+# =============================================================================
+FROM python:3.11-slim AS base
+
+# Set environment variables for non-interactive installs
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies in a single layer
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg \
+        git \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# =============================================================================
+# Stage 2: Python dependencies
+# =============================================================================
+FROM base AS python-deps
+
+# Copy only requirements files to leverage layer caching
+COPY requirements.txt constraints.txt* ./
+
+# Install Python dependencies with pip cache mount for faster rebuilds
+# Use CPU-only PyTorch (smaller, no CUDA/ROCm)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    # Remove any torch variants pulled in by other dependencies
+    (pip3 uninstall -y torch torchvision torchaudio || true) && \
+    # Install CPU-only PyTorch (much smaller)
+    pip3 install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.4.1+cpu torchaudio==2.4.1+cpu
+
+# Verify PyTorch installation
+RUN python3 -c "import torch; print('Torch version:', torch.__version__); print('CPU-only build')"
+
+# =============================================================================
+# Stage 3: Final application stage
+# =============================================================================
+FROM base AS app
+
+# Copy Python packages from deps stage
+COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=python-deps /usr/local/bin /usr/local/bin
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code (excluding files in .dockerignore)
+COPY . /app
+
+# Pre-compile Python files for faster startup
+RUN python3 -m compileall -q /app
+
+# Set optimal environment variables for production
+ENV PDF_FONT_PATH=/app/fonts/DejaVuSerif.ttf \
+    HF_HOME=/root/.cache/hf \
+    HF_HUB_CACHE=/root/.cache/hf/hub \
+    TRANSFORMERS_CACHE=/root/.cache/hf/transformers \
+    FORCE_GPU=false \
+    WHISPER_BACKEND=faster-whisper
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose API port
+EXPOSE 8000
+
+# Default command
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -9,6 +9,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 
 from .exceptions import AppError
 from .logging_config import configure_logging, get_logger, request_id_ctx, user_id_ctx
+from .middleware import setup_security_middleware
 from .settings import settings
 
 # Configure structured logging for API service
@@ -64,14 +65,22 @@ Admin endpoints require additional authorization.
     ],
 )
 
+# Setup security middleware (headers, rate limiting, session management)
+setup_security_middleware(app)
+
+# Configure CORS
+allowed_origins = [settings.FRONTEND_ORIGIN]
+if settings.CORS_ALLOW_ORIGINS:
+    # Add additional origins from settings if configured
+    additional_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+    allowed_origins.extend(additional_origins)
+
 # Allow local dev frontends to call the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_ORIGIN,
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],  # Restrict methods
     allow_headers=["*"],
 )
 
@@ -288,6 +297,8 @@ async def metrics_middleware(request: Request, call_next):
 
 
 from .routes.admin import router as admin_router  # noqa: E402
+from .routes.analytics import router as analytics_router  # noqa: E402
+from .routes.api_keys import router as api_keys_router  # noqa: E402
 from .routes.auth import router as auth_router  # noqa: E402
 from .routes.billing import router as billing_router  # noqa: E402
 from .routes.events import router as events_router  # noqa: E402
@@ -301,12 +312,14 @@ from .routes.videos import router as videos_router  # noqa: E402
 app.include_router(health_router)
 app.include_router(exports_router)
 app.include_router(auth_router)
+app.include_router(api_keys_router)
 app.include_router(billing_router)
 app.include_router(jobs_router)
 app.include_router(videos_router)
 app.include_router(favorites_router)
 app.include_router(events_router)
 app.include_router(admin_router)
+app.include_router(analytics_router)
 app.include_router(search_router)
 
 

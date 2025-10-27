@@ -1,0 +1,308 @@
+# Default values for transcript-create.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  environment: production
+  domain: your-domain.com
+
+# Image configuration
+image:
+  repository: transcript-create
+  tag: latest
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# API configuration
+api:
+  enabled: true
+  replicaCount: 3
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  
+  service:
+    type: ClusterIP
+    port: 8000
+    sessionAffinity: None
+  
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/limit-rps: "100"
+      nginx.ingress.kubernetes.io/limit-connections: "50"
+      nginx.ingress.kubernetes.io/enable-cors: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    hosts:
+      - host: api.your-domain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: transcript-tls-cert
+        hosts:
+          - api.your-domain.com
+
+# Worker configuration
+worker:
+  enabled: true
+  replicaCount: 2
+  
+  # GPU configuration
+  gpu:
+    enabled: true
+    type: amd  # amd or nvidia
+    nodeSelector:
+      workload-type: gpu
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: amd.com/gpu
+        operator: Exists
+        effect: NoSchedule
+  
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 8Gi
+      amd.com/gpu: 1
+    limits:
+      cpu: 4000m
+      memory: 16Gi
+      amd.com/gpu: 1
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    customMetrics:
+      - type: Pods
+        pods:
+          metric:
+            name: videos_pending
+          target:
+            type: AverageValue
+            averageValue: "5"
+  
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Database configuration (if not using external database)
+postgresql:
+  enabled: false  # Set to true to deploy PostgreSQL StatefulSet
+  persistence:
+    enabled: true
+    size: 100Gi
+    storageClass: fast-ssd
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+# Redis configuration (if not using external Redis)
+redis:
+  enabled: false  # Set to true to deploy Redis
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# OpenSearch configuration (if not using external OpenSearch)
+opensearch:
+  enabled: false  # Set to true to deploy OpenSearch
+  persistence:
+    enabled: true
+    size: 100Gi
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+# Storage configuration
+persistence:
+  data:
+    enabled: true
+    storageClass: fast-ssd
+    accessMode: ReadWriteMany
+    size: 500Gi
+  cache:
+    enabled: true
+    storageClass: fast-ssd
+    accessMode: ReadWriteMany
+    size: 50Gi
+
+# Application configuration
+config:
+  # Whisper settings
+  whisper:
+    model: large-v3
+    backend: faster-whisper
+    backendWorker: whisper
+    chunkSeconds: 900
+    gpuDevicePreference: cuda,hip
+    gpuComputeTypes: float16,int8_float16,bfloat16,float32
+  
+  # Search backend
+  search:
+    backend: opensearch
+  
+  # Cleanup settings
+  cleanup:
+    afterProcess: true
+    deleteRaw: true
+    deleteWav: true
+    deleteChunks: true
+  
+  # Cache TTLs
+  cache:
+    defaultTtl: 300
+    videoTtl: 300
+    transcriptTtl: 3600
+    searchTtl: 600
+  
+  # Quotas
+  quotas:
+    freeDailySearchLimit: 10
+    freeDailyExportLimit: 2
+    proPlanName: pro
+  
+  # Security
+  security:
+    enableRateLimiting: true
+    sessionExpireHours: 24
+    oauthStateValidation: true
+  
+  # Health checks
+  healthCheck:
+    timeout: 5.0
+    workerStaleSeconds: 300
+    diskMinFreeGb: 10.0
+    criticalComponents: database,storage
+  
+  # Logging
+  logging:
+    level: INFO
+    format: json
+  
+  # Monitoring
+  monitoring:
+    enabled: true
+
+# Secrets configuration (must be provided)
+secrets:
+  # Create secrets manually or use external-secrets-operator
+  existingSecret: transcript-secrets
+  
+  # If existingSecret is not set, provide values here (NOT RECOMMENDED for production)
+  # databaseUrl: ""
+  # sessionSecret: ""
+  # hfToken: ""
+  # oauthGoogleClientId: ""
+  # oauthGoogleClientSecret: ""
+  # oauthTwitchClientId: ""
+  # oauthTwitchClientSecret: ""
+  # stripeApiKey: ""
+  # stripeWebhookSecret: ""
+
+# External services (if using managed services)
+externalServices:
+  database:
+    enabled: false
+    url: ""  # postgresql+psycopg://user:pass@host:5432/db
+  redis:
+    enabled: false
+    url: ""  # redis://host:6379/0
+  opensearch:
+    enabled: false
+    url: ""  # http://host:9200
+
+# Migrations
+migrations:
+  enabled: true
+  image:
+    repository: transcript-create
+    tag: latest
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Monitoring and observability
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+  
+  podMonitor:
+    enabled: true
+    interval: 30s
+  
+  grafanaDashboard:
+    enabled: false  # Set to true to create ConfigMap with dashboard
+
+# Network policies
+networkPolicy:
+  enabled: true
+
+# Pod security
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+    - ALL
+
+# Node selector for all pods (can be overridden per component)
+nodeSelector: {}
+
+# Tolerations for all pods (can be overridden per component)
+tolerations: []
+
+# Affinity for all pods (can be overridden per component)
+affinity: {}

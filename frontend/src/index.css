@@ -8,10 +8,71 @@
   --tab-size-github: 8;
 }
 
+/* Dark mode support */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #0c0a09;
+  color: #fafaf9;
+}
+
+/* Accessibility: Enhanced focus indicators */
+*:focus-visible {
+  outline: 2px solid theme('colors.blue.600');
+  outline-offset: 2px;
+}
+
+.dark *:focus-visible {
+  outline-color: theme('colors.blue.400');
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only:focus,
+.sr-only:active {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @layer components {
-  /* Example component */
+  /* Touch-friendly button component */
   .btn {
-    @apply inline-block px-6 py-2 rounded-md text-center font-semibold transition-colors;
+    @apply inline-block px-6 py-3 rounded-md text-center font-semibold transition-colors;
+    min-height: 44px;
+    min-width: 44px;
     background-color: theme('colors.blue.600');
     color: theme('colors.white');
 
@@ -22,6 +83,23 @@
     &:disabled {
       @apply opacity-50 cursor-not-allowed;
       background-color: theme('colors.blue.600');
+    }
+
+    &:focus-visible {
+      outline: 2px solid theme('colors.blue.600');
+      outline-offset: 2px;
+    }
+  }
+
+  .dark .btn {
+    background-color: theme('colors.blue.500');
+    
+    &:hover {
+      background-color: theme('colors.blue.600');
+    }
+
+    &:disabled {
+      background-color: theme('colors.blue.500');
     }
   }
 }

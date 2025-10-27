@@ -459,7 +459,7 @@ class TestSearchAnalytics:
             text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
             {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
         )
-        
+
         # Create a search with 0 results
         db_session.execute(
             text(

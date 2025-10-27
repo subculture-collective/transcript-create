@@ -48,7 +48,14 @@ def create_checkout_session(payload: dict, request: Request, db=Depends(get_db))
     if not user:
         raise AuthenticationError()
 
-    period = (payload.get("period") or "").lower()
+    period = (payload.get("period") or "monthly").lower()
+    # Validate period parameter
+    if period not in ("monthly", "yearly"):
+        raise ValidationError(
+            "Invalid period parameter. Must be 'monthly' or 'yearly'",
+            field="period"
+        )
+    
     price_id = payload.get("price_id") or (
         settings.STRIPE_PRICE_PRO_YEARLY
         if period == "yearly" and settings.STRIPE_PRICE_PRO_YEARLY

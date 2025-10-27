@@ -92,6 +92,64 @@ class TestBillingRoutes:
                         )
                         assert response.status_code == 200
 
+    def test_checkout_session_invalid_period(self, client: TestClient, db_session):
+        """Test checkout session with invalid period parameter."""
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject) "
+                "VALUES (:id, :email, 'google', 'test123')"
+            ),
+            {"id": str(user_id), "email": "invalid@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+        db_session.commit()
+
+        with patch("app.settings.settings.STRIPE_API_KEY", "sk_test_fake"):
+            response = client.post(
+                "/billing/checkout-session",
+                json={"period": "quarterly"},
+                cookies={"tc_session": session_token},
+            )
+            assert response.status_code == 400
+            assert "Invalid period" in response.json()["detail"]
+
+    def test_checkout_session_default_period(self, client: TestClient, db_session):
+        """Test checkout session with no period defaults to monthly."""
+        user_id = uuid.uuid4()
+        session_token = secrets.token_urlsafe(32)
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, oauth_provider, oauth_subject) "
+                "VALUES (:id, :email, 'google', 'test123')"
+            ),
+            {"id": str(user_id), "email": "default@example.com"},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+            {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+        )
+        db_session.commit()
+
+        with patch("app.settings.settings.STRIPE_API_KEY", "sk_test_fake"):
+            with patch("stripe.Customer.create") as mock_customer:
+                with patch("stripe.checkout.Session.create") as mock_session:
+                    mock_customer.return_value = MagicMock(id="cus_test")
+                    mock_session.return_value = MagicMock(id="cs_test", url="https://checkout.stripe.com")
+
+                    response = client.post(
+                        "/billing/checkout-session",
+                        json={},  # No period specified
+                        cookies={"tc_session": session_token},
+                    )
+                    assert response.status_code == 200
+
     @patch("app.settings.settings.STRIPE_API_KEY", None)
     def test_billing_portal_stripe_not_configured(self, client: TestClient):
         """Test billing portal when Stripe is not configured."""

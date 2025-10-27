@@ -576,10 +576,12 @@ def get_search_analytics(
     )
 
     # Average results per query
+    # Note: AVG() returns NULL when there are no rows, which is preserved as None
+    # This distinguishes between "no data" (None) and "average of 0 results" (0.0)
     avg_results = db.execute(
         _text(
             """
-            SELECT AVG(result_count)::float as avg_results
+            SELECT AVG(result_count) as avg_results
             FROM user_searches
             WHERE created_at >= now() - INTERVAL ':days days'
               AND result_count IS NOT NULL
@@ -587,6 +589,9 @@ def get_search_analytics(
         ),
         {"days": days},
     ).scalar_one_or_none()
+    # Convert to float only if not None
+    if avg_results is not None:
+        avg_results = float(avg_results)
 
     # Total searches
     total = db.execute(

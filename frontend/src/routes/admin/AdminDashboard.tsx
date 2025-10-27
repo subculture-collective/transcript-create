@@ -167,10 +167,12 @@ function SimpleLineChart({ data, labels }: { data: number[]; labels: string[] })
           );
         })}
       </svg>
-      <div className="mt-1 flex justify-between text-xs text-stone-500">
-        <span>{labels[0]}</span>
-        <span>{labels[labels.length - 1]}</span>
-      </div>
+      {labels.length > 0 && (
+        <div className="mt-1 flex justify-between text-xs text-stone-500">
+          <span>{labels[0]}</span>
+          <span>{labels[labels.length - 1]}</span>
+        </div>
+      )}
     </div>
   );
 }

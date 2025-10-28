@@ -176,8 +176,8 @@ jobs:
           # Run npm audit and capture output
           npm audit --json > npm-audit.json || true
           
-          # Check for high/critical vulnerabilities
-          HIGH_CRITICAL=$(jq -r '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' npm-audit.json)
+          # Check for high/critical vulnerabilities (handle null values gracefully)
+          HIGH_CRITICAL=$(jq -r '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' npm-audit.json)
           
           echo "High/Critical vulnerabilities found: $HIGH_CRITICAL" >> $GITHUB_STEP_SUMMARY
           

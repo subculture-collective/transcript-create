@@ -38,8 +38,9 @@ function calculateDelay(attempt: number, config: RetryConfig): number {
   );
 
   if (config.jitter) {
-    // Add jitter: random value between 0 and delay
-    delay = Math.random() * delay;
+    // Add "equal jitter" (aka half jitter): random value between 50% and 100% of delay.
+    // See: https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+    delay = delay * (0.5 + Math.random() * 0.5);
   }
 
   return delay;

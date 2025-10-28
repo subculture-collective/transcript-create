@@ -6,7 +6,7 @@
  * Token bucket rate limiter
  */
 export class RateLimiter {
-  private rate: number;
+  protected rate: number;
   private burstSize: number;
   private tokens: number;
   private lastUpdate: number;
@@ -92,6 +92,7 @@ export class AdaptiveRateLimiter extends RateLimiter {
       const newRate = Math.min(this.currentRate * this.increaseFactor, this.maxRate);
       if (newRate !== this.currentRate) {
         this.currentRate = newRate;
+        this.rate = newRate; // Update parent class rate
         this.successCount = 0;
       }
     }
@@ -103,6 +104,7 @@ export class AdaptiveRateLimiter extends RateLimiter {
   onRateLimit(): void {
     // Decrease rate immediately
     this.currentRate = Math.max(this.currentRate * this.decreaseFactor, this.minRate);
+    this.rate = this.currentRate; // Update parent class rate
     this.successCount = 0;
   }
 }

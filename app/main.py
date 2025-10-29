@@ -115,9 +115,22 @@ async def startup_event():
     """Log application startup and initialize metrics."""
     from app.metrics import setup_app_info
 
+    # Get version info
+    try:
+        import os
+        import tomllib
+
+        pyproject_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pyproject.toml")
+        with open(pyproject_path, "rb") as f:
+            pyproject_data = tomllib.load(f)
+            version = pyproject_data.get("project", {}).get("version", "unknown")
+    except Exception:
+        version = "unknown"
+
     logger.info(
         "API service started",
         extra={
+            "version": version,
             "log_level": settings.LOG_LEVEL,
             "log_format": settings.LOG_FORMAT,
             "database_url": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "[hidden]",

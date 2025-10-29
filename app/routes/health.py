@@ -5,6 +5,7 @@ Provides comprehensive health monitoring for:
 - Basic liveness/readiness probes for Kubernetes
 - Detailed component health checks (database, OpenSearch, storage, worker)
 - Health metrics for Prometheus
+- Version information
 """
 
 import asyncio
@@ -26,6 +27,21 @@ from ..settings import settings
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="", tags=["Health"])
+
+# Version information
+try:
+    import tomllib
+    
+    pyproject_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "pyproject.toml")
+    with open(pyproject_path, "rb") as f:
+        pyproject_data = tomllib.load(f)
+        VERSION = pyproject_data.get("project", {}).get("version", "unknown")
+except Exception:
+    VERSION = "unknown"
+
+# Git information (if available)
+GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
+BUILD_DATE = os.getenv("BUILD_DATE", "unknown")
 
 # Health check metrics
 from prometheus_client import Counter, Gauge, Histogram
@@ -554,3 +570,36 @@ async def detailed_health_check():
         return JSONResponse(status_code=503, content=result)
     else:
         return result
+
+
+@router.get(
+    "/version",
+    summary="Version information",
+    description="Returns version information including API version, git commit, and build date.",
+    responses={
+        200: {
+            "description": "Version information",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "version": "0.1.0",
+                        "git_commit": "abc123def",
+                        "build_date": "2025-10-25T23:00:00Z"
+                    }
+                }
+            },
+        }
+    },
+)
+async def version_info():
+    """
+    Version information endpoint.
+    
+    Returns the API version, git commit hash, and build date.
+    No authentication required.
+    """
+    return {
+        "version": VERSION,
+        "git_commit": GIT_COMMIT,
+        "build_date": BUILD_DATE,
+    }

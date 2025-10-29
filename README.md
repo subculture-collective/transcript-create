@@ -654,6 +654,35 @@ See [SECURITY.md](SECURITY.md) for:
 -   Production security checklist
 -   Dependency update procedures
 
+## Versioning & Releases
+
+We follow [Semantic Versioning](https://semver.org/) (SemVer) for all releases.
+
+### Version Support Policy
+
+- **Latest major version**: Full support (new features, bug fixes, security updates)
+- **Previous major version**: Security updates only (for 6 months after new major release)
+- **Older versions**: No support
+
+### Release Information
+
+- **Current version**: See [releases](https://github.com/subculture-collective/transcript-create/releases)
+- **Changelog**: See [CHANGELOG.md](CHANGELOG.md) for all changes
+- **Release process**: See [docs/development/release-process.md](docs/development/release-process.md)
+
+### Docker Image Tags
+
+```bash
+# Specific version (recommended for production)
+ghcr.io/subculture-collective/transcript-create:v0.1.0
+
+# Latest stable release (auto-updated)
+ghcr.io/subculture-collective/transcript-create:latest
+
+# Major version (gets minor and patch updates)
+ghcr.io/subculture-collective/transcript-create:0
+```
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

@@ -1,0 +1,32 @@
+{
+  "name": "transcript-create",
+  "version": "0.1.0",
+  "description": "Create searchable, exportable transcripts from YouTube videos or channels",
+  "private": true,
+  "scripts": {
+    "commit": "cz",
+    "release": "standard-version",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major",
+    "release:patch": "standard-version --release-as patch"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "commitizen": "^4.3.0",
+    "cz-conventional-changelog": "^3.3.0",
+    "husky": "^9.0.0",
+    "standard-version": "^9.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/subculture-collective/transcript-create.git"
+  },
+  "license": "Apache-2.0",
+  "author": "onnwee"
+}

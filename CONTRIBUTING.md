@@ -403,7 +403,71 @@ The hooks automatically run:
 - **isort**: Import sorting
 - **mypy**: Type checking
 - **gitleaks**: Secret detection
+- **commitlint**: Commit message validation
 - Additional checks for trailing whitespace, YAML/JSON/TOML syntax
+
+### Commit Message Guidelines
+
+We follow [Conventional Commits](https://www.conventionalcommits.org/) for automated changelog generation and semantic versioning.
+
+**Format:**
+
+```
+<type>: <subject>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Types:**
+
+- `feat`: New feature (triggers MINOR version bump)
+- `fix`: Bug fix (triggers PATCH version bump)
+- `docs`: Documentation changes
+- `style`: Code style changes (formatting, semicolons, etc.)
+- `refactor`: Code refactoring without changing functionality
+- `perf`: Performance improvements
+- `test`: Adding or updating tests
+- `build`: Build system or dependency changes
+- `ci`: CI/CD configuration changes
+- `chore`: Other changes that don't modify src or test files
+- `revert`: Reverting a previous commit
+
+**Breaking Changes:**
+
+Add `BREAKING CHANGE:` in the footer or append `!` after the type (triggers MAJOR version bump):
+
+```
+feat!: remove support for Python 3.10
+
+BREAKING CHANGE: Minimum Python version is now 3.11
+```
+
+**Examples:**
+
+```bash
+feat: add speaker diarization support
+fix: resolve memory leak in audio processing
+docs: update API authentication guide
+perf: optimize database query for search
+test: add integration tests for job creation
+ci: add release workflow for automated versioning
+```
+
+**Using Commitizen (Interactive):**
+
+If you prefer an interactive prompt:
+
+```bash
+# Install commitizen (one-time)
+npm install
+
+# Use interactive commit
+npm run commit
+```
+
+The pre-commit hook will validate your commit message format automatically.
 
 ## CI/CD Pipeline
 

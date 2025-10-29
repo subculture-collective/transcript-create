@@ -1,0 +1,34 @@
+---
+# Application deployment playbook
+- name: Deploy transcript-create application
+  hosts: all
+  become: yes
+  
+  pre_tasks:
+    - name: Backup current deployment
+      ansible.builtin.command:
+        cmd: cp -r {{ app_install_dir }} {{ app_backup_dir }}/backup-{{ ansible_date_time.epoch }}
+        creates: "{{ app_backup_dir }}/backup-{{ ansible_date_time.epoch }}"
+      when: app_install_dir is exists
+      tags:
+        - backup
+  
+  roles:
+    - app
+  
+  post_tasks:
+    - name: Verify deployment
+      ansible.builtin.uri:
+        url: "http://localhost:{{ app_port }}/health"
+        status_code: 200
+      register: health_check
+      retries: 5
+      delay: 10
+      until: health_check.status == 200
+      tags:
+        - verify
+    
+    - name: Display deployment status
+      ansible.builtin.debug:
+        msg: "Deployment successful! API is healthy at port {{ app_port }}"
+      when: health_check.status == 200

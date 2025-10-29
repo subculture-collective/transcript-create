@@ -145,3 +145,57 @@ jobs:
           name: frontend-build
           path: frontend/dist/
           retention-days: 7
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run npm audit
+        id: npm-audit
+        continue-on-error: true
+        run: |
+          cd frontend
+          echo "## npm audit Report" >> $GITHUB_STEP_SUMMARY
+          
+          # Run npm audit and capture output
+          npm audit --json > npm-audit.json || true
+          
+          # Check for high/critical vulnerabilities (handle null values gracefully)
+          HIGH_CRITICAL=$(jq -r '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' npm-audit.json)
+          
+          echo "High/Critical vulnerabilities found: $HIGH_CRITICAL" >> $GITHUB_STEP_SUMMARY
+          
+          # Generate human-readable report
+          npm audit --audit-level=moderate >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          
+          # Fail if high or critical vulnerabilities found
+          if [ "$HIGH_CRITICAL" -gt 0 ]; then
+            echo "::error::Found $HIGH_CRITICAL HIGH/CRITICAL vulnerabilities in npm dependencies"
+            exit 1
+          fi
+
+      - name: Upload npm audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: frontend/npm-audit.json
+          retention-days: 30

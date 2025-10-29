@@ -80,7 +80,7 @@ This project implements multiple layers of security scanning:
 
 - **Parameterized Database Queries**: All SQL queries use parameterized statements via SQLAlchemy
 - **Authentication**: Optional OAuth 2.0 integration with secure token handling<sup>†</sup>
-- **Rate Limiting**: API endpoints protected with rate limiting
+- **Rate Limiting**: API endpoints are protected with a simple in-memory rate limiting implementation suitable for development and single-instance deployments only. **For production deployments, you must use a distributed rate limiting backend (e.g., Redis with a sliding window algorithm) to ensure effective protection across multiple processes or servers.**
 - **Input Validation**: Pydantic models for request/response validation
 - **Secret Management**: Environment variables for sensitive configuration
 

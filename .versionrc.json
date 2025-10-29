@@ -23,15 +23,15 @@
     },
     {
       "filename": "frontend/package.json",
-      "updater": "scripts/version-updater.js"
+      "type": "json"
     },
     {
       "filename": "clients/javascript/package.json",
-      "updater": "scripts/version-updater.js"
+      "type": "json"
     },
     {
       "filename": "e2e/package.json",
-      "updater": "scripts/version-updater.js"
+      "type": "json"
     }
   ],
   "skip": {

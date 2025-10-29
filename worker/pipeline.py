@@ -193,8 +193,14 @@ def process_video(engine, video_id):
     quality_settings = job_meta.get("quality", {}) if job_meta else {}
     language = quality_settings.get("language") or getattr(settings, "WHISPER_LANGUAGE", None) or None
     beam_size = quality_settings.get("beam_size") or getattr(settings, "WHISPER_BEAM_SIZE", 5)
-    temperature = quality_settings.get("temperature") if quality_settings.get("temperature") is not None else getattr(settings, "WHISPER_TEMPERATURE", 0.0)
+    temp_from_settings = getattr(settings, "WHISPER_TEMPERATURE", 0.0)
+    temperature = (
+        quality_settings.get("temperature")
+        if quality_settings.get("temperature") is not None
+        else temp_from_settings
+    )
     word_timestamps = quality_settings.get("word_timestamps", getattr(settings, "WHISPER_WORD_TIMESTAMPS", True))
+    vad_filter = quality_settings.get("vad_filter", getattr(settings, "WHISPER_VAD_FILTER", False))
 
     all_segments = []
     detected_language = None
@@ -209,7 +215,8 @@ def process_video(engine, video_id):
             language=language,
             beam_size=beam_size,
             temperature=temperature,
-            word_timestamps=word_timestamps
+            word_timestamps=word_timestamps,
+            vad_filter=vad_filter
         )
 
         # Capture language info from first chunk

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 class QualitySettingsInput(BaseModel):
     """Quality settings for transcription."""
 
-    preset: Optional[Literal["fast", "balanced", "accurate"]] = Field(
+    preset: Literal["fast", "balanced", "accurate"] = Field(
         "balanced",
         description="Quality preset (fast/balanced/accurate)"
     )
@@ -36,6 +36,10 @@ class QualitySettingsInput(BaseModel):
     word_timestamps: Optional[bool] = Field(
         True,
         description="Extract word-level timestamps"
+    )
+    vad_filter: Optional[bool] = Field(
+        None,
+        description="Voice Activity Detection filter (faster-whisper only)"
     )
 
 

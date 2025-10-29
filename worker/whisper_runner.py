@@ -158,7 +158,7 @@ def _get_ct2_fallback_model():
     return _fallback_ct2_model
 
 
-def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, word_timestamps=None):
+def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, word_timestamps=None, vad_filter=None):
     """Transcribe audio chunk with Whisper.
 
     Args:
@@ -167,6 +167,7 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
         beam_size: Beam size for decoding (default: from settings or 5)
         temperature: Sampling temperature (default: from settings or 0.0)
         word_timestamps: Extract word-level timestamps (default: from settings)
+        vad_filter: Voice Activity Detection filter (default: from settings, faster-whisper only)
 
     Returns:
         Tuple of (segments_list, language_info_dict)
@@ -182,14 +183,17 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
         word_timestamps = getattr(settings, "WHISPER_WORD_TIMESTAMPS", True)
     if language is None:
         language = getattr(settings, "WHISPER_LANGUAGE", None) or None
+    if vad_filter is None:
+        vad_filter = getattr(settings, "WHISPER_VAD_FILTER", False)
 
     logger.info(
-        "Transcribing %s (lang=%s, beam=%d, temp=%.1f, word_ts=%s)",
+        "Transcribing %s (lang=%s, beam=%d, temp=%.1f, word_ts=%s, vad=%s)",
         wav_path,
         language or "auto",
         beam_size,
         temperature,
         word_timestamps,
+        vad_filter,
     )
 
     detected_language = None
@@ -305,6 +309,8 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
             ct2_kwargs["language"] = language
         if word_timestamps:
             ct2_kwargs["word_timestamps"] = True
+        if vad_filter:
+            ct2_kwargs["vad_filter"] = True
 
         segments, info = model.transcribe(str(wav_path), **ct2_kwargs)
         logger.debug("Transcribe info: %s", info)

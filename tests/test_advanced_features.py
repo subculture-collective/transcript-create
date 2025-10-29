@@ -1,8 +1,5 @@
 """Tests for advanced transcription features."""
 
-import json
-from unittest.mock import Mock
-
 import pytest
 
 from worker.quality_presets import QUALITY_PRESETS, get_quality_settings, merge_quality_settings
@@ -151,6 +148,8 @@ class TestSchemas:
 
     def test_quality_settings_input_validation(self):
         """Test QualitySettingsInput schema validation."""
+        from pydantic import ValidationError
+
         from app.schemas import QualitySettingsInput
 
         # Valid input
@@ -160,11 +159,11 @@ class TestSchemas:
         assert valid.beam_size == 7
 
         # Invalid beam size (out of range)
-        with pytest.raises(Exception):  # Pydantic ValidationError
+        with pytest.raises(ValidationError):
             QualitySettingsInput(beam_size=20)  # > 10
 
         # Invalid temperature
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             QualitySettingsInput(temperature=2.0)  # > 1.0
 
     def test_vocabulary_term_schema(self):

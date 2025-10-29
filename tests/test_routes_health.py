@@ -59,6 +59,25 @@ class TestHealthEndpoints:
             assert "status" in check
             assert check["status"] in ["healthy", "degraded", "unhealthy", "disabled"]
 
+    def test_version_endpoint(self, client: TestClient):
+        """Test version information endpoint returns correct data."""
+        response = client.get("/version")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Check that all expected fields are present
+        assert "version" in data
+        assert "git_commit" in data
+        assert "build_date" in data
+        
+        # Version should be non-empty (will be from pyproject.toml or "unknown")
+        assert data["version"]
+        assert isinstance(data["version"], str)
+        
+        # Git commit and build date may be "unknown" in test environment
+        assert isinstance(data["git_commit"], str)
+        assert isinstance(data["build_date"], str)
+
 
 class TestDatabaseHealthCheck:
     """Tests for database health check component."""

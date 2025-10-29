@@ -111,8 +111,6 @@ def get_vocabulary(vocabulary_id: uuid.UUID, db=Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Vocabulary {vocabulary_id} not found"
         )
-
-
     return VocabularyResponse(
         id=vocab["id"],
         name=vocab["name"],

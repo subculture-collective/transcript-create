@@ -1,0 +1,54 @@
+---
+# Example inventory file
+# Copy this to inventory.yml and customize for your environment
+
+all:
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  
+  children:
+    # Production environment
+    production:
+      children:
+        api_servers:
+          hosts:
+            api-01:
+              ansible_host: 10.0.1.10
+              ansible_user: ubuntu
+            api-02:
+              ansible_host: 10.0.1.11
+              ansible_user: ubuntu
+        
+        workers:
+          hosts:
+            worker-01:
+              ansible_host: 10.0.2.10
+              ansible_user: ubuntu
+              gpu_type: nvidia
+              gpu_count: 1
+            worker-02:
+              ansible_host: 10.0.2.11
+              ansible_user: ubuntu
+              gpu_type: nvidia
+              gpu_count: 1
+      
+      vars:
+        environment: production
+        app_version: v1.0.0
+        database_host: prod-db.example.com
+        redis_host: prod-redis.example.com
+    
+    # Staging environment
+    staging:
+      hosts:
+        staging-01:
+          ansible_host: 10.0.3.10
+          ansible_user: ubuntu
+          gpu_type: nvidia
+      
+      vars:
+        environment: staging
+        app_version: main
+        database_host: staging-db.example.com
+        redis_host: staging-redis.example.com

@@ -1,0 +1,37 @@
+---
+# Default variables for app role
+
+# Application settings
+app_name: transcript-create
+app_user: transcript
+app_group: transcript
+app_install_dir: /opt/transcript-create
+app_data_dir: /opt/transcript-create/data
+app_backup_dir: /opt/transcript-create/backups
+app_log_dir: /var/log/transcript-create
+
+# Repository
+app_repo_url: https://github.com/subculture-collective/transcript-create.git
+app_version: main
+
+# Python settings
+python_version: "3.11"
+venv_dir: "{{ app_install_dir }}/venv"
+
+# Service configuration
+systemd_services:
+  - name: transcript-api
+    description: Transcript Create API
+    exec_start: "{{ venv_dir }}/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4"
+    environment:
+      PYTHONUNBUFFERED: "1"
+  - name: transcript-worker
+    description: Transcript Create Worker
+    exec_start: "{{ venv_dir }}/bin/python -m worker.loop"
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+# Database configuration (provide via vault or host_vars)
+database_url: ""
+redis_url: ""
+session_secret: ""

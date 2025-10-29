@@ -1,0 +1,184 @@
+version: '3.8'
+
+# Production Docker Compose Configuration
+# This extends docker-compose.yml with production-specific settings
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./backups/db:/backups
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  redis:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  migrations:
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-change-me-in-production}@db:5432/transcripts
+
+  api:
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-change-me-in-production}@db:5432/transcripts
+      REDIS_URL: redis://redis:6379/0
+      OPENSEARCH_URL: http://opensearch:9200
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+      ENABLE_METRICS: "true"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  worker:
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-change-me-in-production}@db:5432/transcripts
+      OPENSEARCH_URL: http://opensearch:9200
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 8G
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  opensearch:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Reverse proxy with automatic SSL
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3 support
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # Automated backups service
+  backup:
+    image: transcript-create:latest
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD}@db:5432/transcripts
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-7}
+      BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}
+      BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
+      MEDIA_RETENTION_DAYS: ${MEDIA_RETENTION_DAYS:-30}
+    volumes:
+      - ./data:/data:ro
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        # Install cron if not present
+        apt-get update && apt-get install -y cron postgresql-client
+        
+        # Create cron jobs
+        echo "0 2 * * * /scripts/backup_db.sh >> /backups/backup.log 2>&1" > /etc/cron.d/backup-db
+        echo "0 3 * * * /scripts/backup_media.sh >> /backups/backup.log 2>&1" > /etc/cron.d/backup-media
+        echo "0 4 * * 0 /scripts/verify_backup.sh >> /backups/verify.log 2>&1" > /etc/cron.d/verify-backup
+        
+        # Set permissions
+        chmod 0644 /etc/cron.d/*
+        
+        # Apply cron jobs
+        crontab /etc/cron.d/backup-db
+        crontab /etc/cron.d/backup-media
+        crontab /etc/cron.d/verify-backup
+        
+        # Start cron in foreground
+        echo "Backup service started. Logs in /backups/backup.log"
+        cron && tail -f /backups/backup.log
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # Automatic container updates (optional but recommended)
+  watchtower:
+    image: containrrr/watchtower:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-86400}  # Check daily
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_INCLUDE_STOPPED: "false"
+      WATCHTOWER_REVIVE_STOPPED: "false"
+      WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL:-}  # Slack/email notifications
+    restart: unless-stopped
+
+volumes:
+  dbdata:
+    driver: local
+  redis-data:
+    driver: local
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local
+
+networks:
+  default:
+    name: transcript-create-prod
+    driver: bridge

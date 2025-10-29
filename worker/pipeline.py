@@ -193,7 +193,7 @@ def process_video(engine, video_id):
     quality_settings = job_meta.get("quality", {}) if job_meta else {}
     language = quality_settings.get("language") or getattr(settings, "WHISPER_LANGUAGE", None) or None
     beam_size = quality_settings.get("beam_size") or getattr(settings, "WHISPER_BEAM_SIZE", 5)
-    temperature = quality_settings.get("temperature") or getattr(settings, "WHISPER_TEMPERATURE", 0.0)
+    temperature = quality_settings.get("temperature") if quality_settings.get("temperature") is not None else getattr(settings, "WHISPER_TEMPERATURE", 0.0)
     word_timestamps = quality_settings.get("word_timestamps", getattr(settings, "WHISPER_WORD_TIMESTAMPS", True))
 
     all_segments = []

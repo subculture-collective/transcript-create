@@ -261,6 +261,13 @@ def process_video(engine, video_id):
         try:
             from worker.vocabulary import apply_vocabulary_corrections
             with engine.begin() as conn:
+                # Ensure job_meta is a dict before accessing .get()
+                if job_meta and isinstance(job_meta, str):
+                    try:
+                        job_meta = json.loads(job_meta)
+                    except Exception as e:
+                        logger.warning("Failed to parse job_meta as JSON", extra={"error": str(e)})
+                        job_meta = None
                 user_id = job_meta.get("user_id") if job_meta else None
                 diar_segments = apply_vocabulary_corrections(conn, diar_segments, user_id)
                 logger.info("Applied custom vocabulary corrections")

@@ -296,7 +296,6 @@ def process_video(engine, video_id):
             # Serialize word timestamps if present
             word_ts_json = None
             if "words" in s and s["words"]:
-                import json
                 word_ts_json = json.dumps(s["words"])
 
             conn.execute(

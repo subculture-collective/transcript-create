@@ -6,7 +6,6 @@ Create Date: 2025-10-29 01:53:00.000000
 
 """
 from alembic import op
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '002_advanced_features'

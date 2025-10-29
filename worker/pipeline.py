@@ -181,15 +181,55 @@ def process_video(engine, video_id):
     logger.info("Audio chunks created", extra={"chunk_count": len(chunks)})
     chunk_count.observe(len(chunks))
     
+    # Extract quality settings from job metadata if available
+    with engine.begin() as conn:
+        job_meta = conn.execute(
+            text("SELECT meta FROM jobs WHERE id=:j"),
+            {"j": v["job_id"]},
+        ).scalar()
+    
+    quality_settings = job_meta.get("quality", {}) if job_meta else {}
+    language = quality_settings.get("language") or getattr(settings, 'WHISPER_LANGUAGE', None) or None
+    beam_size = quality_settings.get("beam_size") or getattr(settings, 'WHISPER_BEAM_SIZE', 5)
+    temperature = quality_settings.get("temperature") or getattr(settings, 'WHISPER_TEMPERATURE', 0.0)
+    word_timestamps = quality_settings.get("word_timestamps", getattr(settings, 'WHISPER_WORD_TIMESTAMPS', True))
+    
     all_segments = []
+    detected_language = None
+    language_probability = None
     transcription_start = time.time()
+    
     for c in chunks:
         ct0 = time.time()
         logger.info("Transcribing chunk", extra={"chunk_file": c.path.name, "offset_seconds": c.offset})
-        segs = transcribe_chunk(c.path)
+        segs, lang_info = transcribe_chunk(
+            c.path, 
+            language=language,
+            beam_size=beam_size,
+            temperature=temperature,
+            word_timestamps=word_timestamps
+        )
+        
+        # Capture language info from first chunk
+        if detected_language is None and lang_info:
+            detected_language = lang_info.get("language")
+            language_probability = lang_info.get("language_probability")
+            logger.info(
+                "Language detected",
+                extra={
+                    "language": detected_language,
+                    "probability": language_probability,
+                }
+            )
+        
         for s in segs:
             s["start"] += c.offset
             s["end"] += c.offset
+            # Adjust word timestamps if present
+            if "words" in s:
+                for w in s["words"]:
+                    w["start"] += c.offset
+                    w["end"] += c.offset
         all_segments.extend(segs)
         chunk_duration = time.time() - ct0
         whisper_chunk_transcription_seconds.labels(model=settings.WHISPER_MODEL).observe(chunk_duration)
@@ -214,6 +254,17 @@ def process_video(engine, video_id):
         diarization_duration_seconds.observe(diarization_duration)
         logger.info("Diarization completed", extra={"duration_seconds": round(diarization_duration, 2)})
 
+    # Apply custom vocabulary corrections if enabled
+    if getattr(settings, 'ENABLE_CUSTOM_VOCABULARY', True):
+        try:
+            from worker.vocabulary import apply_vocabulary_corrections
+            with engine.begin() as conn:
+                user_id = job_meta.get("user_id") if job_meta else None
+                diar_segments = apply_vocabulary_corrections(conn, diar_segments, user_id)
+                logger.info("Applied custom vocabulary corrections")
+        except Exception as e:
+            logger.warning("Failed to apply vocabulary corrections", extra={"error": str(e)})
+
     with engine.begin() as conn:
         full_text = " ".join(s["text"] for s in diar_segments)
         logger.info("Inserting transcript", extra={"text_length": len(full_text)})
@@ -227,19 +278,32 @@ def process_video(engine, video_id):
         conn.execute(
             text(
                 """
-            INSERT INTO transcripts (video_id, full_text, language, model)
-            VALUES (:v,:t,:lang,:m)
+            INSERT INTO transcripts (video_id, full_text, language, model, detected_language, language_probability)
+            VALUES (:v,:t,:lang,:m,:dlang,:lprob)
         """
             ),
-            {"v": video_id, "t": full_text, "lang": "en", "m": settings.WHISPER_MODEL},
+            {
+                "v": video_id,
+                "t": full_text,
+                "lang": detected_language or "en",
+                "m": settings.WHISPER_MODEL,
+                "dlang": detected_language,
+                "lprob": language_probability,
+            },
         )
         logger.info("Inserting segments", extra={"segment_count": len(diar_segments)})
         for s in diar_segments:
+            # Serialize word timestamps if present
+            word_ts_json = None
+            if "words" in s and s["words"]:
+                import json
+                word_ts_json = json.dumps(s["words"])
+            
             conn.execute(
                 text(
                     """
-                INSERT INTO segments (video_id,start_ms,end_ms,text,speaker_label,confidence,avg_logprob,temperature,token_count)
-                VALUES (:v,:s,:e,:txt,:spk,:conf,:lp,:temp,:tc)
+                INSERT INTO segments (video_id,start_ms,end_ms,text,speaker_label,confidence,avg_logprob,temperature,token_count,word_timestamps)
+                VALUES (:v,:s,:e,:txt,:spk,:conf,:lp,:temp,:tc,:wts)
             """  # noqa: E501
                 ),
                 {
@@ -252,6 +316,7 @@ def process_video(engine, video_id):
                     "lp": s.get("avg_logprob"),
                     "temp": s.get("temperature"),
                     "tc": s.get("token_count"),
+                    "wts": word_ts_json,
                 },
             )
         logger.info("Marking video as completed")

@@ -63,12 +63,15 @@ def _retry_on_transient_error(func):
 
 
 @_retry_on_transient_error
-def create_job(db, kind: str, url: str):
+def create_job(db, kind: str, url: str, meta: dict = None):
     from app.metrics import jobs_created_total
+    import json
 
     job_id = uuid.uuid4()
+    meta_json = json.dumps(meta) if meta else '{}'
     db.execute(
-        text("INSERT INTO jobs (id, kind, input_url) VALUES (:i,:k,:u)"), {"i": str(job_id), "k": kind, "u": url}
+        text("INSERT INTO jobs (id, kind, input_url, meta) VALUES (:i,:k,:u,:m)"), 
+        {"i": str(job_id), "k": kind, "u": url, "m": meta_json}
     )
     db.commit()
 

@@ -41,6 +41,15 @@ def _row_to_status(row):
     - `expanded`: Videos identified and queued for transcription
     - `completed`: All videos transcribed successfully
     - `failed`: Job encountered an error
+    
+    **Quality Settings:**
+    Optionally specify quality settings for transcription:
+    - `preset`: 'fast', 'balanced', or 'accurate'
+    - `language`: Language code (e.g., 'en', 'es') or omit for auto-detection
+    - `model`: Whisper model size (overrides preset)
+    - `beam_size`: Beam search size (1-10)
+    - `temperature`: Sampling temperature (0.0-1.0)
+    - `word_timestamps`: Extract word-level timestamps (default: true)
     """,
     responses={
         200: {
@@ -66,7 +75,14 @@ def _row_to_status(row):
 )
 def create_job(payload: JobCreate, db=Depends(get_db)):
     """Create a new transcription job."""
-    job_id = crud.create_job(db, payload.kind, str(payload.url))
+    # Build job metadata with quality settings and vocabulary
+    meta = {}
+    if payload.quality:
+        meta["quality"] = payload.quality.model_dump(exclude_none=True)
+    if payload.vocabulary_ids:
+        meta["vocabulary_ids"] = [str(vid) for vid in payload.vocabulary_ids]
+    
+    job_id = crud.create_job(db, payload.kind, str(payload.url), meta=meta)
     job = crud.fetch_job(db, job_id)
     return _row_to_status(job)
 

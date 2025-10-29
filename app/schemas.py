@@ -6,6 +6,39 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
+class QualitySettingsInput(BaseModel):
+    """Quality settings for transcription."""
+    
+    preset: Optional[Literal["fast", "balanced", "accurate"]] = Field(
+        "balanced",
+        description="Quality preset (fast/balanced/accurate)"
+    )
+    language: Optional[str] = Field(
+        None,
+        description="Language code (e.g., 'en', 'es', 'fr') or None for auto-detect"
+    )
+    model: Optional[str] = Field(
+        None,
+        description="Whisper model (tiny/base/small/medium/large/large-v3)"
+    )
+    beam_size: Optional[int] = Field(
+        None,
+        ge=1,
+        le=10,
+        description="Beam size for decoding (1-10, higher = more accurate)"
+    )
+    temperature: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Sampling temperature (0.0-1.0, 0.0 = greedy)"
+    )
+    word_timestamps: Optional[bool] = Field(
+        True,
+        description="Extract word-level timestamps"
+    )
+
+
 class JobCreate(BaseModel):
     """Request body for creating a new transcription job."""
 
@@ -17,6 +50,14 @@ class JobCreate(BaseModel):
     kind: Literal["single", "channel"] = Field(
         "single",
         description="Type of job: 'single' for one video, 'channel' for all videos in a channel",
+    )
+    quality: Optional[QualitySettingsInput] = Field(
+        None,
+        description="Quality settings for transcription"
+    )
+    vocabulary_ids: Optional[List[uuid.UUID]] = Field(
+        None,
+        description="Custom vocabulary IDs to apply during transcription"
     )
 
     @field_validator("url")
@@ -276,3 +317,90 @@ class PaginatedVideos(BaseModel):
             }
         }
     }
+
+
+# Advanced transcription feature schemas
+
+class VocabularyTerm(BaseModel):
+    """A single vocabulary term with replacement pattern."""
+    
+    pattern: str = Field(..., description="Pattern to match (will be regex-escaped)")
+    replacement: str = Field(..., description="Replacement text")
+    case_sensitive: bool = Field(False, description="Whether matching is case-sensitive")
+
+
+class VocabularyCreate(BaseModel):
+    """Request to create a custom vocabulary."""
+    
+    name: str = Field(..., min_length=1, max_length=100, description="Vocabulary name")
+    terms: List[VocabularyTerm] = Field(..., description="List of vocabulary terms")
+    is_global: bool = Field(False, description="Apply to all jobs (requires admin)")
+
+
+class VocabularyResponse(BaseModel):
+    """Custom vocabulary response."""
+    
+    id: uuid.UUID = Field(..., description="Vocabulary ID")
+    name: str = Field(..., description="Vocabulary name")
+    terms: List[VocabularyTerm] = Field(..., description="List of vocabulary terms")
+    is_global: bool = Field(..., description="Whether this is a global vocabulary")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class TranslationRequest(BaseModel):
+    """Request to translate a transcript."""
+    
+    transcript_id: uuid.UUID = Field(..., description="Transcript ID to translate")
+    target_language: str = Field(..., min_length=2, max_length=10, description="Target language code (e.g., 'es', 'fr')")
+    provider: Optional[Literal["google", "deepl", "libretranslate"]] = Field(
+        None,
+        description="Translation provider (uses system default if not specified)"
+    )
+
+
+class TranslationSegment(BaseModel):
+    """A translated segment."""
+    
+    start_ms: int = Field(..., description="Start time in milliseconds")
+    end_ms: int = Field(..., description="End time in milliseconds")
+    text: str = Field(..., description="Translated text")
+    original_text: Optional[str] = Field(None, description="Original text before translation")
+
+
+class TranslationResponse(BaseModel):
+    """Translation response."""
+    
+    id: uuid.UUID = Field(..., description="Translation ID")
+    transcript_id: uuid.UUID = Field(..., description="Source transcript ID")
+    target_language: str = Field(..., description="Target language code")
+    provider: str = Field(..., description="Translation provider used")
+    segments: List[TranslationSegment] = Field(..., description="Translated segments")
+    full_text: Optional[str] = Field(None, description="Full translated text")
+    created_at: datetime = Field(..., description="Translation timestamp")
+
+
+class ConfidenceFilter(BaseModel):
+    """Filter segments by confidence score."""
+    
+    min_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Minimum confidence score")
+    max_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Maximum confidence score")
+
+
+class EnhancedSegment(Segment):
+    """Segment with additional metadata."""
+    
+    confidence: Optional[float] = Field(None, description="Confidence score (0-1)")
+    word_timestamps: Optional[List[Dict[str, Any]]] = Field(None, description="Word-level timestamps")
+    avg_logprob: Optional[float] = Field(None, description="Average log probability")
+    temperature: Optional[float] = Field(None, description="Sampling temperature used")
+
+
+class TranscriptMetadata(BaseModel):
+    """Metadata about a transcript."""
+    
+    detected_language: Optional[str] = Field(None, description="Detected language code")
+    language_probability: Optional[float] = Field(None, description="Language detection confidence")
+    model: str = Field(..., description="Whisper model used")
+    quality_preset: Optional[str] = Field(None, description="Quality preset used")
+

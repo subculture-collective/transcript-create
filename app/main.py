@@ -62,6 +62,7 @@ Admin endpoints require additional authorization.
         {"name": "Favorites", "description": "User favorite transcript segments"},
         {"name": "Events", "description": "Client-side event tracking"},
         {"name": "Health", "description": "Service health check"},
+        {"name": "Vocabularies", "description": "Custom vocabulary management for improved accuracy"},
     ],
 )
 
@@ -308,6 +309,7 @@ from .routes.health import router as health_router  # noqa: E402
 from .routes.jobs import router as jobs_router  # noqa: E402
 from .routes.search import router as search_router  # noqa: E402
 from .routes.videos import router as videos_router  # noqa: E402
+from .routes.vocabularies import router as vocabularies_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(exports_router)
@@ -321,6 +323,7 @@ app.include_router(events_router)
 app.include_router(admin_router)
 app.include_router(analytics_router)
 app.include_router(search_router)
+app.include_router(vocabularies_router)
 
 
 @app.get(

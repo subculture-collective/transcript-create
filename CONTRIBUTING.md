@@ -1,9 +1,18 @@
 # Contributing to Transcript Create
 
-Thank you for considering contributing to Transcript Create! This document provides guidelines and information about our development process.
+Thank you for considering contributing to Transcript Create! 🎉
+
+We're excited to have you here. Whether you're fixing a bug, adding a feature, improving documentation, or helping others, every contribution makes a difference.
+
+This document provides guidelines and information about our development process to help you contribute effectively.
+
+## Code of Conduct
+
+This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to security@subculture.community.
 
 ## Table of Contents
 
+- [Code of Conduct](#code-of-conduct)
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Database Migrations](#database-migrations)
@@ -11,6 +20,8 @@ Thank you for considering contributing to Transcript Create! This document provi
 - [CI/CD Pipeline](#cicd-pipeline)
 - [Pull Request Process](#pull-request-process)
 - [Branch Protection Rules](#branch-protection-rules)
+- [First-Time Contributors](#first-time-contributors)
+- [Getting Help](#getting-help)
 
 ## Getting Started
 
@@ -20,6 +31,8 @@ Thank you for considering contributing to Transcript Create! This document provi
 4. Make your changes following our code quality guidelines
 5. Run tests and linting locally
 6. Push to your fork and submit a pull request
+
+**New to open source?** Check out our [First-Time Contributors Guide](docs/contributing/first-time.md) for a detailed walkthrough.
 
 ## Development Setup
 
@@ -565,6 +578,33 @@ Our CI/CD is designed for fast feedback:
 
 If checks take significantly longer, please report as an issue.
 
+## First-Time Contributors
+
+👋 New to the project? Welcome! We're here to help.
+
+**Start here:**
+1. Read our [First-Time Contributors Guide](docs/contributing/first-time.md) for a step-by-step walkthrough
+2. Look for issues labeled [`good first issue`](https://github.com/subculture-collective/transcript-create/labels/good%20first%20issue) - these are beginner-friendly
+3. Check out our [Development Setup](#development-setup) guide
+4. Don't hesitate to ask questions!
+
+**Tips for success:**
+- Start small - documentation fixes and small bug fixes are great first contributions
+- Ask questions early and often - we're happy to help
+- Read existing code and pull requests to understand our style
+- Join discussions in issues to learn more about the project
+
+## Getting Help
+
+If you have questions or need help:
+
+1. **Documentation**: Check the [README.md](README.md) and [docs/](docs/) folder
+2. **Existing Issues**: Search [existing issues](https://github.com/subculture-collective/transcript-create/issues) for similar questions
+3. **Ask a Question**: Open a [new issue](https://github.com/subculture-collective/transcript-create/issues/new/choose) with the question template
+4. **Development Questions**: Check [docs/development/](docs/development/) for architecture and code guidelines
+
+We strive to respond to all questions within 48 hours. Don't be shy - there are no stupid questions!
+
 ## Security
 
 Please review [SECURITY.md](SECURITY.md) for:
@@ -574,12 +614,14 @@ Please review [SECURITY.md](SECURITY.md) for:
 - Production security checklist
 - Dependency update procedures
 
-## Questions?
+## Recognition
 
-If you have questions or need help:
+All contributors are recognized in our [CONTRIBUTORS.md](CONTRIBUTORS.md) file. Your contributions, big or small, are valuable to us!
 
-1. Check the [README.md](README.md) for project documentation
-2. Search existing issues for similar questions
-3. Open a new issue with the `question` label
+## License
 
-Thank you for contributing! 🚀
+By contributing to Transcript Create, you agree that your contributions will be licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+
+---
+
+Thank you for contributing! 🚀 Your help makes Transcript Create better for everyone.

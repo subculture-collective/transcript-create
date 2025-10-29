@@ -79,11 +79,12 @@ This project implements multiple layers of security scanning:
 ### Security Features
 
 - **Parameterized Database Queries**: All SQL queries use parameterized statements via SQLAlchemy
-- **Authentication**: OAuth 2.0 integration with secure token handling
+- **Authentication**: Optional OAuth 2.0 integration with secure token handling<sup>†</sup>
 - **Rate Limiting**: API endpoints protected with rate limiting
 - **Input Validation**: Pydantic models for request/response validation
 - **Secret Management**: Environment variables for sensitive configuration
 
+<sup>†</sup> OAuth 2.0 authentication is an optional feature. It requires installing additional dependencies and configuring the application. See the documentation for details on enabling OAuth support.
 ## Security Best Practices
 
 When contributing to this project:

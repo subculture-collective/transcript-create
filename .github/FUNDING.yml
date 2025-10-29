@@ -1,0 +1,20 @@
+# GitHub Sponsors configuration
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button
+
+# GitHub username(s) for GitHub Sponsors
+github: # [onnwee]
+
+# Patreon username
+patreon: # your-patreon-username
+
+# Open Collective username
+open_collective: # your-opencollective
+
+# Ko-fi username
+ko_fi: # your-kofi-username
+
+# Buy Me a Coffee username
+custom: # https://buymeacoffee.com/yourusername
+
+# Note: Uncomment and update the relevant fields above to enable sponsorship options
+# This file is optional and can be removed if sponsorship is not set up yet

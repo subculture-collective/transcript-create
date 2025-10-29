@@ -6,9 +6,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 
-from .. import crud
 from ..db import get_db
-from ..schemas import VocabularyCreate, VocabularyResponse
+from ..schemas import VocabularyCreate, VocabularyResponse, VocabularyTerm
 
 router = APIRouter(prefix="/vocabularies", tags=["Vocabularies"])
 
@@ -20,11 +19,11 @@ router = APIRouter(prefix="/vocabularies", tags=["Vocabularies"])
     summary="Create custom vocabulary",
     description="""
     Create a custom vocabulary for improving transcription accuracy.
-    
+
     Vocabularies contain term patterns and replacements that are applied
     post-transcription to correct domain-specific terminology, proper nouns,
     acronyms, etc.
-    
+
     **Note**: Setting `is_global=true` requires admin privileges.
     """,
 )
@@ -32,12 +31,12 @@ def create_vocabulary(payload: VocabularyCreate, db=Depends(get_db)):
     """Create a new vocabulary."""
     # TODO: Add user authentication and check admin for is_global
     # For now, we'll create without user_id (global-like behavior)
-    
+
     vocab_id = uuid.uuid4()
     import json
-    
+
     terms_json = json.dumps([t.model_dump() for t in payload.terms])
-    
+
     with db.begin():
         db.execute(
             text("""
@@ -51,13 +50,13 @@ def create_vocabulary(payload: VocabularyCreate, db=Depends(get_db)):
                 "is_global": payload.is_global,
             }
         )
-    
+
     # Fetch and return the created vocabulary
     vocab = db.execute(
         text("SELECT * FROM user_vocabularies WHERE id = :id"),
         {"id": str(vocab_id)}
     ).mappings().first()
-    
+
     return VocabularyResponse(
         id=vocab["id"],
         name=vocab["name"],
@@ -77,13 +76,12 @@ def create_vocabulary(payload: VocabularyCreate, db=Depends(get_db)):
 def list_vocabularies(db=Depends(get_db)):
     """List all vocabularies."""
     # TODO: Add user authentication and filter by user_id
-    
+
     vocabs = db.execute(
         text("SELECT * FROM user_vocabularies ORDER BY created_at DESC")
     ).mappings().all()
-    
-    from ..schemas import VocabularyTerm
-    
+
+
     return [
         VocabularyResponse(
             id=v["id"],
@@ -109,15 +107,14 @@ def get_vocabulary(vocabulary_id: uuid.UUID, db=Depends(get_db)):
         text("SELECT * FROM user_vocabularies WHERE id = :id"),
         {"id": str(vocabulary_id)}
     ).mappings().first()
-    
+
     if not vocab:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Vocabulary {vocabulary_id} not found"
         )
-    
-    from ..schemas import VocabularyTerm
-    
+
+
     return VocabularyResponse(
         id=vocab["id"],
         name=vocab["name"],
@@ -137,13 +134,13 @@ def get_vocabulary(vocabulary_id: uuid.UUID, db=Depends(get_db)):
 def delete_vocabulary(vocabulary_id: uuid.UUID, db=Depends(get_db)):
     """Delete a vocabulary."""
     # TODO: Add user authentication and ownership check
-    
+
     result = db.execute(
         text("DELETE FROM user_vocabularies WHERE id = :id"),
         {"id": str(vocabulary_id)}
     )
     db.commit()
-    
+
     if result.rowcount == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

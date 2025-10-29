@@ -4,7 +4,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 
 from .exceptions import AppError
@@ -115,7 +114,7 @@ if settings.SENTRY_DSN:
 async def startup_event():
     """Log application startup and initialize metrics."""
     from app.metrics import setup_app_info
-    
+
     logger.info(
         "API service started",
         extra={
@@ -124,7 +123,7 @@ async def startup_event():
             "database_url": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "[hidden]",
         },
     )
-    
+
     # Initialize application info metric
     setup_app_info()
 
@@ -240,10 +239,10 @@ async def add_request_context(request: Request, call_next):
     """Add request ID and user context for tracing."""
     req_id = str(uuid.uuid4())
     request.state.request_id = req_id
-    
+
     # Set request ID in context for logging
     request_id_ctx.set(req_id)
-    
+
     # Extract user ID from session if available
     # Note: User ID will be set by auth middleware/dependency
     try:
@@ -263,30 +262,31 @@ async def metrics_middleware(request: Request, call_next):
     # Skip metrics for the metrics endpoint itself to avoid recursion
     if request.url.path == "/metrics":
         return await call_next(request)
-    
-    from app.metrics import http_requests_total, http_request_duration_seconds, http_requests_in_flight
+
     import time
-    
+
+    from app.metrics import http_request_duration_seconds, http_requests_in_flight, http_requests_total
+
     # Normalize endpoint path for metrics (remove IDs)
     endpoint = request.url.path
     method = request.method
-    
+
     # Track in-flight requests
     http_requests_in_flight.labels(method=method, endpoint=endpoint).inc()
-    
+
     # Track request duration
     start_time = time.time()
     try:
         response = await call_next(request)
         status_code = response.status_code
-        
+
         # Record metrics
         duration = time.time() - start_time
         http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
         http_requests_total.labels(method=method, endpoint=endpoint, status=status_code).inc()
-        
+
         return response
-    except Exception as e:
+    except Exception:
         # Record error metrics
         duration = time.time() - start_time
         http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
@@ -340,7 +340,7 @@ app.include_router(vocabularies_router)
 )
 async def metrics():
     """Prometheus metrics endpoint"""
-    from prometheus_client import REGISTRY, generate_latest
     from fastapi.responses import Response
-    
+    from prometheus_client import REGISTRY, generate_latest
+
     return Response(content=generate_latest(REGISTRY), media_type="text/plain; version=0.0.4; charset=utf-8")

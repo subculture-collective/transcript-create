@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 class QualitySettingsInput(BaseModel):
     """Quality settings for transcription."""
-    
+
     preset: Optional[Literal["fast", "balanced", "accurate"]] = Field(
         "balanced",
         description="Quality preset (fast/balanced/accurate)"
@@ -282,7 +282,7 @@ class SearchQuery(BaseModel):
 
 class PageInfo(BaseModel):
     """Pagination information for cursor-based pagination."""
-    
+
     has_next_page: bool = Field(..., description="Whether there are more results available")
     has_previous_page: bool = Field(..., description="Whether there are previous results available")
     next_cursor: Optional[str] = Field(None, description="Cursor for fetching the next page")
@@ -292,10 +292,10 @@ class PageInfo(BaseModel):
 
 class PaginatedVideos(BaseModel):
     """Paginated list of videos."""
-    
+
     items: List[VideoInfo] = Field(..., description="List of videos in current page")
     page_info: PageInfo = Field(..., description="Pagination information")
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -323,7 +323,7 @@ class PaginatedVideos(BaseModel):
 
 class VocabularyTerm(BaseModel):
     """A single vocabulary term with replacement pattern."""
-    
+
     pattern: str = Field(..., description="Pattern to match (will be regex-escaped)")
     replacement: str = Field(..., description="Replacement text")
     case_sensitive: bool = Field(False, description="Whether matching is case-sensitive")
@@ -331,7 +331,7 @@ class VocabularyTerm(BaseModel):
 
 class VocabularyCreate(BaseModel):
     """Request to create a custom vocabulary."""
-    
+
     name: str = Field(..., min_length=1, max_length=100, description="Vocabulary name")
     terms: List[VocabularyTerm] = Field(..., description="List of vocabulary terms")
     is_global: bool = Field(False, description="Apply to all jobs (requires admin)")
@@ -339,7 +339,7 @@ class VocabularyCreate(BaseModel):
 
 class VocabularyResponse(BaseModel):
     """Custom vocabulary response."""
-    
+
     id: uuid.UUID = Field(..., description="Vocabulary ID")
     name: str = Field(..., description="Vocabulary name")
     terms: List[VocabularyTerm] = Field(..., description="List of vocabulary terms")
@@ -350,18 +350,19 @@ class VocabularyResponse(BaseModel):
 
 class TranslationRequest(BaseModel):
     """Request to translate a transcript."""
-    
+
     transcript_id: uuid.UUID = Field(..., description="Transcript ID to translate")
-    target_language: str = Field(..., min_length=2, max_length=10, description="Target language code (e.g., 'es', 'fr')")
+    target_language: str = Field(
+        ..., min_length=2, max_length=10, description="Target language code (e.g., 'es', 'fr')"
+    )
     provider: Optional[Literal["google", "deepl", "libretranslate"]] = Field(
-        None,
-        description="Translation provider (uses system default if not specified)"
+        None, description="Translation provider (uses system default if not specified)"
     )
 
 
 class TranslationSegment(BaseModel):
     """A translated segment."""
-    
+
     start_ms: int = Field(..., description="Start time in milliseconds")
     end_ms: int = Field(..., description="End time in milliseconds")
     text: str = Field(..., description="Translated text")
@@ -370,7 +371,7 @@ class TranslationSegment(BaseModel):
 
 class TranslationResponse(BaseModel):
     """Translation response."""
-    
+
     id: uuid.UUID = Field(..., description="Translation ID")
     transcript_id: uuid.UUID = Field(..., description="Source transcript ID")
     target_language: str = Field(..., description="Target language code")
@@ -382,14 +383,14 @@ class TranslationResponse(BaseModel):
 
 class ConfidenceFilter(BaseModel):
     """Filter segments by confidence score."""
-    
+
     min_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Minimum confidence score")
     max_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Maximum confidence score")
 
 
 class EnhancedSegment(Segment):
     """Segment with additional metadata."""
-    
+
     confidence: Optional[float] = Field(None, description="Confidence score (0-1)")
     word_timestamps: Optional[List[Dict[str, Any]]] = Field(None, description="Word-level timestamps")
     avg_logprob: Optional[float] = Field(None, description="Average log probability")
@@ -398,7 +399,7 @@ class EnhancedSegment(Segment):
 
 class TranscriptMetadata(BaseModel):
     """Metadata about a transcript."""
-    
+
     detected_language: Optional[str] = Field(None, description="Detected language code")
     language_probability: Optional[float] = Field(None, description="Language detection confidence")
     model: str = Field(..., description="Whisper model used")

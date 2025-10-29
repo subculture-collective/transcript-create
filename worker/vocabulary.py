@@ -41,7 +41,7 @@ class VocabularyProcessor:
                 try:
                     flags = 0 if case_sensitive else re.IGNORECASE
                     # Use word boundaries for whole-word matching
-                    compiled = re.compile(r"\b" + re.escape(pattern) + r"\b", flags)
+                    compiled = re.compile(r"\b" + pattern + r"\b", flags)
                     self.patterns.append((compiled, replacement))
                 except re.error as e:
                     logger.warning(

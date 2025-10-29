@@ -67,10 +67,10 @@ def get_video_by_id(video_id):
 **Use modern type syntax** (Python 3.10+):
 
 ```python
-from typing import Optional, Union
+from typing import Optional, Union, Any
 
 # Good - Python 3.10+ syntax
-def process_video(video_id: int | None = None) -> dict[str, any]:
+def process_video(video_id: int | None = None) -> dict[str, Any]:
     pass
 
 # Also acceptable - backwards compatible

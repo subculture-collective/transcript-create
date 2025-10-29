@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced CONTRIBUTING.md with welcome message and code of conduct reference
 - Improved README.md with community resource links
 
-## [1.0.0] - TBD
+## [1.0.0] - Unreleased
 
 ### Added
 - Initial release of Transcript Create

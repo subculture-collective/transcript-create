@@ -185,7 +185,7 @@ docker compose up -d db
 export DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/postgres_test"
 
 # Apply schema
-python scripts/run_migrations.py upgrade
+alembic upgrade head
 ```
 
 ### Frontend Tests (Vitest)

@@ -80,8 +80,6 @@ def list_vocabularies(db=Depends(get_db)):
     vocabs = db.execute(
         text("SELECT * FROM user_vocabularies ORDER BY created_at DESC")
     ).mappings().all()
-
-
     return [
         VocabularyResponse(
             id=v["id"],

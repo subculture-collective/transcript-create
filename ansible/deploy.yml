@@ -5,11 +5,16 @@
   become: yes
   
   pre_tasks:
+    - name: Check if app_install_dir exists
+      ansible.builtin.stat:
+        path: "{{ app_install_dir }}"
+      register: app_install_dir_stat
+
     - name: Backup current deployment
       ansible.builtin.command:
         cmd: cp -r {{ app_install_dir }} {{ app_backup_dir }}/backup-{{ ansible_date_time.epoch }}
         creates: "{{ app_backup_dir }}/backup-{{ ansible_date_time.epoch }}"
-      when: app_install_dir is exists
+      when: app_install_dir_stat.stat.exists
       tags:
         - backup
   

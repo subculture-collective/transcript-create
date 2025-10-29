@@ -124,11 +124,10 @@ variable "ec2_worker_instance_type" {
 }
 
 variable "ec2_worker_ami_id" {
-  description = "AMI ID for worker instances (should have GPU drivers)"
+  description = "AMI ID for worker instances (should have GPU drivers). Must be set per region."
   type        = string
   # Deep Learning AMI with NVIDIA drivers
-  # Update based on region
-  default     = "ami-0c55b159cbfafe1f0"
+  # No default provided; must be specified for your region.
 }
 
 variable "ec2_key_name" {
@@ -159,12 +158,21 @@ variable "ec2_worker_max_count" {
 variable "certificate_arn" {
   description = "ARN of SSL certificate for ALB (from ACM)"
   type        = string
+  default     = ""
+  validation {
+    condition     = var.certificate_arn == "" || can(regex("^arn:aws:acm:[^:]+:[0-9]+:certificate/", var.certificate_arn))
+    error_message = "If provided, certificate_arn must be a valid ACM certificate ARN."
+  }
 }
 
 # DNS Variables
 variable "domain_name" {
   description = "Domain name for the API"
   type        = string
+  validation {
+    condition     = can(regex("^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$", var.domain_name))
+    error_message = "The domain_name must be a valid domain name (e.g., example.com)."
+  }
 }
 
 variable "create_dns_record" {

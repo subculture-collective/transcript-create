@@ -7,7 +7,7 @@ version: '3.8'
 services:
   db:
     environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me-in-production}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./backups/db:/backups
@@ -118,7 +118,7 @@ services:
     image: transcript-create:latest
     env_file: .env.prod
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-change-me-in-production}@db:5432/transcripts
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD}@db:5432/transcripts
       BACKUP_DIR: /backups
       BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-7}
       BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}

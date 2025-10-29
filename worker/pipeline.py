@@ -188,6 +188,8 @@ def process_video(engine, video_id):
             {"j": v["job_id"]},
         ).scalar()
 
+    if job_meta and isinstance(job_meta, str):
+        job_meta = json.loads(job_meta)
     quality_settings = job_meta.get("quality", {}) if job_meta else {}
     language = quality_settings.get("language") or getattr(settings, "WHISPER_LANGUAGE", None) or None
     beam_size = quality_settings.get("beam_size") or getattr(settings, "WHISPER_BEAM_SIZE", 5)

@@ -119,6 +119,25 @@ class Settings(BaseSettings):
     # Metrics and monitoring configuration
     ENABLE_METRICS: bool = True  # Enable Prometheus metrics collection
 
+    # Advanced transcription features
+    # Language detection (uses Whisper's built-in capability)
+    WHISPER_LANGUAGE: str = ""  # Empty = auto-detect; set to specific language code to force (e.g., 'en', 'es', 'fr')
+    # Quality presets: fast, balanced, accurate
+    WHISPER_QUALITY_PRESET: str = "balanced"  # Default quality preset
+    WHISPER_BEAM_SIZE: int = 5  # Beam size for decoding (1-10, higher = more accurate but slower)
+    WHISPER_TEMPERATURE: float = 0.0  # Temperature for sampling (0.0-1.0, 0.0 = greedy)
+    WHISPER_VAD_FILTER: bool = False  # Voice Activity Detection filter (faster-whisper only)
+    WHISPER_WORD_TIMESTAMPS: bool = True  # Extract word-level timestamps
+    # Custom vocabulary post-processing
+    ENABLE_CUSTOM_VOCABULARY: bool = True  # Apply custom vocabulary corrections
+    # Translation support
+    ENABLE_TRANSLATION: bool = False  # Enable translation features
+    TRANSLATION_PROVIDER: str = "libretranslate"  # 'google', 'deepl', 'libretranslate'
+    LIBRETRANSLATE_URL: str = "https://libretranslate.com"  # LibreTranslate API URL
+    LIBRETRANSLATE_API_KEY: str = ""  # Optional API key for LibreTranslate
+    GOOGLE_TRANSLATE_API_KEY: str = ""  # Google Cloud Translation API key
+    DEEPL_API_KEY: str = ""  # DeepL API key
+
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
     model_config = SettingsConfigDict(

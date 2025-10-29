@@ -29,19 +29,11 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="", tags=["Health"])
 
 # Version information
-try:
-    import tomllib
-    
-    pyproject_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "pyproject.toml")
-    with open(pyproject_path, "rb") as f:
-        pyproject_data = tomllib.load(f)
-        VERSION = pyproject_data.get("project", {}).get("version", "unknown")
-except Exception:
-    VERSION = "unknown"
+from ..version import get_version, get_git_commit, get_build_date
 
-# Git information (if available)
-GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
-BUILD_DATE = os.getenv("BUILD_DATE", "unknown")
+VERSION = get_version()
+GIT_COMMIT = get_git_commit()
+BUILD_DATE = get_build_date()
 
 # Health check metrics
 from prometheus_client import Counter, Gauge, Histogram

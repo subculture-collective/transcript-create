@@ -114,18 +114,9 @@ if settings.SENTRY_DSN:
 async def startup_event():
     """Log application startup and initialize metrics."""
     from app.metrics import setup_app_info
+    from app.version import get_version
 
-    # Get version info
-    try:
-        import os
-        import tomllib
-
-        pyproject_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pyproject.toml")
-        with open(pyproject_path, "rb") as f:
-            pyproject_data = tomllib.load(f)
-            version = pyproject_data.get("project", {}).get("version", "unknown")
-    except Exception:
-        version = "unknown"
+    version = get_version()
 
     logger.info(
         "API service started",

@@ -2,14 +2,8 @@
 
 /**
  * Custom version updater for standard-version
- * Handles updating version in pyproject.toml and package.json files
+ * Handles updating version in pyproject.toml files with Python-style version format
  */
-
-const fs = require('fs');
-const path = require('path');
-
-const PLAIN_TEXT_BUMP_FILES = ['pyproject.toml'];
-const JSON_BUMP_FILES = ['frontend/package.json', 'clients/javascript/package.json', 'e2e/package.json'];
 
 const VERSION_REGEX = /(\bversion\s*[:=]\s*['"])([\d.]+[-\w.]*)/;
 

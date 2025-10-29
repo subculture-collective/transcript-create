@@ -58,15 +58,14 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
-          release_name: Release ${{ steps.get_version.outputs.TAG_NAME }}
+          name: Release ${{ steps.get_version.outputs.TAG_NAME }}
           body_path: /tmp/release_notes.md
           draft: false
           prerelease: ${{ contains(steps.get_version.outputs.TAG_NAME, '-alpha') || contains(steps.get_version.outputs.TAG_NAME, '-beta') || contains(steps.get_version.outputs.TAG_NAME, '-rc') }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
     runs-on: ubuntu-latest
@@ -96,6 +95,10 @@ jobs:
           MINOR=$(echo $VERSION | cut -d. -f1-2)
           echo "MAJOR=$MAJOR" >> $GITHUB_OUTPUT
           echo "MINOR=$MINOR" >> $GITHUB_OUTPUT
+          
+          # Generate build timestamp
+          BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
 
       - name: Extract metadata for Docker
         id: meta
@@ -125,7 +128,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             GIT_COMMIT=${{ github.sha }}
-            BUILD_DATE=${{ github.event.repository.updated_at }}
+            BUILD_DATE=${{ steps.get_version.outputs.BUILD_DATE }}
             VERSION=${{ steps.get_version.outputs.VERSION }}
 
   notify:

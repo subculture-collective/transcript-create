@@ -35,6 +35,7 @@
     }
   ],
   "skip": {
+    "_comment": "Skip automatic tag push to allow manual review before triggering release workflow",
     "tag": true
   }
 }

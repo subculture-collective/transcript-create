@@ -12,7 +12,7 @@ pypdf2==3.0.1
 
 # Linting and formatting
 ruff==0.9.1
-black==25.1.0
+black==25.9.0
 isort==6.1.0
 mypy==1.14.1
 

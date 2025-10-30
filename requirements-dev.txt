@@ -11,7 +11,7 @@ pytest-xdist==3.6.1
 pypdf2==3.0.1
 
 # Linting and formatting
-ruff==0.9.1
+ruff==0.14.2
 black==25.1.0
 isort==6.1.0
 mypy==1.14.1

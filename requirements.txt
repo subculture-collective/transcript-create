@@ -1,5 +1,5 @@
 # Core API framework
-fastapi==0.119.0
+fastapi==0.120.2
 uvicorn[standard]==0.38.0
 
 # Database

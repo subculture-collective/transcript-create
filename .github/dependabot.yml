@@ -33,9 +33,6 @@ updates:
     allow:
       - dependency-type: "all"
     # Separate major version updates for careful review
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
   
   # Frontend npm dependencies
   - package-ecosystem: "npm"

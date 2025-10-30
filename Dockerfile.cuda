@@ -15,7 +15,7 @@
 # =============================================================================
 # Stage 1: Base image with system dependencies
 # =============================================================================
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04 AS base
+FROM nvidia/cuda:13.0.1-runtime-ubuntu22.04 AS base
 
 # Build argument for PyTorch CUDA wheel index
 ARG CUDA_WHEEL_INDEX=https://download.pytorch.org/whl/cu121

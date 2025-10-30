@@ -4,6 +4,7 @@ This document outlines the versioning scheme, release procedures, and checklists
 
 ## Table of Contents
 
+- [Automated Release Process](#automated-release-process)
 - [Versioning Scheme](#versioning-scheme)
 - [Release Types](#release-types)
 - [Release Checklist](#release-checklist)
@@ -11,6 +12,75 @@ This document outlines the versioning scheme, release procedures, and checklists
 - [Post-Release Tasks](#post-release-tasks)
 - [Hotfix Releases](#hotfix-releases)
 - [Docker Images](#docker-images)
+
+## Automated Release Process
+
+We use an automated release process powered by:
+
+- **standard-version**: Automated versioning and CHANGELOG generation
+- **Conventional Commits**: Structured commit messages for automatic version bumping
+- **GitHub Actions**: Automated release workflow triggered on version tags
+
+### Quick Release Guide
+
+1. **Ensure commits follow Conventional Commits format** (enforced by pre-commit hooks)
+2. **Create a release** using standard-version:
+
+```bash
+# Automatic version bump based on commits
+npm run release
+
+# Or specify version type
+npm run release:patch   # Bug fixes (0.1.0 → 0.1.1)
+npm run release:minor   # New features (0.1.0 → 0.2.0)
+npm run release:major   # Breaking changes (0.1.0 → 1.0.0)
+```
+
+3. **Review and commit the changes**:
+
+```bash
+# standard-version will have updated:
+# - CHANGELOG.md
+# - pyproject.toml
+# - package.json
+# - frontend/package.json
+# - clients/javascript/package.json
+# - e2e/package.json
+
+git push origin main
+```
+
+4. **Create and push the tag**:
+
+```bash
+# standard-version creates a tag but doesn't push it
+git push --follow-tags
+```
+
+5. **GitHub Actions will automatically**:
+   - Create a GitHub Release with changelog
+   - Build and push Docker images with proper tags
+   - Notify on completion
+
+### What Gets Automated
+
+✅ **Version bumping** across all package files  
+✅ **CHANGELOG.md** generation from commit messages  
+✅ **Git tagging** with semantic version  
+✅ **GitHub Release** creation with notes  
+✅ **Docker images** built and published  
+✅ **Multiple image tags** (latest, semver, major, minor)
+
+### Conventional Commits Reference
+
+Your commits determine the version bump automatically:
+
+- `feat:` → MINOR version (0.1.0 → 0.2.0)
+- `fix:` → PATCH version (0.1.0 → 0.1.1)
+- `feat!:` or `BREAKING CHANGE:` → MAJOR version (0.1.0 → 1.0.0)
+- `docs:`, `chore:`, etc. → No version bump
+
+See [CONTRIBUTING.md](../../CONTRIBUTING.md#commit-message-guidelines) for complete commit format guidelines.
 
 ## Versioning Scheme
 

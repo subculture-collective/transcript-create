@@ -114,10 +114,14 @@ if settings.SENTRY_DSN:
 async def startup_event():
     """Log application startup and initialize metrics."""
     from app.metrics import setup_app_info
+    from app.version import get_version
+
+    version = get_version()
 
     logger.info(
         "API service started",
         extra={
+            "version": version,
             "log_level": settings.LOG_LEVEL,
             "log_format": settings.LOG_FORMAT,
             "database_url": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "[hidden]",

@@ -1,0 +1,41 @@
+{
+  "types": [
+    { "type": "feat", "section": "✨ Features" },
+    { "type": "fix", "section": "🐛 Bug Fixes" },
+    { "type": "perf", "section": "⚡ Performance Improvements" },
+    { "type": "revert", "section": "⏪ Reverts" },
+    { "type": "docs", "section": "📚 Documentation" },
+    { "type": "style", "section": "💄 Styling" },
+    { "type": "refactor", "section": "♻️ Code Refactoring" },
+    { "type": "test", "section": "✅ Tests" },
+    { "type": "build", "section": "📦 Build System" },
+    { "type": "ci", "section": "👷 CI/CD" },
+    { "type": "chore", "hidden": true }
+  ],
+  "bumpFiles": [
+    {
+      "filename": "pyproject.toml",
+      "updater": "scripts/version-updater.js"
+    },
+    {
+      "filename": "package.json",
+      "type": "json"
+    },
+    {
+      "filename": "frontend/package.json",
+      "type": "json"
+    },
+    {
+      "filename": "clients/javascript/package.json",
+      "type": "json"
+    },
+    {
+      "filename": "e2e/package.json",
+      "type": "json"
+    }
+  ],
+  "skip": {
+    "_comment": "Skip automatic tag push to allow manual review before triggering release workflow",
+    "tag": true
+  }
+}

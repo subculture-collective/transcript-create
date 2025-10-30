@@ -91,7 +91,7 @@ pydantic_core==2.41.4
 Pygments==2.19.2
 pyparsing==3.2.5
 python-dateutil==2.9.0.post0
-python-dotenv==1.1.1
+python-dotenv==1.2.1
 pytorch-lightning==2.5.5
 pytorch-metric-learning==2.9.0
 pytz==2025.2

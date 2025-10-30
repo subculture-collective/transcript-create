@@ -48,7 +48,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build ROCm image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
@@ -113,7 +113,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build CPU image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.cpu
@@ -190,7 +190,7 @@ jobs:
           esac
 
       - name: Build CUDA image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.cuda

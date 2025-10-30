@@ -678,7 +678,7 @@ git push --force-with-lease
 For dependency-related issues:
 
 1. **Check this guide** first
-2. **Review docs/DEPENDENCIES.md** for technical details
+2. **Review ../DEPENDENCIES.md** for technical details
 3. **Search GitHub Issues** for similar problems
 4. **Check CI logs** for detailed error messages
 5. **Ask in Discussions** for community help

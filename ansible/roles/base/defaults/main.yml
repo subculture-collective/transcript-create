@@ -1,0 +1,40 @@
+---
+# Default variables for base role
+
+# System packages to install
+base_packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - unzip
+  - jq
+  - build-essential
+  - software-properties-common
+
+# Firewall configuration
+firewall_enabled: true
+firewall_allowed_ports:
+  - 22    # SSH
+  - 80    # HTTP
+  - 443   # HTTPS
+  - 8000  # API (if needed)
+
+# System limits
+system_limits:
+  - domain: '*'
+    type: soft
+    item: nofile
+    value: 65536
+  - domain: '*'
+    type: hard
+    item: nofile
+    value: 65536
+
+# Timezone
+system_timezone: UTC
+
+# Swap configuration
+swap_file_size_mb: 2048
+swap_enabled: false  # Usually disabled on systems with SSDs

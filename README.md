@@ -8,8 +8,55 @@
 [![E2E Tests](https://github.com/subculture-collective/transcript-create/actions/workflows/e2e-tests.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/e2e-tests.yml)
 [![Docker Build](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/docker-build.yml)
 [![Docker Image Version](https://ghcr-badge.egpl.dev/onnwee/transcript-create/latest_tag?trim=major&label=latest)](https://github.com/onnwee/transcript-create/pkgs/container/transcript-create)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 Create searchable, exportable transcripts from YouTube videos or channels. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
+
+## 🚀 API Client SDKs
+
+Integrate Transcript Create into your applications with our official client libraries:
+
+- **[Python SDK](clients/python)** - Async client with full type hints
+  ```bash
+  pip install transcript-create-client
+  ```
+
+- **[JavaScript/TypeScript SDK](clients/javascript)** - Universal client for Node.js and browsers
+  ```bash
+  npm install @transcript-create/sdk
+  ```
+
+See the [SDK documentation](clients/) for detailed usage examples and API reference.
+
+## 📚 Documentation & Community
+
+### Quick Links
+
+- **[Getting Started Guide](docs/getting-started.md)** - Set up and run your first transcription
+- **[API Documentation](docs/api-reference.md)** - Complete API reference with examples
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
+- **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community guidelines
+- **[Changelog](CHANGELOG.md)** - Track project changes and releases
+- **[Security Policy](SECURITY.md)** - Report vulnerabilities responsibly
+
+### For Contributors
+
+- **[First-Time Contributors](docs/contributing/first-time.md)** - Step-by-step guide for newcomers
+- **[Development Setup](docs/development/setup.md)** - Set up your local environment
+- **[Architecture Overview](docs/development/architecture.md)** - System design and components
+- **[Code Guidelines](docs/development/code-guidelines.md)** - Coding standards and best practices
+- **[Testing Guide](docs/development/testing.md)** - How to write and run tests
+- **[Release Process](docs/development/release-process.md)** - Versioning and releases
+
+### Get Involved
+
+- 🐛 [Report a Bug](https://github.com/subculture-collective/transcript-create/issues/new?template=bug_report.md)
+- ✨ [Request a Feature](https://github.com/subculture-collective/transcript-create/issues/new?template=feature_request.md)
+- ❓ [Ask a Question](https://github.com/subculture-collective/transcript-create/issues/new?template=question.md)
+- 🙌 [View All Contributors](CONTRIBUTORS.md)
+- 🎯 [Find Good First Issues](https://github.com/subculture-collective/transcript-create/labels/good%20first%20issue)
 
 ## CI/CD Status
 
@@ -119,6 +166,8 @@ Check status and fetch transcript when complete (see API section below).
 ## Docker Images
 
 Pre-built Docker images are automatically published to GitHub Container Registry (GHCR) on every release and push to main.
+
+**See [CHANGELOG.md](CHANGELOG.md) for release notes and version history.**
 
 ### Pulling Images
 
@@ -606,13 +655,48 @@ See [SECURITY.md](SECURITY.md) for:
 - Production security checklist
 - Dependency update procedures
 
-## License
+## Versioning & Releases
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+We follow [Semantic Versioning](https://semver.org/) (SemVer) for all releases.
+
+### Version Support Policy
+
+- **Latest major version**: Full support (new features, bug fixes, security updates)
+- **Previous major version**: Security updates only (for 6 months after new major release)
+- **Older versions**: No support
+
+### Release Information
+
+- **Current version**: See [releases](https://github.com/subculture-collective/transcript-create/releases)
+- **Changelog**: See [CHANGELOG.md](CHANGELOG.md) for all changes
+- **Release process**: See [docs/development/release-process.md](docs/development/release-process.md)
+
+### Docker Image Tags
+
+```bash
+# Specific version (recommended for production)
+ghcr.io/subculture-collective/transcript-create:v0.1.0
+
+# Latest stable release (auto-updated)
+ghcr.io/subculture-collective/transcript-create:latest
+
+# Major version (gets minor and patch updates)
+ghcr.io/subculture-collective/transcript-create:0
+```
+
+## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 For information about third-party dependencies and their licenses, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Contributors
+
+Thank you to all the amazing people who have contributed to Transcript Create! 🙏
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full list of contributors.
+
+Want to contribute? Check out our [Contributing Guide](CONTRIBUTING.md) and [First-Time Contributors Guide](docs/contributing/first-time.md) to get started!
 
 ## GitHub project automation
 

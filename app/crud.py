@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from app.cache import cache, invalidate_cache, invalidate_cache_pattern
+from app.cache import cache
 from app.logging_config import get_logger
 from app.settings import settings
 
@@ -63,12 +63,16 @@ def _retry_on_transient_error(func):
 
 
 @_retry_on_transient_error
-def create_job(db, kind: str, url: str):
+def create_job(db, kind: str, url: str, meta: dict = None):
+    import json
+
     from app.metrics import jobs_created_total
 
     job_id = uuid.uuid4()
+    meta_json = json.dumps(meta) if meta else "{}"
     db.execute(
-        text("INSERT INTO jobs (id, kind, input_url) VALUES (:i,:k,:u)"), {"i": str(job_id), "k": kind, "u": url}
+        text("INSERT INTO jobs (id, kind, input_url, meta) VALUES (:i,:k,:u,:m)"),
+        {"i": str(job_id), "k": kind, "u": url, "m": meta_json}
     )
     db.commit()
 

@@ -5,6 +5,7 @@ Provides comprehensive health monitoring for:
 - Basic liveness/readiness probes for Kubernetes
 - Detailed component health checks (database, OpenSearch, storage, worker)
 - Health metrics for Prometheus
+- Version information
 """
 
 import asyncio
@@ -26,6 +27,13 @@ from ..settings import settings
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="", tags=["Health"])
+
+# Version information
+from ..version import get_version, get_git_commit, get_build_date
+
+VERSION = get_version()
+GIT_COMMIT = get_git_commit()
+BUILD_DATE = get_build_date()
 
 # Health check metrics
 from prometheus_client import Counter, Gauge, Histogram
@@ -554,3 +562,36 @@ async def detailed_health_check():
         return JSONResponse(status_code=503, content=result)
     else:
         return result
+
+
+@router.get(
+    "/version",
+    summary="Version information",
+    description="Returns version information including API version, git commit, and build date.",
+    responses={
+        200: {
+            "description": "Version information",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "version": "0.1.0",
+                        "git_commit": "abc123def",
+                        "build_date": "2025-10-25T23:00:00Z"
+                    }
+                }
+            },
+        }
+    },
+)
+async def version_info():
+    """
+    Version information endpoint.
+    
+    Returns the API version, git commit hash, and build date.
+    No authentication required.
+    """
+    return {
+        "version": VERSION,
+        "git_commit": GIT_COMMIT,
+        "build_date": BUILD_DATE,
+    }

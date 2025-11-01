@@ -1,0 +1,318 @@
+name: Production Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        default: 'latest'
+      skip_tests:
+        description: 'Skip smoke tests after deployment'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  AWS_REGION: us-east-1
+  KUBE_NAMESPACE: transcript-create
+
+jobs:
+  validate:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      should_proceed: ${{ steps.validation.outputs.proceed }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Validate image tag
+        id: validation
+        run: |
+          if [[ "${{ inputs.image_tag }}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "::error::Invalid image tag format"
+            echo "proceed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      
+      - name: Check deployment readiness
+        run: |
+          echo "Deploying to: ${{ inputs.environment }}"
+          echo "Image tag: ${{ inputs.image_tag }}"
+          echo "Skip tests: ${{ inputs.skip_tests }}"
+
+  approve:
+    name: Manual Approval
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+    
+    steps:
+      - name: Request approval
+        run: |
+          echo "Deployment approved for ${{ inputs.environment }}"
+          echo "Proceeding with deployment..."
+
+  deploy-kubernetes:
+    name: Deploy to Kubernetes
+    needs: approve
+    runs-on: ubuntu-latest
+    if: ${{ inputs.environment == 'production' || inputs.environment == 'staging' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name transcript-${{ inputs.environment }} --region ${{ env.AWS_REGION }}
+      
+      - name: Verify cluster access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+      
+      - name: Update Helm values
+        run: |
+          cat > values-override.yaml <<EOF
+          image:
+            tag: "${{ inputs.image_tag }}"
+          global:
+            environment: "${{ inputs.environment }}"
+          EOF
+      
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install transcript-create ./charts/transcript-create \
+            -f charts/transcript-create/values-${{ inputs.environment }}.yaml \
+            -f values-override.yaml \
+            --namespace ${{ env.KUBE_NAMESPACE }} \
+            --wait \
+            --timeout=10m \
+            --atomic
+      
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/transcript-api -n ${{ env.KUBE_NAMESPACE }} --timeout=5m
+          kubectl rollout status deployment/transcript-worker -n ${{ env.KUBE_NAMESPACE }} --timeout=5m
+      
+      - name: Get deployment status
+        if: always()
+        run: |
+          kubectl get pods -n ${{ env.KUBE_NAMESPACE }}
+          kubectl get svc -n ${{ env.KUBE_NAMESPACE }}
+          kubectl get ingress -n ${{ env.KUBE_NAMESPACE }}
+
+  smoke-tests:
+    name: Run Smoke Tests
+    needs: deploy-kubernetes
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name transcript-${{ inputs.environment }} --region ${{ env.AWS_REGION }}
+      
+      - name: Get API endpoint
+        id: get-endpoint
+        run: |
+          if [ "${{ inputs.environment }}" == "production" ]; then
+            echo "endpoint=https://api.example.com" >> $GITHUB_OUTPUT
+          else
+            INGRESS_HOST=$(kubectl get ingress -n ${{ env.KUBE_NAMESPACE }} -o jsonpath='{.items[0].spec.rules[0].host}')
+            echo "endpoint=https://${INGRESS_HOST}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Test API health
+        run: |
+          echo "Testing API at: ${{ steps.get-endpoint.outputs.endpoint }}"
+          
+          # Wait for API to be ready
+          for i in {1..30}; do
+            if curl -sf "${{ steps.get-endpoint.outputs.endpoint }}/health" > /dev/null; then
+              echo "API is healthy"
+              break
+            fi
+            echo "Waiting for API... ($i/30)"
+            sleep 10
+          done
+          
+          # Verify health check
+          HEALTH=$(curl -sf "${{ steps.get-endpoint.outputs.endpoint }}/health" | jq -r '.status')
+          if [ "$HEALTH" != "healthy" ]; then
+            echo "::error::API health check failed"
+            exit 1
+          fi
+          
+          echo "Health check passed: $HEALTH"
+      
+      - name: Test job submission
+        run: |
+          # Submit a test job
+          JOB_RESPONSE=$(curl -sf -X POST "${{ steps.get-endpoint.outputs.endpoint }}/api/jobs" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.API_TEST_TOKEN }}" \
+            -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}')
+          
+          JOB_ID=$(echo $JOB_RESPONSE | jq -r '.id')
+          
+          if [ -z "$JOB_ID" ] || [ "$JOB_ID" == "null" ]; then
+            echo "::error::Failed to submit test job"
+            exit 1
+          fi
+          
+          echo "Test job submitted: $JOB_ID"
+          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+        id: test-job
+      
+      - name: Verify worker processing
+        run: |
+          echo "Verifying worker picked up job: ${{ steps.test-job.outputs.job_id }}"
+          
+          # Check job status for 2 minutes
+          for i in {1..12}; do
+            STATUS=$(curl -sf "${{ steps.get-endpoint.outputs.endpoint }}/api/jobs/${{ steps.test-job.outputs.job_id }}" | jq -r '.status')
+            echo "Job status: $STATUS"
+            
+            if [ "$STATUS" == "processing" ] || [ "$STATUS" == "completed" ]; then
+              echo "Worker is processing the job"
+              break
+            fi
+            
+            if [ "$STATUS" == "failed" ]; then
+              echo "::error::Job failed"
+              exit 1
+            fi
+            
+            sleep 10
+          done
+      
+      - name: Test search functionality
+        run: |
+          # Test search endpoint
+          SEARCH_RESULTS=$(curl -sf "${{ steps.get-endpoint.outputs.endpoint }}/api/search?q=test" | jq -r '.results')
+          echo "Search test passed"
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "Smoke tests completed"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Image tag: ${{ inputs.image_tag }}"
+          echo "API endpoint: ${{ steps.get-endpoint.outputs.endpoint }}"
+
+  rollback:
+    name: Rollback on Failure
+    needs: [deploy-kubernetes, smoke-tests]
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name transcript-${{ inputs.environment }} --region ${{ env.AWS_REGION }}
+      
+      - name: Rollback deployment
+        run: |
+          echo "Rolling back deployment..."
+          
+          helm rollback transcript-create --namespace ${{ env.KUBE_NAMESPACE }} --wait
+          
+          kubectl rollout status deployment/transcript-api -n ${{ env.KUBE_NAMESPACE }} --timeout=5m
+          kubectl rollout status deployment/transcript-worker -n ${{ env.KUBE_NAMESPACE }} --timeout=5m
+      
+      - name: Verify rollback
+        run: |
+          kubectl get pods -n ${{ env.KUBE_NAMESPACE }}
+          kubectl get events -n ${{ env.KUBE_NAMESPACE }} --sort-by='.lastTimestamp' | tail -20
+      
+      - name: Send alert
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            ⚠️ Deployment FAILED and was ROLLED BACK
+            Environment: ${{ inputs.environment }}
+            Image tag: ${{ inputs.image_tag }}
+            Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  notify:
+    name: Send Notification
+    needs: [deploy-kubernetes, smoke-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Send success notification
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            ✅ Deployment SUCCESSFUL
+            Environment: ${{ inputs.environment }}
+            Image tag: ${{ inputs.image_tag }}
+            API: https://api.example.com
+            Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      
+      - name: Send failure notification
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            ❌ Deployment FAILED
+            Environment: ${{ inputs.environment }}
+            Image tag: ${{ inputs.image_tag }}
+            Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

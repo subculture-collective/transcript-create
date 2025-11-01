@@ -1,0 +1,58 @@
+# AWS Region
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "transcript"
+environment  = "production"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+
+# Database Configuration
+db_name              = "transcripts"
+db_username          = "transcript_admin"
+db_instance_class    = "db.t3.medium"
+db_allocated_storage = 100
+db_multi_az          = true
+
+# Redis Configuration
+redis_node_type    = "cache.t3.medium"
+redis_num_clusters = 2  # 2 for high availability
+
+# Container Configuration
+ecr_repository_url = "123456789012.dkr.ecr.us-east-1.amazonaws.com/transcript-create"
+image_tag          = "v1.0.0"
+
+# ECS API Configuration
+ecs_api_cpu       = 1024   # 1 vCPU
+ecs_api_memory    = 2048   # 2 GB
+ecs_api_count     = 3      # Desired count
+ecs_api_min_count = 2      # Min for auto-scaling
+ecs_api_max_count = 10     # Max for auto-scaling
+
+# EC2 Worker Configuration
+ec2_worker_enabled       = true
+ec2_worker_instance_type = "g4dn.xlarge"  # NVIDIA T4 GPU
+ec2_worker_ami_id        = "ami-0c55b159cbfafe1f0"  # Update for your region
+ec2_key_name             = "my-keypair"
+ec2_worker_count         = 2
+ec2_worker_min_count     = 1
+ec2_worker_max_count     = 4
+
+# Load Balancer
+certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/your-cert-id"
+
+# DNS Configuration
+domain_name        = "api.example.com"
+create_dns_record  = true
+route53_zone_id    = "Z1234567890ABC"
+
+# Logging
+log_retention_days = 30
+
+# Additional Tags
+additional_tags = {
+  Owner       = "Platform Team"
+  CostCenter  = "Engineering"
+  Compliance  = "GDPR"
+}

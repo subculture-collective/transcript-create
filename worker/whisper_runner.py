@@ -70,9 +70,10 @@ def _try_load_torch(model_name: str, force_gpu: bool):
 
 
 def _get_model():
-    from worker.metrics import whisper_model_load_seconds
     import time
-    
+
+    from worker.metrics import whisper_model_load_seconds
+
     global _model
     if _model is None:
         load_start = time.time()
@@ -126,9 +127,11 @@ def _get_model():
                 except Exception:
                     logger.warning("Half precision failed; retrying with float32 on device=auto")
                     _model = _try_load_ct2(settings.WHISPER_MODEL, device="auto", compute_type="float32")
-        
+
         load_duration = time.time() - load_start
-        whisper_model_load_seconds.labels(model=settings.WHISPER_MODEL, backend=settings.WHISPER_BACKEND).observe(load_duration)
+        whisper_model_load_seconds.labels(
+            model=settings.WHISPER_MODEL, backend=settings.WHISPER_BACKEND
+        ).observe(load_duration)
         logger.info("Model loaded", extra={"duration_seconds": round(load_duration, 2)})
     return _model
 
@@ -146,19 +149,57 @@ def _get_ct2_fallback_model():
         for model_name, dev, ctype in try_order:
             try:
                 _fallback_ct2_model = _try_load_ct2(model_name, device=dev, compute_type=ctype)
-                logging.info("CT2 fallback loaded: model=%s device=%s compute=%s", model_name, dev, ctype)
+                logger.info("CT2 fallback loaded: model=%s device=%s compute=%s", model_name, dev, ctype)
                 break
             except Exception as e:
                 last_err = e
-                logging.warning("CT2 fallback load failed (model=%s dev=%s compute=%s): %s", model_name, dev, ctype, e)
+                logger.warning("CT2 fallback load failed (model=%s dev=%s compute=%s): %s", model_name, dev, ctype, e)
         if _fallback_ct2_model is None:
             raise RuntimeError(f"Unable to load CT2 fallback model on ROCm HIP: {last_err}")
     return _fallback_ct2_model
 
 
-def transcribe_chunk(wav_path):
+def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, word_timestamps=None, vad_filter=None):
+    """Transcribe audio chunk with Whisper.
+
+    Args:
+        wav_path: Path to audio file
+        language: Language code (e.g., 'en', 'es') or None for auto-detect
+        beam_size: Beam size for decoding (default: from settings or 5)
+        temperature: Sampling temperature (default: from settings or 0.0)
+        word_timestamps: Extract word-level timestamps (default: from settings)
+        vad_filter: Voice Activity Detection filter (default: from settings, faster-whisper only)
+
+    Returns:
+        Tuple of (segments_list, language_info_dict)
+    """
     model = _get_model()
-    logging.info("Transcribing %s", wav_path)
+
+    # Use settings defaults if not specified
+    if beam_size is None:
+        beam_size = getattr(settings, "WHISPER_BEAM_SIZE", 5)
+    if temperature is None:
+        temperature = getattr(settings, "WHISPER_TEMPERATURE", 0.0)
+    if word_timestamps is None:
+        word_timestamps = getattr(settings, "WHISPER_WORD_TIMESTAMPS", True)
+    if language is None:
+        language = getattr(settings, "WHISPER_LANGUAGE", None) or None
+    if vad_filter is None:
+        vad_filter = getattr(settings, "WHISPER_VAD_FILTER", False)
+
+    logger.info(
+        "Transcribing %s (lang=%s, beam=%d, temp=%.1f, word_ts=%s, vad=%s)",
+        wav_path,
+        language or "auto",
+        beam_size,
+        temperature,
+        word_timestamps,
+        vad_filter,
+    )
+
+    detected_language = None
+    language_probability = None
+
     if settings.WHISPER_BACKEND == "whisper":
         # openai-whisper returns dict with 'segments' list
         # On ROCm, some optimized attention kernels can cause faults on certain drivers/GPUs.
@@ -190,62 +231,114 @@ def transcribe_chunk(wav_path):
                 sdp_ctx = None
 
         try:
+            transcribe_kwargs = {
+                "fp16": False,
+                "beam_size": beam_size,
+                "temperature": temperature,
+            }
+            if language:
+                transcribe_kwargs["language"] = language
+            if word_timestamps:
+                transcribe_kwargs["word_timestamps"] = True
+
             if sdp_ctx:
                 with sdp_ctx():
-                    result = model.transcribe(str(wav_path), fp16=False)
+                    result = model.transcribe(str(wav_path), **transcribe_kwargs)
             else:
-                result = model.transcribe(str(wav_path), fp16=False)
+                result = model.transcribe(str(wav_path), **transcribe_kwargs)
+
+            detected_language = result.get("language")
+
         except Exception as e:
             # Known ROCm fault signatures
             msg = str(e)
             if "Memory access fault" in msg or "hipError" in msg or "HSA_STATUS_ERROR" in msg:
-                logging.error("PyTorch whisper on ROCm crashed (%s). Falling back to CT2 HIP backend.", msg)
+                logger.error("PyTorch whisper on ROCm crashed (%s). Falling back to CT2 HIP backend.", msg)
                 ct2 = _get_ct2_fallback_model()
-                segments, info = ct2.transcribe(str(wav_path), beam_size=5)
+                ct2_kwargs = {"beam_size": beam_size}
+                if language:
+                    ct2_kwargs["language"] = language
+                if word_timestamps:
+                    ct2_kwargs["word_timestamps"] = True
+                segments, info = ct2.transcribe(str(wav_path), **ct2_kwargs)
+                detected_language = info.language if hasattr(info, "language") else None
+                language_probability = info.language_probability if hasattr(info, "language_probability") else None
                 out = []
                 for s in segments:
-                    out.append(
-                        {
-                            "start": s.start,
-                            "end": s.end,
-                            "text": s.text.strip(),
-                            "avg_logprob": s.avg_logprob,
-                            "temperature": s.temperature,
-                            "token_count": len(s.tokens),
-                            "confidence": getattr(s, "no_speech_prob", None),
-                        }
-                    )
-                return out
+                    seg_dict = {
+                        "start": s.start,
+                        "end": s.end,
+                        "text": s.text.strip(),
+                        "avg_logprob": s.avg_logprob,
+                        "temperature": s.temperature,
+                        "token_count": len(s.tokens),
+                        "confidence": getattr(s, "no_speech_prob", None),
+                    }
+                    if word_timestamps and hasattr(s, "words"):
+                        seg_dict["words"] = [
+                            {"word": w.word, "start": w.start, "end": w.end, "probability": w.probability}
+                            for w in s.words
+                        ]
+                    out.append(seg_dict)
+                lang_info = {
+                    "language": detected_language,
+                    "language_probability": language_probability,
+                }
+                return out, lang_info
             else:
                 raise
         out = []
         for seg in result.get("segments", []):
-            out.append(
-                {
-                    "start": float(seg.get("start", 0)),
-                    "end": float(seg.get("end", 0)),
-                    "text": (seg.get("text") or "").strip(),
-                    "avg_logprob": seg.get("avg_logprob"),
-                    "temperature": seg.get("temperature"),
-                    "token_count": len(seg.get("tokens") or []),
-                    "confidence": None,
-                }
-            )
-        return out
+            seg_dict = {
+                "start": float(seg.get("start", 0)),
+                "end": float(seg.get("end", 0)),
+                "text": (seg.get("text") or "").strip(),
+                "avg_logprob": seg.get("avg_logprob"),
+                "temperature": seg.get("temperature"),
+                "token_count": len(seg.get("tokens") or []),
+                "confidence": None,
+            }
+            if word_timestamps and "words" in seg:
+                seg_dict["words"] = seg["words"]
+            out.append(seg_dict)
+        lang_info = {"language": detected_language, "language_probability": None}
+        return out, lang_info
     else:
-        segments, info = model.transcribe(str(wav_path), beam_size=5)
-        logging.debug("Transcribe info: %s", info)
+        # faster-whisper backend
+        ct2_kwargs = {"beam_size": beam_size, "temperature": temperature}
+        if language:
+            ct2_kwargs["language"] = language
+        if word_timestamps:
+            ct2_kwargs["word_timestamps"] = True
+        if vad_filter:
+            ct2_kwargs["vad_filter"] = True
+
+        segments, info = model.transcribe(str(wav_path), **ct2_kwargs)
+        logger.debug("Transcribe info: %s", info)
+
+        detected_language = info.language if hasattr(info, "language") else None
+        language_probability = info.language_probability if hasattr(info, "language_probability") else None
+
         out = []
         for s in segments:
-            out.append(
-                {
-                    "start": s.start,
-                    "end": s.end,
-                    "text": s.text.strip(),
-                    "avg_logprob": s.avg_logprob,
-                    "temperature": s.temperature,
-                    "token_count": len(s.tokens),
-                    "confidence": getattr(s, "no_speech_prob", None),
-                }
-            )
-        return out
+            seg_dict = {
+                "start": s.start,
+                "end": s.end,
+                "text": s.text.strip(),
+                "avg_logprob": s.avg_logprob,
+                "temperature": s.temperature,
+                "token_count": len(s.tokens),
+                "confidence": getattr(s, "no_speech_prob", None),
+            }
+            if word_timestamps and hasattr(s, "words"):
+                seg_dict["words"] = [
+                    {"word": w.word, "start": w.start, "end": w.end, "probability": w.probability}
+                    for w in s.words
+                ]
+            out.append(seg_dict)
+
+        lang_info = {
+            "language": detected_language,
+            "language_probability": language_probability,
+        }
+        return out, lang_info

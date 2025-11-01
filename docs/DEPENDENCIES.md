@@ -2,7 +2,16 @@
 
 ## Overview
 
-This document explains the dependency structure and management strategy for transcript-create.
+This document explains the technical details of dependency structure for transcript-create.
+
+**📚 For comprehensive dependency management guidelines, see: [Development > Dependencies Guide](./development/dependencies.md)**
+
+The detailed guide covers:
+- Adding and updating dependencies
+- Security patch handling with SLA
+- Automated updates with Dependabot
+- Version policy and testing strategies
+- Troubleshooting common issues
 
 ## Files
 

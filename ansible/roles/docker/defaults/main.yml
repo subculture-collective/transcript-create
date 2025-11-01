@@ -1,0 +1,23 @@
+---
+# Default variables for Docker role
+
+# Docker version
+docker_version: "24.0"
+docker_compose_version: "2.23.0"
+
+# Docker configuration
+docker_daemon_options:
+  log-driver: json-file
+  log-opts:
+    max-size: "100m"
+    max-file: "10"
+  storage-driver: overlay2
+
+# Users to add to docker group
+docker_users:
+  - "{{ ansible_user }}"
+
+# Docker registry (if using private registry)
+docker_registry_url: ""
+docker_registry_username: ""
+docker_registry_password: ""

@@ -16,7 +16,7 @@
 # =============================================================================
 # Stage 1: Base image with system dependencies
 # =============================================================================
-FROM rocm/dev-ubuntu-22.04:6.0.2 AS base
+FROM rocm/dev-ubuntu-22.04:7.1 AS base
 
 # Build argument for PyTorch ROCm wheel index
 ARG ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.0

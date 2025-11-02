@@ -35,6 +35,18 @@ def _fmt_time_ms(ms: int) -> str:
 
 
 def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str] = None, require_auth: bool = False):
+    """
+    Check if export is allowed based on user plan and daily limits.
+    
+    Args:
+        require_auth: If True, unauthenticated users get 401 error.
+                     If False (default), unauthenticated users can export.
+    
+    Note: YouTube caption exports use require_auth=True because they rely on
+    YouTube's API which requires attribution. Native Whisper transcripts use
+    require_auth=False to allow anonymous access, with rate limiting enforced
+    via daily export quotas for authenticated free users.
+    """
     # Pro users and admins allowed
     if user and (is_admin(user) or (user.get("plan") or "free").lower() == settings.PRO_PLAN_NAME.lower()):
         return None

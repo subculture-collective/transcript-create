@@ -94,10 +94,12 @@ def downgrade():
     try:
         op.drop_constraint("segments_transcript_id_fkey", table_name="segments", type_="foreignkey")
     except Exception:
+        # Ignore errors if the constraint does not exist; this is a best-effort downgrade.
         pass
     try:
         with op.batch_alter_table("segments") as batch_op:
             batch_op.drop_column("transcript_id")
             batch_op.drop_column("idx")
     except Exception:
+        # Ignore errors if the columns do not exist; this is a best-effort downgrade.
         pass

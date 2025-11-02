@@ -48,21 +48,6 @@ def _new_oauth():
     return oauth
 
 
-# NOTE:
-# Some tests expect a symbol named `verify_oauth_token` to exist at app.routes.auth
-# so they can monkeypatch it. Our production code uses Authlib flows directly and
-# does not rely on this helper, but we provide a placeholder for test patching.
-def verify_oauth_token(provider: str, token: str) -> dict:  # pragma: no cover - shim for tests
-    """Verify an OAuth access token and return user info.
-
-    This is a shim to support tests that monkeypatch this function. In production,
-    our implementation uses Authlib's authorize_access_token and provider APIs
-    directly within the request flow, so this function is not called. Tests may
-    patch it to inject deterministic user info.
-    """
-    raise NotImplementedError("verify_oauth_token is a test-only shim and should be monkeypatched in tests")
-
-
 @router.get(
     "/auth/me",
     summary="Get current user",

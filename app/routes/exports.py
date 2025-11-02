@@ -37,11 +37,11 @@ def _fmt_time_ms(ms: int) -> str:
 def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str] = None, require_auth: bool = False):
     """
     Check if export is allowed based on user plan and daily limits.
-    
+
     Args:
         require_auth: If True, unauthenticated users get 401 error.
                      If False (default), unauthenticated users can export.
-    
+
     Note: YouTube caption exports use require_auth=True because they rely on
     YouTube's API which requires attribution. Native Whisper transcripts use
     require_auth=False to allow anonymous access, with rate limiting enforced
@@ -80,11 +80,10 @@ def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str
 
 def _log_export(db, request: Request, user, payload: dict):
     from ..metrics import exports_total
-    import json
 
     db.execute(
         text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'export',CAST(:p AS JSONB))"),
-        {"u": str(user["id"]) if user else None, "t": get_session_token(request), "p": json.dumps(payload)},
+        {"u": str(user["id"]) if user else None, "t": get_session_token(request), "p": payload},
     )
     db.commit()
 
@@ -203,7 +202,7 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
     # Ensure video exists first -> return 404 for unknown video ids
     v = crud.get_video(db, video_id)
     if not v:
-        from ..exceptions import VideoNotFoundError, NotFoundError
+        from ..exceptions import NotFoundError, VideoNotFoundError
 
         raise VideoNotFoundError(str(video_id))
 

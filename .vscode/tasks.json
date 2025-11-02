@@ -7,6 +7,28 @@
 			"command": "docker compose up -d --force-recreate worker",
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Serena: Start MCP server (HTTP)",
+			"type": "shell",
+			"command": "uvx",
+			"args": [
+				"--from",
+				"git+https://github.com/oraios/serena",
+				"serena",
+				"start-mcp-server",
+				"--context",
+				"ide-assistant",
+				"--project",
+				"/home/onnwee/Documents/Code/onnwee/transcript-create",
+				"--transport",
+				"streamable-http",
+				"--port",
+				"9121"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }

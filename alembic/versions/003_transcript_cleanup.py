@@ -185,7 +185,7 @@ def downgrade() -> None:
     """
     
     # Drop view
-    op.execute("DROP VIEW IF EXISTS cleaned_segments_view")
+    op.execute("DROP VIEW IF EXISTS cleaned_segments_view;")
     
     # Drop indexes
     op.execute("DROP INDEX IF EXISTS segments_text_cleaned_tsv_idx")

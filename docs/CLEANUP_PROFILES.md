@@ -445,10 +445,10 @@ async def get_cleanup_profile(profile_name: str):
 
 ## Testing Profiles
 
-To test a profile on sample data:
+To test a profile on sample data, you can use the development/debugging test endpoint (note: this endpoint is for testing purposes and may not be available in production):
 
 ```bash
-# Use the test endpoint
+# Use the test endpoint (development/debugging only)
 curl -X POST "http://localhost:8000/cleanup/test" \
   -H "Content-Type: application/json" \
   -d '{
@@ -457,7 +457,7 @@ curl -X POST "http://localhost:8000/cleanup/test" \
   }'
 ```
 
-Response:
+Expected response format (for development/debugging):
 ```json
 {
   "input": "um hello everyone [MUSIC] welcome to the show",
@@ -471,6 +471,8 @@ Response:
   ]
 }
 ```
+
+**Note**: The `/cleanup/test` endpoint shown above is a proposed development/debugging endpoint and is not part of the core API specification. It should be implemented as a convenience tool for testing cleanup transformations during development.
 
 ## Performance Considerations
 

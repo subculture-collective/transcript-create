@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -492,7 +492,7 @@ class CleanedTranscriptResponse(BaseModel):
     segments: List[CleanedSegment] = Field(..., description="Cleaned transcript segments")
     cleanup_config: CleanupConfig = Field(..., description="Cleanup configuration used")
     stats: CleanupStats = Field(..., description="Statistics about cleanup operations")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of cleanup")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of cleanup")
 
     model_config = {
         "json_schema_extra": {
@@ -522,4 +522,4 @@ class FormattedTranscriptResponse(BaseModel):
     text: str = Field(..., description="Formatted transcript text")
     format: Literal["inline", "dialogue", "structured"] = Field(..., description="Formatting style used")
     cleanup_config: CleanupConfig = Field(..., description="Cleanup configuration used")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of formatting")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of formatting")

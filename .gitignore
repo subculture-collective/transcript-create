@@ -252,3 +252,6 @@ pnpm-debug.log*
 #Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
 backups/
+
+# YouTube cookies (sensitive authentication data)
+cookies.txt

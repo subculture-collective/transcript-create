@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -386,3 +386,140 @@ class TranscriptMetadata(BaseModel):
     language_probability: Optional[float] = Field(None, description="Language detection confidence")
     model: str = Field(..., description="Whisper model used")
     quality_preset: Optional[str] = Field(None, description="Quality preset used")
+
+
+# Transcript cleanup schemas
+
+
+class CleanupConfig(BaseModel):
+    """Configuration for transcript cleanup operations."""
+
+    # Normalization
+    normalize_unicode: bool = Field(True, description="Apply Unicode NFC normalization")
+    normalize_whitespace: bool = Field(True, description="Normalize whitespace characters")
+    remove_special_tokens: bool = Field(True, description="Remove [MUSIC], [APPLAUSE], etc.")
+    preserve_sound_events: bool = Field(False, description="Keep sound event markers when cleaning")
+
+    # Punctuation
+    add_punctuation: bool = Field(True, description="Add sentence-ending punctuation")
+    punctuation_mode: Literal["none", "rule-based", "model-based"] = Field(
+        "rule-based", description="Punctuation restoration strategy"
+    )
+    add_internal_punctuation: bool = Field(False, description="Add commas and internal punctuation")
+    capitalize: bool = Field(True, description="Capitalize sentence-initial letters")
+    fix_all_caps: bool = Field(True, description="Fix inappropriate all-caps text")
+
+    # De-filler
+    remove_fillers: bool = Field(True, description="Enable filler word removal")
+    filler_level: int = Field(1, ge=0, le=3, description="Filler removal level (0-3)")
+
+    # Segmentation
+    segment_sentences: bool = Field(True, description="Split segments on sentence boundaries")
+    merge_short_segments: bool = Field(True, description="Merge segments with small gaps")
+    min_segment_length_ms: int = Field(1000, ge=0, description="Minimum segment duration in ms")
+    max_gap_for_merge_ms: int = Field(500, ge=0, description="Maximum gap for merging segments in ms")
+    speaker_format: Literal["inline", "dialogue", "structured"] = Field(
+        "structured", description="Speaker label formatting style"
+    )
+
+    # Advanced
+    detect_hallucinations: bool = Field(True, description="Detect and mark potential hallucinations")
+    language_specific_rules: bool = Field(True, description="Apply language-specific cleanup rules")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "normalize_unicode": True,
+                "remove_fillers": True,
+                "filler_level": 1,
+                "add_punctuation": True,
+                "punctuation_mode": "rule-based",
+                "capitalize": True,
+            }
+        }
+    }
+
+
+class CleanupProfile(BaseModel):
+    """Predefined cleanup configuration profile."""
+
+    name: str = Field(..., description="Profile name")
+    description: str = Field(..., description="Profile description")
+    config: CleanupConfig = Field(..., description="Cleanup configuration")
+
+
+class CleanedSegment(BaseModel):
+    """Transcript segment with cleaned text."""
+
+    start_ms: int = Field(..., description="Start time in milliseconds", ge=0)
+    end_ms: int = Field(..., description="End time in milliseconds", ge=0)
+    text_raw: str = Field(..., description="Original text before cleanup")
+    text_cleaned: str = Field(..., description="Text after cleanup applied")
+    speaker_label: Optional[str] = Field(None, description="Speaker label from diarization")
+    sentence_boundary: bool = Field(False, description="True if this segment ends a sentence")
+    likely_hallucination: bool = Field(False, description="True if detected as potential hallucination")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "start_ms": 1000,
+                "end_ms": 3500,
+                "text_raw": "um hello everyone and uh welcome",
+                "text_cleaned": "Hello everyone and welcome.",
+                "speaker_label": "Speaker 1",
+                "sentence_boundary": True,
+                "likely_hallucination": False,
+            }
+        }
+    }
+
+
+class CleanupStats(BaseModel):
+    """Statistics about cleanup operations performed."""
+
+    fillers_removed: int = Field(0, description="Number of filler words removed")
+    special_tokens_removed: int = Field(0, description="Number of special tokens removed")
+    segments_merged: int = Field(0, description="Number of segments merged")
+    segments_split: int = Field(0, description="Number of segments split")
+    hallucinations_detected: int = Field(0, description="Number of hallucinations detected")
+    punctuation_added: int = Field(0, description="Number of punctuation marks added")
+
+
+class CleanedTranscriptResponse(BaseModel):
+    """Response containing cleaned transcript segments."""
+
+    video_id: uuid.UUID = Field(..., description="Unique identifier for the video")
+    segments: List[CleanedSegment] = Field(..., description="Cleaned transcript segments")
+    cleanup_config: CleanupConfig = Field(..., description="Cleanup configuration used")
+    stats: CleanupStats = Field(..., description="Statistics about cleanup operations")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of cleanup")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "video_id": "123e4567-e89b-12d3-a456-426614174000",
+                "segments": [
+                    {
+                        "start_ms": 1000,
+                        "end_ms": 3500,
+                        "text_raw": "um hello everyone",
+                        "text_cleaned": "Hello everyone.",
+                        "speaker_label": "Speaker 1",
+                        "sentence_boundary": True,
+                    }
+                ],
+                "cleanup_config": {"remove_fillers": True, "filler_level": 1},
+                "stats": {"fillers_removed": 1, "punctuation_added": 1},
+            }
+        }
+    }
+
+
+class FormattedTranscriptResponse(BaseModel):
+    """Response containing formatted transcript text."""
+
+    video_id: uuid.UUID = Field(..., description="Unique identifier for the video")
+    text: str = Field(..., description="Formatted transcript text")
+    format: Literal["inline", "dialogue", "structured"] = Field(..., description="Formatting style used")
+    cleanup_config: CleanupConfig = Field(..., description="Cleanup configuration used")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of formatting")

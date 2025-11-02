@@ -141,6 +141,33 @@ class Settings(BaseSettings):
     GOOGLE_TRANSLATE_API_KEY: str = ""  # Google Cloud Translation API key
     DEEPL_API_KEY: str = ""  # DeepL API key
 
+    # Transcript cleanup configuration
+    CLEANUP_ENABLED: bool = True  # Enable transcript cleanup features
+    # Text normalization
+    CLEANUP_NORMALIZE_UNICODE: bool = True  # Apply Unicode NFC normalization
+    CLEANUP_NORMALIZE_WHITESPACE: bool = True  # Normalize whitespace characters
+    CLEANUP_REMOVE_SPECIAL_TOKENS: bool = True  # Remove [MUSIC], [APPLAUSE], etc.
+    CLEANUP_PRESERVE_SOUND_EVENTS: bool = False  # Keep sound event markers when cleaning
+    # Punctuation and capitalization
+    CLEANUP_PUNCTUATION_MODE: str = "rule-based"  # 'none', 'rule-based', 'model-based'
+    CLEANUP_PUNCTUATION_MODEL: str = ""  # HuggingFace model name for model-based punctuation
+    CLEANUP_ADD_SENTENCE_PUNCTUATION: bool = True  # Add terminal punctuation to segments
+    CLEANUP_ADD_INTERNAL_PUNCTUATION: bool = False  # Add commas and internal punctuation
+    CLEANUP_CAPITALIZE_SENTENCES: bool = True  # Capitalize sentence-initial letters
+    CLEANUP_FIX_ALL_CAPS: bool = True  # Fix inappropriate all-caps text
+    # De-filler configuration
+    CLEANUP_REMOVE_FILLERS: bool = True  # Enable filler word removal
+    CLEANUP_FILLER_LEVEL: int = 1  # 0=disabled, 1=conservative, 2=moderate, 3=aggressive
+    # Segmentation
+    CLEANUP_SEGMENT_BY_SENTENCES: bool = True  # Split segments on sentence boundaries
+    CLEANUP_MERGE_SHORT_SEGMENTS: bool = True  # Merge segments with small gaps
+    CLEANUP_MIN_SEGMENT_LENGTH_MS: int = 1000  # Minimum segment duration in milliseconds
+    CLEANUP_MAX_GAP_FOR_MERGE_MS: int = 500  # Maximum gap for merging segments
+    CLEANUP_SPEAKER_FORMAT: str = "structured"  # 'inline', 'dialogue', 'structured'
+    # Advanced cleanup features
+    CLEANUP_DETECT_HALLUCINATIONS: bool = True  # Detect and mark Whisper hallucinations
+    CLEANUP_LANGUAGE_SPECIFIC_RULES: bool = True  # Apply language-specific cleanup rules
+
     # Resolve .env relative to the repository root so scripts work from any CWD.
     # Allow extra env vars (ignore) so container-only vars in .env don't break settings.
     model_config = SettingsConfigDict(

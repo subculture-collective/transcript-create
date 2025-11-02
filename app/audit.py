@@ -52,14 +52,16 @@ def log_audit_event(
     """
     try:
         db.execute(
-            text("""
+            text(
+                """
                 INSERT INTO audit_logs
                 (user_id, action, resource_type, resource_id, success, details, ip_address, user_agent)
                 VALUES (
                     :user_id, :action, :resource_type, :resource_id,
-                    :success, :details::jsonb, :ip_address, :user_agent
+                    :success, CAST(:details AS JSONB), :ip_address, :user_agent
                 )
-            """),
+            """
+            ),
             {
                 "user_id": str(user_id) if user_id else None,
                 "action": action,
@@ -69,7 +71,7 @@ def log_audit_event(
                 "details": details or {},
                 "ip_address": ip_address,
                 "user_agent": user_agent,
-            }
+            },
         )
         db.commit()
 
@@ -80,7 +82,7 @@ def log_audit_event(
                 "user_id": str(user_id) if user_id else None,
                 "success": success,
                 "resource_type": resource_type,
-            }
+            },
         )
     except Exception as e:
         logger.error(
@@ -89,7 +91,7 @@ def log_audit_event(
                 "action": action,
                 "error": str(e),
             },
-            exc_info=True
+            exc_info=True,
         )
         # Don't raise - audit logging failure shouldn't break the application
 
@@ -200,27 +202,22 @@ def cleanup_old_audit_logs(db, days_to_keep: int = 90):
     """
     try:
         result = db.execute(
-            text("""
+            text(
+                """
                 DELETE FROM audit_logs
-                WHERE created_at < now() - interval ':days days'
+                WHERE created_at < now() - make_interval(days => :days)
                 RETURNING id
-            """),
-            {"days": days_to_keep}
+            """
+            ),
+            {"days": days_to_keep},
         )
         deleted_count = result.rowcount
         db.commit()
 
-        logger.info(
-            "Cleaned up old audit logs",
-            extra={"deleted_count": deleted_count, "days_to_keep": days_to_keep}
-        )
+        logger.info("Cleaned up old audit logs", extra={"deleted_count": deleted_count, "days_to_keep": days_to_keep})
 
         return deleted_count
     except Exception as e:
-        logger.error(
-            "Failed to cleanup audit logs",
-            extra={"error": str(e)},
-            exc_info=True
-        )
+        logger.error("Failed to cleanup audit logs", extra={"error": str(e)}, exc_info=True)
         db.rollback()
         return 0

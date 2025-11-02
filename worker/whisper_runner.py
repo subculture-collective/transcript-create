@@ -128,9 +128,9 @@ def _get_model():
                     _model = _try_load_ct2(settings.WHISPER_MODEL, device="auto", compute_type="float32")
 
         load_duration = time.time() - load_start
-        whisper_model_load_seconds.labels(
-            model=settings.WHISPER_MODEL, backend=settings.WHISPER_BACKEND
-        ).observe(load_duration)
+        whisper_model_load_seconds.labels(model=settings.WHISPER_MODEL, backend=settings.WHISPER_BACKEND).observe(
+            load_duration
+        )
         logger.info("Model loaded", extra={"duration_seconds": round(load_duration, 2)})
     return _model
 
@@ -331,8 +331,7 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
             }
             if word_timestamps and hasattr(s, "words"):
                 seg_dict["words"] = [
-                    {"word": w.word, "start": w.start, "end": w.end, "probability": w.probability}
-                    for w in s.words
+                    {"word": w.word, "start": w.start, "end": w.end, "probability": w.probability} for w in s.words
                 ]
             out.append(seg_dict)
 

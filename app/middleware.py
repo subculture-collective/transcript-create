@@ -84,7 +84,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "client_id": client_id,
                     "path": request.url.path,
                     "method": request.method,
-                }
+                },
             )
             return JSONResponse(
                 status_code=429,
@@ -92,7 +92,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "error": "rate_limit_exceeded",
                     "message": "Too many requests. Please try again later.",
                 },
-                headers={"Retry-After": "60"}
+                headers={"Retry-After": "60"},
             )
 
         # Record request
@@ -114,6 +114,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # In production, use Redis with sliding window
 
         import time
+
         current_minute = int(time.time() / 60)
         key = f"{client_id}:{current_minute}"
 
@@ -123,6 +124,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _record_request(self, client_id: str):
         """Record a request for rate limiting."""
         import time
+
         current_minute = int(time.time() / 60)
         key = f"{client_id}:{current_minute}"
 
@@ -134,6 +136,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _cleanup_old_entries(self):
         """Remove old rate limit entries to prevent memory leak."""
         import time
+
         current_minute = int(time.time() / 60)
 
         # Only cleanup once per minute
@@ -305,9 +308,12 @@ def setup_security_middleware(app):
     # Setup session middleware for OAuth
     setup_session_middleware(app)
 
-    logger.info("Security middleware configured", extra={
-        "rate_limiting": settings.ENABLE_RATE_LIMITING,
-        "environment": settings.ENVIRONMENT,
-        "compression": True,
-        "cache_control": True,
-    })
+    logger.info(
+        "Security middleware configured",
+        extra={
+            "rate_limiting": settings.ENABLE_RATE_LIMITING,
+            "environment": settings.ENVIRONMENT,
+            "compression": True,
+            "cache_control": True,
+        },
+    )

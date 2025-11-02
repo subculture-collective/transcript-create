@@ -1,7 +1,6 @@
 """Smoke tests for integration test infrastructure."""
 
 
-
 class TestIntegrationInfrastructure:
     """Smoke tests to verify integration test infrastructure."""
 

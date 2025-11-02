@@ -1,7 +1,6 @@
 """Admin analytics endpoints for dashboard metrics and system health."""
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
@@ -84,71 +83,46 @@ def get_dashboard_metrics(
 
     # Jobs metrics
     jobs_total = db.execute(text("SELECT COUNT(*) FROM jobs")).scalar()
-    jobs_today = db.execute(
-        text("SELECT COUNT(*) FROM jobs WHERE created_at >= :today"),
-        {"today": today}
-    ).scalar()
+    jobs_today = db.execute(text("SELECT COUNT(*) FROM jobs WHERE created_at >= :today"), {"today": today}).scalar()
     jobs_this_week = db.execute(
-        text("SELECT COUNT(*) FROM jobs WHERE created_at >= :week_ago"),
-        {"week_ago": week_ago}
+        text("SELECT COUNT(*) FROM jobs WHERE created_at >= :week_ago"), {"week_ago": week_ago}
     ).scalar()
-    jobs_pending = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state = 'pending'")
-    ).scalar()
+    jobs_pending = db.execute(text("SELECT COUNT(*) FROM videos WHERE state = 'pending'")).scalar()
     jobs_in_progress = db.execute(
         text("SELECT COUNT(*) FROM videos WHERE state IN ('downloading', 'transcoding', 'transcribing')")
     ).scalar()
 
     # Videos metrics
     videos_total = db.execute(text("SELECT COUNT(*) FROM videos")).scalar()
-    videos_completed = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state = 'completed'")
-    ).scalar()
-    videos_failed = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state = 'failed'")
-    ).scalar()
+    videos_completed = db.execute(text("SELECT COUNT(*) FROM videos WHERE state = 'completed'")).scalar()
+    videos_failed = db.execute(text("SELECT COUNT(*) FROM videos WHERE state = 'failed'")).scalar()
 
     # Users metrics
     users_total = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
-    users_free = db.execute(
-        text("SELECT COUNT(*) FROM users WHERE plan = 'free'")
-    ).scalar()
-    users_pro = db.execute(
-        text("SELECT COUNT(*) FROM users WHERE plan != 'free'")
-    ).scalar()
-    signups_today = db.execute(
-        text("SELECT COUNT(*) FROM users WHERE created_at >= :today"),
-        {"today": today}
-    ).scalar()
+    users_free = db.execute(text("SELECT COUNT(*) FROM users WHERE plan = 'free'")).scalar()
+    users_pro = db.execute(text("SELECT COUNT(*) FROM users WHERE plan != 'free'")).scalar()
+    signups_today = db.execute(text("SELECT COUNT(*) FROM users WHERE created_at >= :today"), {"today": today}).scalar()
     signups_this_week = db.execute(
-        text("SELECT COUNT(*) FROM users WHERE created_at >= :week_ago"),
-        {"week_ago": week_ago}
+        text("SELECT COUNT(*) FROM users WHERE created_at >= :week_ago"), {"week_ago": week_ago}
     ).scalar()
 
     # Active sessions (sessions not expired)
-    sessions_active = db.execute(
-        text("SELECT COUNT(*) FROM sessions WHERE expires_at > :now"),
-        {"now": now}
-    ).scalar()
+    sessions_active = db.execute(text("SELECT COUNT(*) FROM sessions WHERE expires_at > :now"), {"now": now}).scalar()
 
     # Search queries from events table
     searches_today = db.execute(
-        text("SELECT COUNT(*) FROM events WHERE type = 'search' AND created_at >= :today"),
-        {"today": today}
+        text("SELECT COUNT(*) FROM events WHERE type = 'search' AND created_at >= :today"), {"today": today}
     ).scalar()
     searches_this_week = db.execute(
-        text("SELECT COUNT(*) FROM events WHERE type = 'search' AND created_at >= :week_ago"),
-        {"week_ago": week_ago}
+        text("SELECT COUNT(*) FROM events WHERE type = 'search' AND created_at >= :week_ago"), {"week_ago": week_ago}
     ).scalar()
 
     # Export requests from events table
     exports_today = db.execute(
-        text("SELECT COUNT(*) FROM events WHERE type = 'export' AND created_at >= :today"),
-        {"today": today}
+        text("SELECT COUNT(*) FROM events WHERE type = 'export' AND created_at >= :today"), {"today": today}
     ).scalar()
     exports_this_week = db.execute(
-        text("SELECT COUNT(*) FROM events WHERE type = 'export' AND created_at >= :week_ago"),
-        {"week_ago": week_ago}
+        text("SELECT COUNT(*) FROM events WHERE type = 'export' AND created_at >= :week_ago"), {"week_ago": week_ago}
     ).scalar()
 
     return {
@@ -225,29 +199,35 @@ def get_jobs_over_time(
     start_date = now - timedelta(days=days)
 
     if period == "daily":
-        query = text("""
+        query = text(
+            """
             SELECT DATE(created_at) as date, COUNT(*) as count
             FROM jobs
             WHERE created_at >= :start_date
             GROUP BY DATE(created_at)
             ORDER BY date ASC
-        """)
+        """
+        )
     elif period == "weekly":
-        query = text("""
+        query = text(
+            """
             SELECT DATE_TRUNC('week', created_at) as date, COUNT(*) as count
             FROM jobs
             WHERE created_at >= :start_date
             GROUP BY DATE_TRUNC('week', created_at)
             ORDER BY date ASC
-        """)
+        """
+        )
     elif period == "monthly":
-        query = text("""
+        query = text(
+            """
             SELECT DATE_TRUNC('month', created_at) as date, COUNT(*) as count
             FROM jobs
             WHERE created_at >= :start_date
             GROUP BY DATE_TRUNC('month', created_at)
             ORDER BY date ASC
-        """)
+        """
+        )
     else:
         return {"error": "Invalid period. Use 'daily', 'weekly', or 'monthly'"}
 
@@ -289,12 +269,14 @@ def get_job_status_breakdown(
     user=Depends(require_role(ROLE_ADMIN)),
 ):
     """Get breakdown of videos by status."""
-    query = text("""
+    query = text(
+        """
         SELECT state, COUNT(*) as count
         FROM videos
         GROUP BY state
         ORDER BY count DESC
-    """)
+    """
+    )
 
     rows = db.execute(query).all()
 
@@ -337,8 +319,9 @@ def get_export_format_breakdown(
     """Get breakdown of exports by format from events."""
     start_date = datetime.utcnow() - timedelta(days=days)
 
-    query = text("""
-        SELECT 
+    query = text(
+        """
+        SELECT
             payload->>'format' as format,
             COUNT(*) as count
         FROM events
@@ -347,7 +330,8 @@ def get_export_format_breakdown(
           AND payload->>'format' IS NOT NULL
         GROUP BY format
         ORDER BY count DESC
-    """)
+    """
+    )
 
     rows = db.execute(query, {"start_date": start_date}).all()
 
@@ -398,14 +382,16 @@ def get_search_analytics(
     # Popular search terms from user_searches table if it exists
     popular_terms = []
     try:
-        query = text("""
+        query = text(
+            """
             SELECT query, COUNT(*) as count
             FROM user_searches
             WHERE created_at >= :start_date
             GROUP BY query
             ORDER BY count DESC
             LIMIT 20
-        """)
+        """
+        )
         rows = db.execute(query, {"start_date": start_date}).all()
         popular_terms = [{"term": row[0], "count": row[1]} for row in rows]
     except Exception:
@@ -417,21 +403,28 @@ def get_search_analytics(
     avg_results = 0
     avg_time = 0
     try:
-        zero_results = db.execute(
-            text("""
+        zero_results = (
+            db.execute(
+                text(
+                    """
                 SELECT COUNT(*) FROM user_searches
                 WHERE created_at >= :start_date AND result_count = 0
-            """),
-            {"start_date": start_date}
-        ).scalar() or 0
+            """
+                ),
+                {"start_date": start_date},
+            ).scalar()
+            or 0
+        )
 
         stats = db.execute(
-            text("""
+            text(
+                """
                 SELECT AVG(result_count), AVG(query_time_ms)
                 FROM user_searches
                 WHERE created_at >= :start_date
-            """),
-            {"start_date": start_date}
+            """
+            ),
+            {"start_date": start_date},
         ).first()
 
         if stats:
@@ -497,9 +490,7 @@ def get_system_health(
 
     try:
         # Get database size
-        size_result = db.execute(
-            text("SELECT pg_database_size(current_database()) / (1024*1024)")
-        ).scalar()
+        size_result = db.execute(text("SELECT pg_database_size(current_database()) / (1024*1024)")).scalar()
         total_size_mb = int(size_result) if size_result else 0
 
         # Get connection count
@@ -511,42 +502,53 @@ def get_system_health(
         db_status = "error"
 
     # Worker metrics
-    active_jobs = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state IN ('downloading', 'transcoding', 'transcribing')")
-    ).scalar() or 0
+    active_jobs = (
+        db.execute(
+            text("SELECT COUNT(*) FROM videos WHERE state IN ('downloading', 'transcoding', 'transcribing')")
+        ).scalar()
+        or 0
+    )
 
     # Calculate average processing time from completed videos in last 7 days
     avg_time_result = db.execute(
-        text("""
+        text(
+            """
             SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))
             FROM videos
             WHERE state = 'completed'
               AND updated_at >= NOW() - INTERVAL '7 days'
-        """)
+        """
+        )
     ).scalar()
     avg_processing_time = int(avg_time_result) if avg_time_result else 0
 
     # Error rate
-    completed_week = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state = 'completed' AND updated_at >= NOW() - INTERVAL '7 days'")
-    ).scalar() or 0
-    failed_week = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state = 'failed' AND updated_at >= NOW() - INTERVAL '7 days'")
-    ).scalar() or 0
+    completed_week = (
+        db.execute(
+            text("SELECT COUNT(*) FROM videos WHERE state = 'completed' AND updated_at >= NOW() - INTERVAL '7 days'")
+        ).scalar()
+        or 0
+    )
+    failed_week = (
+        db.execute(
+            text("SELECT COUNT(*) FROM videos WHERE state = 'failed' AND updated_at >= NOW() - INTERVAL '7 days'")
+        ).scalar()
+        or 0
+    )
     total_week = completed_week + failed_week
     error_rate = (failed_week / total_week * 100) if total_week > 0 else 0
 
     # Queue metrics
-    pending = db.execute(
-        text("SELECT COUNT(*) FROM videos WHERE state = 'pending'")
-    ).scalar() or 0
+    pending = db.execute(text("SELECT COUNT(*) FROM videos WHERE state = 'pending'")).scalar() or 0
 
     oldest_pending_result = db.execute(
-        text("""
+        text(
+            """
             SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at))) / 60
             FROM videos
             WHERE state = 'pending'
-        """)
+        """
+        )
     ).scalar()
     oldest_pending_minutes = int(oldest_pending_result) if oldest_pending_result else 0
 

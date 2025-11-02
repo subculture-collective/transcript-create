@@ -444,11 +444,7 @@ class TestCaptureYouTubeCaptions:
         mock_conn.execute.return_value.all.return_value = [(video_id, youtube_id)]
 
         # Mock yt-dlp response
-        yt_dlp_data = {
-            "automatic_captions": {
-                "en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]
-            }
-        }
+        yt_dlp_data = {"automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}}
         mock_check_output.return_value = json.dumps(yt_dlp_data).encode()
 
         # Mock urlopen for caption download
@@ -514,11 +510,7 @@ class TestCaptureYouTubeCaptions:
         mock_conn.execute.return_value.all.return_value = videos
 
         # Mock yt-dlp responses
-        yt_dlp_data = {
-            "automatic_captions": {
-                "en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]
-            }
-        }
+        yt_dlp_data = {"automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}}
         mock_check_output.return_value = json.dumps(yt_dlp_data).encode()
 
         # Mock caption download

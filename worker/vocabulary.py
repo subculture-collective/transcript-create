@@ -121,9 +121,7 @@ def load_vocabularies(conn, user_id: Optional[str] = None) -> List[Dict[str, Any
     if user_id:
         user_vocabs = (
             conn.execute(
-                text(
-                    "SELECT id, name, terms FROM user_vocabularies WHERE user_id = :uid AND is_global = false"
-                ),
+                text("SELECT id, name, terms FROM user_vocabularies WHERE user_id = :uid AND is_global = false"),
                 {"uid": user_id},
             )
             .mappings()

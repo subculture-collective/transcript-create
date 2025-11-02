@@ -55,13 +55,27 @@ def integration_db(integration_engine) -> Generator:
     connection.close()
 
 
-@pytest.fixture(scope="module")
-def integration_client() -> Generator:
-    """Create a test client for integration tests."""
+@pytest.fixture(scope="function")
+def integration_client(integration_db) -> Generator:
+    """Create a test client for integration tests, sharing the DB session with the app."""
     if app is None:
         pytest.skip("FastAPI app not available (missing dependencies)")
-    with TestClient(app) as c:
-        yield c
+
+    # Override the app's DB dependency to use the test session
+    from app.db import get_db as real_get_db
+
+    def override_get_db():
+        try:
+            yield integration_db
+        finally:
+            pass
+
+    app.dependency_overrides[real_get_db] = override_get_db
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(real_get_db, None)
 
 
 @pytest.fixture(scope="function")

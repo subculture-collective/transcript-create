@@ -29,6 +29,7 @@ def get_redis_client():
     if _redis_client is None and settings.REDIS_URL:
         try:
             import redis
+
             _redis_client = redis.from_url(
                 settings.REDIS_URL,
                 decode_responses=True,
@@ -92,6 +93,7 @@ def cache(
         def get_video(video_id: str):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -106,9 +108,7 @@ def cache(
                 cache_key = key_func(*args, **kwargs)
             else:
                 # Skip 'self' or 'db' parameter for instance/DB methods
-                is_method = args and (
-                    hasattr(args[0], "__dict__") or str(type(args[0])).find("Session") >= 0
-                )
+                is_method = args and (hasattr(args[0], "__dict__") or str(type(args[0])).find("Session") >= 0)
                 cache_args = args[1:] if is_method else args
                 cache_key = generate_cache_key(prefix, *cache_args, **kwargs)
 
@@ -120,6 +120,7 @@ def cache(
                     # Track cache hit metric
                     if settings.ENABLE_METRICS:
                         from app.metrics import cache_hits_total
+
                         cache_hits_total.labels(cache_type=prefix).inc()
                     return json.loads(cached)
 
@@ -127,6 +128,7 @@ def cache(
                 # Track cache miss metric
                 if settings.ENABLE_METRICS:
                     from app.metrics import cache_misses_total
+
                     cache_misses_total.labels(cache_type=prefix).inc()
 
             except Exception as e:
@@ -138,11 +140,7 @@ def cache(
             # Cache the result
             if result is not None or not skip_none:
                 try:
-                    redis_client.setex(
-                        cache_key,
-                        ttl,
-                        json.dumps(result, default=str)
-                    )
+                    redis_client.setex(cache_key, ttl, json.dumps(result, default=str))
                     logger.debug("Cached result", extra={"key": cache_key, "ttl": ttl})
                 except Exception as e:
                     logger.warning("Cache write error", extra={"key": cache_key, "error": str(e)})
@@ -150,6 +148,7 @@ def cache(
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -233,7 +232,8 @@ def get_cache_stats() -> dict:
                     if (info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0)) == 0
                     else info.get("keyspace_hits", 0) / (info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0))
                 )
-                if "keyspace_hits" in info else None
+                if "keyspace_hits" in info
+                else None
             ),
         }
     except Exception as e:

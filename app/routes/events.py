@@ -13,9 +13,9 @@ router = APIRouter(prefix="", tags=["Events"])
     summary="Track client event",
     description="""
     Track a client-side event for analytics.
-    
+
     Events are stored with optional user association for authenticated users.
-    
+
     Request body:
     ```json
     {
@@ -45,7 +45,7 @@ def ingest_event(payload: dict, request: Request, db=Depends(get_db)):
     summary="Track multiple events",
     description="""
     Track multiple client-side events in a single request.
-    
+
     Request body:
     ```json
     {

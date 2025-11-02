@@ -3,8 +3,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
-
 
 class TestVersionUtility:
     """Tests for version information utilities."""
@@ -29,7 +27,6 @@ class TestVersionUtility:
 
     def test_get_version_no_tomllib(self):
         """Test get_version returns 'unknown' when tomllib is not available."""
-        from app.version import get_version
 
         with patch("app.version.get_version") as mock_get_version:
             # Simulate ModuleNotFoundError for tomllib

@@ -7,12 +7,10 @@ This module defines all metrics collected by the API service including:
 - Database metrics (connections, query duration, errors)
 """
 
-from prometheus_client import Counter, Gauge, Histogram, Summary
-from prometheus_client import REGISTRY, CollectorRegistry, generate_latest
-from prometheus_client.multiprocess import MultiProcessCollector
-from prometheus_client.openmetrics.exposition import CONTENT_TYPE_LATEST
 import os
 
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram
+from prometheus_client.multiprocess import MultiProcessCollector
 
 # Use multi-process mode if PROMETHEUS_MULTIPROC_DIR is set (for uvicorn workers)
 if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
@@ -140,4 +138,7 @@ app_info = Gauge(
 def setup_app_info():
     """Set application information metric."""
     import sys
-    app_info.labels(version="0.1.0", python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}").set(1)
+
+    app_info.labels(
+        version="0.1.0", python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    ).set(1)

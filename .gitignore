@@ -50,7 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
-
+data/**
 # Translations
 *.mo
 *.pot
@@ -154,6 +154,7 @@ activemq-data/
 .venv
 env/
 venv/
+.venv/*
 ENV/
 env.bak/
 venv.bak/
@@ -251,3 +252,6 @@ pnpm-debug.log*
 #Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
 backups/
+
+# YouTube cookies (sensitive authentication data)
+cookies.txt

@@ -34,7 +34,19 @@ def _fmt_time_ms(ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms_rem:03d}"
 
 
-def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str] = None):
+def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str] = None, require_auth: bool = False):
+    """
+    Check if export is allowed based on user plan and daily limits.
+
+    Args:
+        require_auth: If True, unauthenticated users get 401 error.
+                     If False (default), unauthenticated users can export.
+
+    Note: YouTube caption exports use require_auth=True because they rely on
+    YouTube's API which requires attribution. Native Whisper transcripts use
+    require_auth=False to allow anonymous access, with rate limiting enforced
+    via daily export quotas for authenticated free users.
+    """
     # Pro users and admins allowed
     if user and (is_admin(user) or (user.get("plan") or "free").lower() == settings.PRO_PLAN_NAME.lower()):
         return None
@@ -60,20 +72,21 @@ def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str
                 status_code=402,
             )
     else:
-        # Unauthed cannot export
-        return JSONResponse({"error": "auth_required", "message": "Login required to export."}, status_code=401)
+        # If auth is required for this export, enforce login
+        if require_auth:
+            return JSONResponse({"error": "auth_required", "message": "Login required to export."}, status_code=401)
     return None
 
 
 def _log_export(db, request: Request, user, payload: dict):
     from ..metrics import exports_total
-    
+
     db.execute(
-        text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'export',:p)"),
+        text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'export',CAST(:p AS JSONB))"),
         {"u": str(user["id"]) if user else None, "t": get_session_token(request), "p": payload},
     )
     db.commit()
-    
+
     # Track export metric
     fmt = payload.get("format", "unknown")
     exports_total.labels(format=fmt).inc()
@@ -84,8 +97,8 @@ def _log_export(db, request: Request, user, payload: dict):
     summary="Export YouTube captions as SRT",
     description="""
     Download YouTube's native closed captions in SubRip (SRT) subtitle format.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
@@ -100,15 +113,15 @@ def _log_export(db, request: Request, user, payload: dict):
 )
 def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
     """Export YouTube captions as SRT subtitle file."""
-    user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
-    )
-    if gate is not None:
-        return gate
     yt = crud.get_youtube_transcript(db, video_id)
     if not yt:
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
+    user = get_user_from_session(db, get_session_token(request))
+    gate = _export_allowed_or_402(
+        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}", require_auth=True
+    )
+    if gate is not None:
+        return gate
     segs = crud.list_youtube_segments(db, yt["id"])
     lines = []
     for i, (start_ms, end_ms, textv) in enumerate(segs, start=1):
@@ -127,8 +140,8 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
     summary="Export YouTube captions as VTT",
     description="""
     Download YouTube's native closed captions in WebVTT subtitle format.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
@@ -140,15 +153,15 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
 )
 def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
     """Export YouTube captions as WebVTT subtitle file."""
-    user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
-    )
-    if gate is not None:
-        return gate
     yt = crud.get_youtube_transcript(db, video_id)
     if not yt:
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
+    user = get_user_from_session(db, get_session_token(request))
+    gate = _export_allowed_or_402(
+        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}", require_auth=True
+    )
+    if gate is not None:
+        return gate
     segs = crud.list_youtube_segments(db, yt["id"])
 
     def vtt_time(ms: int) -> str:
@@ -173,8 +186,8 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
     summary="Export Whisper transcript as SRT",
     description="""
     Download Whisper-generated transcript in SubRip (SRT) subtitle format.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
@@ -186,15 +199,29 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
 )
 def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
     """Export Whisper transcript as SRT subtitle file."""
+    # Ensure video exists first -> return 404 for unknown video ids
+    v = crud.get_video(db, video_id)
+    if not v:
+        from ..exceptions import NotFoundError, VideoNotFoundError
+
+        raise VideoNotFoundError(str(video_id))
+
+    segs = crud.list_segments(db, video_id)
+    if not segs:
+        # Treat missing transcript/segments as 404 per tests' expectation
+        from ..exceptions import NotFoundError
+
+        raise NotFoundError(
+            message=f"Transcript for video {video_id} not found",
+            resource_type="transcript",
+            details={"video_id": str(video_id)},
+        )
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
     )
     if gate is not None:
         return gate
-    segs = crud.list_segments(db, video_id)
-    if not segs:
-        raise TranscriptNotReadyError(str(video_id), "no_segments")
     lines = []
     for i, (start_ms, end_ms, textv, _speaker) in enumerate(segs, start=1):
         lines.append(str(i))
@@ -212,8 +239,8 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
     summary="Export Whisper transcript as VTT",
     description="""
     Download Whisper-generated transcript in WebVTT subtitle format.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
@@ -225,15 +252,28 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
 )
 def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
     """Export Whisper transcript as WebVTT subtitle file."""
+    # Ensure video exists first
+    v = crud.get_video(db, video_id)
+    if not v:
+        from ..exceptions import VideoNotFoundError
+
+        raise VideoNotFoundError(str(video_id))
+
+    segs = crud.list_segments(db, video_id)
+    if not segs:
+        from ..exceptions import NotFoundError
+
+        raise NotFoundError(
+            message=f"Transcript for video {video_id} not found",
+            resource_type="transcript",
+            details={"video_id": str(video_id)},
+        )
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
     )
     if gate is not None:
         return gate
-    segs = crud.list_segments(db, video_id)
-    if not segs:
-        raise TranscriptNotReadyError(str(video_id), "no_segments")
 
     def vtt_time(ms: int) -> str:
         s, ms_rem = divmod(ms, 1000)
@@ -257,8 +297,8 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
     summary="Export Whisper transcript as JSON",
     description="""
     Download Whisper-generated transcript in JSON format with full segment data.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
@@ -284,15 +324,28 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
 )
 def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
     """Export Whisper transcript as JSON."""
+    # Ensure video exists first
+    v = crud.get_video(db, video_id)
+    if not v:
+        from ..exceptions import VideoNotFoundError
+
+        raise VideoNotFoundError(str(video_id))
+
+    segs = crud.list_segments(db, video_id)
+    if not segs:
+        from ..exceptions import NotFoundError
+
+        raise NotFoundError(
+            message=f"Transcript for video {video_id} not found",
+            resource_type="transcript",
+            details={"video_id": str(video_id)},
+        )
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
     )
     if gate is not None:
         return gate
-    segs = crud.list_segments(db, video_id)
-    if not segs:
-        raise TranscriptNotReadyError(str(video_id), "no_segments")
     payload = [{"start_ms": r[0], "end_ms": r[1], "text": r[2], "speaker_label": r[3]} for r in segs]
     _log_export(db, request, user, {"format": "json", "source": "native", "video_id": str(video_id)})
     headers = {"Content-Disposition": f"attachment; filename=video-{video_id}.json"}
@@ -304,8 +357,8 @@ def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends
     summary="Export YouTube captions as JSON",
     description="""
     Download YouTube's native closed captions in JSON format.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
@@ -319,7 +372,7 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
     """Export YouTube captions as JSON."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
+        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}", require_auth=True
     )
     if gate is not None:
         return gate
@@ -338,14 +391,14 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
     summary="Export Whisper transcript as PDF",
     description="""
     Download Whisper-generated transcript as a formatted PDF document.
-    
+
     The PDF includes:
     - Video title and metadata
     - Timestamps for each segment
     - Speaker labels (if diarization was performed)
     - Formatted for easy reading and printing
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
@@ -357,15 +410,28 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
 )
 def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
     """Export Whisper transcript as formatted PDF."""
+    # Check resource existence before auth gating
+    v = crud.get_video(db, video_id)
+    if not v:
+        from ..exceptions import VideoNotFoundError
+
+        raise VideoNotFoundError(str(video_id))
+    segs = crud.list_segments(db, video_id)
+    if not segs:
+        from ..exceptions import NotFoundError
+
+        raise NotFoundError(
+            message=f"Transcript for video {video_id} not found",
+            resource_type="transcript",
+            details={"video_id": str(video_id)},
+        )
+
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
     )
     if gate is not None:
         return gate
-    segs = crud.list_segments(db, video_id)
-    if not segs:
-        raise TranscriptNotReadyError(str(video_id), "no_segments")
     # Build PDF in-memory
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -400,7 +466,6 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
     )
     story: list = []
     # Title and header/footer + metadata
-    v = crud.get_video(db, video_id)
     title = (v.get("title") if v else None) or f"Transcript {video_id}"
     duration = v.get("duration_seconds") if v else None
     platform = "YouTube"

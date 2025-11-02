@@ -17,10 +17,10 @@ stripe.api_key = settings.STRIPE_API_KEY or None
     summary="Create Stripe checkout session",
     description="""
     Create a Stripe checkout session for Pro plan subscription.
-    
+
     Returns a Stripe checkout URL to redirect the user to complete payment.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Plans:** Pro monthly or yearly subscription
     """,
     responses={
@@ -97,13 +97,13 @@ def create_checkout_session(payload: dict, request: Request, db=Depends(get_db))
     summary="Get Stripe billing portal",
     description="""
     Get URL to Stripe customer portal for managing subscription.
-    
+
     The portal allows users to:
     - Update payment method
     - Cancel subscription
     - View billing history
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Requirements:** User must have an active Stripe subscription
     """,
     responses={
@@ -143,14 +143,14 @@ def billing_portal(request: Request, db=Depends(get_db)):
     summary="Stripe webhook handler",
     description="""
     Handle incoming Stripe webhook events for subscription management.
-    
+
     This endpoint is called by Stripe when subscription events occur:
     - `checkout.session.completed`: New subscription created
     - `customer.subscription.updated`: Subscription status changed
     - `customer.subscription.deleted`: Subscription canceled
-    
+
     Automatically updates user plan and subscription status in the database.
-    
+
     **Authentication:** Validated via Stripe webhook signature
     """,
     responses={

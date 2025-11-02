@@ -27,17 +27,19 @@ assignees: []
 
 <!-- Please describe what you've already tried or researched -->
 
-### Documentation Checked:
+### Documentation Checked
+
 - [ ] README.md
 - [ ] CONTRIBUTING.md
 - [ ] docs/ folder
 - [ ] API documentation
 - [ ] Existing issues
 
-### Steps Attempted:
-1. 
-2. 
-3. 
+### Steps Attempted
+
+1.
+2.
+3.
 
 ## 🎯 Context
 
@@ -63,8 +65,10 @@ assignees: []
 
 <!-- Share relevant code snippets or configuration -->
 
+```html
 <details>
 <summary>Click to expand code</summary>
+```
 
 ```python
 # Paste your code here

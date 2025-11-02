@@ -38,6 +38,7 @@ helm install transcript-create ./charts/transcript-create \
 ### Production Installation
 
 1. **Create secrets**:
+
    ```bash
    kubectl create secret generic transcript-secrets \
      --from-literal=database-url='postgresql+psycopg://user:pass@host:5432/db' \
@@ -47,6 +48,7 @@ helm install transcript-create ./charts/transcript-create \
    ```
 
 2. **Create custom values file** (`my-values.yaml`):
+
    ```yaml
    global:
      environment: production
@@ -84,6 +86,7 @@ helm install transcript-create ./charts/transcript-create \
    ```
 
 3. **Install**:
+
    ```bash
    helm install transcript-create ./charts/transcript-create \
      -f my-values.yaml \
@@ -418,8 +421,8 @@ helm install transcript-create charts/transcript-create \
 
 ## Support
 
-- GitHub Issues: https://github.com/subculture-collective/transcript-create/issues
-- Documentation: https://github.com/subculture-collective/transcript-create/tree/main/docs/kubernetes
+- GitHub Issues: <https://github.com/subculture-collective/transcript-create/issues>
+- Documentation: <https://github.com/subculture-collective/transcript-create/tree/main/docs/kubernetes>
 
 ## License
 

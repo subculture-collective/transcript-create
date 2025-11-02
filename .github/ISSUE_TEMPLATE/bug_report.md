@@ -31,8 +31,10 @@ assignees: []
 
 <!-- If applicable, add screenshots or error logs to help explain your problem -->
 
+```html
 <details>
 <summary>Click to expand logs</summary>
+```
 
 ```
 Paste logs here

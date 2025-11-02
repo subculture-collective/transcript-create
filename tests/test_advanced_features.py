@@ -72,9 +72,7 @@ class TestVocabularyProcessor:
     def test_case_sensitive_replacement(self):
         """Test case-sensitive vocabulary replacement."""
         vocab = {
-            "terms": [
-                {"pattern": "API", "replacement": "Application Programming Interface", "case_sensitive": True}
-            ]
+            "terms": [{"pattern": "API", "replacement": "Application Programming Interface", "case_sensitive": True}]
         }
         processor = VocabularyProcessor([vocab])
 
@@ -83,9 +81,7 @@ class TestVocabularyProcessor:
 
     def test_word_boundary_matching(self):
         """Test that replacements respect word boundaries."""
-        vocab = {
-            "terms": [{"pattern": "test", "replacement": "TEST", "case_sensitive": False}]
-        }
+        vocab = {"terms": [{"pattern": "test", "replacement": "TEST", "case_sensitive": False}]}
         processor = VocabularyProcessor([vocab])
 
         assert processor.process_text("This is a test") == "This is a TEST"
@@ -93,12 +89,8 @@ class TestVocabularyProcessor:
 
     def test_multiple_vocabularies(self):
         """Test applying multiple vocabularies."""
-        vocab1 = {
-            "terms": [{"pattern": "API", "replacement": "API", "case_sensitive": True}]
-        }
-        vocab2 = {
-            "terms": [{"pattern": "DB", "replacement": "database", "case_sensitive": True}]
-        }
+        vocab1 = {"terms": [{"pattern": "API", "replacement": "API", "case_sensitive": True}]}
+        vocab2 = {"terms": [{"pattern": "DB", "replacement": "database", "case_sensitive": True}]}
         processor = VocabularyProcessor([vocab1, vocab2])
 
         text = "Connect API to DB"
@@ -131,11 +123,7 @@ class TestVocabularyProcessor:
 
     def test_invalid_regex_pattern(self):
         """Test handling of invalid regex patterns."""
-        vocab = {
-            "terms": [
-                {"pattern": "[invalid", "replacement": "valid", "case_sensitive": False}
-            ]
-        }
+        vocab = {"terms": [{"pattern": "[invalid", "replacement": "valid", "case_sensitive": False}]}
         # Should not raise exception, just skip invalid patterns
         processor = VocabularyProcessor([vocab])
         text = "Some text"

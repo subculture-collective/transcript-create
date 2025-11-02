@@ -140,7 +140,8 @@ async def app_exception_handler(request: Request, exc: AppError):
         "Application error",
         extra={
             "error_type": type(exc).__name__,
-            "message": exc.message,
+            # Avoid reserved LogRecord keys like 'message'
+            "error_message": exc.message,
             "path": request.url.path,
             "details": exc.details,
         },
@@ -338,7 +339,11 @@ app.include_router(vocabularies_router)
     responses={
         200: {
             "description": "Prometheus metrics in text format",
-            "content": {"text/plain": {"example": "# HELP http_requests_total Total HTTP requests\n# TYPE http_requests_total counter\n"}},
+            "content": {
+                "text/plain": {
+                    "example": "# HELP http_requests_total Total HTTP requests\n# TYPE http_requests_total counter\n"
+                }
+            },
         }
     },
 )

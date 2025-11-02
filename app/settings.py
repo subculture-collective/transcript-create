@@ -55,10 +55,13 @@ class Settings(BaseSettings):
     SESSION_SECRET: str = "change-me"
     OAUTH_GOOGLE_CLIENT_ID: str = ""
     OAUTH_GOOGLE_CLIENT_SECRET: str = ""
+    # OAuth redirect URI - must match what's configured in Google Cloud Console
+    # Default uses port 8000 (matches docker-compose API_HOST_PORT default)
     OAUTH_GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/callback/google"
     # Twitch OAuth
     OAUTH_TWITCH_CLIENT_ID: str = ""
     OAUTH_TWITCH_CLIENT_SECRET: str = ""
+    # OAuth redirect URI - must match what's configured in Twitch Developer Console
     OAUTH_TWITCH_REDIRECT_URI: str = "http://localhost:8000/auth/callback/twitch"
     # Comma-separated admin emails for admin dashboard access
     ADMIN_EMAILS: str = ""

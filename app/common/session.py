@@ -66,17 +66,21 @@ def should_refresh_session(db, token: Optional[str]) -> bool:
     if not token:
         return False
 
-    result = db.execute(
-        text(
-            """
+    result = (
+        db.execute(
+            text(
+                """
             SELECT created_at, expires_at
             FROM sessions
             WHERE token = :t
             AND (expires_at IS NULL OR expires_at > now())
             """
-        ),
-        {"t": token}
-    ).mappings().first()
+            ),
+            {"t": token},
+        )
+        .mappings()
+        .first()
+    )
 
     if not result:
         return False
@@ -92,10 +96,7 @@ def refresh_session(db, token: str):
     """Extend session expiration time."""
     new_expires = datetime.utcnow() + timedelta(hours=settings.SESSION_EXPIRE_HOURS)
 
-    db.execute(
-        text("UPDATE sessions SET expires_at = :exp WHERE token = :t"),
-        {"exp": new_expires, "t": token}
-    )
+    db.execute(text("UPDATE sessions SET expires_at = :exp WHERE token = :t"), {"exp": new_expires, "t": token})
     db.commit()
 
 
@@ -106,4 +107,3 @@ def is_admin(user) -> bool:
     admins = set([e.strip().lower() for e in admins_env.split(",") if e.strip()])
     email = (user.get("email") or "").lower()
     return email in admins if admins else False
-

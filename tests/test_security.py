@@ -5,7 +5,6 @@ import secrets
 import uuid
 from datetime import datetime, timedelta
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -49,11 +48,11 @@ class TestAPIKeyGeneration:
     def test_generate_api_key(self):
         """Test API key generation."""
         api_key, api_key_hash = generate_api_key()
-        
+
         # Check format
         assert api_key.startswith("tc_")
         assert len(api_key) > 10
-        
+
         # Check hash
         assert len(api_key_hash) == 64  # SHA-256 hex digest
 
@@ -66,7 +65,7 @@ class TestAPIKeyGeneration:
         """Test that generated API keys are unique."""
         key1, hash1 = generate_api_key()
         key2, hash2 = generate_api_key()
-        
+
         assert key1 != key2
         assert hash1 != hash2
 
@@ -84,7 +83,7 @@ class TestAPIKeyEndpoints:
         # Create user and session
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
-        
+
         db_session.execute(
             text(
                 "INSERT INTO users (id, email, name, oauth_provider, oauth_subject) "
@@ -97,7 +96,7 @@ class TestAPIKeyEndpoints:
             {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
         )
         db_session.commit()
-        
+
         response = client.get("/api-keys", cookies={"tc_session": session_token})
         assert response.status_code == 200
         data = response.json()
@@ -109,7 +108,7 @@ class TestAPIKeyEndpoints:
         # Create user and session
         user_id = uuid.uuid4()
         session_token = secrets.token_urlsafe(32)
-        
+
         db_session.execute(
             text(
                 "INSERT INTO users (id, email, name, oauth_provider, oauth_subject) "
@@ -122,39 +121,50 @@ class TestAPIKeyEndpoints:
             {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
         )
         db_session.commit()
-        
+
         # Create API key
         response = client.post(
             "/api-keys",
             json={"name": "Test Key", "expires_days": 30},
             cookies={"tc_session": session_token},
         )
-        
+
         assert response.status_code == 201
         data = response.json()
-        
+
         # Check response structure
         assert "api_key" in data
         assert "key" in data
         assert data["api_key"].startswith("tc_")
         assert data["key"]["name"] == "Test Key"
         assert data["key"]["key_prefix"].startswith("tc_")
-        
+
         # Verify key was stored in database
-        stored = db_session.execute(
-            text("SELECT * FROM api_keys WHERE user_id = :uid"),
-            {"uid": str(user_id)}
-        ).mappings().first()
-        
+        stored = (
+            db_session.execute(text("SELECT * FROM api_keys WHERE user_id = :uid"), {"uid": str(user_id)})
+            .mappings()
+            .first()
+        )
+
         assert stored is not None
         assert stored["name"] == "Test Key"
-        
+
         # Verify audit log
-        audit = db_session.execute(
-            text("SELECT * FROM audit_logs WHERE action = :action AND user_id = :uid ORDER BY created_at DESC LIMIT 1"),
-            {"action": ACTION_API_KEY_CREATED, "uid": str(user_id)}
-        ).mappings().first()
-        
+        audit = (
+            db_session.execute(
+                text(
+                    """
+                    SELECT * FROM audit_logs
+                    WHERE action = :action AND user_id = :uid
+                    ORDER BY created_at DESC LIMIT 1
+                    """
+                ),
+                {"action": ACTION_API_KEY_CREATED, "uid": str(user_id)},
+            )
+            .mappings()
+            .first()
+        )
+
         assert audit is not None
         assert audit["success"] is True
 
@@ -165,7 +175,7 @@ class TestAPIKeyEndpoints:
         session_token = secrets.token_urlsafe(32)
         api_key, api_key_hash = generate_api_key()
         key_id = uuid.uuid4()
-        
+
         db_session.execute(
             text(
                 "INSERT INTO users (id, email, name, oauth_provider, oauth_subject) "
@@ -191,32 +201,43 @@ class TestAPIKeyEndpoints:
             },
         )
         db_session.commit()
-        
+
         # Revoke the key
         response = client.delete(
             f"/api-keys/{key_id}",
             cookies={"tc_session": session_token},
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["ok"] is True
-        
+
         # Verify key was revoked
-        revoked = db_session.execute(
-            text("SELECT revoked_at FROM api_keys WHERE id = :id"),
-            {"id": str(key_id)}
-        ).mappings().first()
-        
+        revoked = (
+            db_session.execute(text("SELECT revoked_at FROM api_keys WHERE id = :id"), {"id": str(key_id)})
+            .mappings()
+            .first()
+        )
+
         assert revoked is not None
         assert revoked["revoked_at"] is not None
-        
+
         # Verify audit log
-        audit = db_session.execute(
-            text("SELECT * FROM audit_logs WHERE action = :action AND user_id = :uid ORDER BY created_at DESC LIMIT 1"),
-            {"action": ACTION_API_KEY_REVOKED, "uid": str(user_id)}
-        ).mappings().first()
-        
+        audit = (
+            db_session.execute(
+                text(
+                    """
+                    SELECT * FROM audit_logs
+                    WHERE action = :action AND user_id = :uid
+                    ORDER BY created_at DESC LIMIT 1
+                    """
+                ),
+                {"action": ACTION_API_KEY_REVOKED, "uid": str(user_id)},
+            )
+            .mappings()
+            .first()
+        )
+
         assert audit is not None
         assert audit["success"] is True
 
@@ -228,7 +249,7 @@ class TestAPIKeyEndpoints:
         session_token = secrets.token_urlsafe(32)
         api_key, api_key_hash = generate_api_key()
         key_id = uuid.uuid4()
-        
+
         # User 1 owns the key
         db_session.execute(
             text(
@@ -237,7 +258,7 @@ class TestAPIKeyEndpoints:
             ),
             {"id": str(user1_id), "email": "user1@example.com", "name": "User 1"},
         )
-        
+
         # User 2 tries to revoke it
         db_session.execute(
             text(
@@ -264,13 +285,13 @@ class TestAPIKeyEndpoints:
             },
         )
         db_session.commit()
-        
+
         # Try to revoke
         response = client.delete(
             f"/api-keys/{key_id}",
             cookies={"tc_session": session_token},
         )
-        
+
         assert response.status_code == 403
         data = response.json()
         assert "permission" in data["message"].lower()
@@ -283,12 +304,13 @@ class TestSessionSecurity:
         """Test that session cookies have secure attributes."""
         # This test would need to inspect Set-Cookie headers
         # For now, we verify the logic in session.py
-        from app.common.session import set_session_cookie
         from fastapi.responses import Response
-        
+
+        from app.common.session import set_session_cookie
+
         resp = Response()
         set_session_cookie(resp, "test_token")
-        
+
         # Check that the cookie is set
         set_cookie_header = resp.headers.get("set-cookie", "")
         assert "tc_session" in set_cookie_header
@@ -302,7 +324,7 @@ class TestAuditLogging:
     def test_audit_log_creation(self, db_session):
         """Test creating audit log entries."""
         from app.audit import log_audit_event
-        
+
         user_id = uuid.uuid4()
         log_audit_event(
             db_session,
@@ -311,13 +333,14 @@ class TestAuditLogging:
             success=True,
             details={"test": "data"},
         )
-        
+
         # Verify log was created
-        log = db_session.execute(
-            text("SELECT * FROM audit_logs WHERE user_id = :uid"),
-            {"uid": str(user_id)}
-        ).mappings().first()
-        
+        log = (
+            db_session.execute(text("SELECT * FROM audit_logs WHERE user_id = :uid"), {"uid": str(user_id)})
+            .mappings()
+            .first()
+        )
+
         assert log is not None
         assert log["action"] == "test_action"
         assert log["success"] is True

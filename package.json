@@ -28,5 +28,8 @@
     "url": "https://github.com/subculture-collective/transcript-create.git"
   },
   "license": "Apache-2.0",
-  "author": "onnwee"
+  "author": "onnwee",
+  "dependencies": {
+    "applicationinsights": "^3.12.0"
+  }
 }

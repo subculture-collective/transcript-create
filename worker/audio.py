@@ -5,6 +5,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List, Optional
 
 from app.logging_config import get_logger
 
@@ -17,7 +18,7 @@ class Chunk:
     offset: float  # seconds
 
 
-def _yt_dlp_cmd(base_out: Path, url: str, extra: list[str] | None = None) -> list[str]:
+def _yt_dlp_cmd(base_out: Path, url: str, extra: Optional[List[str]] = None) -> List[str]:
     cmd = [
         "yt-dlp",
         "-v",

@@ -83,7 +83,7 @@ def create_job(db, kind: str, url: str, meta: dict = None):
 
 
 @_retry_on_transient_error
-def fetch_job(db, job_id):
+def fetch_job(db, job_id: uuid.UUID):
     # Pass UUID directly to ensure proper binding/casting
     row = db.execute(text("SELECT * FROM jobs WHERE id=:i"), {"i": job_id}).mappings().first()
     return row

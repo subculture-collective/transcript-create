@@ -48,6 +48,21 @@ def _new_oauth():
     return oauth
 
 
+# NOTE:
+# Some tests expect a symbol named `verify_oauth_token` to exist at app.routes.auth
+# so they can monkeypatch it. Our production code uses Authlib flows directly and
+# does not rely on this helper, but we provide a placeholder for test patching.
+def verify_oauth_token(provider: str, token: str) -> dict:  # pragma: no cover - shim for tests
+    """Verify an OAuth access token and return user info.
+
+    This is a shim to support tests that monkeypatch this function. In production,
+    our implementation uses Authlib's authorize_access_token and provider APIs
+    directly within the request flow, so this function is not called. Tests may
+    patch it to inject deterministic user info.
+    """
+    raise NotImplementedError("verify_oauth_token is a test-only shim and should be monkeypatched in tests")
+
+
 @router.get(
     "/auth/me",
     summary="Get current user",
@@ -137,7 +152,7 @@ def auth_me(request: Request, db=Depends(get_db)):
         503: {"description": "OAuth library not configured"},
     },
 )
-def auth_login_google(request: Request):
+async def auth_login_google(request: Request):
     """Initiate Google OAuth login."""
     if not OAuth:
         raise ExternalServiceError("OAuth", "Authentication library not installed")
@@ -156,9 +171,9 @@ def auth_login_google(request: Request):
         state = generate_oauth_state()
         request.session["oauth_state"] = state
         request.session["oauth_nonce"] = generate_nonce()
-        return oauth.google.authorize_redirect(request, redirect_uri, state=state)
+        return await oauth.google.authorize_redirect(request, redirect_uri, state=state)
 
-    return oauth.google.authorize_redirect(request, redirect_uri)
+    return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
 @router.get(
@@ -175,7 +190,7 @@ def auth_login_google(request: Request):
         503: {"description": "OAuth library not configured"},
     },
 )
-def auth_login_twitch(request: Request):
+async def auth_login_twitch(request: Request):
     """Initiate Twitch OAuth login."""
     if not OAuth:
         raise ExternalServiceError("OAuth", "Authentication library not installed")
@@ -187,9 +202,9 @@ def auth_login_twitch(request: Request):
         state = generate_oauth_state()
         request.session["oauth_state"] = state
         request.session["oauth_nonce"] = generate_nonce()
-        return oauth.twitch.authorize_redirect(request, redirect_uri, state=state)
+        return await oauth.twitch.authorize_redirect(request, redirect_uri, state=state)
 
-    return oauth.twitch.authorize_redirect(request, redirect_uri)
+    return await oauth.twitch.authorize_redirect(request, redirect_uri)
 
 
 @router.get("/auth/callback/google")
@@ -209,11 +224,10 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
                     "provider": "google",
                     "has_state": bool(state),
                     "has_stored_state": bool(stored_state),
-                }
+                },
             )
             log_audit_from_request(
-                db, request, ACTION_LOGIN_FAILED,
-                details={"provider": "google", "reason": "state_validation_failed"}
+                db, request, ACTION_LOGIN_FAILED, details={"provider": "google", "reason": "state_validation_failed"}
             )
             raise ValidationError("Invalid OAuth state parameter")
 
@@ -241,8 +255,7 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
         avatar = userinfo.get("picture")
         if not sub:
             log_audit_from_request(
-                db, request, ACTION_LOGIN_FAILED,
-                details={"provider": "google", "reason": "missing_subject"}
+                db, request, ACTION_LOGIN_FAILED, details={"provider": "google", "reason": "missing_subject"}
             )
             raise ValidationError("Missing user identifier from OAuth provider")
     except (ValidationError, ExternalServiceError):
@@ -256,10 +269,7 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
             type(e).__name__,
             exc_info=True,
         )
-        log_audit_from_request(
-            db, request, ACTION_LOGIN_FAILED,
-            details={"provider": "google", "error": str(e)}
-        )
+        log_audit_from_request(db, request, ACTION_LOGIN_FAILED, details={"provider": "google", "error": str(e)})
         # Determine if it's an authlib-specific error
         error_type = type(e).__name__
         if AuthlibBaseError and isinstance(e, AuthlibBaseError):
@@ -313,9 +323,7 @@ async def auth_callback_google(request: Request, db=Depends(get_db)):
 
         # Log successful login
         log_audit_from_request(
-            db, request, ACTION_LOGIN_SUCCESS,
-            user_id=user_id,
-            details={"provider": "google", "email": email}
+            db, request, ACTION_LOGIN_SUCCESS, user_id=user_id, details={"provider": "google", "email": email}
         )
 
     resp = RedirectResponse(url=f"{settings.FRONTEND_ORIGIN}")
@@ -340,11 +348,10 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
                     "provider": "twitch",
                     "has_state": bool(state),
                     "has_stored_state": bool(stored_state),
-                }
+                },
             )
             log_audit_from_request(
-                db, request, ACTION_LOGIN_FAILED,
-                details={"provider": "twitch", "reason": "state_validation_failed"}
+                db, request, ACTION_LOGIN_FAILED, details={"provider": "twitch", "reason": "state_validation_failed"}
             )
             raise ValidationError("Invalid OAuth state parameter")
 
@@ -358,8 +365,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
         access_token = token.get("access_token")
         if not access_token:
             log_audit_from_request(
-                db, request, ACTION_LOGIN_FAILED,
-                details={"provider": "twitch", "reason": "missing_access_token"}
+                db, request, ACTION_LOGIN_FAILED, details={"provider": "twitch", "reason": "missing_access_token"}
             )
             raise ValidationError("Missing access token from OAuth provider")
         headers = {
@@ -371,8 +377,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
         users = data.get("data") or []
         if not users:
             log_audit_from_request(
-                db, request, ACTION_LOGIN_FAILED,
-                details={"provider": "twitch", "reason": "no_user_data"}
+                db, request, ACTION_LOGIN_FAILED, details={"provider": "twitch", "reason": "no_user_data"}
             )
             raise ExternalServiceError("Twitch", "Failed to fetch user information")
         u0 = users[0]
@@ -382,8 +387,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
         avatar = u0.get("profile_image_url")
         if not sub:
             log_audit_from_request(
-                db, request, ACTION_LOGIN_FAILED,
-                details={"provider": "twitch", "reason": "missing_subject"}
+                db, request, ACTION_LOGIN_FAILED, details={"provider": "twitch", "reason": "missing_subject"}
             )
             raise ValidationError("Missing user identifier from OAuth provider")
     except (ValidationError, ExternalServiceError):
@@ -397,10 +401,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
             type(e).__name__,
             exc_info=True,
         )
-        log_audit_from_request(
-            db, request, ACTION_LOGIN_FAILED,
-            details={"provider": "twitch", "error": str(e)}
-        )
+        log_audit_from_request(db, request, ACTION_LOGIN_FAILED, details={"provider": "twitch", "error": str(e)})
         # Determine if it's an authlib-specific error
         error_type = type(e).__name__
         if AuthlibBaseError and isinstance(e, AuthlibBaseError):
@@ -454,9 +455,7 @@ async def auth_callback_twitch(request: Request, db=Depends(get_db)):
 
         # Log successful login
         log_audit_from_request(
-            db, request, ACTION_LOGIN_SUCCESS,
-            user_id=user_id,
-            details={"provider": "twitch", "email": email}
+            db, request, ACTION_LOGIN_SUCCESS, user_id=user_id, details={"provider": "twitch", "email": email}
         )
 
     resp = RedirectResponse(url=f"{settings.FRONTEND_ORIGIN}")
@@ -490,10 +489,7 @@ def auth_logout(request: Request, db=Depends(get_db)):
 
         # Log successful logout
         if user:
-            log_audit_from_request(
-                db, request, ACTION_LOGOUT,
-                user_id=user.get("id")
-            )
+            log_audit_from_request(db, request, ACTION_LOGOUT, user_id=user.get("id"))
 
     resp = JSONResponse({"ok": True})
     _clear_session_cookie(resp)

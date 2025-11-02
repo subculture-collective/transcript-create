@@ -26,4 +26,3 @@ sys.modules["faster_whisper"] = Mock()
 sys.modules["whisper"] = Mock()
 sys.modules["pyannote"] = Mock()
 sys.modules["pyannote.audio"] = Mock()
-

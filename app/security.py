@@ -34,6 +34,7 @@ def get_user_role(user: Optional[dict]) -> str:
 
     # Admin check (from ADMIN_EMAILS env var)
     from .common.session import is_admin
+
     if is_admin(user):
         return ROLE_ADMIN
 
@@ -63,10 +64,13 @@ def require_auth(request: Request, db=Depends(get_db)):
     user = get_user_from_session(db, token)
 
     if not user:
-        logger.warning("Authentication required but no valid session", extra={
-            "path": request.url.path,
-            "method": request.method,
-        })
+        logger.warning(
+            "Authentication required but no valid session",
+            extra={
+                "path": request.url.path,
+                "method": request.method,
+            },
+        )
         raise AuthenticationError("Authentication required")
 
     return user
@@ -81,6 +85,7 @@ def require_role(required_role: str):
         def admin_dashboard(user=Depends(require_role(ROLE_ADMIN))):
             ...
     """
+
     def role_dependency(request: Request, db=Depends(get_db)):
         user = require_auth(request, db)
 
@@ -94,7 +99,7 @@ def require_role(required_role: str):
                     "user_id": user.get("id"),
                     "user_role": user_role,
                     "required_role": required_role,
-                }
+                },
             )
             raise AuthorizationError(f"This endpoint requires {required_role} role or higher")
 
@@ -147,24 +152,27 @@ def verify_api_key(db, api_key: str) -> Optional[dict]:
     api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()  # nosec B324
 
     # Look up the key in the database
-    result = db.execute(
-        text("""
+    result = (
+        db.execute(
+            text(
+                """
             SELECT u.*, k.id as api_key_id, k.name as api_key_name
             FROM api_keys k
             JOIN users u ON u.id = k.user_id
             WHERE k.key_hash = :hash
               AND k.revoked_at IS NULL
               AND (k.expires_at IS NULL OR k.expires_at > now())
-        """),
-        {"hash": api_key_hash}
-    ).mappings().first()
+        """
+            ),
+            {"hash": api_key_hash},
+        )
+        .mappings()
+        .first()
+    )
 
     if result:
         # Update last used timestamp
-        db.execute(
-            text("UPDATE api_keys SET last_used_at = now() WHERE id = :id"),
-            {"id": result["api_key_id"]}
-        )
+        db.execute(text("UPDATE api_keys SET last_used_at = now() WHERE id = :id"), {"id": result["api_key_id"]})
         db.commit()
 
         logger.info(
@@ -172,7 +180,7 @@ def verify_api_key(db, api_key: str) -> Optional[dict]:
             extra={
                 "user_id": result["id"],
                 "api_key_name": result["api_key_name"],
-            }
+            },
         )
 
         return dict(result)
@@ -249,7 +257,7 @@ def validate_state_token(state: str, request: Request) -> bool:
             extra={
                 "provided_state": state[:10] + "..." if state else None,
                 "has_stored_state": bool(stored_state),
-            }
+            },
         )
         return False
 

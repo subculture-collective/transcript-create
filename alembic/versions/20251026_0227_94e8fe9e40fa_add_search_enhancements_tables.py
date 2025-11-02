@@ -9,8 +9,6 @@ Create Date: 2025-10-26 02:27:48.774673
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
 revision: str = "94e8fe9e40fa"
@@ -25,15 +23,16 @@ def upgrade() -> None:
     op.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS channel_name TEXT")
     op.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS language TEXT")
     op.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS category TEXT")
-    
+
     # Add indexes for filter performance
     op.execute("CREATE INDEX IF NOT EXISTS videos_uploaded_at_idx ON videos(uploaded_at)")
     op.execute("CREATE INDEX IF NOT EXISTS videos_duration_idx ON videos(duration_seconds)")
     op.execute("CREATE INDEX IF NOT EXISTS videos_channel_name_idx ON videos(channel_name)")
     op.execute("CREATE INDEX IF NOT EXISTS videos_language_idx ON videos(language)")
-    
+
     # Create search_suggestions table for autocomplete
-    op.execute("""
+    op.execute(
+        """
         CREATE TABLE IF NOT EXISTS search_suggestions (
             id BIGSERIAL PRIMARY KEY,
             term TEXT NOT NULL,
@@ -41,12 +40,14 @@ def upgrade() -> None:
             last_used TIMESTAMPTZ NOT NULL DEFAULT now(),
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
-    """)
+    """
+    )
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS search_suggestions_term_idx ON search_suggestions(LOWER(term))")
     op.execute("CREATE INDEX IF NOT EXISTS search_suggestions_frequency_idx ON search_suggestions(frequency DESC)")
-    
+
     # Create user_searches table for search history
-    op.execute("""
+    op.execute(
+        """
         CREATE TABLE IF NOT EXISTS user_searches (
             id BIGSERIAL PRIMARY KEY,
             user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -56,7 +57,8 @@ def upgrade() -> None:
             query_time_ms INT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
-    """)
+    """
+    )
     op.execute("CREATE INDEX IF NOT EXISTS user_searches_user_id_idx ON user_searches(user_id, created_at DESC)")
     op.execute("CREATE INDEX IF NOT EXISTS user_searches_query_idx ON user_searches(query)")
     op.execute("CREATE INDEX IF NOT EXISTS user_searches_created_at_idx ON user_searches(created_at DESC)")
@@ -66,13 +68,13 @@ def downgrade() -> None:
     # Drop new tables
     op.execute("DROP TABLE IF EXISTS user_searches")
     op.execute("DROP TABLE IF EXISTS search_suggestions")
-    
+
     # Drop new indexes on videos
     op.execute("DROP INDEX IF EXISTS videos_language_idx")
     op.execute("DROP INDEX IF EXISTS videos_channel_name_idx")
     op.execute("DROP INDEX IF EXISTS videos_duration_idx")
     op.execute("DROP INDEX IF EXISTS videos_uploaded_at_idx")
-    
+
     # Drop new columns from videos
     op.execute("ALTER TABLE videos DROP COLUMN IF EXISTS category")
     op.execute("ALTER TABLE videos DROP COLUMN IF EXISTS language")

@@ -2,7 +2,6 @@
 
 import uuid
 
-import pytest
 from sqlalchemy import text
 
 from app import crud
@@ -16,13 +15,13 @@ class TestDatabaseIndices:
         result = db_session.execute(
             text(
                 """
-                SELECT indexname FROM pg_indexes 
-                WHERE tablename = 'jobs' 
+                SELECT indexname FROM pg_indexes
+                WHERE tablename = 'jobs'
                 AND indexname = 'jobs_queue_ordering_idx'
                 """
             )
         ).scalar()
-        
+
         # Index may not exist yet if migration hasn't run
         # This test will pass once migration is applied
         if result:
@@ -33,13 +32,13 @@ class TestDatabaseIndices:
         result = db_session.execute(
             text(
                 """
-                SELECT indexname FROM pg_indexes 
-                WHERE tablename = 'jobs' 
+                SELECT indexname FROM pg_indexes
+                WHERE tablename = 'jobs'
                 AND indexname = 'jobs_pending_idx'
                 """
             )
         ).scalar()
-        
+
         if result:
             assert result == "jobs_pending_idx"
 
@@ -48,13 +47,13 @@ class TestDatabaseIndices:
         result = db_session.execute(
             text(
                 """
-                SELECT indexname FROM pg_indexes 
-                WHERE tablename = 'users' 
+                SELECT indexname FROM pg_indexes
+                WHERE tablename = 'users'
                 AND indexname = 'users_email_idx'
                 """
             )
         ).scalar()
-        
+
         if result:
             assert result == "users_email_idx"
 
@@ -63,13 +62,13 @@ class TestDatabaseIndices:
         result = db_session.execute(
             text(
                 """
-                SELECT indexname FROM pg_indexes 
-                WHERE tablename = 'events' 
+                SELECT indexname FROM pg_indexes
+                WHERE tablename = 'events'
                 AND indexname = 'events_user_created_idx'
                 """
             )
         ).scalar()
-        
+
         if result:
             assert result == "events_user_created_idx"
 
@@ -129,10 +128,7 @@ class TestCachedQueries:
 
         # Insert test segments
         db_session.execute(
-            text(
-                "INSERT INTO segments (video_id, start_ms, end_ms, text) "
-                "VALUES (:vid, :start, :end, :text)"
-            ),
+            text("INSERT INTO segments (video_id, start_ms, end_ms, text) " "VALUES (:vid, :start, :end, :text)"),
             {
                 "vid": str(video_id),
                 "start": 0,
@@ -160,21 +156,21 @@ class TestQueryPerformance:
         # Create some test jobs
         for i in range(5):
             crud.create_job(db_session, "single", f"https://youtube.com/watch?v=test{i}")
-        
+
         # Query for pending jobs (worker hot path)
         # This should use jobs_pending_idx or jobs_queue_ordering_idx
         result = db_session.execute(
             text(
                 """
-                EXPLAIN (FORMAT JSON) 
-                SELECT * FROM jobs 
-                WHERE state IN ('pending', 'downloading') 
-                ORDER BY priority, created_at 
+                EXPLAIN (FORMAT JSON)
+                SELECT * FROM jobs
+                WHERE state IN ('pending', 'downloading')
+                ORDER BY priority, created_at
                 LIMIT 10
                 """
             )
         ).scalar()
-        
+
         # Check that explain plan exists (index usage details depend on data volume)
         assert result is not None
 
@@ -202,7 +198,7 @@ class TestQueryPerformance:
             text("SELECT id FROM users WHERE email = :email"),
             {"email": test_email},
         ).scalar()
-        
+
         assert result == str(user_id)
 
     def test_quota_check_query_performance(self, db_session):
@@ -224,12 +220,9 @@ class TestQueryPerformance:
         db_session.commit()
 
         # Insert some events
-        for i in range(3):
+        for _i in range(3):
             db_session.execute(
-                text(
-                    "INSERT INTO events (user_id, type, payload) "
-                    "VALUES (:user_id, :type, :payload)"
-                ),
+                text("INSERT INTO events (user_id, type, payload) " "VALUES (:user_id, :type, :payload)"),
                 {
                     "user_id": str(user_id),
                     "type": "search_api",
@@ -243,11 +236,11 @@ class TestQueryPerformance:
             text(
                 """
                 SELECT COUNT(*) FROM events
-                WHERE user_id = :user_id 
+                WHERE user_id = :user_id
                 AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
                 """
             ),
             {"user_id": str(user_id)},
         ).scalar()
-        
+
         assert count == 3

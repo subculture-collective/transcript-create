@@ -1,15 +1,13 @@
 """Async HTTP client for Transcript Create API."""
 
 import asyncio
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 from uuid import UUID
 
 import httpx
-from pydantic import ValidationError as PydanticValidationError
 
 from .exceptions import (
     APIError,
-    AuthenticationError,
     InvalidAPIKeyError,
     NetworkError,
     NotFoundError,
@@ -64,9 +62,7 @@ class TranscriptClient:
         # Setup rate limiting
         if rate_limit is not None:
             if adaptive_rate_limiting:
-                self.rate_limiter: Optional[RateLimiter] = AdaptiveRateLimiter(
-                    initial_requests_per_second=rate_limit
-                )
+                self.rate_limiter: Optional[RateLimiter] = AdaptiveRateLimiter(initial_requests_per_second=rate_limit)
             else:
                 self.rate_limiter = RateLimiter(requests_per_second=rate_limit)
         else:
@@ -195,9 +191,9 @@ class TranscriptClient:
                 return response
 
             except httpx.TimeoutException as e:
-                raise TimeoutError(f"Request timeout: {e}")
+                raise TimeoutError(f"Request timeout: {e}") from e
             except httpx.NetworkError as e:
-                raise NetworkError(f"Network error: {e}")
+                raise NetworkError(f"Network error: {e}") from e
             except httpx.HTTPStatusError:
                 raise
 

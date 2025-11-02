@@ -5,7 +5,7 @@ avoiding fragile string-based matching that could match unintended routes.
 """
 
 import re
-from typing import Callable, Pattern
+from typing import Pattern
 
 
 class PathMatcher:

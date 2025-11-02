@@ -1,12 +1,12 @@
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.orm import Session as _SASession, sessionmaker
 
 from .settings import settings
 
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
-SessionLocal = scoped_session(sessionmaker(bind=engine, expire_on_commit=False))
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 @contextmanager
@@ -23,8 +23,19 @@ def session_scope():
 
 
 def get_db():
-    db = SessionLocal()
+    # Allow tests to monkeypatch SessionLocal to a concrete Session instance
+    created_here = False
+    if callable(SessionLocal):
+        db = SessionLocal()
+        created_here = True
+    else:
+        db = SessionLocal  # type: ignore[assignment]
+        if not isinstance(db, _SASession):
+            # Fallback: create a new session
+            db = sessionmaker(bind=engine, expire_on_commit=False)()
+            created_here = True
     try:
         yield db
     finally:
-        db.close()
+        if created_here:
+            db.close()

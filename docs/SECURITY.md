@@ -1,209 +1,130 @@
 # Security Policy
 
-## Overview
+## Supported Versions
 
-This document outlines security practices and policies for the transcript-create project.
+We actively support security updates for the following versions of Transcript Create:
 
-## Reporting Security Vulnerabilities
+| Version | Supported          |
+| ------- | ------------------ |
+| latest (main) | :white_check_mark: |
+| < 1.0   | :x:                |
 
-If you discover a security vulnerability, please report it by emailing the maintainers directly rather than opening a public issue. This helps protect users while a fix is being developed.
+## Reporting a Vulnerability
 
-**Do not disclose security vulnerabilities publicly until a fix is available.**
+We take the security of Transcript Create seriously. If you have discovered a security vulnerability, we appreciate your help in disclosing it to us in a responsible manner.
 
-## Secrets Management
+### Where to Report
 
-### Environment Variables
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-All secrets must be stored in environment variables, never hardcoded in source code:
+Instead, please report them via one of the following methods:
 
-- **Required Secrets**:
-  - `SESSION_SECRET`: Generate with `openssl rand -hex 32`
-  - `STRIPE_API_KEY`: Stripe API key (use test keys for development)
-  - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret
-  - `OAUTH_GOOGLE_CLIENT_SECRET`: Google OAuth client secret (if using Google auth)
-  - `OAUTH_TWITCH_CLIENT_SECRET`: Twitch OAuth client secret (if using Twitch auth)
+1. **GitHub Security Advisories** (Preferred): [Report a vulnerability](https://github.com/subculture-collective/transcript-create/security/advisories/new)
+2. **Email**: security@subculture.community
 
-- **Optional Secrets**:
-  - `HF_TOKEN`: Hugging Face token for speaker diarization
-  - `OPENSEARCH_PASSWORD`: OpenSearch authentication password
+### What to Include
 
-### Setup Instructions
+Please include as much of the following information as possible:
 
-1. Copy the example environment file:
+- Type of vulnerability (e.g., SQL injection, XSS, authentication bypass)
+- Full paths of source file(s) related to the manifestation of the vulnerability
+- The location of the affected source code (tag/branch/commit or direct URL)
+- Any special configuration required to reproduce the issue
+- Step-by-step instructions to reproduce the issue
+- Proof-of-concept or exploit code (if possible)
+- Impact of the issue, including how an attacker might exploit it
 
-   ```bash
-   cp .env.example .env
-   ```
+### Response Timeline
 
-2. Generate a secure session secret:
+- **Initial Response**: We will acknowledge receipt of your vulnerability report within 48 hours
+- **Status Update**: We will send a more detailed response within 7 days indicating the next steps
+- **Fix Timeline**: We aim to release a fix within 30 days for HIGH/CRITICAL vulnerabilities
+- **Disclosure**: We will coordinate with you on the disclosure timeline
 
-   ```bash
-   openssl rand -hex 32
-   ```
+### Security Update Policy
 
-3. Fill in your secrets in `.env` - this file is gitignored and will not be committed.
+- **CRITICAL**: Immediate patch release within 24-48 hours
+- **HIGH**: Patch release within 7 days
+- **MEDIUM**: Included in next scheduled release (typically within 30 days)
+- **LOW**: Evaluated for inclusion in future releases
 
-4. Never use default/example values in production deployments.
+## Security Scanning
 
-### Pre-commit Hooks
+This project implements multiple layers of security scanning:
 
-This repository uses pre-commit hooks to prevent accidental secret commits:
+### Automated Scans
 
-```bash
-# Install pre-commit
-pip install pre-commit
+1. **Dependency Scanning**
+   - Python: `pip-audit` checks for known CVEs in dependencies
+   - JavaScript: `npm audit` scans frontend dependencies
+   - Schedule: On every PR, push to main/develop, and weekly
 
-# Install the git hooks
-pre-commit install
+2. **Container Image Scanning**
+   - Tool: Trivy
+   - Scans Docker images for OS and package vulnerabilities
+   - Results uploaded to GitHub Security tab
+   - Schedule: On every Docker image build
 
-# Run manually on all files
-pre-commit run --all-files
-```
+3. **Secret Scanning**
+   - Tool: Gitleaks
+   - Detects API keys, tokens, passwords, and private keys
+   - Runs in CI and as pre-commit hook
+   - Schedule: On every commit and PR
 
-The hooks include:
+4. **Static Application Security Testing (SAST)**
+   - Tool: Bandit (Python)
+   - Detects security issues like SQL injection, hardcoded secrets, insecure crypto
+   - Schedule: On every PR and push to main/develop
 
-- **Gitleaks**: Scans for secrets and sensitive data
-- **detect-private-key**: Detects private keys
-- Code quality checks (black, isort, flake8)
+### Security Features
 
-## Dependency Security
+- **Parameterized Database Queries**: All SQL queries use parameterized statements via SQLAlchemy
+- **Authentication**: Optional OAuth 2.0 integration with secure token handling<sup>†</sup>
+- **Rate Limiting**: API endpoints are protected with a simple in-memory rate limiting implementation suitable for development and single-instance deployments only. **For production deployments, you must use a distributed rate limiting backend (e.g., Redis with a sliding window algorithm) to ensure effective protection across multiple processes or servers.**
+- **Input Validation**: Pydantic models for request/response validation
+- **Secret Management**: Environment variables for sensitive configuration
 
-### Pinned Dependencies
+<sup>†</sup> OAuth 2.0 authentication is an optional feature. It requires installing additional dependencies and configuring the application. See the documentation for details on enabling OAuth support.
+## Security Best Practices
 
-All Python dependencies are pinned to specific versions in `requirements.txt` to ensure:
+When contributing to this project:
 
-- Reproducible builds
-- Protection against supply chain attacks
-- Controlled updates with security review
+1. **Never commit secrets**: Use environment variables for sensitive data
+2. **Use parameterized queries**: Always use SQLAlchemy ORM or parameterized text() queries
+3. **Validate inputs**: Use Pydantic models for all API inputs
+4. **Update dependencies**: Keep dependencies up to date
+5. **Run pre-commit hooks**: Install and use the provided pre-commit hooks
+6. **Review security warnings**: Address any security warnings in CI
 
-Full dependency tree is captured in `constraints.txt`.
+## Vulnerability Disclosure Process
 
-### Automated Scanning
+1. Security researcher reports vulnerability privately
+2. We acknowledge and begin investigation
+3. We develop and test a fix
+4. We coordinate disclosure timeline with reporter
+5. We release a security patch
+6. We publish a security advisory
+7. We credit the reporter (if desired)
 
-GitHub Actions automatically scans dependencies for vulnerabilities:
+## Security Contacts
 
-- **pip-audit**: Checks PyPI packages against OSV vulnerability database
-- **safety**: Checks against Safety DB for known security issues
-- Runs on: pushes to main/develop, pull requests, and weekly schedule
-- Fails CI on high/critical severity vulnerabilities
+- **Security Email**: security@subculture.community
+- **GitHub Security**: Use [GitHub Security Advisories](https://github.com/subculture-collective/transcript-create/security/advisories)
 
-### Updating Dependencies
+## Recognition
 
-When updating dependencies:
+We appreciate the security research community and recognize responsible disclosure. Security researchers who report valid vulnerabilities will be:
 
-1. Review the changelog and security advisories
-2. Test thoroughly in development
-3. Run security scans: `pip-audit -r requirements.txt`
-4. Update both `requirements.txt` and `constraints.txt`
+- Credited in the security advisory (with permission)
+- Listed in our Hall of Fame (coming soon)
+- Eligible for our bug bounty program (when launched)
 
-### ROCm/CUDA Dependencies
+## Additional Resources
 
-PyTorch and related GPU packages are installed separately in the Dockerfile to support different hardware configurations. See `Dockerfile` for details.
-
-## GitHub Security Features
-
-### Secret Scanning
-
-Enable GitHub's secret scanning for this repository:
-
-1. Go to Settings → Security → Code security and analysis
-2. Enable "Secret scanning"
-3. Enable "Push protection" to prevent secret commits
-
-### Dependabot
-
-Consider enabling Dependabot for automated dependency updates:
-
-1. Go to Settings → Security → Code security and analysis
-2. Enable "Dependabot alerts"
-3. Enable "Dependabot security updates"
-
-## Production Deployment Security
-
-### Essential Security Measures
-
-1. **Use HTTPS**: Always serve the application over HTTPS in production
-2. **Secure Secrets**: Use proper secret management (AWS Secrets Manager, HashiCorp Vault, etc.)
-3. **Database Security**: Use strong passwords, enable SSL connections
-4. **Firewall Rules**: Restrict access to database and internal services
-5. **Session Security**: Use secure, httpOnly, sameSite cookies
-6. **CORS**: Configure `FRONTEND_ORIGIN` to your actual frontend domain
-7. **Rate Limiting**: Implement rate limiting on API endpoints
-8. **Regular Updates**: Keep dependencies and system packages updated
-
-### OpenSearch Security
-
-For production OpenSearch deployments:
-
-- Enable security plugin
-- Use strong admin password
-- Configure TLS/SSL
-- Set up proper access controls
-- See: <https://opensearch.org/docs/latest/security/>
-
-### Stripe Integration Security
-
-- Use live keys (`sk_live_...`) only in production
-- Validate webhook signatures using `STRIPE_WEBHOOK_SECRET`
-- Use HTTPS endpoints for webhooks
-- Test webhooks using Stripe CLI in development
-
-## Docker Security
-
-When deploying with Docker:
-
-- Use specific image tags, not `latest`
-- Scan images for vulnerabilities: `docker scan <image>`
-- Run containers as non-root user where possible
-- Keep base images updated
-- Use multi-stage builds to minimize attack surface
-
-## Database Security
-
-- Use connection pooling with limits
-- Enable SSL/TLS for database connections in production
-- Use read-only database users where appropriate
-- Regular backups with encryption
-- Audit database access logs
-
-## Incident Response
-
-If a security incident occurs:
-
-1. Immediately rotate affected credentials
-2. Review access logs for suspicious activity
-3. Assess scope of potential data exposure
-4. Notify affected users if required
-5. Document incident and response
-6. Review and update security measures
-
-## Security Checklist for Production
-
-Before deploying to production, ensure:
-
-- [ ] All secrets are properly managed (not in code)
-- [ ] `SESSION_SECRET` is generated securely
-- [ ] Database uses strong passwords and SSL
-- [ ] HTTPS is enabled for all endpoints
-- [ ] CORS is configured correctly
-- [ ] Secret scanning is enabled in GitHub
-- [ ] Dependabot alerts are enabled
-- [ ] Pre-commit hooks are installed
-- [ ] Security audit passes (`pip-audit`, `safety check`)
-- [ ] Docker images are scanned for vulnerabilities
-- [ ] Rate limiting is configured
-- [ ] Monitoring and alerting are set up
-- [ ] Backup and recovery procedures are documented
-- [ ] Security headers are configured (CSP, HSTS, etc.)
-
-## Resources
-
+- [GitHub Security Documentation](https://docs.github.com/en/code-security)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [Python Security Best Practices](https://python.readthedocs.io/en/stable/library/security.html)
-- [FastAPI Security](https://fastapi.tiangolo.com/tutorial/security/)
-- [PostgreSQL Security](https://www.postgresql.org/docs/current/security.html)
-- [Docker Security](https://docs.docker.com/engine/security/)
+- [CWE Top 25](https://cwe.mitre.org/top25/)
 
-## License
+---
 
-This security policy is part of the transcript-create project.
+*Last Updated: 2025-10-28*

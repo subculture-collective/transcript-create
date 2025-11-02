@@ -28,13 +28,20 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies in a single layer
-# Combine apt-get update, install, and cleanup to minimize layer size
+# Install system dependencies and development toolchain in a single layer
+# We include python3-dev and build-essential so runtime packages that compile
+# helper extensions (e.g. numba/triton helpers) can build their temporary
+# C artefacts without "Python.h: No such file or directory" failures.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
         python3 \
         python3-pip \
+        python3-dev \
+        libpython3-dev \
+        build-essential \
+        cmake \
+        pkg-config \
         git \
         curl \
     && rm -rf /var/lib/apt/lists/* \

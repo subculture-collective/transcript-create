@@ -1,5 +1,4 @@
 import json
-import logging
 import subprocess
 import time
 from pathlib import Path
@@ -196,9 +195,7 @@ def process_video(engine, video_id):
     beam_size = quality_settings.get("beam_size") or getattr(settings, "WHISPER_BEAM_SIZE", 5)
     temp_from_settings = getattr(settings, "WHISPER_TEMPERATURE", 0.0)
     temperature = (
-        quality_settings.get("temperature")
-        if quality_settings.get("temperature") is not None
-        else temp_from_settings
+        quality_settings.get("temperature") if quality_settings.get("temperature") is not None else temp_from_settings
     )
     word_timestamps = quality_settings.get("word_timestamps", getattr(settings, "WHISPER_WORD_TIMESTAMPS", True))
     vad_filter = quality_settings.get("vad_filter", getattr(settings, "WHISPER_VAD_FILTER", False))
@@ -217,7 +214,7 @@ def process_video(engine, video_id):
             beam_size=beam_size,
             temperature=temperature,
             word_timestamps=word_timestamps,
-            vad_filter=vad_filter
+            vad_filter=vad_filter,
         )
 
         # Capture language info from first chunk
@@ -229,7 +226,7 @@ def process_video(engine, video_id):
                 extra={
                     "language": detected_language,
                     "probability": language_probability,
-                }
+                },
             )
 
         for s in segs:
@@ -268,6 +265,7 @@ def process_video(engine, video_id):
     if getattr(settings, "ENABLE_CUSTOM_VOCABULARY", True):
         try:
             from worker.vocabulary import apply_vocabulary_corrections
+
             with engine.begin() as conn:
                 # Ensure job_meta is a dict before accessing .get()
                 if job_meta and isinstance(job_meta, str):

@@ -16,9 +16,9 @@ router = APIRouter(prefix="", tags=["Favorites"])
     summary="List user favorites",
     description="""
     Get all favorite transcript segments for the authenticated user.
-    
+
     Optionally filter by video_id to get favorites for a specific video.
-    
+
     **Authentication Required:** Yes
     """,
     responses={
@@ -79,13 +79,13 @@ def list_favorites(request: Request, db=Depends(get_db), video_id: uuid.UUID | N
     summary="Add favorite segment",
     description="""
     Save a transcript segment as a favorite.
-    
+
     Required fields:
     - `video_id`: UUID of the video
     - `start_ms`: Start time in milliseconds
     - `end_ms`: End time in milliseconds
     - `text`: The transcript text (optional)
-    
+
     **Authentication Required:** Yes
     """,
     responses={
@@ -122,8 +122,8 @@ def add_favorite(payload: dict, request: Request, db=Depends(get_db)):
     summary="Delete favorite",
     description="""
     Remove a favorite transcript segment.
-    
-    **Authentication Required:** Yes  
+
+    **Authentication Required:** Yes
     **Authorization:** Can only delete your own favorites
     """,
     responses={

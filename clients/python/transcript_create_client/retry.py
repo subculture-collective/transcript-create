@@ -4,7 +4,7 @@ import asyncio
 import random
 from typing import Any, Callable, Optional, Set, TypeVar
 
-from httpx import HTTPStatusError, RequestError
+from httpx import HTTPStatusError
 
 from .exceptions import NetworkError, RateLimitError, ServerError, TimeoutError
 

@@ -53,7 +53,7 @@ async def main() -> None:
 
             print(f"✓ Transcript retrieved: {len(transcript.segments)} segments")
             print("\nFirst 5 segments:")
-            for i, segment in enumerate(transcript.segments[:5]):
+            for _i, segment in enumerate(transcript.segments[:5]):
                 start_sec = segment.start_ms / 1000
                 end_sec = segment.end_ms / 1000
                 speaker = f"[{segment.speaker_label}] " if segment.speaker_label else ""

@@ -39,23 +39,22 @@ def create_vocabulary(payload: VocabularyCreate, db=Depends(get_db)):
 
     with db.begin():
         db.execute(
-            text("""
+            text(
+                """
                 INSERT INTO user_vocabularies (id, name, terms, is_global)
                 VALUES (:id, :name, :terms::jsonb, :is_global)
-            """),
+            """
+            ),
             {
                 "id": str(vocab_id),
                 "name": payload.name,
                 "terms": terms_json,
                 "is_global": payload.is_global,
-            }
+            },
         )
 
     # Fetch and return the created vocabulary
-    vocab = db.execute(
-        text("SELECT * FROM user_vocabularies WHERE id = :id"),
-        {"id": str(vocab_id)}
-    ).mappings().first()
+    vocab = db.execute(text("SELECT * FROM user_vocabularies WHERE id = :id"), {"id": str(vocab_id)}).mappings().first()
 
     return VocabularyResponse(
         id=vocab["id"],
@@ -77,9 +76,7 @@ def list_vocabularies(db=Depends(get_db)):
     """List all vocabularies."""
     # TODO: Add user authentication and filter by user_id
 
-    vocabs = db.execute(
-        text("SELECT * FROM user_vocabularies ORDER BY created_at DESC")
-    ).mappings().all()
+    vocabs = db.execute(text("SELECT * FROM user_vocabularies ORDER BY created_at DESC")).mappings().all()
     return [
         VocabularyResponse(
             id=v["id"],
@@ -101,16 +98,14 @@ def list_vocabularies(db=Depends(get_db)):
 )
 def get_vocabulary(vocabulary_id: uuid.UUID, db=Depends(get_db)):
     """Get a vocabulary by ID."""
-    vocab = db.execute(
-        text("SELECT * FROM user_vocabularies WHERE id = :id"),
-        {"id": str(vocabulary_id)}
-    ).mappings().first()
+    vocab = (
+        db.execute(text("SELECT * FROM user_vocabularies WHERE id = :id"), {"id": str(vocabulary_id)})
+        .mappings()
+        .first()
+    )
 
     if not vocab:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Vocabulary {vocabulary_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Vocabulary {vocabulary_id} not found")
     return VocabularyResponse(
         id=vocab["id"],
         name=vocab["name"],
@@ -131,14 +126,8 @@ def delete_vocabulary(vocabulary_id: uuid.UUID, db=Depends(get_db)):
     """Delete a vocabulary."""
     # TODO: Add user authentication and ownership check
 
-    result = db.execute(
-        text("DELETE FROM user_vocabularies WHERE id = :id"),
-        {"id": str(vocabulary_id)}
-    )
+    result = db.execute(text("DELETE FROM user_vocabularies WHERE id = :id"), {"id": str(vocabulary_id)})
     db.commit()
 
     if result.rowcount == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Vocabulary {vocabulary_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Vocabulary {vocabulary_id} not found")

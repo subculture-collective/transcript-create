@@ -4,8 +4,6 @@ import json
 import logging
 from io import StringIO
 
-import pytest
-
 from app.logging_config import (
     JSONFormatter,
     SensitiveDataFilter,
@@ -91,7 +89,7 @@ class TestJSONFormatter:
     def test_context_vars(self):
         """Test context variable inclusion."""
         formatter = JSONFormatter(service="test")
-        
+
         # Set context
         request_id_ctx.set("req-123")
         user_id_ctx.set("user-456")
@@ -124,11 +122,12 @@ class TestJSONFormatter:
     def test_exception_info(self):
         """Test exception info formatting."""
         formatter = JSONFormatter(service="test")
-        
+
         try:
             raise ValueError("Test error")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = logging.LogRecord(
@@ -228,7 +227,7 @@ def test_configure_logging():
     root_logger = logging.getLogger()
     assert root_logger.level == logging.DEBUG
     assert len(root_logger.handlers) > 0
-    
+
     # Test plain text format
     configure_logging(service="test2", level="INFO", json_format=False)
     assert root_logger.level == logging.INFO

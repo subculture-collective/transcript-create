@@ -10,7 +10,6 @@ from app.cache import (
     clear_all_cache,
     generate_cache_key,
     get_cache_stats,
-    get_redis_client,
     invalidate_cache,
     invalidate_cache_pattern,
 )

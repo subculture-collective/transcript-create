@@ -72,7 +72,7 @@ def create_job(db, kind: str, url: str, meta: dict = None):
     meta_json = json.dumps(meta) if meta else "{}"
     db.execute(
         text("INSERT INTO jobs (id, kind, input_url, meta) VALUES (:i,:k,:u,:m)"),
-        {"i": str(job_id), "k": kind, "u": url, "m": meta_json}
+        {"i": str(job_id), "k": kind, "u": url, "m": meta_json},
     )
     db.commit()
 
@@ -84,17 +84,23 @@ def create_job(db, kind: str, url: str, meta: dict = None):
 
 @_retry_on_transient_error
 def fetch_job(db, job_id):
-    row = db.execute(text("SELECT * FROM jobs WHERE id=:i"), {"i": str(job_id)}).mappings().first()
+    # Pass UUID directly to ensure proper binding/casting
+    row = db.execute(text("SELECT * FROM jobs WHERE id=:i"), {"i": job_id}).mappings().first()
     return row
 
 
 @_retry_on_transient_error
 @cache(prefix="segments", ttl=settings.CACHE_TRANSCRIPT_TTL if settings.ENABLE_CACHING else 0)
 def list_segments(db, video_id):
-    rows = db.execute(
-        text("SELECT start_ms,end_ms,text,speaker_label FROM segments WHERE video_id=:v ORDER BY start_ms"),
-        {"v": str(video_id)},
-    ).all()
+    # Support both schemas: segments linked directly to video_id, or indirectly via transcripts
+    sql = """
+        SELECT s.start_ms, s.end_ms, s.text, s.speaker_label
+        FROM segments s
+        LEFT JOIN transcripts t ON t.id = s.transcript_id
+        WHERE s.video_id = :v OR (s.transcript_id IS NOT NULL AND t.video_id = :v)
+        ORDER BY s.start_ms
+    """
+    rows = db.execute(text(sql), {"v": str(video_id)}).all()
     return rows
 
 

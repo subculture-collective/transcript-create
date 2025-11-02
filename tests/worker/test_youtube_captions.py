@@ -293,9 +293,7 @@ class TestFetchYoutubeAutoCaptions:
         """Test fetching json3 captions."""
         # Setup yt-dlp response
         mock_yt_dlp.return_value = {
-            "automatic_captions": {
-                "en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]
-            }
+            "automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}
         }
 
         # Setup caption response
@@ -340,9 +338,7 @@ class TestFetchYoutubeAutoCaptions:
     def test_fetch_youtube_auto_captions_vtt(self, mock_yt_dlp, mock_urlopen):
         """Test fetching VTT captions."""
         mock_yt_dlp.return_value = {
-            "automatic_captions": {
-                "en": [{"ext": "vtt", "url": "http://example.com/captions.vtt"}]
-            }
+            "automatic_captions": {"en": [{"ext": "vtt", "url": "http://example.com/captions.vtt"}]}
         }
 
         vtt_content = b"""WEBVTT
@@ -379,9 +375,7 @@ Caption text
     def test_fetch_youtube_auto_captions_download_failure(self, mock_yt_dlp, mock_urlopen):
         """Test returns None when caption download fails."""
         mock_yt_dlp.return_value = {
-            "automatic_captions": {
-                "en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]
-            }
+            "automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}
         }
 
         mock_urlopen.side_effect = Exception("Network error")
@@ -395,9 +389,7 @@ Caption text
     def test_fetch_youtube_auto_captions_invalid_json3(self, mock_yt_dlp, mock_urlopen):
         """Test returns None when json3 is invalid."""
         mock_yt_dlp.return_value = {
-            "automatic_captions": {
-                "en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]
-            }
+            "automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}
         }
 
         mock_response = Mock()
@@ -415,9 +407,7 @@ Caption text
     def test_fetch_youtube_auto_captions_empty_events(self, mock_yt_dlp, mock_urlopen):
         """Test handles json3 with empty events."""
         mock_yt_dlp.return_value = {
-            "automatic_captions": {
-                "en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]
-            }
+            "automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}
         }
 
         caption_data = {"events": []}
@@ -439,9 +429,7 @@ Caption text
     def test_fetch_youtube_auto_captions_user_agent(self, mock_yt_dlp, mock_urlopen):
         """Test request includes User-Agent header."""
         mock_yt_dlp.return_value = {
-            "automatic_captions": {
-                "en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]
-            }
+            "automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}
         }
 
         mock_response = Mock()

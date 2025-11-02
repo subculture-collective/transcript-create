@@ -10,37 +10,18 @@ class QualitySettingsInput(BaseModel):
     """Quality settings for transcription."""
 
     preset: Literal["fast", "balanced", "accurate"] = Field(
-        "balanced",
-        description="Quality preset (fast/balanced/accurate)"
+        "balanced", description="Quality preset (fast/balanced/accurate)"
     )
-    language: Optional[str] = Field(
-        None,
-        description="Language code (e.g., 'en', 'es', 'fr') or None for auto-detect"
-    )
-    model: Optional[str] = Field(
-        None,
-        description="Whisper model (tiny/base/small/medium/large/large-v3)"
-    )
+    language: Optional[str] = Field(None, description="Language code (e.g., 'en', 'es', 'fr') or None for auto-detect")
+    model: Optional[str] = Field(None, description="Whisper model (tiny/base/small/medium/large/large-v3)")
     beam_size: Optional[int] = Field(
-        None,
-        ge=1,
-        le=10,
-        description="Beam size for decoding (1-10, higher = more accurate)"
+        None, ge=1, le=10, description="Beam size for decoding (1-10, higher = more accurate)"
     )
     temperature: Optional[float] = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Sampling temperature (0.0-1.0, 0.0 = greedy)"
+        None, ge=0.0, le=1.0, description="Sampling temperature (0.0-1.0, 0.0 = greedy)"
     )
-    word_timestamps: Optional[bool] = Field(
-        True,
-        description="Extract word-level timestamps"
-    )
-    vad_filter: Optional[bool] = Field(
-        None,
-        description="Voice Activity Detection filter (faster-whisper only)"
-    )
+    word_timestamps: Optional[bool] = Field(True, description="Extract word-level timestamps")
+    vad_filter: Optional[bool] = Field(None, description="Voice Activity Detection filter (faster-whisper only)")
 
 
 class JobCreate(BaseModel):
@@ -55,13 +36,9 @@ class JobCreate(BaseModel):
         "single",
         description="Type of job: 'single' for one video, 'channel' for all videos in a channel",
     )
-    quality: Optional[QualitySettingsInput] = Field(
-        None,
-        description="Quality settings for transcription"
-    )
+    quality: Optional[QualitySettingsInput] = Field(None, description="Quality settings for transcription")
     vocabulary_ids: Optional[List[uuid.UUID]] = Field(
-        None,
-        description="Custom vocabulary IDs to apply during transcription"
+        None, description="Custom vocabulary IDs to apply during transcription"
     )
 
     @field_validator("url")
@@ -317,13 +294,14 @@ class PaginatedVideos(BaseModel):
                     "next_cursor": "eyJpZCI6IjEyMyIsImNyZWF0ZWRfYXQiOiIyMDI1LTAxLTAxIn0=",
                     "previous_cursor": None,
                     "total_count": 100,
-                }
+                },
             }
         }
     }
 
 
 # Advanced transcription feature schemas
+
 
 class VocabularyTerm(BaseModel):
     """A single vocabulary term with replacement pattern."""
@@ -408,4 +386,3 @@ class TranscriptMetadata(BaseModel):
     language_probability: Optional[float] = Field(None, description="Language detection confidence")
     model: str = Field(..., description="Whisper model used")
     quality_preset: Optional[str] = Field(None, description="Quality preset used")
-

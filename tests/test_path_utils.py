@@ -1,6 +1,5 @@
 """Tests for path matching utilities."""
 
-import pytest
 
 from app.path_utils import (
     CommonMatchers,

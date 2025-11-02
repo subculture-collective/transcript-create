@@ -9,8 +9,6 @@ This module defines all metrics collected by the worker including:
 """
 
 from prometheus_client import Counter, Gauge, Histogram
-from prometheus_client import REGISTRY, CollectorRegistry
-
 
 # Worker Processing Metrics
 transcription_duration_seconds = Histogram(
@@ -115,6 +113,7 @@ def try_collect_gpu_metrics():
     # Try ROCm first
     try:
         import subprocess
+
         result = subprocess.run(
             ["rocm-smi", "--showmeminfo", "vram", "--json"],
             capture_output=True,
@@ -123,6 +122,7 @@ def try_collect_gpu_metrics():
         )
         if result.returncode == 0:
             import json
+
             data = json.loads(result.stdout)
             for device_id, info in data.items():
                 if isinstance(info, dict) and "VRAM Total Memory (B)" in info:
@@ -133,10 +133,11 @@ def try_collect_gpu_metrics():
             return True
     except Exception:
         pass
-    
+
     # Try PyTorch with CUDA
     try:
         import torch
+
         if torch.cuda.is_available():
             for i in range(torch.cuda.device_count()):
                 total = torch.cuda.get_device_properties(i).total_memory
@@ -146,5 +147,5 @@ def try_collect_gpu_metrics():
             return True
     except Exception:
         pass
-    
+
     return False

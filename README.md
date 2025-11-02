@@ -19,11 +19,13 @@ Create searchable, exportable transcripts from YouTube videos or channels. The s
 Integrate Transcript Create into your applications with our official client libraries:
 
 - **[Python SDK](clients/python)** - Async client with full type hints
+
   ```bash
   pip install transcript-create-client
   ```
 
 - **[JavaScript/TypeScript SDK](clients/javascript)** - Universal client for Node.js and browsers
+
   ```bash
   npm install @transcript-create/sdk
   ```
@@ -115,13 +117,13 @@ docker compose build
 docker compose up -d
 ```
 
--   API available at <http://localhost:8000>
--   Postgres exposed on host port 5434 (inside network: db:5432)
--   Prometheus metrics at <http://localhost:9090>
--   Grafana dashboards at <http://localhost:3000> (admin/admin)
--   Automated backups: Daily at 2 AM UTC (database) and 3 AM UTC (media)
--   Backup verification: Weekly on Sundays at 4 AM UTC
--   If your host ROCm version ≠ 6.0, use a different build arg, e.g.:
+- API available at <http://localhost:8000>
+- Postgres exposed on host port 5434 (inside network: db:5432)
+- Prometheus metrics at <http://localhost:9090>
+- Grafana dashboards at <http://localhost:3000> (admin/admin)
+- Automated backups: Daily at 2 AM UTC (database) and 3 AM UTC (media)
+- Backup verification: Weekly on Sundays at 4 AM UTC
+- If your host ROCm version ≠ 6.0, use a different build arg, e.g.:
 
 ```bash
 docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.1

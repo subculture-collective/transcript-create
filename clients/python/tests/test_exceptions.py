@@ -1,7 +1,5 @@
 """Tests for exception classes."""
 
-import pytest
-
 from transcript_create_client.exceptions import (
     APIError,
     AuthenticationError,
@@ -9,7 +7,6 @@ from transcript_create_client.exceptions import (
     NotFoundError,
     QuotaExceededError,
     RateLimitError,
-    ServerError,
     TranscriptNotFoundError,
     ValidationError,
 )

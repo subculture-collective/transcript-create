@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api-keys", tags=["API Keys"])
 
 class CreateAPIKeyRequest(BaseModel):
     """Request to create a new API key."""
+
     name: str = Field(..., description="Human-readable name for the API key", min_length=1, max_length=100)
     expires_days: Optional[int] = Field(
         default=None,
@@ -34,6 +35,7 @@ class CreateAPIKeyRequest(BaseModel):
 
 class APIKeyResponse(BaseModel):
     """Response containing API key details."""
+
     id: str
     name: str
     key_prefix: str
@@ -46,6 +48,7 @@ class APIKeyResponse(BaseModel):
 
 class CreateAPIKeyResponse(BaseModel):
     """Response when creating a new API key."""
+
     api_key: str = Field(..., description="The full API key - save this, it won't be shown again!")
     key: APIKeyResponse
 
@@ -65,15 +68,21 @@ def list_api_keys(request: Request, db=Depends(get_db), user=Depends(get_user_re
     """List all API keys for the current user."""
     user_id = user.get("id")
 
-    result = db.execute(
-        text("""
+    result = (
+        db.execute(
+            text(
+                """
             SELECT id, name, key_prefix, created_at, expires_at, last_used_at, revoked_at, scopes
             FROM api_keys
             WHERE user_id = :user_id
             ORDER BY created_at DESC
-        """),
-        {"user_id": str(user_id)}
-    ).mappings().all()
+        """
+            ),
+            {"user_id": str(user_id)},
+        )
+        .mappings()
+        .all()
+    )
 
     return [dict(row) for row in result]
 
@@ -114,10 +123,12 @@ def create_api_key(
     # Insert into database
     key_id = uuid.uuid4()
     db.execute(
-        text("""
+        text(
+            """
             INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix, expires_at, scopes)
             VALUES (:id, :user_id, :name, :key_hash, :key_prefix, :expires_at, :scopes)
-        """),
+        """
+        ),
         {
             "id": str(key_id),
             "user_id": str(user_id),
@@ -126,18 +137,19 @@ def create_api_key(
             "key_prefix": key_prefix,
             "expires_at": expires_at,
             "scopes": body.scopes,
-        }
+        },
     )
     db.commit()
 
     # Log audit event
     log_audit_from_request(
-        db, request,
+        db,
+        request,
         ACTION_API_KEY_CREATED,
         user_id=user_id,
         resource_type="api_key",
         resource_id=str(key_id),
-        details={"name": body.name, "expires_at": expires_at.isoformat() if expires_at else None}
+        details={"name": body.name, "expires_at": expires_at.isoformat() if expires_at else None},
     )
 
     logger.info(
@@ -146,18 +158,24 @@ def create_api_key(
             "user_id": str(user_id),
             "key_id": str(key_id),
             "name": body.name,
-        }
+        },
     )
 
     # Retrieve the created key
-    key_data = db.execute(
-        text("""
+    key_data = (
+        db.execute(
+            text(
+                """
             SELECT id, name, key_prefix, created_at, expires_at, last_used_at, revoked_at, scopes
             FROM api_keys
             WHERE id = :id
-        """),
-        {"id": str(key_id)}
-    ).mappings().first()
+        """
+            ),
+            {"id": str(key_id)},
+        )
+        .mappings()
+        .first()
+    )
 
     return {
         "api_key": api_key,
@@ -184,14 +202,20 @@ def revoke_api_key(
     user_id = user.get("id")
 
     # Verify the key belongs to the user
-    key = db.execute(
-        text("""
+    key = (
+        db.execute(
+            text(
+                """
             SELECT id, name, user_id, revoked_at
             FROM api_keys
             WHERE id = :id
-        """),
-        {"id": key_id}
-    ).mappings().first()
+        """
+            ),
+            {"id": key_id},
+        )
+        .mappings()
+        .first()
+    )
 
     if not key:
         raise NotFoundError("API key not found")
@@ -204,23 +228,26 @@ def revoke_api_key(
 
     # Revoke the key
     db.execute(
-        text("""
+        text(
+            """
             UPDATE api_keys
             SET revoked_at = now()
             WHERE id = :id
-        """),
-        {"id": key_id}
+        """
+        ),
+        {"id": key_id},
     )
     db.commit()
 
     # Log audit event
     log_audit_from_request(
-        db, request,
+        db,
+        request,
         ACTION_API_KEY_REVOKED,
         user_id=user_id,
         resource_type="api_key",
         resource_id=key_id,
-        details={"name": key["name"]}
+        details={"name": key["name"]},
     )
 
     logger.info(
@@ -229,7 +256,7 @@ def revoke_api_key(
             "user_id": str(user_id),
             "key_id": key_id,
             "name": key["name"],
-        }
+        },
     )
 
     return {"ok": True, "message": "API key revoked successfully"}

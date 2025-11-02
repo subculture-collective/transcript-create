@@ -1,7 +1,6 @@
 """Tests for health check endpoints."""
 
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -46,16 +45,16 @@ class TestHealthEndpoints:
         assert data["status"] in ["healthy", "degraded", "unhealthy"]
         assert "timestamp" in data
         assert "checks" in data
-        
+
         # Check that all expected components are present
         checks = data["checks"]
         assert "database" in checks
         assert "opensearch" in checks
         assert "storage" in checks
         assert "worker" in checks
-        
+
         # Each check should have a status
-        for component, check in checks.items():
+        for _component, check in checks.items():
             assert "status" in check
             assert check["status"] in ["healthy", "degraded", "unhealthy", "disabled"]
 
@@ -64,16 +63,16 @@ class TestHealthEndpoints:
         response = client.get("/version")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Check that all expected fields are present
         assert "version" in data
         assert "git_commit" in data
         assert "build_date" in data
-        
+
         # Version should be non-empty (will be from pyproject.toml or "unknown")
         assert data["version"]
         assert isinstance(data["version"], str)
-        
+
         # Git commit and build date may be "unknown" in test environment
         assert isinstance(data["git_commit"], str)
         assert isinstance(data["build_date"], str)
@@ -86,7 +85,7 @@ class TestDatabaseHealthCheck:
     async def test_database_health_check_success(self):
         """Test database health check succeeds with healthy database."""
         from app.routes.health import check_database
-        
+
         result = await check_database()
         # Database may not be available in test environment
         assert result["status"] in ["healthy", "unhealthy"]
@@ -99,7 +98,7 @@ class TestDatabaseHealthCheck:
     async def test_database_health_check_measures_latency(self):
         """Test database health check measures latency."""
         from app.routes.health import check_database
-        
+
         result = await check_database()
         assert "latency_ms" in result
         assert isinstance(result["latency_ms"], (int, float))
@@ -113,7 +112,7 @@ class TestOpenSearchHealthCheck:
     async def test_opensearch_disabled_by_default(self):
         """Test OpenSearch health check returns disabled when backend is postgres."""
         from app.routes.health import check_opensearch
-        
+
         result = await check_opensearch()
         # Default backend is postgres, so OpenSearch should be disabled
         assert result["status"] == "disabled"
@@ -123,14 +122,14 @@ class TestOpenSearchHealthCheck:
         """Test OpenSearch health check when backend is enabled."""
         from app.routes.health import check_opensearch
         from app.settings import settings
-        
+
         # Save original setting
         original_backend = settings.SEARCH_BACKEND
-        
+
         try:
             # Enable OpenSearch backend
             settings.SEARCH_BACKEND = "opensearch"
-            
+
             result = await check_opensearch()
             # Will likely fail in test environment, but should have proper error structure
             assert "status" in result
@@ -148,7 +147,7 @@ class TestStorageHealthCheck:
     async def test_storage_health_check_success(self):
         """Test storage health check succeeds."""
         from app.routes.health import check_storage
-        
+
         result = await check_storage()
         assert "status" in result
         assert result["status"] in ["healthy", "unhealthy"]
@@ -163,7 +162,7 @@ class TestStorageHealthCheck:
     async def test_storage_health_check_measures_disk_space(self):
         """Test storage health check measures disk space."""
         from app.routes.health import check_storage
-        
+
         result = await check_storage()
         if result["status"] == "healthy":
             assert result["free_gb"] > 0
@@ -174,7 +173,7 @@ class TestStorageHealthCheck:
     async def test_storage_health_check_write_permission(self):
         """Test storage health check verifies write permissions."""
         from app.routes.health import check_storage
-        
+
         result = await check_storage()
         # Should be able to write in test environment if directory is accessible
         assert "can_write" in result or "error" in result
@@ -187,7 +186,7 @@ class TestWorkerHealthCheck:
     async def test_worker_health_check_structure(self):
         """Test worker health check returns expected structure."""
         from app.routes.health import check_worker
-        
+
         result = await check_worker()
         assert "status" in result
         assert result["status"] in ["healthy", "degraded", "unhealthy"]
@@ -204,8 +203,8 @@ class TestHealthMetrics:
 
     def test_health_metrics_exist(self):
         """Test that health check metrics are defined."""
-        from app.routes.health import health_check_status, health_check_duration_seconds, health_check_total
-        
+        from app.routes.health import health_check_duration_seconds, health_check_status, health_check_total
+
         assert health_check_status is not None
         assert health_check_duration_seconds is not None
         assert health_check_total is not None
@@ -213,15 +212,16 @@ class TestHealthMetrics:
     @pytest.mark.asyncio
     async def test_health_metrics_updated_on_check(self):
         """Test that health metrics are updated when checks run."""
-        from app.routes.health import check_database, health_check_total
-        
         # Get initial count (may not exist)
         from prometheus_client import REGISTRY
+
+        from app.routes.health import check_database
+
         before_samples = list(REGISTRY.collect())
-        
+
         # Run a health check
         await check_database()
-        
+
         # Verify metrics were updated (new samples should exist)
         after_samples = list(REGISTRY.collect())
         assert len(after_samples) >= len(before_samples)
@@ -233,28 +233,28 @@ class TestHealthCheckConfiguration:
     def test_health_check_timeout_configured(self):
         """Test that health check timeout is configurable."""
         from app.settings import settings
-        
+
         assert hasattr(settings, "HEALTH_CHECK_TIMEOUT")
         assert settings.HEALTH_CHECK_TIMEOUT > 0
 
     def test_worker_stale_threshold_configured(self):
         """Test that worker stale threshold is configurable."""
         from app.settings import settings
-        
+
         assert hasattr(settings, "HEALTH_CHECK_WORKER_STALE_SECONDS")
         assert settings.HEALTH_CHECK_WORKER_STALE_SECONDS > 0
 
     def test_disk_min_free_configured(self):
         """Test that disk minimum free space is configurable."""
         from app.settings import settings
-        
+
         assert hasattr(settings, "HEALTH_CHECK_DISK_MIN_FREE_GB")
         assert settings.HEALTH_CHECK_DISK_MIN_FREE_GB > 0
 
     def test_critical_components_configured(self):
         """Test that critical components list is configurable."""
         from app.settings import settings
-        
+
         assert hasattr(settings, "HEALTH_CHECK_CRITICAL_COMPONENTS")
         assert isinstance(settings.HEALTH_CHECK_CRITICAL_COMPONENTS, str)
 
@@ -267,7 +267,7 @@ class TestHealthCheckResponseTimes:
         start = time.time()
         response = client.get("/health")
         duration = time.time() - start
-        
+
         assert response.status_code == 200
         assert duration < 0.1  # Should be very fast
 
@@ -276,18 +276,19 @@ class TestHealthCheckResponseTimes:
         start = time.time()
         response = client.get("/live")
         duration = time.time() - start
-        
+
         assert response.status_code == 200
         assert duration < 0.1  # Should be very fast
 
     def test_readiness_probe_reasonable_response(self, client: TestClient):
         """Test readiness probe responds within timeout (< 5s)."""
         start = time.time()
-        response = client.get("/ready")
+        client.get("/ready")
         duration = time.time() - start
-        
+
         # Should respond within configured timeout
         from app.settings import settings
+
         assert duration < settings.HEALTH_CHECK_TIMEOUT
 
 

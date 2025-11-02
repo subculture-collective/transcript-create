@@ -10,7 +10,8 @@ DO $$ BEGIN
         'diarizing',
         'persisting',
         'completed',
-        'failed'
+        'failed',
+        'expanded'
     );
 EXCEPTION
     WHEN duplicate_object THEN null;
@@ -67,6 +68,8 @@ CREATE INDEX IF NOT EXISTS transcripts_video_id_idx ON transcripts(video_id);
 CREATE TABLE IF NOT EXISTS segments (
     id BIGSERIAL PRIMARY KEY,
     video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    transcript_id UUID REFERENCES transcripts(id) ON DELETE CASCADE,
+    idx INT,
     start_ms INT NOT NULL,
     end_ms INT NOT NULL,
     text TEXT NOT NULL,
@@ -99,6 +102,22 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS segments_text_tsv_idx ON segments USING GIN (text_tsv);
+
+-- Set video_id automatically when only transcript_id is provided on insert
+CREATE OR REPLACE FUNCTION segments_set_video_from_transcript() RETURNS trigger LANGUAGE plpgsql AS $set_video$
+BEGIN
+    IF NEW.transcript_id IS NOT NULL AND NEW.video_id IS NULL THEN
+        SELECT t.video_id INTO NEW.video_id FROM transcripts t WHERE t.id = NEW.transcript_id;
+    END IF;
+    RETURN NEW;
+END
+$set_video$;
+
+DO $$ BEGIN
+    CREATE TRIGGER segments_set_video_from_transcript_tr
+    BEFORE INSERT ON segments
+    FOR EACH ROW EXECUTE FUNCTION segments_set_video_from_transcript();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---
 -- YouTube auto-generated transcript storage

@@ -1,8 +1,8 @@
+import logging
 import os
-import time
 import shlex
 import subprocess
-import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 

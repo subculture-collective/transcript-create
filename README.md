@@ -313,8 +313,42 @@ Videos
 
 - `GET /videos/{id}` → details
 - `GET /videos/{id}/transcript` → merged segments (JSON)
+  - `?mode=raw` (default) → raw Whisper segments
+  - `?mode=cleaned` → segments with cleanup (filler removal, punctuation, normalization)
+  - `?mode=formatted` → fully formatted text with speaker labels and paragraphs
 - `GET /videos/{id}/transcript.(srt|vtt|pdf)`
 - `GET /videos/{id}/youtube-transcript.(json|srt|vtt)`
+
+**Transcript Modes:**
+The `/videos/{id}/transcript` endpoint supports three modes via the `mode` query parameter:
+
+1. **raw** (default): Returns raw Whisper-generated segments without any processing
+   ```bash
+   curl http://localhost:8000/videos/{id}/transcript
+   # or explicitly
+   curl http://localhost:8000/videos/{id}/transcript?mode=raw
+   ```
+
+2. **cleaned**: Returns segments with cleanup applied (filler removal, normalization, punctuation)
+   ```bash
+   curl http://localhost:8000/videos/{id}/transcript?mode=cleaned
+   ```
+   Response includes:
+   - `text_raw`: Original text
+   - `text_cleaned`: Text after cleanup
+   - `cleanup_config`: Configuration used
+   - `stats`: Cleanup statistics (fillers removed, punctuation added, etc.)
+
+3. **formatted**: Returns fully formatted text with speaker labels and paragraph structure
+   ```bash
+   curl http://localhost:8000/videos/{id}/transcript?mode=formatted
+   ```
+   Response includes:
+   - `text`: Formatted transcript text
+   - `format`: Formatting style (inline/dialogue/structured)
+   - `cleanup_config`: Configuration used
+
+All modes return responses with ETags for efficient caching. ETags are unique per mode to avoid stale caches.
 
 Search
 

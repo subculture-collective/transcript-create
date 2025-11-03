@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 import subprocess
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -9,23 +8,9 @@ from urllib.request import Request, urlopen
 from app.logging_config import get_logger
 from app.settings import settings
 from worker.po_token_manager import TokenType, get_token_manager
+from worker.token_utils import redact_tokens_from_command
 
 logger = get_logger(__name__)
-
-
-def _redact_tokens_from_command(cmd: List[str]) -> str:
-    """Redact PO token values from command for safe logging.
-
-    Args:
-        cmd: Command list
-
-    Returns:
-        Command string with tokens redacted
-    """
-    cmd_str = " ".join(cmd)
-    # Redact po_token values: po_token=type:TOKEN -> po_token=type:***REDACTED***
-    cmd_str = re.sub(r"(po_token=\w+:)[^\s;]+", r"\1***REDACTED***", cmd_str)
-    return cmd_str
 
 
 @dataclass
@@ -120,10 +105,11 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
         try:
             logger.info(
                 f"Fetching metadata with client: {client_name}",
-                extra={"command": _redact_tokens_from_command(cmd)}
+                extra={"command": redact_tokens_from_command(cmd)}
             )
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            return json.loads(result.stdout)
+            metadata_json = result.stdout
+            return json.loads(metadata_json)
         except subprocess.CalledProcessError as e:
             last_error = e
             stderr = e.stderr or ""
@@ -132,7 +118,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
             stderr_lower = stderr.lower()
             is_token_error = (
                 ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
-                or ("403" in stderr)
+                or ("403" in stderr_lower)
                 or ("token" in stderr_lower and "expired" in stderr_lower)
             )
 

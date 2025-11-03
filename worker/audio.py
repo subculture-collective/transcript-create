@@ -1,5 +1,4 @@
 import logging
-import re
 import shlex
 import subprocess
 import time
@@ -10,23 +9,9 @@ from typing import List, Optional
 from app.logging_config import get_logger
 from app.settings import settings
 from worker.po_token_manager import TokenType, get_token_manager
+from worker.token_utils import redact_tokens_from_command
 
 logger = get_logger(__name__)
-
-
-def _redact_tokens_from_command(cmd: List[str]) -> str:
-    """Redact PO token values from command for safe logging.
-
-    Args:
-        cmd: Command list
-
-    Returns:
-        Command string with tokens redacted
-    """
-    cmd_str = " ".join(cmd)
-    # Redact po_token values: po_token=type:TOKEN -> po_token=type:***REDACTED***
-    cmd_str = re.sub(r"(po_token=\w+:)[^\s;]+", r"\1***REDACTED***", cmd_str)
-    return cmd_str
 
 
 @dataclass
@@ -247,7 +232,7 @@ def download_audio(url: str, dest_dir: Path) -> Path:
                 extra={
                     "client": strategy.name,
                     "attempt": try_idx,
-                    "command": _redact_tokens_from_command(cmd),
+                    "command": redact_tokens_from_command(cmd),
                 },
             )
 
@@ -292,7 +277,7 @@ def download_audio(url: str, dest_dir: Path) -> Path:
                     # Explicit PO token errors
                     ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
                     # 403 errors in stderr
-                    or ("403" in last_stderr)
+                    or ("403" in stderr_lower)
                     # Auth/forbidden errors that might be token-related, but only if "token" mentioned
                     or (error_class in ["forbidden", "authentication_required"] and "token" in stderr_lower)
                 )

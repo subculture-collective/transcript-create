@@ -39,6 +39,20 @@ class Settings(BaseSettings):
     YTDLP_REQUIRE_JS_RUNTIME: bool = True  # Require JS runtime validation at startup
     YTDLP_JS_RUNTIME_HINT: str = ""  # Optional custom hint for installation instructions
 
+    # yt-dlp client fallback strategy configuration
+    # Client order for fallback (comma-separated): web_safari, ios, android, tv
+    YTDLP_CLIENT_ORDER: str = "web_safari,ios,android,tv"
+    # Enable/disable specific clients (comma-separated list of disabled clients)
+    YTDLP_CLIENTS_DISABLED: str = ""
+    # Path to cookies file for yt-dlp (Netscape format)
+    YTDLP_COOKIES_PATH: str = ""
+    # Number of retry attempts per client strategy
+    YTDLP_TRIES_PER_CLIENT: int = 2
+    # Sleep time between retries within same client (seconds)
+    YTDLP_RETRY_SLEEP: float = 1.0
+    # Additional extractor args (space-separated, applied to all clients)
+    YTDLP_EXTRA_ARGS: str = ""
+
     # Search backend toggle: 'postgres' (default) or 'opensearch'
     SEARCH_BACKEND: str = "postgres"
     # OpenSearch settings

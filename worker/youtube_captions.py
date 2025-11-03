@@ -25,10 +25,68 @@ class YTCaptionTrack:
     ext: str  # 'json3', 'vtt', etc.
 
 
+def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
+    """Build list of client strategies for metadata extraction.
+
+    Returns list of (client_name, extractor_args) tuples.
+    """
+    from app.settings import settings
+    from worker.ytdlp_client_utils import get_client_extractor_args
+
+    strategies = []
+    client_order = [c.strip() for c in settings.YTDLP_CLIENT_ORDER.split(",") if c.strip()]
+    disabled_clients = set(c.strip() for c in settings.YTDLP_CLIENTS_DISABLED.split(",") if c.strip())
+
+    for client in client_order:
+        if client in disabled_clients:
+            continue
+
+        extractor_args = get_client_extractor_args(client)
+        if extractor_args:
+            strategies.append((client, extractor_args))
+        else:
+            logger.warning(f"Unknown YTDLP client '{client}' in YTDLP_CLIENT_ORDER; skipping.")
+
+    if not strategies:
+        strategies.append(("default", []))
+
+    return strategies
+
+
 def _yt_dlp_json(url: str) -> Dict[str, Any]:
-    """Return yt-dlp JSON metadata for a YouTube URL."""
-    meta = subprocess.check_output(["yt-dlp", "-J", url])
-    return json.loads(meta)
+    """Return yt-dlp JSON metadata for a YouTube URL using client fallback strategy."""
+    from pathlib import Path
+
+    from app.settings import settings
+
+    strategies = _build_metadata_strategies()
+
+    last_error = None
+    for client_name, extractor_args in strategies:
+        cmd = ["yt-dlp", "-J"]
+        cmd.extend(extractor_args)
+
+        # Add cookies if configured
+        if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
+            cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
+
+        cmd.append(url)
+
+        try:
+            logger.info(f"Fetching metadata with client: {client_name}")
+            meta = subprocess.check_output(cmd, stderr=subprocess.PIPE, text=True)
+            return json.loads(meta)
+        except subprocess.CalledProcessError as e:
+            last_error = e
+            logger.warning(f"Metadata fetch failed with {client_name}: {e.returncode}")
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Metadata fetch raised exception with {client_name}: {e}")
+
+    # All strategies failed
+    if last_error:
+        raise last_error
+    raise RuntimeError("Failed to fetch metadata with all client strategies")
 
 
 def _pick_auto_caption(data: dict) -> Optional[YTCaptionTrack]:

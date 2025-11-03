@@ -1,5 +1,4 @@
 import logging
-import os
 import shlex
 import subprocess
 import time
@@ -8,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from app.logging_config import get_logger
+from app.settings import settings
 
 logger = get_logger(__name__)
 
@@ -18,7 +18,110 @@ class Chunk:
     offset: float  # seconds
 
 
-def _yt_dlp_cmd(base_out: Path, url: str, extra: Optional[List[str]] = None) -> List[str]:
+@dataclass
+class ClientStrategy:
+    """Defines a YouTube client strategy for yt-dlp."""
+
+    name: str
+    extractor_args: List[str]
+    headers: List[str]
+    description: str
+
+
+def _get_user_agent(client: str = "web_safari") -> str:
+    """Return appropriate user agent for a given client."""
+    user_agents = {
+        "web_safari": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        ),
+        "ios": "com.google.ios.youtube/19.09.3 (iPhone14,5; U; CPU iOS 15_6 like Mac OS X)",
+        "android": "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip",
+        "tv": "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version",
+    }
+    return user_agents.get(client, user_agents["web_safari"])
+
+
+def _build_client_strategies() -> List[ClientStrategy]:
+    """Build list of client strategies based on settings."""
+    from worker.ytdlp_client_utils import get_client_extractor_args
+
+    # Parse client order from settings
+    client_order = [c.strip() for c in settings.YTDLP_CLIENT_ORDER.split(",") if c.strip()]
+    disabled_clients = set(c.strip() for c in settings.YTDLP_CLIENTS_DISABLED.split(",") if c.strip())
+
+    # Client descriptions
+    client_descriptions = {
+        "web_safari": "Safari web client with HLS streaming",
+        "ios": "iOS mobile client",
+        "android": "Android mobile client",
+        "tv": "TV embedded client (safe fallback)",
+    }
+
+    strategies = []
+
+    for client in client_order:
+        if client in disabled_clients:
+            logger.debug(f"Skipping disabled client: {client}")
+            continue
+
+        extractor_args = get_client_extractor_args(client)
+        if extractor_args:
+            headers = ["--user-agent", _get_user_agent(client)]
+            # Add Referer header for web_safari
+            if client == "web_safari":
+                headers.extend(["--add-header", "Referer:https://www.youtube.com"])
+
+            strategies.append(
+                ClientStrategy(
+                    name=client,
+                    extractor_args=extractor_args,
+                    headers=headers,
+                    description=client_descriptions.get(client, f"{client} client"),
+                )
+            )
+        else:
+            logger.warning(f"Unknown client type in YTDLP_CLIENT_ORDER: {client}")
+
+    if not strategies:
+        # Fallback to default strategy if none configured
+        logger.warning("No client strategies configured, using default web_safari")
+        strategies.append(
+            ClientStrategy(
+                name="web_safari",
+                extractor_args=["--extractor-args", "youtube:player_client=web_safari"],
+                headers=[
+                    "--user-agent",
+                    _get_user_agent("web_safari"),
+                    "--add-header",
+                    "Referer:https://www.youtube.com",
+                ],
+                description="Safari web client with HLS streaming (default)",
+            )
+        )
+
+    return strategies
+
+
+def _classify_error(returncode: int, stderr: str = "") -> str:
+    """Classify yt-dlp error for logging."""
+    stderr_lower = stderr.lower()
+    if "unavailable" in stderr_lower or "private" in stderr_lower:
+        return "video_unavailable"
+    elif "sign in" in stderr_lower or "bot" in stderr_lower:
+        return "authentication_required"
+    elif "throttl" in stderr_lower:
+        return "throttling"
+    elif "403" in stderr_lower or "forbidden" in stderr_lower:
+        return "forbidden"
+    elif returncode == 1:
+        return "generic_error"
+    else:
+        return f"error_code_{returncode}"
+
+
+def _yt_dlp_cmd(base_out: Path, url: str, strategy: Optional[ClientStrategy] = None) -> List[str]:
+    """Build yt-dlp command with optional client strategy."""
     cmd = [
         "yt-dlp",
         "-v",
@@ -29,74 +132,146 @@ def _yt_dlp_cmd(base_out: Path, url: str, extra: Optional[List[str]] = None) -> 
         # be nice to YouTube infra
         "--sleep-requests",
         "1",
-        # Retry a few times (-R is the stable alias for --retries)
+        # Retry a few times internally (-R is the stable alias for --retries)
         "-R",
         "3",
     ]
-    # allow user-provided extra args (space-separated string)
-    ytdlp_extra = os.getenv("YTDLP_EXTRA_ARGS", "").strip()
-    if ytdlp_extra:
+
+    # Add client strategy args
+    if strategy:
+        cmd.extend(strategy.extractor_args)
+        cmd.extend(strategy.headers)
+
+    # Add cookies if configured
+    if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
+        cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
+
+    # Allow user-provided extra args (from settings)
+    if settings.YTDLP_EXTRA_ARGS:
         try:
-            cmd.extend(shlex.split(ytdlp_extra))
+            cmd.extend(shlex.split(settings.YTDLP_EXTRA_ARGS))
         except Exception:
             # fallback to raw split
-            cmd.extend(ytdlp_extra.split())
-    if extra:
-        cmd.extend(extra)
+            cmd.extend(settings.YTDLP_EXTRA_ARGS.split())
+
     cmd.append(url)
     return cmd
 
 
 def download_audio(url: str, dest_dir: Path) -> Path:
+    """Download audio from YouTube URL with client fallback strategy.
+
+    Tries each configured client strategy in order until one succeeds.
+    Logs structured information about attempts and failures.
+    """
     out = dest_dir / "raw.m4a"
-    attempts: list[tuple[str, list[str]]] = []
-    # 1) default
-    attempts.append(("default", []))
-    # 2) try iOS client
-    attempts.append(("ios-client", ["--extractor-args", "youtube:player_client=ios"]))
-    # 3) try android client
-    attempts.append(("android-client", ["--extractor-args", "youtube:player_client=android"]))
-    # 4) add UA + Referer headers
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36"
-    attempts.append(("ua+referer", ["--user-agent", ua, "--add-header", "Referer:https://www.youtube.com"]))
-    # 5) use cookies if provided
-    cookies_path = os.getenv("YTDLP_COOKIES")
-    if cookies_path and Path(cookies_path).exists():
-        attempts.append(("cookies", ["--cookies", cookies_path]))
+    strategies = _build_client_strategies()
 
     last_err: Exception | None = None
-    per_attempt_tries = int(os.getenv("YTDLP_TRIES", "2") or "2")
-    sleep_between = float(os.getenv("YTDLP_TRY_SLEEP", "1") or "1")
-    for label, extra in attempts:
-        cmd = _yt_dlp_cmd(out, url, extra)
-        for try_idx in range(1, per_attempt_tries + 1):
+    last_stderr: str = ""
+
+    for strategy_idx, strategy in enumerate(strategies):
+        logger.info(
+            "Attempting download with client strategy",
+            extra={
+                "client": strategy.name,
+                "description": strategy.description,
+                "url": url,
+            },
+        )
+
+        for try_idx in range(1, settings.YTDLP_TRIES_PER_CLIENT + 1):
+            cmd = _yt_dlp_cmd(out, url, strategy)
             logger.info(
                 "Running yt-dlp command",
-                extra={"attempt": label, "try": try_idx, "command": " ".join(cmd)},
+                extra={
+                    "client": strategy.name,
+                    "attempt": try_idx,
+                    "command": " ".join(cmd),
+                },
             )
+
             try:
-                subprocess.check_call(cmd)
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                # Calculate total attempts across all strategies
+                total_attempts_made = try_idx + (strategy_idx * settings.YTDLP_TRIES_PER_CLIENT)
+
+                # Log stderr if present even on success (may contain warnings)
+                if result.stderr:
+                    logger.debug(
+                        "yt-dlp stderr output",
+                        extra={
+                            "client": strategy.name,
+                            "stderr_snippet": result.stderr[:200],
+                        },
+                    )
+
+                logger.info(
+                    "Download succeeded",
+                    extra={
+                        "client": strategy.name,
+                        "attempt": try_idx,
+                        "total_attempts": total_attempts_made,
+                    },
+                )
                 return out
             except subprocess.CalledProcessError as e:
                 last_err = e
+                last_stderr = e.stderr or ""
+                error_class = _classify_error(e.returncode, last_stderr)
+
                 logger.warning(
                     "yt-dlp attempt failed",
-                    extra={"attempt": label, "try": try_idx, "returncode": e.returncode},
+                    extra={
+                        "client": strategy.name,
+                        "attempt": try_idx,
+                        "returncode": e.returncode,
+                        "error_classification": error_class,
+                        "stderr_snippet": last_stderr[:200] if last_stderr else "",
+                    },
                 )
-            except Exception as e:  # network or other unexpected
+            except Exception as e:
                 last_err = e
                 logger.warning(
                     "yt-dlp attempt raised exception",
-                    extra={"attempt": label, "try": try_idx, "error": str(e)},
+                    extra={
+                        "client": strategy.name,
+                        "attempt": try_idx,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
                 )
-            # brief pause before retry within the same attempt profile
-            if try_idx < per_attempt_tries:
-                time.sleep(sleep_between)
 
-    # If all attempts failed, raise the last error
+            # Brief pause before retry within the same client
+            if try_idx < settings.YTDLP_TRIES_PER_CLIENT:
+                time.sleep(settings.YTDLP_RETRY_SLEEP)
+
+        # Log failure for this client before moving to next
+        logger.info(
+            "Client strategy exhausted, trying next",
+            extra={
+                "client": strategy.name,
+                "attempts": settings.YTDLP_TRIES_PER_CLIENT,
+            },
+        )
+
+    # All strategies failed
+    logger.error(
+        "All client strategies failed",
+        extra={
+            "total_clients_tried": len(strategies),
+            "clients": [s.name for s in strategies],
+            "url": url,
+        },
+    )
+
     if last_err:
         raise last_err
-    # Safety (should not reach)
     raise RuntimeError("yt-dlp failed with no captured exception")
 
 

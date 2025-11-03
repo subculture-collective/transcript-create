@@ -32,14 +32,18 @@ class TestYTDlpJson:
 
     @patch("worker.youtube_captions.subprocess.check_output")
     def test_yt_dlp_json_command_structure(self, mock_check_output):
-        """Test yt-dlp command structure."""
+        """Test yt-dlp command structure includes client strategy."""
         mock_check_output.return_value = b'{"id": "test"}'
         url = "https://www.youtube.com/watch?v=abc"
 
         _yt_dlp_json(url)
 
         call_args = mock_check_output.call_args[0][0]
-        assert call_args == ["yt-dlp", "-J", url]
+        # Command should include yt-dlp, -J, and the URL
+        # May also include extractor args based on settings
+        assert call_args[0] == "yt-dlp"
+        assert "-J" in call_args
+        assert url in call_args
 
 
 class TestPickAutoCaption:

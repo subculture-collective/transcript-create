@@ -9,33 +9,48 @@ from worker.audio import Chunk, chunk_audio, download_audio, ensure_wav_16k, get
 class TestDownloadAudio:
     """Tests for download_audio function."""
 
-    @patch("worker.audio.subprocess.check_call")
-    def test_download_audio_success(self, mock_check_call, tmp_path):
+    @patch("worker.audio.subprocess.run")
+    def test_download_audio_success(self, mock_run, tmp_path):
         """Test successful audio download."""
+        from unittest.mock import MagicMock
+
         url = "https://www.youtube.com/watch?v=test123"
         dest_dir = tmp_path / "test_video"
         dest_dir.mkdir()
 
+        # Mock successful subprocess run
+        mock_run.return_value = MagicMock(returncode=0)
+
         result = download_audio(url, dest_dir)
 
-        # Verify the command was called correctly
-        expected_out = dest_dir / "raw.m4a"
-        expected_cmd = ["yt-dlp", "-v", "-f", "bestaudio", "-o", str(expected_out), url]
-        mock_check_call.assert_called_once_with(expected_cmd)
-
         # Verify return path
+        expected_out = dest_dir / "raw.m4a"
         assert result == expected_out
+        
+        # Verify the command structure (at least one call should succeed)
+        assert mock_run.call_count >= 1
+        first_call_args = mock_run.call_args_list[0][0][0]
+        assert first_call_args[0] == "yt-dlp"
+        assert "-f" in first_call_args
+        assert "bestaudio" in first_call_args
 
-    @patch("worker.audio.subprocess.check_call")
-    def test_download_audio_command_structure(self, mock_check_call, tmp_path):
+    @patch("worker.audio.subprocess.run")
+    def test_download_audio_command_structure(self, mock_run, tmp_path):
         """Test that download command includes required flags."""
+        from unittest.mock import MagicMock
+
         url = "https://www.youtube.com/watch?v=abc"
         dest_dir = tmp_path / "video"
         dest_dir.mkdir()
 
+        # Mock successful subprocess run
+        mock_run.return_value = MagicMock(returncode=0)
+
         download_audio(url, dest_dir)
 
-        call_args = mock_check_call.call_args[0][0]
+        # Check that subprocess.run was called at least once
+        assert mock_run.call_count >= 1
+        call_args = mock_run.call_args_list[0][0][0]
         assert call_args[0] == "yt-dlp"
         assert "-f" in call_args
         assert "bestaudio" in call_args

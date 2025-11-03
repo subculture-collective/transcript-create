@@ -1,6 +1,6 @@
 """Pydantic models for API requests and responses."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 from uuid import UUID
 
@@ -158,7 +158,7 @@ class CleanedTranscriptResponse(BaseModel):
     segments: List[CleanedSegment]
     cleanup_config: CleanupConfig
     stats: CleanupStats
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class FormattedTranscriptResponse(BaseModel):
@@ -168,4 +168,4 @@ class FormattedTranscriptResponse(BaseModel):
     text: str
     format: Literal["inline", "dialogue", "structured"]
     cleanup_config: CleanupConfig
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

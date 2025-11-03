@@ -178,7 +178,7 @@ export class TranscriptClient {
     videoId: string,
     mode: TranscriptMode = 'raw'
   ): Promise<TranscriptResponse | CleanedTranscriptResponse | FormattedTranscriptResponse> {
-    const searchParams: Record<string, string> = mode !== 'raw' ? { mode } : {};
+    const searchParams: Record<string, string> = { mode };
     return this.request(`videos/${videoId}/transcript`, { searchParams });
   }
 

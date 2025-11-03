@@ -74,8 +74,8 @@ def get_transcript(
         "raw",
         description="Transcript mode: raw (default), cleaned (with cleanup), or formatted (with paragraphs)",
     ),
-    response: Response = None,
     db=Depends(get_db),
+    response: Response = None,
 ):
     """Get the Whisper-generated transcript for a video."""
     # Check if video exists

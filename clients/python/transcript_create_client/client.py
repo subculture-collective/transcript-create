@@ -318,7 +318,7 @@ class TranscriptClient:
             NotFoundError: Video not found
             APIError: API error
         """
-        params = {"mode": mode} if mode != "raw" else {}
+        params = {"mode": mode}
         response = await self._request("GET", f"/videos/{video_id}/transcript", params=params)
         data = response.json()
 

@@ -1,25 +1,32 @@
 import uuid
+from typing import Literal, Union
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
 from .. import crud
 from ..db import get_db
 from ..exceptions import TranscriptNotReadyError, VideoNotFoundError
 from ..schemas import (
+    CleanedSegment,
+    CleanedTranscriptResponse,
+    CleanupConfig,
+    CleanupStats,
     ErrorResponse,
+    FormattedTranscriptResponse,
     Segment,
     TranscriptResponse,
     VideoInfo,
     YouTubeTranscriptResponse,
     YTSegment,
 )
+from worker.formatter import TranscriptFormatter
 
 router = APIRouter(prefix="", tags=["Videos"])
 
 
 @router.get(
     "/videos/{video_id}/transcript",
-    response_model=TranscriptResponse,
+    response_model=Union[TranscriptResponse, CleanedTranscriptResponse, FormattedTranscriptResponse],
     summary="Get video transcript",
     description="""
     Retrieve the Whisper-generated transcript for a video with optional speaker diarization.
@@ -31,6 +38,13 @@ router = APIRouter(prefix="", tags=["Videos"])
     - Audio is transcribed using Whisper (faster-whisper or openai-whisper backend)
     - Optional speaker diarization using pyannote.audio
     - Segments are ordered chronologically by start time
+
+    **Modes:**
+    - `raw` (default): Returns raw Whisper-generated segments without any processing
+    - `cleaned`: Returns segments with cleanup applied (filler removal, normalization, punctuation)
+    - `formatted`: Returns fully formatted text with speaker labels and paragraph structure
+
+    **Note:** Responses are cached per mode. ETags reflect the mode to avoid stale caches.
     """,
     responses={
         200: {"description": "Transcript retrieved successfully"},
@@ -53,7 +67,15 @@ router = APIRouter(prefix="", tags=["Videos"])
         },
     },
 )
-def get_transcript(video_id: uuid.UUID, db=Depends(get_db)):
+def get_transcript(
+    video_id: uuid.UUID,
+    mode: Literal["raw", "cleaned", "formatted"] = Query(
+        "raw",
+        description="Transcript mode: raw (default), cleaned (with cleanup), or formatted (full formatting with paragraphs)",
+    ),
+    response: Response = None,
+    db=Depends(get_db),
+):
     """Get the Whisper-generated transcript for a video."""
     # Check if video exists
     video = crud.get_video(db, video_id)
@@ -65,9 +87,135 @@ def get_transcript(video_id: uuid.UUID, db=Depends(get_db)):
         # No segments found; inferring that the video is still processing
         raise TranscriptNotReadyError(str(video_id), "processing")
 
-    return TranscriptResponse(
-        video_id=video_id, segments=[Segment(start_ms=r[0], end_ms=r[1], text=r[2], speaker_label=r[3]) for r in segs]
-    )
+    # Convert raw database segments to dicts for formatter
+    segments = [
+        {"start": r[0], "end": r[1], "text": r[2], "speaker": r[3], "speaker_label": r[3]} for r in segs
+    ]
+
+    # Set ETag based on mode and video_id for cache differentiation
+    etag = f'"{video_id}-{mode}"'
+    if response:
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=3600"
+
+    # Handle different modes
+    if mode == "raw":
+        # Return raw segments without any processing
+        return TranscriptResponse(
+            video_id=video_id,
+            segments=[Segment(start_ms=r[0], end_ms=r[1], text=r[2], speaker_label=r[3]) for r in segs],
+        )
+
+    elif mode == "cleaned":
+        # Apply cleanup transformations but preserve segment structure
+        formatter = TranscriptFormatter(
+            config={
+                "enabled": True,
+                "normalize_unicode": True,
+                "normalize_whitespace": True,
+                "remove_special_tokens": True,
+                "remove_fillers": True,
+                "filler_level": 1,
+                "add_sentence_punctuation": True,
+                "punctuation_mode": "rule-based",
+                "capitalize_sentences": True,
+                "fix_all_caps": True,
+                "detect_hallucinations": True,
+                "segment_by_sentences": False,  # Keep original segment boundaries
+                "merge_short_segments": False,
+                "speaker_format": "structured",
+            }
+        )
+
+        formatted_segments = formatter.format_segments(segments)
+
+        # Track statistics
+        stats = CleanupStats(
+            fillers_removed=sum(1 for s in segments if any(f in s["text"].lower() for f in ["um", "uh", "er"])),
+            special_tokens_removed=sum(
+                1 for s in segments if any(t in s["text"] for t in ["[MUSIC]", "[APPLAUSE]", "[LAUGHTER]"])
+            ),
+            segments_merged=0,
+            segments_split=0,
+            hallucinations_detected=len(segments) - len(formatted_segments),
+            punctuation_added=sum(1 for s in formatted_segments if s["text"].endswith(".")),
+        )
+
+        # Convert to cleaned segments with both raw and cleaned text
+        cleaned_segs = []
+        for i, seg in enumerate(formatted_segments):
+            # Find original text by matching timestamps
+            orig_text = next((s["text"] for s in segments if s["start"] == seg["start"]), seg["text"])
+            cleaned_segs.append(
+                CleanedSegment(
+                    start_ms=seg["start"],
+                    end_ms=seg["end"],
+                    text_raw=orig_text,
+                    text_cleaned=seg["text"],
+                    speaker_label=seg.get("speaker_label"),
+                    sentence_boundary=seg["text"].rstrip().endswith((".", "!", "?")),
+                    likely_hallucination=False,
+                )
+            )
+
+        cleanup_config = CleanupConfig(**formatter.config)
+
+        return CleanedTranscriptResponse(
+            video_id=video_id, segments=cleaned_segs, cleanup_config=cleanup_config, stats=stats
+        )
+
+    elif mode == "formatted":
+        # Apply full formatting with paragraph structure
+        formatter = TranscriptFormatter(
+            config={
+                "enabled": True,
+                "normalize_unicode": True,
+                "normalize_whitespace": True,
+                "remove_special_tokens": True,
+                "remove_fillers": True,
+                "filler_level": 2,
+                "add_sentence_punctuation": True,
+                "punctuation_mode": "rule-based",
+                "add_internal_punctuation": True,
+                "capitalize_sentences": True,
+                "fix_all_caps": True,
+                "detect_hallucinations": True,
+                "segment_by_sentences": True,
+                "merge_short_segments": True,
+                "speaker_format": "structured",
+                "min_segment_length_ms": 2000,
+                "max_gap_for_merge_ms": 1000,
+            }
+        )
+
+        formatted_segments = formatter.format_segments(segments)
+
+        # Build formatted text with speaker labels and paragraphs
+        text_lines = []
+        prev_speaker = None
+
+        for seg in formatted_segments:
+            speaker = seg.get("speaker_label") or seg.get("speaker")
+
+            # Add speaker label if changed
+            if speaker and speaker != prev_speaker:
+                if text_lines:
+                    text_lines.append("")  # Blank line between speakers
+                text_lines.append(f"{speaker}:")
+                prev_speaker = speaker
+
+            # Add the text
+            text_lines.append(seg["text"])
+
+        formatted_text = "\n".join(text_lines)
+        cleanup_config = CleanupConfig(**formatter.config)
+
+        return FormattedTranscriptResponse(
+            video_id=video_id,
+            text=formatted_text,
+            format="structured",
+            cleanup_config=cleanup_config,
+        )
 
 
 @router.get(

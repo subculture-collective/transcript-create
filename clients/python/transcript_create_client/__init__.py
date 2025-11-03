@@ -17,6 +17,11 @@ from .exceptions import (
     ValidationError,
 )
 from .models import (
+    CleanedSegment,
+    CleanedTranscriptResponse,
+    CleanupConfig,
+    CleanupStats,
+    FormattedTranscriptResponse,
     Job,
     JobCreate,
     JobStatus,
@@ -49,4 +54,9 @@ __all__ = [
     "TranscriptResponse",
     "VideoInfo",
     "YouTubeTranscriptResponse",
+    "CleanedSegment",
+    "CleanedTranscriptResponse",
+    "CleanupConfig",
+    "CleanupStats",
+    "FormattedTranscriptResponse",
 ]

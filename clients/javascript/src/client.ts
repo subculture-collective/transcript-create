@@ -4,13 +4,16 @@
 
 import ky, { type KyInstance, type Options as KyOptions } from 'ky';
 import type {
+  CleanedTranscriptResponse,
   ClientOptions,
+  FormattedTranscriptResponse,
   Job,
   JobCreateRequest,
   JobKind,
   SearchOptions,
   SearchResponse,
   SearchSource,
+  TranscriptMode,
   TranscriptResponse,
   VideoInfo,
   WaitOptions,
@@ -171,8 +174,12 @@ export class TranscriptClient {
   /**
    * Get video transcript
    */
-  async getTranscript(videoId: string): Promise<TranscriptResponse> {
-    return this.request<TranscriptResponse>(`videos/${videoId}/transcript`);
+  async getTranscript(
+    videoId: string,
+    mode: TranscriptMode = 'raw'
+  ): Promise<TranscriptResponse | CleanedTranscriptResponse | FormattedTranscriptResponse> {
+    const searchParams: Record<string, string> = mode !== 'raw' ? { mode } : {};
+    return this.request(`videos/${videoId}/transcript`, { searchParams });
   }
 
   /**

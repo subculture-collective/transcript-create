@@ -117,6 +117,16 @@ def run():
 
     logger.info("Worker service started", extra={"worker_id": WORKER_ID})
 
+    # Initialize PO token manager with default providers
+    from worker.po_token_manager import get_token_manager
+    from worker.po_token_providers import initialize_default_providers
+
+    token_manager = get_token_manager()
+    providers = initialize_default_providers()
+    for provider in providers:
+        token_manager.add_provider(provider)
+    logger.info("PO token manager initialized", extra={"provider_count": len(providers)})
+
     # Initialize worker info metrics
     setup_worker_info(
         whisper_model=settings.WHISPER_MODEL,

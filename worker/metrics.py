@@ -95,6 +95,44 @@ worker_info = Gauge(
     ["whisper_model", "whisper_backend", "force_gpu"],
 )
 
+# PO Token Metrics
+po_token_retrievals_total = Counter(
+    "po_token_retrievals_total",
+    "Total number of PO token retrievals",
+    ["token_type", "result"],  # result: success, failed, cached
+)
+
+po_token_provider_attempts_total = Counter(
+    "po_token_provider_attempts_total",
+    "Total number of provider attempts",
+    ["provider", "token_type"],
+)
+
+po_token_cache_hits_total = Counter(
+    "po_token_cache_hits_total",
+    "Total number of token cache hits",
+    ["token_type"],
+)
+
+po_token_cache_misses_total = Counter(
+    "po_token_cache_misses_total",
+    "Total number of token cache misses",
+    ["token_type"],
+)
+
+po_token_retrieval_latency_seconds = Histogram(
+    "po_token_retrieval_latency_seconds",
+    "Token retrieval latency in seconds",
+    ["provider", "token_type"],
+    buckets=(0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10),
+)
+
+po_token_failures_total = Counter(
+    "po_token_failures_total",
+    "Total number of token failures (invalidations)",
+    ["token_type", "reason"],
+)
+
 
 def setup_worker_info(whisper_model: str, whisper_backend: str, force_gpu: bool):
     """Set worker information metric."""

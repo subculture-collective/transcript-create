@@ -114,11 +114,15 @@ class POTokenCache:
         self._misses = 0
 
     def _make_key(self, token_type: TokenType, context: Optional[dict] = None) -> str:
-        """Generate cache key from token type and context."""
+        """Generate cache key from token type and context.
+        
+        Uses URL encoding to handle special characters in context values.
+        """
         if context is None:
             return f"{token_type.value}"
-        # Sort context keys for consistent cache keys
-        context_str = ":".join(f"{k}={v}" for k, v in sorted(context.items()))
+        # Sort context keys for consistent cache keys and URL-encode values
+        from urllib.parse import quote
+        context_str = ":".join(f"{quote(str(k))}={quote(str(v))}" for k, v in sorted(context.items()))
         return f"{token_type.value}:{context_str}"
 
     def get(self, token_type: TokenType, context: Optional[dict] = None) -> Optional[POToken]:

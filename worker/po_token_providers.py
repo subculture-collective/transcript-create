@@ -5,6 +5,7 @@ This module provides:
 - HTTPTokenProvider: External HTTP service for token generation
 """
 
+import json
 from typing import Optional
 
 import requests
@@ -106,8 +107,6 @@ class HTTPTokenProvider:
         try:
             params = {"type": token_type.value}
             if context:
-                import json
-
                 params["context"] = json.dumps(context)
 
             url = f"{self._base_url}/token"

@@ -264,15 +264,27 @@ def download_audio(url: str, dest_dir: Path) -> Path:
                 last_stderr = e.stderr or ""
                 error_class = _classify_error(e.returncode, last_stderr)
 
-                # Check if error indicates invalid/expired token
-                if "token" in last_stderr.lower() or "403" in last_stderr or "forbidden" in last_stderr.lower():
+                # Check if error indicates invalid/expired PO token
+                # Only mark tokens invalid for specific error patterns
+                stderr_lower = last_stderr.lower()
+                is_token_error = (
+                    # Explicit PO token errors
+                    ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
+                    # 403 errors specifically mentioning tokens
+                    or (e.returncode == 403 or "403" in last_stderr)
+                    # Authentication/forbidden errors that might be token-related
+                    or (error_class in ["forbidden", "authentication_required"])
+                )
+                
+                if is_token_error:
                     token_manager = get_token_manager()
-                    # Mark all token types as potentially invalid
-                    for token_type in [TokenType.PLAYER, TokenType.GVS, TokenType.SUBS]:
+                    # Mark only player and GVS tokens as potentially invalid
+                    # (most download failures involve these, not subs)
+                    for token_type in [TokenType.PLAYER, TokenType.GVS]:
                         token_manager.mark_token_invalid(token_type, reason=error_class)
                     logger.warning(
-                        "Possible token error detected, marking tokens invalid",
-                        extra={"error_classification": error_class}
+                        "Token-related error detected, marking player/gvs tokens invalid",
+                        extra={"error_classification": error_class, "returncode": e.returncode}
                     )
 
                 logger.warning(

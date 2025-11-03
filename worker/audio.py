@@ -1,12 +1,11 @@
 import logging
+import re
 import shlex
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
-
-import re
 
 from app.logging_config import get_logger
 from app.settings import settings
@@ -17,16 +16,16 @@ logger = get_logger(__name__)
 
 def _redact_tokens_from_command(cmd: List[str]) -> str:
     """Redact PO token values from command for safe logging.
-    
+
     Args:
         cmd: Command list
-        
+
     Returns:
         Command string with tokens redacted
     """
     cmd_str = " ".join(cmd)
     # Redact po_token values: po_token=type:TOKEN -> po_token=type:***REDACTED***
-    cmd_str = re.sub(r'(po_token=\w+:)[^\s;]+', r'\1***REDACTED***', cmd_str)
+    cmd_str = re.sub(r"(po_token=\w+:)[^\s;]+", r"\1***REDACTED***", cmd_str)
     return cmd_str
 
 
@@ -140,7 +139,7 @@ def _classify_error(returncode: int, stderr: str = "") -> str:
 
 def _get_po_tokens() -> dict[str, str]:
     """Get PO tokens from token manager.
-    
+
     Returns:
         Dictionary with available tokens keyed by type
     """
@@ -148,19 +147,19 @@ def _get_po_tokens() -> dict[str, str]:
     if not settings.PO_TOKEN_USE_FOR_AUDIO:
         logger.debug("PO token usage for audio disabled by feature flag")
         return {}
-    
+
     token_manager = get_token_manager()
     tokens = {}
-    
+
     # Try to get Player and GVS tokens for audio downloads
     for token_type in [TokenType.PLAYER, TokenType.GVS]:
         token = token_manager.get_token(token_type)
         if token:
             tokens[token_type.value] = token
-    
+
     if tokens:
         logger.debug("PO tokens available for audio download", extra={"token_types": list(tokens.keys())})
-    
+
     return tokens
 
 
@@ -194,7 +193,7 @@ def _yt_dlp_cmd(base_out: Path, url: str, strategy: Optional[ClientStrategy] = N
         token_args = []
         for token_type, token_value in po_tokens.items():
             token_args.append(f"po_token={token_type}:{token_value}")
-        
+
         if token_args:
             extractor_arg = "youtube:" + ";".join(token_args)
             cmd.extend(["--extractor-args", extractor_arg])
@@ -294,10 +293,10 @@ def download_audio(url: str, dest_dir: Path) -> Path:
                     ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
                     # 403 errors in stderr
                     or ("403" in last_stderr)
-                    # Authentication/forbidden errors that might be token-related, but only if "token" is mentioned in stderr
+                    # Auth/forbidden errors that might be token-related, but only if "token" mentioned
                     or (error_class in ["forbidden", "authentication_required"] and "token" in stderr_lower)
                 )
-                
+
                 if is_token_error:
                     token_manager = get_token_manager()
                     # Mark only player and GVS tokens as potentially invalid

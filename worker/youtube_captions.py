@@ -15,16 +15,16 @@ logger = get_logger(__name__)
 
 def _redact_tokens_from_command(cmd: List[str]) -> str:
     """Redact PO token values from command for safe logging.
-    
+
     Args:
         cmd: Command list
-        
+
     Returns:
         Command string with tokens redacted
     """
     cmd_str = " ".join(cmd)
     # Redact po_token values: po_token=type:TOKEN -> po_token=type:***REDACTED***
-    cmd_str = re.sub(r'(po_token=\w+:)[^\s;]+', r'\1***REDACTED***', cmd_str)
+    cmd_str = re.sub(r"(po_token=\w+:)[^\s;]+", r"\1***REDACTED***", cmd_str)
     return cmd_str
 
 
@@ -72,7 +72,7 @@ def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
 
 def _get_subs_token() -> Optional[str]:
     """Get Subs PO token from token manager.
-    
+
     Returns:
         Token string or None if unavailable
     """
@@ -80,15 +80,15 @@ def _get_subs_token() -> Optional[str]:
     if not settings.PO_TOKEN_USE_FOR_CAPTIONS:
         logger.debug("PO token usage for captions disabled by feature flag")
         return None
-    
+
     token_manager = get_token_manager()
     token = token_manager.get_token(TokenType.SUBS)
-    
+
     if token:
         logger.debug("Subs token available for caption fetch")
     else:
         logger.debug("No Subs token available")
-    
+
     return token
 
 
@@ -127,7 +127,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
         except subprocess.CalledProcessError as e:
             last_error = e
             stderr = e.stderr or ""
-            
+
             # Check if error indicates invalid/expired Subs token
             stderr_lower = stderr.lower()
             is_token_error = (
@@ -135,7 +135,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                 or ("403" in stderr)
                 or ("token" in stderr_lower and "expired" in stderr_lower)
             )
-            
+
             if is_token_error and subs_token:
                 token_manager = get_token_manager()
                 token_manager.mark_token_invalid(TokenType.SUBS, reason="metadata_fetch_failed")
@@ -143,7 +143,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                     "Subs token marked invalid during metadata fetch",
                     extra={"client": client_name, "returncode": e.returncode}
                 )
-            
+
             logger.warning(
                 f"Metadata fetch failed with {client_name}: {e.returncode}",
                 extra={"stderr_snippet": stderr[:200] if stderr else ""}

@@ -2,7 +2,7 @@
 
 import json
 import subprocess
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -52,7 +52,6 @@ class TestAudioTokenIntegration:
         call_args = mock_run.call_args_list[0][0][0]
 
         # Verify command includes PO tokens
-        cmd_str = " ".join(call_args)
         assert "--extractor-args" in call_args
         # Find extractor args values (there may be multiple)
         found_token_args = False
@@ -282,9 +281,6 @@ class TestCaptionTokenIntegration:
 
         # Verify command does not include token args when no token available
         call_args = mock_run.call_args_list[0][0][0]
-        cmd_str = " ".join(call_args)
-        # Count extractor-args occurrences (may have client strategy args)
-        extractor_count = call_args.count("--extractor-args")
         # If there are extractor args, they should not contain po_token=subs
         for i, arg in enumerate(call_args):
             if arg == "--extractor-args" and i + 1 < len(call_args):

@@ -25,14 +25,13 @@ class YTCaptionTrack:
     ext: str  # 'json3', 'vtt', etc.
 
 
-def _yt_dlp_json(url: str) -> Dict[str, Any]:
-    """Return yt-dlp JSON metadata for a YouTube URL using client fallback strategy."""
-    from pathlib import Path
+def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
+    """Build list of client strategies for metadata extraction.
 
+    Returns list of (client_name, extractor_args) tuples.
+    """
     from app.settings import settings
 
-    # Import client strategy building from audio module
-    # We'll build a simpler version for metadata extraction
     strategies = []
     client_order = [c.strip() for c in settings.YTDLP_CLIENT_ORDER.split(",") if c.strip()]
     disabled_clients = set(c.strip() for c in settings.YTDLP_CLIENTS_DISABLED.split(",") if c.strip())
@@ -51,6 +50,17 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
 
     if not strategies:
         strategies.append(("default", []))
+
+    return strategies
+
+
+def _yt_dlp_json(url: str) -> Dict[str, Any]:
+    """Return yt-dlp JSON metadata for a YouTube URL using client fallback strategy."""
+    from pathlib import Path
+
+    from app.settings import settings
+
+    strategies = _build_metadata_strategies()
 
     last_error = None
     for client_name, extractor_args in strategies:

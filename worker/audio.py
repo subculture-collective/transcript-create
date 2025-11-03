@@ -196,7 +196,7 @@ def download_audio(url: str, dest_dir: Path) -> Path:
     last_err: Exception | None = None
     last_stderr: str = ""
 
-    for strategy in strategies:
+    for strategy_idx, strategy in enumerate(strategies):
         logger.info(
             "Attempting download with client strategy",
             extra={
@@ -218,15 +218,25 @@ def download_audio(url: str, dest_dir: Path) -> Path:
             )
 
             try:
-                subprocess.run(
+                result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
                     check=True,
                 )
-                total_attempts_made = try_idx + sum(
-                    settings.YTDLP_TRIES_PER_CLIENT for _ in range(strategies.index(strategy))
-                )
+                # Calculate total attempts across all strategies
+                total_attempts_made = try_idx + (strategy_idx * settings.YTDLP_TRIES_PER_CLIENT)
+
+                # Log stderr if present even on success (may contain warnings)
+                if result.stderr:
+                    logger.debug(
+                        "yt-dlp stderr output",
+                        extra={
+                            "client": strategy.name,
+                            "stderr_snippet": result.stderr[:200],
+                        },
+                    )
+
                 logger.info(
                     "Download succeeded",
                     extra={

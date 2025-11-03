@@ -233,10 +233,31 @@ class TranscriptFormatter:
         return text.strip()
 
     def _fix_all_caps(self, text: str) -> str:
-        """Fix inappropriate all-caps text."""
+        """Fix inappropriate all-caps text, preserving acronyms."""
         # Only fix if entire text is caps and longer than 3 chars
         if len(text) > 3 and text.isupper():
-            return text.capitalize()
+            words = text.split()
+
+            def is_likely_acronym(word):
+                # Preserve words that are all uppercase and 2-4 chars (likely acronyms like NASA, FBI, USA)
+                # Longer words are probably just shouting, not acronyms
+                return 2 <= len(word) <= 4 and word.isupper()
+
+            if not words:
+                return text
+
+            # If more than 50% of words would be preserved as acronyms, treat the whole text as shouting
+            acronym_count = sum(1 for w in words if is_likely_acronym(w))
+            if acronym_count > len(words) / 2:
+                # Just capitalize normally
+                return text.capitalize()
+
+            # Otherwise, preserve acronyms
+            new_words = [w if is_likely_acronym(w) else w.lower() for w in words]
+            # Capitalize the first word (unless it's a preserved acronym)
+            if not is_likely_acronym(words[0]):
+                new_words[0] = new_words[0].capitalize()
+            return " ".join(new_words)
         return text
 
     def _add_sentence_punctuation(self, text: str) -> str:
@@ -255,10 +276,15 @@ class TranscriptFormatter:
     def _add_internal_punctuation(self, text: str) -> str:
         """Add commas and internal punctuation (simple heuristics)."""
         # Add comma after common conjunctions if missing
-        text = re.sub(r"\b(and|but|so|yet)\s+", r"\1, ", text)
+        text = re.sub(r"\b(and|but|so|yet)\s+(?!,)", r"\1, ", text)
 
-        # Add comma after introductory phrases
-        text = re.sub(r"^(however|therefore|thus|meanwhile|furthermore)\s+", r"\1, ", text, flags=re.IGNORECASE)
+        # Add comma after introductory phrases, but only if not already followed by punctuation
+        text = re.sub(
+            r"^(however|therefore|thus|meanwhile|furthermore)\s+(?![,;:\-])",
+            r"\1, ",
+            text,
+            flags=re.IGNORECASE,
+        )
 
         return text
 
@@ -304,7 +330,8 @@ class TranscriptFormatter:
             i = 0
             while i < len(sentences):
                 sentence = sentences[i]
-                if i + 1 < len(sentences) and sentences[i + 1].strip() in [".", "!", "?"]:
+                # Always append the punctuation (and whitespace) if present
+                if i + 1 < len(sentences):
                     sentence += sentences[i + 1]
                     i += 2
                 else:

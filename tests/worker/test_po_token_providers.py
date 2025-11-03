@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from worker.po_token_manager import TokenType
 from worker.po_token_providers import HTTPTokenProvider, ManualTokenProvider, initialize_default_providers
 

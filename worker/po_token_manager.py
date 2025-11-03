@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Protocol
+from urllib.parse import quote
 
 from app.logging_config import get_logger
 from app.settings import settings
@@ -65,11 +66,9 @@ class POTokenProvider(Protocol):
         Returns:
             Token string or None if unavailable
         """
-        ...
 
     def is_available(self) -> bool:
         """Check if provider is available and ready to provide tokens."""
-        ...
 
 
 @dataclass
@@ -121,7 +120,6 @@ class POTokenCache:
         if context is None:
             return f"{token_type.value}"
         # Sort context keys for consistent cache keys and URL-encode values
-        from urllib.parse import quote
         context_str = ":".join(f"{quote(str(k))}={quote(str(v))}" for k, v in sorted(context.items()))
         return f"{token_type.value}:{context_str}"
 

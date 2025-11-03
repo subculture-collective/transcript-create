@@ -303,10 +303,10 @@ Most yt-dlp operations need **player** and **GVS** tokens. Subtitle operations n
 Token failures are detected via:
 - HTTP 403 status codes
 - "token" keyword in error messages
-- "forbidden" keyword in error messages
+- "forbidden" keyword in error messages (only when "token" is also mentioned)
 
 When detected:
-- All token types are marked invalid (conservative approach)
+- Only PLAYER and GVS token types are marked invalid on download failures
 - Cooldown prevents immediate retry
 - Providers are consulted after cooldown
 

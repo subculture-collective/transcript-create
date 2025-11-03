@@ -1,9 +1,7 @@
 """Tests for PO token manager."""
 
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from worker.po_token_manager import POToken, POTokenCache, POTokenManager, TokenType
 

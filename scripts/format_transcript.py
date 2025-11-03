@@ -25,7 +25,6 @@ Usage:
 import argparse
 import json
 import sys
-import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -35,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, text
 
 from app.settings import settings
-from worker.formatter import TranscriptFormatter, format_transcript
+from worker.formatter import format_transcript
 
 
 def load_segments_from_file(filepath: str) -> List[Dict[str, Any]]:

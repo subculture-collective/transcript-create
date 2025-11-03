@@ -45,7 +45,7 @@ HALLUCINATION_PATTERNS = [
 class TranscriptFormatter:
     """
     Format transcript segments with configurable transformations.
-    
+
     Supports:
     - Unicode normalization
     - Whitespace cleanup
@@ -60,13 +60,13 @@ class TranscriptFormatter:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Initialize formatter with configuration.
-        
+
         Args:
             config: Optional dict to override settings. If None, uses app settings.
         """
         # Load defaults first
         self.config = self._load_default_config()
-        
+
         # Override with provided config if any
         if config:
             self.config.update(config)
@@ -101,16 +101,14 @@ class TranscriptFormatter:
             "language_specific_rules": settings.CLEANUP_LANGUAGE_SPECIFIC_RULES,
         }
 
-    def format_segments(
-        self, segments: List[Dict[str, Any]], language: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    def format_segments(self, segments: List[Dict[str, Any]], language: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Format a list of transcript segments.
-        
+
         Args:
             segments: List of segment dicts with 'text', 'start', 'end', optional 'speaker'
             language: Optional language code for language-specific rules
-            
+
         Returns:
             List of formatted segments
         """
@@ -300,7 +298,6 @@ class TranscriptFormatter:
                 continue
 
             ms_per_char = duration_ms / chars_total
-            current_pos = 0
             current_start = seg["start"]
 
             # Reconstruct sentences and create segments
@@ -353,7 +350,7 @@ class TranscriptFormatter:
 
             # Check speaker compatibility (don't merge different speakers)
             same_speaker = current.get("speaker") == next_seg.get("speaker")
-            
+
             # Only merge if no speaker or same speaker
             if current.get("speaker") and next_seg.get("speaker") and not same_speaker:
                 should_merge = False
@@ -418,12 +415,12 @@ def format_transcript(
 ) -> List[Dict[str, Any]]:
     """
     Convenience function to format transcript segments.
-    
+
     Args:
         segments: List of segment dicts
         language: Optional language code
         config: Optional config dict to override settings
-        
+
     Returns:
         Formatted segments
     """

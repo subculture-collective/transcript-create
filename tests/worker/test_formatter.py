@@ -726,7 +726,7 @@ class TestRegressionFixtures:
 
         assert len(result) == len(expected_formatted_output)
 
-        for i, (actual, expected) in enumerate(zip(result, expected_formatted_output)):
+        for i, (actual, expected) in enumerate(zip(result, expected_formatted_output, strict=True)):
             # Check text is formatted correctly
             assert actual["text"] == expected["text"], f"Mismatch at segment {i}"
             # Check timing is preserved

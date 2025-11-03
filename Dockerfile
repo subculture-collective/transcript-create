@@ -44,8 +44,16 @@ RUN apt-get update && \
         pkg-config \
         git \
         curl \
+        unzip \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Install Deno for yt-dlp JavaScript runtime requirement
+# yt-dlp requires a JS runtime (Deno/Node/Bun/QuickJS) to solve YouTube challenges
+RUN curl -fsSL https://deno.land/install.sh | sh && \
+    mv /root/.deno/bin/deno /usr/local/bin/deno && \
+    chmod +x /usr/local/bin/deno && \
+    deno --version
 
 # =============================================================================
 # Stage 2: Python dependencies

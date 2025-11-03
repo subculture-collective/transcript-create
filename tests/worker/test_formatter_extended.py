@@ -9,7 +9,7 @@ Tests cover:
 - Corner cases in punctuation and capitalization
 """
 
-from worker.formatter import TranscriptFormatter, format_transcript
+from worker.formatter import TranscriptFormatter
 
 
 class TestMultilingualSupport:

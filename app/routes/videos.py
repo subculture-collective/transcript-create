@@ -3,6 +3,8 @@ from typing import Literal, Union
 
 from fastapi import APIRouter, Depends, Query, Response
 
+from worker.formatter import TranscriptFormatter
+
 from .. import crud
 from ..db import get_db
 from ..exceptions import TranscriptNotReadyError, VideoNotFoundError
@@ -19,7 +21,6 @@ from ..schemas import (
     YouTubeTranscriptResponse,
     YTSegment,
 )
-from worker.formatter import TranscriptFormatter
 
 router = APIRouter(prefix="", tags=["Videos"])
 
@@ -71,7 +72,7 @@ def get_transcript(
     video_id: uuid.UUID,
     mode: Literal["raw", "cleaned", "formatted"] = Query(
         "raw",
-        description="Transcript mode: raw (default), cleaned (with cleanup), or formatted (full formatting with paragraphs)",
+        description="Transcript mode: raw (default), cleaned (with cleanup), or formatted (with paragraphs)",
     ),
     response: Response = None,
     db=Depends(get_db),
@@ -88,9 +89,7 @@ def get_transcript(
         raise TranscriptNotReadyError(str(video_id), "processing")
 
     # Convert raw database segments to dicts for formatter
-    segments = [
-        {"start": r[0], "end": r[1], "text": r[2], "speaker": r[3], "speaker_label": r[3]} for r in segs
-    ]
+    segments = [{"start": r[0], "end": r[1], "text": r[2], "speaker": r[3], "speaker_label": r[3]} for r in segs]
 
     # Set ETag based on mode and video_id for cache differentiation
     etag = f'"{video_id}-{mode}"'
@@ -143,7 +142,7 @@ def get_transcript(
 
         # Convert to cleaned segments with both raw and cleaned text
         cleaned_segs = []
-        for i, seg in enumerate(formatted_segments):
+        for seg in formatted_segments:
             # Find original text by matching timestamps
             orig_text = next((s["text"] for s in segments if s["start"] == seg["start"]), seg["text"])
             cleaned_segs.append(

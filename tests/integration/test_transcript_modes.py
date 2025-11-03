@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import text as sql_text
 
 
 class TestTranscriptModes:
@@ -19,7 +19,7 @@ class TestTranscriptModes:
 
         # Insert job
         integration_db.execute(
-            text(
+            sql_text(
                 """
                 INSERT INTO jobs (id, kind, state, input_url)
                 VALUES (:job_id, 'single', 'completed', 'https://youtube.com/watch?v=test')
@@ -30,7 +30,7 @@ class TestTranscriptModes:
 
         # Insert video
         integration_db.execute(
-            text(
+            sql_text(
                 """
                 INSERT INTO videos (id, job_id, youtube_id, idx, title, duration_seconds, state)
                 VALUES (:video_id, :job_id, 'test123', 0, 'Test Video', 180, 'completed')
@@ -41,7 +41,7 @@ class TestTranscriptModes:
 
         # Insert transcript
         integration_db.execute(
-            text(
+            sql_text(
                 """
                 INSERT INTO transcripts (id, video_id, model, language)
                 VALUES (:transcript_id, :video_id, 'test-model', 'en')
@@ -59,11 +59,11 @@ class TestTranscriptModes:
             (4, "and a final segment", "Speaker 2"),
         ]
 
-        for idx, (seg_idx, text, speaker) in enumerate(segments):
+        for idx, (seg_idx, segment_text, speaker) in enumerate(segments):
             start_ms = seg_idx * 5000
             end_ms = start_ms + 4000
             integration_db.execute(
-                text(
+                sql_text(
                     """
                     INSERT INTO segments (transcript_id, idx, start_ms, end_ms, text, speaker, speaker_label)
                     VALUES (:transcript_id, :idx, :start_ms, :end_ms, :text, :speaker, :speaker_label)
@@ -74,7 +74,7 @@ class TestTranscriptModes:
                     "idx": idx,
                     "start_ms": start_ms,
                     "end_ms": end_ms,
-                    "text": text,
+                    "text": segment_text,
                     "speaker": speaker,
                     "speaker_label": speaker,
                 },
@@ -156,10 +156,8 @@ class TestTranscriptModes:
         assert "punctuation_added" in stats
 
         # Verify cleanup was applied
-        # Check that filler words might be removed
-        first_segment_cleaned = segments[0]["text_cleaned"].lower()
-        # Cleaned text should have less or equal fillers
-        # Note: depending on config, some fillers might remain
+        # Note: depending on config, some fillers might remain but cleanup should be evident
+        # in the stats or the actual text content
 
         # Check cleanup config
         config = data["cleanup_config"]

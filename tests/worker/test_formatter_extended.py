@@ -324,12 +324,12 @@ class TestDeterministicBehavior:
             results.append(result)
         
         # All results should be identical
-        for i in range(1, len(results)):
-            assert len(results[0]) == len(results[i])
+        for i, result in enumerate(results[1:], start=1):
+            assert len(results[0]) == len(result)
             for j in range(len(results[0])):
-                assert results[0][j]["text"] == results[i][j]["text"]
-                assert results[0][j]["start"] == results[i][j]["start"]
-                assert results[0][j]["end"] == results[i][j]["end"]
+                assert results[0][j]["text"] == result[j]["text"]
+                assert results[0][j]["start"] == result[j]["start"]
+                assert results[0][j]["end"] == result[j]["end"]
 
     def test_segment_timing_deterministic(self):
         """Test that segment splitting produces deterministic timings."""
@@ -350,11 +350,11 @@ class TestDeterministicBehavior:
             results.append(result)
         
         # Timings should be identical
-        for i in range(1, len(results)):
-            assert len(results[0]) == len(results[i])
+        for i, result in enumerate(results[1:], start=1):
+            assert len(results[0]) == len(result)
             for j in range(len(results[0])):
-                assert results[0][j]["start"] == results[i][j]["start"]
-                assert results[0][j]["end"] == results[i][j]["end"]
+                assert results[0][j]["start"] == result[j]["start"]
+                assert results[0][j]["end"] == result[j]["end"]
 
 
 class TestPerformance:

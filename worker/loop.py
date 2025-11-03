@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 
 from app.logging_config import configure_logging, get_logger, video_id_ctx
 from app.settings import settings
+from app.ytdlp_validation import validate_js_runtime_or_exit
 from worker.metrics import setup_worker_info, try_collect_gpu_metrics
 from worker.pipeline import capture_youtube_captions_for_unprocessed, expand_channel_if_needed, process_video
 
@@ -112,8 +113,6 @@ def heartbeat_updater():
 
 def run():
     # Validate JavaScript runtime for yt-dlp before starting worker
-    from app.ytdlp_validation import validate_js_runtime_or_exit
-
     validate_js_runtime_or_exit()
 
     logger.info("Worker service started", extra={"worker_id": WORKER_ID})

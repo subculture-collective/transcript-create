@@ -230,7 +230,7 @@ For more information, see:
   - Project documentation: README.md
 
 """
-    print(error_output, flush=True)
+    print(error_output, file=sys.stderr, flush=True)
 
     # Exit with non-zero status
     sys.exit(1)

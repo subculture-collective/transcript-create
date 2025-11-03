@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     # If a video stays in a non-terminal state for too long, requeue it
     RESCUE_STUCK_AFTER_SECONDS: int = 900
 
+    # JavaScript runtime configuration for yt-dlp
+    # yt-dlp requires a JS runtime (Deno/Node/Bun/QuickJS) to solve YouTube challenges
+    JS_RUNTIME_CMD: str = "deno"  # Command for JS runtime (deno, node, bun, quickjs)
+    JS_RUNTIME_ARGS: str = "run -A"  # Arguments for JS runtime (e.g., "run -A" for Deno)
+    YTDLP_REQUIRE_JS_RUNTIME: bool = True  # Require JS runtime validation at startup
+    YTDLP_JS_RUNTIME_HINT: str = ""  # Optional custom hint for installation instructions
+
     # Search backend toggle: 'postgres' (default) or 'opensearch'
     SEARCH_BACKEND: str = "postgres"
     # OpenSearch settings

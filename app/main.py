@@ -115,6 +115,10 @@ async def startup_event():
     """Log application startup and initialize metrics."""
     from app.metrics import setup_app_info
     from app.version import get_version
+    from app.ytdlp_validation import validate_js_runtime_or_exit
+
+    # Validate JavaScript runtime for yt-dlp before starting
+    validate_js_runtime_or_exit()
 
     version = get_version()
 

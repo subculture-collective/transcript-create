@@ -97,6 +97,31 @@ Why this design: a DB-backed queue keeps infra light while enabling scale-out wo
 
 ## Quickstart
 
+### Prerequisites
+
+**JavaScript Runtime Required**: yt-dlp now requires a JavaScript runtime (Deno/Node/Bun/QuickJS) to solve YouTube challenges. Install one before starting:
+
+**Deno (Recommended)**:
+```bash
+# Linux/macOS
+curl -fsSL https://deno.land/install.sh | sh
+
+# Windows
+irm https://deno.land/install.ps1 | iex
+
+# Homebrew
+brew install deno
+```
+
+**Alternatives**:
+- **Node.js**: https://nodejs.org/ or `brew install node`
+- **Bun**: https://bun.sh/ or `curl -fsSL https://bun.sh/install | bash`
+- **QuickJS**: https://bellard.org/quickjs/ or `brew install quickjs`
+
+After installation, ensure the runtime is in your PATH and configure it in `.env` if using a non-default runtime.
+
+### Setup
+
 1. Copy env and fill basics
 
 ```bash
@@ -461,6 +486,11 @@ For detailed documentation, see [docs/MONITORING.md](docs/MONITORING.md) includi
 
 ## Troubleshooting
 
+- **JavaScript runtime not found**: If API or worker fails to start with "JavaScript runtime not available":
+  - Install a JS runtime (Deno recommended): See [Prerequisites](#prerequisites) section above
+  - Verify runtime is in PATH: `which deno` or `which node`
+  - Configure in `.env`: `JS_RUNTIME_CMD=deno` or `JS_RUNTIME_CMD=node`
+  - To bypass validation (not recommended): Set `YTDLP_REQUIRE_JS_RUNTIME=false` in `.env`
 - Worker fails to start on GPU: verify ROCm drivers; try a different `ROCM_WHEEL_INDEX` build arg; set `FORCE_GPU=false` to allow CPU fallback when using `faster-whisper`
 - 402 responses on export/search: expected for Free plan beyond quotas; upgrade or adjust limits in `.env`
 - Webhook not firing: ensure `STRIPE_WEBHOOK_SECRET` matches and that Stripe CLI or a public URL forwards to `/stripe/webhook`

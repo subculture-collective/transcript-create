@@ -111,6 +111,11 @@ def heartbeat_updater():
 
 
 def run():
+    # Validate JavaScript runtime for yt-dlp before starting worker
+    from app.ytdlp_validation import validate_js_runtime_or_exit
+
+    validate_js_runtime_or_exit()
+
     logger.info("Worker service started", extra={"worker_id": WORKER_ID})
 
     # Initialize worker info metrics

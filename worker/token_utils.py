@@ -15,5 +15,10 @@ def redact_tokens_from_command(cmd: List[str]) -> str:
     """
     cmd_str = " ".join(cmd)
     # Redact po_token values: po_token=type:TOKEN -> po_token=type:***REDACTED***
-    cmd_str = re.sub(r"(po_token=\w+:)[^\s;]+", r"\1***REDACTED***", cmd_str)
+    # Match po_token=type:VALUE where VALUE may be quoted or unquoted
+    cmd_str = re.sub(
+        r'(po_token=\w+:)(?:"([^"]*)"|\'([^\']*)\'|([^\s;"\']+))',
+        r'\1***REDACTED***',
+        cmd_str
+    )
     return cmd_str

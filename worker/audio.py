@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from app.logging_config import get_logger
 from app.settings import settings
+from worker.po_token_manager import TokenType, get_token_manager
 
 logger = get_logger(__name__)
 
@@ -120,8 +121,29 @@ def _classify_error(returncode: int, stderr: str = "") -> str:
         return f"error_code_{returncode}"
 
 
+def _get_po_tokens() -> dict[str, str]:
+    """Get PO tokens from token manager.
+    
+    Returns:
+        Dictionary with available tokens keyed by type
+    """
+    token_manager = get_token_manager()
+    tokens = {}
+    
+    # Try to get all token types
+    for token_type in [TokenType.PLAYER, TokenType.GVS, TokenType.SUBS]:
+        token = token_manager.get_token(token_type)
+        if token:
+            tokens[token_type.value] = token
+    
+    if tokens:
+        logger.debug("PO tokens available", extra={"token_types": list(tokens.keys())})
+    
+    return tokens
+
+
 def _yt_dlp_cmd(base_out: Path, url: str, strategy: Optional[ClientStrategy] = None) -> List[str]:
-    """Build yt-dlp command with optional client strategy."""
+    """Build yt-dlp command with optional client strategy and PO tokens."""
     cmd = [
         "yt-dlp",
         "-v",
@@ -141,6 +163,23 @@ def _yt_dlp_cmd(base_out: Path, url: str, strategy: Optional[ClientStrategy] = N
     if strategy:
         cmd.extend(strategy.extractor_args)
         cmd.extend(strategy.headers)
+
+    # Add PO tokens if available
+    po_tokens = _get_po_tokens()
+    if po_tokens:
+        # Build extractor args for PO tokens
+        # Format: --extractor-args "youtube:po_token=player:TOKEN1;po_token=gvs:TOKEN2"
+        token_args = []
+        for token_type, token_value in po_tokens.items():
+            token_args.append(f"po_token={token_type}:{token_value}")
+        
+        if token_args:
+            extractor_arg = "youtube:" + ";".join(token_args)
+            cmd.extend(["--extractor-args", extractor_arg])
+            logger.info(
+                "PO tokens added to yt-dlp command",
+                extra={"token_types": list(po_tokens.keys())}
+            )
 
     # Add cookies if configured
     if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
@@ -224,6 +263,29 @@ def download_audio(url: str, dest_dir: Path) -> Path:
                 last_err = e
                 last_stderr = e.stderr or ""
                 error_class = _classify_error(e.returncode, last_stderr)
+
+                # Check if error indicates invalid/expired PO token
+                # Only mark tokens invalid for specific error patterns
+                stderr_lower = last_stderr.lower()
+                is_token_error = (
+                    # Explicit PO token errors
+                    ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
+                    # 403 errors in stderr
+                    or ("403" in last_stderr)
+                    # Authentication/forbidden errors that might be token-related, but only if "token" is mentioned in stderr
+                    or (error_class in ["forbidden", "authentication_required"] and "token" in stderr_lower)
+                )
+                
+                if is_token_error:
+                    token_manager = get_token_manager()
+                    # Mark only player and GVS tokens as potentially invalid
+                    # (most download failures involve these, not subs)
+                    for token_type in [TokenType.PLAYER, TokenType.GVS]:
+                        token_manager.mark_token_invalid(token_type, reason=error_class)
+                    logger.warning(
+                        "Token-related error detected, marking player/gvs tokens invalid",
+                        extra={"error_classification": error_class, "returncode": e.returncode}
+                    )
 
                 logger.warning(
                     "yt-dlp attempt failed",

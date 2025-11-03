@@ -39,6 +39,17 @@ class Settings(BaseSettings):
     YTDLP_REQUIRE_JS_RUNTIME: bool = True  # Require JS runtime validation at startup
     YTDLP_JS_RUNTIME_HINT: str = ""  # Optional custom hint for installation instructions
 
+    # PO Token configuration for YouTube
+    # YouTube requires PO tokens for Player, GVS, and Subs in many flows
+    PO_TOKEN_PLAYER: str = ""  # Manual player token injection
+    PO_TOKEN_GVS: str = ""  # Manual GVS (GetVideoStream) token injection
+    PO_TOKEN_SUBS: str = ""  # Manual Subs (Subtitles) token injection
+    PO_TOKEN_PROVIDER_ENABLED: bool = False  # Enable external provider plugin
+    PO_TOKEN_PROVIDER_URL: str = ""  # URL for external token provider service (e.g., http://localhost:8080/token)
+    PO_TOKEN_PROVIDER_TIMEOUT: float = 5.0  # Timeout for provider requests in seconds
+    PO_TOKEN_CACHE_TTL: int = 3600  # Token cache TTL in seconds (1 hour)
+    PO_TOKEN_COOLDOWN_SECONDS: int = 60  # Cooldown period after token failure (1 minute)
+
     # yt-dlp client fallback strategy configuration
     # Client order for fallback (comma-separated): web_safari, ios, android, tv
     YTDLP_CLIENT_ORDER: str = "web_safari,ios,android,tv"

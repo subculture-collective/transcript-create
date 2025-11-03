@@ -118,7 +118,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
             stderr_lower = stderr.lower()
             is_token_error = (
                 ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
-                or ("403" in stderr_lower)
+                or (("403" in stderr_lower) and ("token" in stderr_lower or "po_token" in stderr_lower))
                 or ("token" in stderr_lower and "expired" in stderr_lower)
             )
 

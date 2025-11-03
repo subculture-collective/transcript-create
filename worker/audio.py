@@ -276,8 +276,8 @@ def download_audio(url: str, dest_dir: Path) -> Path:
                 is_token_error = (
                     # Explicit PO token errors
                     ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
-                    # 403 errors in stderr
-                    or ("403" in stderr_lower)
+                    # 403 errors only if token-related
+                    or (("403" in stderr_lower) and ("token" in stderr_lower or "po_token" in stderr_lower))
                     # Auth/forbidden errors that might be token-related, but only if "token" mentioned
                     or (error_class in ["forbidden", "authentication_required"] and "token" in stderr_lower)
                 )

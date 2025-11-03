@@ -11,12 +11,9 @@ Tests cover:
 - Resume capability
 """
 
-import json
-import uuid
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from sqlalchemy import create_engine, text
 
 # Import the backfill script functions
 import sys
@@ -579,8 +576,10 @@ class TestEdgeCases:
             "language": "en"
         }
         
+        # Add config dict for JSON serialization; required because scripts/backfill_formatting.py line 267
+        # serializes formatter.config to JSON in the cleanup metadata.
         mock_formatter = Mock()
-        mock_formatter.config = {"enabled": True}  # Add config dict for JSON serialization
+        mock_formatter.config = {"enabled": True}
         mock_formatter.format_segments.return_value = [
             {"id": 1, "start": 0, "end": 1000, "text": "Café ☕ 日本語.", "idx": 0}
         ]

@@ -213,6 +213,8 @@ Depends on:
 - Database and disk I/O performance
 - Available CPU cores (formatting is CPU-bound)
 
+> **Note:** The following performance estimates are approximate and were observed in a specific test environment (e.g., 8-core CPU, SSD storage, PostgreSQL on local network, 1-5 minute videos). Actual performance will vary significantly depending on your hardware, database performance, video length, and formatting complexity.
+
 Typical rates:
 - ~5-10 videos per minute with default settings
 - ~100-200 segments per second

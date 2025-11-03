@@ -232,16 +232,22 @@ def apply_formatting_to_video(
     # For now, we'll use a simple approach: update original segments with cleaned text
     # where we can match them, and mark cleanup_applied=true
     
-    # Create a simple 1:1 mapping based on start time for segments that weren't split
+    # Use two pointers to efficiently match original segments to formatted segments
+    # Both lists are sorted by start time, so we can optimize from O(n*m) to O(n+m)
     seg_id_to_formatted = {}
+    f_idx = 0
+    f_len = len(formatted_segments)
+    
     for orig_seg in segments:
-        # Find formatted segment(s) that overlap with this original segment
-        matching = [
-            f for f in formatted_segments
-            if f["start"] <= orig_seg["start"] < f["end"]
-        ]
-        if matching:
-            seg_id_to_formatted[orig_seg["id"]] = matching[0]["text"]
+        # Advance formatted pointer until we find the segment that contains orig_seg["start"]
+        while f_idx < f_len and formatted_segments[f_idx]["end"] <= orig_seg["start"]:
+            f_idx += 1
+        
+        if f_idx < f_len:
+            f = formatted_segments[f_idx]
+            # Use <= for end bound to handle edge case where segment ends exactly at start
+            if f["start"] <= orig_seg["start"] <= f["end"]:
+                seg_id_to_formatted[orig_seg["id"]] = f["text"]
     
     # Update segments in database
     for seg_id, cleaned_text in seg_id_to_formatted.items():
@@ -313,6 +319,8 @@ def get_videos_to_process(
         List of (video_id, transcript_id) tuples
     """
     # Build WHERE clause based on filters
+    # Note: All filter values are parameterized to prevent SQL injection
+    # The where_clause is constructed from safe literals only
     where_clauses = ["v.state = 'completed'"]
     params = {"limit": batch_size}
     

@@ -1,7 +1,6 @@
 """Tests for yt-dlp client fallback strategy in worker.audio module."""
 
 import subprocess
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -55,7 +54,7 @@ class TestBuildClientStrategies:
         mock_settings.YTDLP_CLIENT_ORDER = "web_safari,ios,android,tv"
         mock_settings.YTDLP_CLIENTS_DISABLED = ""
         strategies = _build_client_strategies()
-        
+
         assert len(strategies) == 4
         assert strategies[0].name == "web_safari"
         assert strategies[1].name == "ios"
@@ -68,7 +67,7 @@ class TestBuildClientStrategies:
         mock_settings.YTDLP_CLIENT_ORDER = "tv,android,ios"
         mock_settings.YTDLP_CLIENTS_DISABLED = ""
         strategies = _build_client_strategies()
-        
+
         assert len(strategies) == 3
         assert strategies[0].name == "tv"
         assert strategies[1].name == "android"
@@ -80,7 +79,7 @@ class TestBuildClientStrategies:
         mock_settings.YTDLP_CLIENT_ORDER = "web_safari,ios,android,tv"
         mock_settings.YTDLP_CLIENTS_DISABLED = "ios,android"
         strategies = _build_client_strategies()
-        
+
         assert len(strategies) == 2
         assert strategies[0].name == "web_safari"
         assert strategies[1].name == "tv"
@@ -91,7 +90,7 @@ class TestBuildClientStrategies:
         mock_settings.YTDLP_CLIENT_ORDER = ""
         mock_settings.YTDLP_CLIENTS_DISABLED = ""
         strategies = _build_client_strategies()
-        
+
         assert len(strategies) == 1
         assert strategies[0].name == "web_safari"
 
@@ -101,7 +100,7 @@ class TestBuildClientStrategies:
         mock_settings.YTDLP_CLIENT_ORDER = "web_safari"
         mock_settings.YTDLP_CLIENTS_DISABLED = ""
         strategies = _build_client_strategies()
-        
+
         assert len(strategies) == 1
         strategy = strategies[0]
         assert "youtube:player_client=web_safari" in " ".join(strategy.extractor_args)
@@ -113,7 +112,7 @@ class TestBuildClientStrategies:
         mock_settings.YTDLP_CLIENT_ORDER = "tv"
         mock_settings.YTDLP_CLIENTS_DISABLED = ""
         strategies = _build_client_strategies()
-        
+
         assert len(strategies) == 1
         strategy = strategies[0]
         assert "youtube:player_client=tv_embedded" in " ".join(strategy.extractor_args)
@@ -171,11 +170,11 @@ class TestYtDlpCmd:
         """Test basic command structure without strategy."""
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         out = tmp_path / "raw.m4a"
         url = "https://www.youtube.com/watch?v=test"
         cmd = _yt_dlp_cmd(out, url)
-        
+
         assert cmd[0] == "yt-dlp"
         assert "-f" in cmd
         assert "bestaudio" in cmd
@@ -188,18 +187,18 @@ class TestYtDlpCmd:
         """Test command includes strategy extractor args and headers."""
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         strategy = ClientStrategy(
             name="test",
             extractor_args=["--extractor-args", "youtube:player_client=test"],
             headers=["--user-agent", "TestAgent"],
             description="Test strategy",
         )
-        
+
         out = tmp_path / "raw.m4a"
         url = "https://www.youtube.com/watch?v=test"
         cmd = _yt_dlp_cmd(out, url, strategy)
-        
+
         assert "--extractor-args" in cmd
         assert "youtube:player_client=test" in cmd
         assert "--user-agent" in cmd
@@ -210,14 +209,14 @@ class TestYtDlpCmd:
         """Test command includes cookies when configured."""
         cookies_file = tmp_path / "cookies.txt"
         cookies_file.write_text("# Netscape HTTP Cookie File\n")
-        
+
         mock_settings.YTDLP_COOKIES_PATH = str(cookies_file)
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         out = tmp_path / "raw.m4a"
         url = "https://www.youtube.com/watch?v=test"
         cmd = _yt_dlp_cmd(out, url)
-        
+
         assert "--cookies" in cmd
         assert str(cookies_file) in cmd
 
@@ -226,11 +225,11 @@ class TestYtDlpCmd:
         """Test command includes extra args from settings."""
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = "--proxy http://proxy:8080 --geo-bypass"
-        
+
         out = tmp_path / "raw.m4a"
         url = "https://www.youtube.com/watch?v=test"
         cmd = _yt_dlp_cmd(out, url)
-        
+
         assert "--proxy" in cmd
         assert "http://proxy:8080" in cmd
         assert "--geo-bypass" in cmd
@@ -249,16 +248,16 @@ class TestDownloadAudio:
         mock_settings.YTDLP_RETRY_SLEEP = 0.1
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         # Mock successful subprocess run
         mock_run.return_value = MagicMock(returncode=0)
-        
+
         url = "https://www.youtube.com/watch?v=test"
         dest_dir = tmp_path / "video"
         dest_dir.mkdir()
-        
+
         result = download_audio(url, dest_dir)
-        
+
         assert result == dest_dir / "raw.m4a"
         # Should only call once (first attempt succeeds)
         assert mock_run.call_count == 1
@@ -273,19 +272,19 @@ class TestDownloadAudio:
         mock_settings.YTDLP_RETRY_SLEEP = 0.1
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         # First client fails, second succeeds
         mock_run.side_effect = [
             subprocess.CalledProcessError(1, "yt-dlp", stderr="Error"),
             MagicMock(returncode=0),
         ]
-        
+
         url = "https://www.youtube.com/watch?v=test"
         dest_dir = tmp_path / "video"
         dest_dir.mkdir()
-        
+
         result = download_audio(url, dest_dir)
-        
+
         assert result == dest_dir / "raw.m4a"
         # Should call twice (first fails, second succeeds)
         assert mock_run.call_count == 2
@@ -300,17 +299,17 @@ class TestDownloadAudio:
         mock_settings.YTDLP_RETRY_SLEEP = 0.1
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         # All clients fail
         mock_run.side_effect = subprocess.CalledProcessError(1, "yt-dlp", stderr="Error")
-        
+
         url = "https://www.youtube.com/watch?v=test"
         dest_dir = tmp_path / "video"
         dest_dir.mkdir()
-        
+
         with pytest.raises(subprocess.CalledProcessError):
             download_audio(url, dest_dir)
-        
+
         # Should try both clients once each
         assert mock_run.call_count == 2
 
@@ -325,20 +324,20 @@ class TestDownloadAudio:
         mock_settings.YTDLP_RETRY_SLEEP = 0.5
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         # First two attempts fail, third succeeds
         mock_run.side_effect = [
             subprocess.CalledProcessError(1, "yt-dlp", stderr="Error"),
             subprocess.CalledProcessError(1, "yt-dlp", stderr="Error"),
             MagicMock(returncode=0),
         ]
-        
+
         url = "https://www.youtube.com/watch?v=test"
         dest_dir = tmp_path / "video"
         dest_dir.mkdir()
-        
+
         result = download_audio(url, dest_dir)
-        
+
         assert result == dest_dir / "raw.m4a"
         # Should call three times (two failures, one success)
         assert mock_run.call_count == 3
@@ -355,19 +354,19 @@ class TestDownloadAudio:
         mock_settings.YTDLP_RETRY_SLEEP = 0.1
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
-        
+
         # First (web_safari) fails, second (tv, since ios/android disabled) succeeds
         mock_run.side_effect = [
             subprocess.CalledProcessError(1, "yt-dlp", stderr="Error"),
             MagicMock(returncode=0),
         ]
-        
+
         url = "https://www.youtube.com/watch?v=test"
         dest_dir = tmp_path / "video"
         dest_dir.mkdir()
-        
+
         result = download_audio(url, dest_dir)
-        
+
         assert result == dest_dir / "raw.m4a"
         # Should only try web_safari and tv (ios and android are disabled)
         assert mock_run.call_count == 2
@@ -384,7 +383,7 @@ class TestClientStrategy:
             headers=["--header1", "value1"],
             description="Test description",
         )
-        
+
         assert strategy.name == "test"
         assert strategy.extractor_args == ["--arg1", "value1"]
         assert strategy.headers == ["--header1", "value1"]

@@ -44,9 +44,19 @@ def _get_user_agent(client: str = "web_safari") -> str:
 
 def _build_client_strategies() -> List[ClientStrategy]:
     """Build list of client strategies based on settings."""
+    from worker.ytdlp_client_utils import get_client_extractor_args
+
     # Parse client order from settings
     client_order = [c.strip() for c in settings.YTDLP_CLIENT_ORDER.split(",") if c.strip()]
     disabled_clients = set(c.strip() for c in settings.YTDLP_CLIENTS_DISABLED.split(",") if c.strip())
+
+    # Client descriptions
+    client_descriptions = {
+        "web_safari": "Safari web client with HLS streaming",
+        "ios": "iOS mobile client",
+        "android": "Android mobile client",
+        "tv": "TV embedded client (safe fallback)",
+    }
 
     strategies = []
 
@@ -55,55 +65,19 @@ def _build_client_strategies() -> List[ClientStrategy]:
             logger.debug(f"Skipping disabled client: {client}")
             continue
 
-        if client == "web_safari":
-            # web_safari with HLS preference
+        extractor_args = get_client_extractor_args(client)
+        if extractor_args:
+            headers = ["--user-agent", _get_user_agent(client)]
+            # Add Referer header for web_safari
+            if client == "web_safari":
+                headers.extend(["--add-header", "Referer:https://www.youtube.com"])
+
             strategies.append(
                 ClientStrategy(
-                    name="web_safari",
-                    extractor_args=["--extractor-args", "youtube:player_client=web_safari"],
-                    headers=[
-                        "--user-agent",
-                        _get_user_agent("web_safari"),
-                        "--add-header",
-                        "Referer:https://www.youtube.com",
-                    ],
-                    description="Safari web client with HLS streaming",
-                )
-            )
-        elif client == "ios":
-            strategies.append(
-                ClientStrategy(
-                    name="ios",
-                    extractor_args=["--extractor-args", "youtube:player_client=ios"],
-                    headers=[
-                        "--user-agent",
-                        _get_user_agent("ios"),
-                    ],
-                    description="iOS mobile client",
-                )
-            )
-        elif client == "android":
-            strategies.append(
-                ClientStrategy(
-                    name="android",
-                    extractor_args=["--extractor-args", "youtube:player_client=android"],
-                    headers=[
-                        "--user-agent",
-                        _get_user_agent("android"),
-                    ],
-                    description="Android mobile client",
-                )
-            )
-        elif client == "tv":
-            strategies.append(
-                ClientStrategy(
-                    name="tv",
-                    extractor_args=["--extractor-args", "youtube:player_client=tv_embedded"],
-                    headers=[
-                        "--user-agent",
-                        _get_user_agent("tv"),
-                    ],
-                    description="TV embedded client (safe fallback)",
+                    name=client,
+                    extractor_args=extractor_args,
+                    headers=headers,
+                    description=client_descriptions.get(client, f"{client} client"),
                 )
             )
         else:

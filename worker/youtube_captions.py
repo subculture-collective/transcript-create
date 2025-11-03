@@ -31,6 +31,7 @@ def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
     Returns list of (client_name, extractor_args) tuples.
     """
     from app.settings import settings
+    from worker.ytdlp_client_utils import get_client_extractor_args
 
     strategies = []
     client_order = [c.strip() for c in settings.YTDLP_CLIENT_ORDER.split(",") if c.strip()]
@@ -39,14 +40,12 @@ def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
     for client in client_order:
         if client in disabled_clients:
             continue
-        if client == "web_safari":
-            strategies.append(("web_safari", ["--extractor-args", "youtube:player_client=web_safari"]))
-        elif client == "ios":
-            strategies.append(("ios", ["--extractor-args", "youtube:player_client=ios"]))
-        elif client == "android":
-            strategies.append(("android", ["--extractor-args", "youtube:player_client=android"]))
-        elif client == "tv":
-            strategies.append(("tv", ["--extractor-args", "youtube:player_client=tv_embedded"]))
+
+        extractor_args = get_client_extractor_args(client)
+        if extractor_args:
+            strategies.append((client, extractor_args))
+        else:
+            logger.warning(f"Unknown YTDLP client '{client}' in YTDLP_CLIENT_ORDER; skipping.")
 
     if not strategies:
         strategies.append(("default", []))

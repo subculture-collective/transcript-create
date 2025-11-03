@@ -259,11 +259,13 @@ def apply_formatting_to_video(
         updated_count += 1
     
     # Update transcript metadata
+    from datetime import datetime, timezone
+    
     cleanup_metadata = {
         "version": FORMATTING_VERSION,
         "config_hash": config_hash,
         "config": formatter.config,
-        "applied_at": "now()",
+        "applied_at": datetime.now(timezone.utc).isoformat(),
     }
     
     conn.execute(

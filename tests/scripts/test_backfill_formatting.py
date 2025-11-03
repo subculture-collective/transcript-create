@@ -405,7 +405,8 @@ class TestRunBackfill:
         """Test running backfill for a single batch."""
         # Setup mocks
         mock_engine = Mock()
-        mock_conn = Mock()
+        mock_conn = MagicMock()
+        mock_engine.begin.return_value = MagicMock()
         mock_engine.begin.return_value.__enter__.return_value = mock_conn
         mock_create_engine.return_value = mock_engine
         
@@ -436,7 +437,8 @@ class TestRunBackfill:
     def test_run_backfill_no_videos(self, mock_get_videos, mock_create_engine):
         """Test running backfill when no videos need processing."""
         mock_engine = Mock()
-        mock_conn = Mock()
+        mock_conn = MagicMock()
+        mock_engine.begin.return_value = MagicMock()
         mock_engine.begin.return_value.__enter__.return_value = mock_conn
         mock_create_engine.return_value = mock_engine
         
@@ -461,12 +463,13 @@ class TestRunBackfill:
     ):
         """Test that max_iterations stops the backfill."""
         mock_engine = Mock()
-        mock_conn = Mock()
+        mock_conn = MagicMock()
+        mock_engine.begin.return_value = MagicMock()
         mock_engine.begin.return_value.__enter__.return_value = mock_conn
         mock_create_engine.return_value = mock_engine
         
-        # Always return some videos
-        mock_get_videos.return_value = [("vid1", "trans1")]
+        # Always return full batch of videos to ensure max_iterations is tested
+        mock_get_videos.return_value = [("vid1", "trans1"), ("vid2", "trans2")]
         mock_should_process.return_value = (True, "never formatted")
         mock_apply.return_value = {
             "status": "success",
@@ -475,7 +478,7 @@ class TestRunBackfill:
         }
         
         result = run_backfill(
-            batch_size=10,
+            batch_size=2,
             until_empty=True,
             max_iterations=3,
         )
@@ -494,7 +497,8 @@ class TestRunBackfill:
     ):
         """Test that already-formatted videos are skipped."""
         mock_engine = Mock()
-        mock_conn = Mock()
+        mock_conn = MagicMock()
+        mock_engine.begin.return_value = MagicMock()
         mock_engine.begin.return_value.__enter__.return_value = mock_conn
         mock_create_engine.return_value = mock_engine
         
@@ -576,6 +580,7 @@ class TestEdgeCases:
         }
         
         mock_formatter = Mock()
+        mock_formatter.config = {"enabled": True}  # Add config dict for JSON serialization
         mock_formatter.format_segments.return_value = [
             {"id": 1, "start": 0, "end": 1000, "text": "Café ☕ 日本語.", "idx": 0}
         ]

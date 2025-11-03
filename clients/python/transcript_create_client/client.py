@@ -19,6 +19,8 @@ from .exceptions import (
     ValidationError,
 )
 from .models import (
+    CleanedTranscriptResponse,
+    FormattedTranscriptResponse,
     Job,
     JobCreate,
     SearchResponse,
@@ -297,22 +299,35 @@ class TranscriptClient:
         response = await self._request("GET", f"/videos/{video_id}")
         return VideoInfo(**response.json())
 
-    async def get_transcript(self, video_id: UUID) -> TranscriptResponse:
+    async def get_transcript(
+        self,
+        video_id: UUID,
+        mode: Literal["raw", "cleaned", "formatted"] = "raw",
+    ) -> TranscriptResponse | CleanedTranscriptResponse | FormattedTranscriptResponse:
         """Get video transcript.
 
         Args:
             video_id: Video ID
+            mode: Transcript mode - 'raw' (default), 'cleaned', or 'formatted'
 
         Returns:
-            Transcript with segments
+            Transcript with segments (type depends on mode)
 
         Raises:
             TranscriptNotFoundError: Transcript not found
             NotFoundError: Video not found
             APIError: API error
         """
-        response = await self._request("GET", f"/videos/{video_id}/transcript")
-        return TranscriptResponse(**response.json())
+        params = {"mode": mode}
+        response = await self._request("GET", f"/videos/{video_id}/transcript", params=params)
+        data = response.json()
+
+        if mode == "cleaned":
+            return CleanedTranscriptResponse(**data)
+        elif mode == "formatted":
+            return FormattedTranscriptResponse(**data)
+        else:
+            return TranscriptResponse(**data)
 
     async def get_youtube_transcript(self, video_id: UUID) -> YouTubeTranscriptResponse:
         """Get YouTube captions.

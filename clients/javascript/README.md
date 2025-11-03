@@ -98,17 +98,49 @@ const job = await client.waitForCompletion(jobId, {
 ### Getting Transcripts
 
 ```typescript
-// Get Whisper transcript
+// Get raw Whisper transcript (default)
 const transcript = await client.getTranscript(videoId);
 for (const segment of transcript.segments) {
   const speaker = segment.speaker_label || 'Unknown';
   console.log(`[${speaker}] ${segment.text}`);
 }
 
+// Get cleaned transcript with filler removal and punctuation
+const cleaned = await client.getTranscript(videoId, 'cleaned');
+for (const segment of cleaned.segments) {
+  console.log(`Raw: ${segment.text_raw}`);
+  console.log(`Cleaned: ${segment.text_cleaned}`);
+}
+console.log(`Stats: ${JSON.stringify(cleaned.stats)}`);
+
+// Get fully formatted transcript
+const formatted = await client.getTranscript(videoId, 'formatted');
+console.log(formatted.text);  // Formatted text with speaker labels
+console.log(`Format: ${formatted.format}`);  // inline/dialogue/structured
+
 // Get YouTube captions
 const ytTranscript = await client.getYouTubeTranscript(videoId);
 console.log(ytTranscript.full_text);
 ```
+
+**Transcript Modes:**
+
+The `getTranscript` method supports three modes:
+
+1. **`'raw'`** (default): Raw Whisper segments without processing
+   - Returns: `TranscriptResponse` with array of `Segment` objects
+   - Use when you need unmodified transcription output
+
+2. **`'cleaned'`**: Segments with cleanup applied
+   - Returns: `CleanedTranscriptResponse` with array of `CleanedSegment` objects
+   - Features: Filler removal, punctuation, normalization
+   - Each segment includes both `text_raw` and `text_cleaned`
+   - Response includes cleanup statistics and configuration
+
+3. **`'formatted'`**: Fully formatted text output
+   - Returns: `FormattedTranscriptResponse` with single `text` field
+   - Features: Speaker labels, paragraph structure, sentence segmentation
+   - Best for human-readable output or document generation
 
 ### Searching
 
@@ -330,7 +362,10 @@ See the [main API documentation](https://github.com/subculture-collective/transc
 
 #### Videos
 - `getVideo(videoId)` - Get video information
-- `getTranscript(videoId)` - Get Whisper transcript
+- `getTranscript(videoId, mode?)` - Get Whisper transcript
+  - `mode: 'raw'` - Raw segments (default)
+  - `mode: 'cleaned'` - Cleaned segments with stats
+  - `mode: 'formatted'` - Formatted text with speaker labels
 - `getYouTubeTranscript(videoId)` - Get YouTube captions
 
 #### Search
@@ -346,10 +381,18 @@ See the [main API documentation](https://github.com/subculture-collective/transc
 This library is written in TypeScript and includes full type definitions. You get autocomplete and type checking out of the box!
 
 ```typescript
-import type { Job, TranscriptResponse, SearchResponse } from '@transcript-create/sdk';
+import type {
+  Job,
+  TranscriptResponse,
+  CleanedTranscriptResponse,
+  FormattedTranscriptResponse,
+  SearchResponse
+} from '@transcript-create/sdk';
 
 const job: Job = await client.createJob(url, 'single');
 const transcript: TranscriptResponse = await client.getTranscript(videoId);
+const cleaned: CleanedTranscriptResponse = await client.getTranscript(videoId, 'cleaned');
+const formatted: FormattedTranscriptResponse = await client.getTranscript(videoId, 'formatted');
 const results: SearchResponse = await client.search({ query: 'test' });
 ```
 

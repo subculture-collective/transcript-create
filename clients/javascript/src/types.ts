@@ -19,6 +19,11 @@ export type SearchSource = 'native' | 'youtube';
 export type ExportFormat = 'srt' | 'vtt' | 'pdf' | 'json';
 
 /**
+ * Transcript modes
+ */
+export type TranscriptMode = 'raw' | 'cleaned' | 'formatted';
+
+/**
  * Request to create a new job
  */
 export interface JobCreateRequest {
@@ -82,6 +87,94 @@ export interface TranscriptResponse {
   video_id: string;
   /** Transcript segments */
   segments: Segment[];
+}
+
+/**
+ * Cleanup configuration
+ */
+export interface CleanupConfig {
+  normalize_unicode: boolean;
+  normalize_whitespace: boolean;
+  remove_special_tokens: boolean;
+  preserve_sound_events: boolean;
+  add_punctuation: boolean;
+  punctuation_mode: 'none' | 'rule-based' | 'model-based';
+  add_internal_punctuation: boolean;
+  capitalize: boolean;
+  fix_all_caps: boolean;
+  remove_fillers: boolean;
+  filler_level: number;
+  segment_sentences: boolean;
+  merge_short_segments: boolean;
+  min_segment_length_ms: number;
+  max_gap_for_merge_ms: number;
+  speaker_format: 'inline' | 'dialogue' | 'structured';
+  detect_hallucinations: boolean;
+  language_specific_rules: boolean;
+}
+
+/**
+ * Cleanup statistics
+ */
+export interface CleanupStats {
+  fillers_removed: number;
+  special_tokens_removed: number;
+  segments_merged: number;
+  segments_split: number;
+  hallucinations_detected: number;
+  punctuation_added: number;
+}
+
+/**
+ * Cleaned transcript segment
+ */
+export interface CleanedSegment {
+  /** Start time in milliseconds */
+  start_ms: number;
+  /** End time in milliseconds */
+  end_ms: number;
+  /** Original raw text */
+  text_raw: string;
+  /** Cleaned text */
+  text_cleaned: string;
+  /** Speaker label from diarization */
+  speaker_label?: string | null;
+  /** True if this segment ends a sentence */
+  sentence_boundary: boolean;
+  /** True if detected as potential hallucination */
+  likely_hallucination: boolean;
+}
+
+/**
+ * Cleaned transcript response
+ */
+export interface CleanedTranscriptResponse {
+  /** Video ID */
+  video_id: string;
+  /** Cleaned segments */
+  segments: CleanedSegment[];
+  /** Cleanup configuration used */
+  cleanup_config: CleanupConfig;
+  /** Statistics about cleanup operations */
+  stats: CleanupStats;
+  /** Timestamp of cleanup */
+  created_at: string;
+}
+
+/**
+ * Formatted transcript response
+ */
+export interface FormattedTranscriptResponse {
+  /** Video ID */
+  video_id: string;
+  /** Formatted text */
+  text: string;
+  /** Formatting style used */
+  format: 'inline' | 'dialogue' | 'structured';
+  /** Cleanup configuration used */
+  cleanup_config: CleanupConfig;
+  /** Timestamp of formatting */
+  created_at: string;
 }
 
 /**

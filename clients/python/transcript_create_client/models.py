@@ -1,6 +1,6 @@
 """Pydantic models for API requests and responses."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 from uuid import UUID
 
@@ -103,3 +103,69 @@ class ErrorResponse(BaseModel):
     error: str
     message: str
     details: Optional[dict] = None
+
+
+class CleanupConfig(BaseModel):
+    """Configuration for transcript cleanup operations."""
+
+    normalize_unicode: bool = True
+    normalize_whitespace: bool = True
+    remove_special_tokens: bool = True
+    preserve_sound_events: bool = False
+    add_punctuation: bool = True
+    punctuation_mode: Literal["none", "rule-based", "model-based"] = "rule-based"
+    add_internal_punctuation: bool = False
+    capitalize: bool = True
+    fix_all_caps: bool = True
+    remove_fillers: bool = True
+    filler_level: int = Field(1, ge=0, le=3)
+    segment_sentences: bool = True
+    merge_short_segments: bool = True
+    min_segment_length_ms: int = 1000
+    max_gap_for_merge_ms: int = 500
+    speaker_format: Literal["inline", "dialogue", "structured"] = "structured"
+    detect_hallucinations: bool = True
+    language_specific_rules: bool = True
+
+
+class CleanupStats(BaseModel):
+    """Statistics about cleanup operations performed."""
+
+    fillers_removed: int = 0
+    special_tokens_removed: int = 0
+    segments_merged: int = 0
+    segments_split: int = 0
+    hallucinations_detected: int = 0
+    punctuation_added: int = 0
+
+
+class CleanedSegment(BaseModel):
+    """Transcript segment with cleaned text."""
+
+    start_ms: int = Field(..., ge=0)
+    end_ms: int = Field(..., ge=0)
+    text_raw: str
+    text_cleaned: str
+    speaker_label: Optional[str] = None
+    sentence_boundary: bool = False
+    likely_hallucination: bool = False
+
+
+class CleanedTranscriptResponse(BaseModel):
+    """Response containing cleaned transcript segments."""
+
+    video_id: UUID
+    segments: List[CleanedSegment]
+    cleanup_config: CleanupConfig
+    stats: CleanupStats
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class FormattedTranscriptResponse(BaseModel):
+    """Response containing formatted transcript text."""
+
+    video_id: UUID
+    text: str
+    format: Literal["inline", "dialogue", "structured"]
+    cleanup_config: CleanupConfig
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

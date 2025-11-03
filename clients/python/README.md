@@ -91,16 +91,47 @@ job = await client.wait_for_completion(
 ### Getting Transcripts
 
 ```python
-# Get Whisper transcript
+# Get raw Whisper transcript (default)
 transcript = await client.get_transcript(video_id)
 for segment in transcript.segments:
     speaker = segment.speaker_label or "Unknown"
     print(f"[{speaker}] {segment.text}")
 
+# Get cleaned transcript with filler removal and punctuation
+cleaned = await client.get_transcript(video_id, mode="cleaned")
+for segment in cleaned.segments:
+    print(f"Raw: {segment.text_raw}")
+    print(f"Cleaned: {segment.text_cleaned}")
+    print(f"Stats: {cleaned.stats}")
+
+# Get fully formatted transcript
+formatted = await client.get_transcript(video_id, mode="formatted")
+print(formatted.text)  # Formatted text with speaker labels and paragraphs
+print(f"Format: {formatted.format}")  # inline/dialogue/structured
+
 # Get YouTube captions
 yt_transcript = await client.get_youtube_transcript(video_id)
 print(yt_transcript.full_text)
 ```
+
+**Transcript Modes:**
+
+The `get_transcript` method supports three modes:
+
+1. **`raw`** (default): Raw Whisper segments without processing
+   - Returns: `TranscriptResponse` with list of `Segment` objects
+   - Use when you need unmodified transcription output
+
+2. **`cleaned`**: Segments with cleanup applied
+   - Returns: `CleanedTranscriptResponse` with list of `CleanedSegment` objects
+   - Features: Filler removal, punctuation, normalization
+   - Each segment includes both `text_raw` and `text_cleaned`
+   - Response includes cleanup statistics and configuration
+
+3. **`formatted`**: Fully formatted text output
+   - Returns: `FormattedTranscriptResponse` with single `text` field
+   - Features: Speaker labels, paragraph structure, sentence segmentation
+   - Best for human-readable output or document generation
 
 ### Searching
 
@@ -298,7 +329,10 @@ See the [main API documentation](https://github.com/subculture-collective/transc
 
 #### Videos
 - `get_video(video_id)` - Get video information
-- `get_transcript(video_id)` - Get Whisper transcript
+- `get_transcript(video_id, mode='raw')` - Get Whisper transcript
+  - `mode='raw'` - Raw segments (default)
+  - `mode='cleaned'` - Cleaned segments with stats
+  - `mode='formatted'` - Formatted text with speaker labels
 - `get_youtube_transcript(video_id)` - Get YouTube captions
 
 #### Search

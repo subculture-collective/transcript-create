@@ -10,8 +10,7 @@ Tests cover:
 """
 
 import json
-import pytest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
 from worker.youtube_captions import (

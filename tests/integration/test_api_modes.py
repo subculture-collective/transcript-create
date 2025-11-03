@@ -11,11 +11,7 @@ Tests cover:
 
 import uuid
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import text
-
-from app.main import app
-from app.exceptions import VideoNotFoundError, TranscriptNotReadyError
 
 
 @pytest.fixture

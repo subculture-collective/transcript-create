@@ -10,8 +10,7 @@ Tests cover:
 - Model fallback chain (GPU_MODEL_FALLBACKS)
 """
 
-import pytest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 from worker import whisper_runner
 
@@ -287,6 +286,7 @@ class TestModelFallbackChain:
             # Should only be called once (medium succeeds on first try)
             assert mock_load_ct2.call_count == 1
             assert mock_load_ct2.call_args_list[0][0][0] == "medium"
+            assert result == mock_model
 
 
 class TestPyTorchROCmFallback:

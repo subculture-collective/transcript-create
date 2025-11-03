@@ -11,10 +11,9 @@ Tests cover:
 import json
 import uuid
 import pytest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 from sqlalchemy import text
 
-from app.main import app
 from worker.youtube_captions import fetch_youtube_auto_captions
 
 

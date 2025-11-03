@@ -9,8 +9,6 @@ Tests cover:
 - Corner cases in punctuation and capitalization
 """
 
-import pytest
-
 from worker.formatter import TranscriptFormatter, format_transcript
 
 
@@ -271,8 +269,9 @@ class TestEdgeCases:
         
         result = formatter.format_segments(segments)
         
-        # Should handle gracefully
-        assert len(result) >= 0
+        # Should preserve all single-character segments when detect_hallucinations is False
+        assert len(result) == 3
+        assert [seg["text"] for seg in result] == ["a", "I", "?"]
 
     def test_whitespace_only_segments(self):
         """Test filtering of whitespace-only segments."""

@@ -3,6 +3,7 @@
 import logging
 import os
 from typing import Generator
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,12 +13,15 @@ from sqlalchemy.pool import NullPool
 
 from app.db import SessionLocal
 
-try:
-    from app.main import app
-except ImportError as e:
-    # Allow worker tests to run without full app dependencies
-    app = None
-    logging.warning("Could not import app.main (missing dependencies): %s", e)
+# Mock JS runtime validation before importing the app
+# This allows tests to run without requiring a JS runtime installed
+with patch("app.ytdlp_validation.validate_js_runtime_or_exit"):
+    try:
+        from app.main import app
+    except ImportError as e:
+        # Allow worker tests to run without full app dependencies
+        app = None
+        logging.warning("Could not import app.main (missing dependencies): %s", e)
 
 logger = logging.getLogger(__name__)
 

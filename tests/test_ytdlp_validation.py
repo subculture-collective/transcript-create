@@ -3,8 +3,6 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestJSRuntimeAvailability:
     """Tests for checking JS runtime availability."""
@@ -314,7 +312,7 @@ class TestMetrics:
         """Test metrics are updated when validation succeeds."""
         from prometheus_client import REGISTRY
 
-        from app.ytdlp_validation import validate_js_runtime_or_exit, ytdlp_js_runtime_check_total
+        from app.ytdlp_validation import validate_js_runtime_or_exit
 
         mock_settings.YTDLP_REQUIRE_JS_RUNTIME = True
         mock_settings.JS_RUNTIME_CMD = "deno"

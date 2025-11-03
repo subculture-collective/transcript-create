@@ -37,8 +37,7 @@ def check_js_runtime_available() -> Tuple[bool, Optional[str]]:
 
     if not js_runtime:
         error_msg = (
-            "JS_RUNTIME_CMD is not configured. "
-            "yt-dlp requires a JavaScript runtime to solve YouTube challenges."
+            "JS_RUNTIME_CMD is not configured. " "yt-dlp requires a JavaScript runtime to solve YouTube challenges."
         )
         return False, error_msg
 
@@ -91,10 +90,7 @@ def validate_ytdlp_with_js_runtime() -> Tuple[bool, Optional[str]]:
         logger.debug(f"yt-dlp version check succeeded: {result.stdout.strip()}")
         return True, None
     except subprocess.TimeoutExpired:
-        error_msg = (
-            "yt-dlp --version timed out. "
-            "This may indicate a problem with the JS runtime configuration."
-        )
+        error_msg = "yt-dlp --version timed out. " "This may indicate a problem with the JS runtime configuration."
         return False, error_msg
     except subprocess.CalledProcessError as e:
         error_msg = (

@@ -1,5 +1,4 @@
 import logging
-import os
 import shlex
 import subprocess
 import time
@@ -32,7 +31,10 @@ class ClientStrategy:
 def _get_user_agent(client: str = "web_safari") -> str:
     """Return appropriate user agent for a given client."""
     user_agents = {
-        "web_safari": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "web_safari": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        ),
         "ios": "com.google.ios.youtube/19.09.3 (iPhone14,5; U; CPU iOS 15_6 like Mac OS X)",
         "android": "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip",
         "tv": "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version",
@@ -216,18 +218,21 @@ def download_audio(url: str, dest_dir: Path) -> Path:
             )
 
             try:
-                result = subprocess.run(
+                subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
                     check=True,
+                )
+                total_attempts_made = try_idx + sum(
+                    settings.YTDLP_TRIES_PER_CLIENT for _ in range(strategies.index(strategy))
                 )
                 logger.info(
                     "Download succeeded",
                     extra={
                         "client": strategy.name,
                         "attempt": try_idx,
-                        "total_attempts": try_idx + sum(settings.YTDLP_TRIES_PER_CLIENT for _ in range(strategies.index(strategy))),
+                        "total_attempts": total_attempts_made,
                     },
                 )
                 return out

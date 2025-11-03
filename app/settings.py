@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     JS_RUNTIME_ARGS: str = "run -A"  # Arguments for JS runtime (e.g., "run -A" for Deno)
     YTDLP_REQUIRE_JS_RUNTIME: bool = True  # Require JS runtime validation at startup
     YTDLP_JS_RUNTIME_HINT: str = ""  # Optional custom hint for installation instructions
-    
+
     # yt-dlp client fallback strategy configuration
     # Client order for fallback (comma-separated): web_safari, ios, android, tv
     YTDLP_CLIENT_ORDER: str = "web_safari,ios,android,tv"

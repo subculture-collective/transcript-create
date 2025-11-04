@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.request import Request, urlopen
 
 from app.logging_config import get_logger
+from app.settings import settings
+from worker.po_token_manager import TokenType, get_token_manager
+from worker.token_utils import redact_tokens_from_command
 
 logger = get_logger(__name__)
 
@@ -30,7 +33,6 @@ def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
 
     Returns list of (client_name, extractor_args) tuples.
     """
-    from app.settings import settings
     from worker.ytdlp_client_utils import get_client_extractor_args
 
     strategies = []
@@ -53,11 +55,31 @@ def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
     return strategies
 
 
+def _get_subs_token() -> Optional[str]:
+    """Get Subs PO token from token manager.
+
+    Returns:
+        Token string or None if unavailable
+    """
+    # Check feature flag
+    if not settings.PO_TOKEN_USE_FOR_CAPTIONS:
+        logger.debug("PO token usage for captions disabled by feature flag")
+        return None
+
+    token_manager = get_token_manager()
+    token = token_manager.get_token(TokenType.SUBS)
+
+    if token:
+        logger.debug("Subs token available for caption fetch")
+    else:
+        logger.debug("No Subs token available")
+
+    return token
+
+
 def _yt_dlp_json(url: str) -> Dict[str, Any]:
     """Return yt-dlp JSON metadata for a YouTube URL using client fallback strategy."""
     from pathlib import Path
-
-    from app.settings import settings
 
     strategies = _build_metadata_strategies()
 
@@ -70,15 +92,48 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
         if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
             cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
 
+        # Add Subs PO token if available
+        subs_token = _get_subs_token()
+        if subs_token:
+            # Format: --extractor-args "youtube:po_token=subs:TOKEN"
+            extractor_arg = f"youtube:po_token=subs:{subs_token}"
+            cmd.extend(["--extractor-args", extractor_arg])
+            logger.info("Subs token added to metadata fetch command")
+
         cmd.append(url)
 
         try:
-            logger.info(f"Fetching metadata with client: {client_name}")
-            meta = subprocess.check_output(cmd, stderr=subprocess.PIPE, text=True)
-            return json.loads(meta)
+            logger.info(
+                f"Fetching metadata with client: {client_name}",
+                extra={"command": redact_tokens_from_command(cmd)}
+            )
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            metadata_json = result.stdout
+            return json.loads(metadata_json)
         except subprocess.CalledProcessError as e:
             last_error = e
-            logger.warning(f"Metadata fetch failed with {client_name}: {e.returncode}")
+            stderr = e.stderr or ""
+
+            # Check if error indicates invalid/expired Subs token
+            stderr_lower = stderr.lower()
+            is_token_error = (
+                ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
+                or (("403" in stderr_lower) and ("token" in stderr_lower or "po_token" in stderr_lower))
+                or ("token" in stderr_lower and "expired" in stderr_lower)
+            )
+
+            if is_token_error and subs_token:
+                token_manager = get_token_manager()
+                token_manager.mark_token_invalid(TokenType.SUBS, reason="metadata_fetch_failed")
+                logger.warning(
+                    "Subs token marked invalid during metadata fetch",
+                    extra={"client": client_name, "returncode": e.returncode}
+                )
+
+            logger.warning(
+                f"Metadata fetch failed with {client_name}: {e.returncode}",
+                extra={"stderr_snippet": stderr[:200] if stderr else ""}
+            )
         except Exception as e:
             last_error = e
             logger.warning(f"Metadata fetch raised exception with {client_name}: {e}")

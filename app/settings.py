@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     PO_TOKEN_PROVIDER_TIMEOUT: float = 5.0  # Timeout for provider requests in seconds
     PO_TOKEN_CACHE_TTL: int = 3600  # Token cache TTL in seconds (1 hour)
     PO_TOKEN_COOLDOWN_SECONDS: int = 60  # Cooldown period after token failure (1 minute)
+    # Feature flags for controlled rollout
+    PO_TOKEN_USE_FOR_AUDIO: bool = True  # Use PO tokens for audio downloads (Player/GVS)
+    PO_TOKEN_USE_FOR_CAPTIONS: bool = True  # Use PO tokens for caption fetching (Subs)
 
     # yt-dlp client fallback strategy configuration
     # Client order for fallback (comma-separated): web_safari, ios, android, tv

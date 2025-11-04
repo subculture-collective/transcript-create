@@ -67,6 +67,19 @@ class Settings(BaseSettings):
     # Additional extractor args (space-separated, applied to all clients)
     YTDLP_EXTRA_ARGS: str = ""
 
+    # Retry and backoff configuration for YouTube requests
+    YTDLP_MAX_RETRY_ATTEMPTS: int = 3  # Maximum retry attempts for transient failures
+    YTDLP_BACKOFF_BASE_DELAY: float = 1.0  # Initial backoff delay in seconds
+    YTDLP_BACKOFF_MAX_DELAY: float = 60.0  # Maximum backoff delay in seconds
+    YTDLP_BACKOFF_JITTER: bool = True  # Add random jitter to backoff delays
+    YTDLP_REQUEST_TIMEOUT: float = 120.0  # Timeout per request attempt in seconds
+
+    # Circuit breaker configuration for YouTube requests
+    YTDLP_CIRCUIT_BREAKER_ENABLED: bool = True  # Enable circuit breaker
+    YTDLP_CIRCUIT_BREAKER_THRESHOLD: int = 5  # Consecutive failures before opening
+    YTDLP_CIRCUIT_BREAKER_COOLDOWN: float = 60.0  # Cooldown period in seconds
+    YTDLP_CIRCUIT_BREAKER_SUCCESS_THRESHOLD: int = 2  # Successes to close from half-open
+
     # Search backend toggle: 'postgres' (default) or 'opensearch'
     SEARCH_BACKEND: str = "postgres"
     # OpenSearch settings

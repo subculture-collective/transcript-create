@@ -78,67 +78,120 @@ def _get_subs_token() -> Optional[str]:
 
 
 def _yt_dlp_json(url: str) -> Dict[str, Any]:
-    """Return yt-dlp JSON metadata for a YouTube URL using client fallback strategy."""
+    """Return yt-dlp JSON metadata for a YouTube URL using client fallback strategy with retry."""
     from pathlib import Path
+
+    from worker.metrics import youtube_requests_total
+    from worker.youtube_resilience import ErrorClass, classify_error, get_circuit_breaker, retry_with_backoff
 
     strategies = _build_metadata_strategies()
 
+    # Get circuit breaker for metadata operations
+    circuit_breaker = None
+    if settings.YTDLP_CIRCUIT_BREAKER_ENABLED:
+        circuit_breaker = get_circuit_breaker("youtube_metadata")
+
     last_error = None
+
     for client_name, extractor_args in strategies:
-        cmd = ["yt-dlp", "-J"]
-        cmd.extend(extractor_args)
+        def make_fetch_metadata(cname: str, cargs: List[str]):
+            """Create metadata fetch function with explicit parameter binding."""
+            def fetch_metadata():
+                """Single metadata fetch attempt that can be retried."""
+                cmd = ["yt-dlp", "-J"]
+                cmd.extend(cargs)
 
-        # Add cookies if configured
-        if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
-            cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
+                # Add cookies if configured
+                if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
+                    cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
 
-        # Add Subs PO token if available
-        subs_token = _get_subs_token()
-        if subs_token:
-            # Format: --extractor-args "youtube:po_token=subs:TOKEN"
-            extractor_arg = f"youtube:po_token=subs:{subs_token}"
-            cmd.extend(["--extractor-args", extractor_arg])
-            logger.info("Subs token added to metadata fetch command")
+                # Add Subs PO token if available
+                subs_token = _get_subs_token()
+                if subs_token:
+                    # Format: --extractor-args "youtube:po_token=subs:TOKEN"
+                    extractor_arg = f"youtube:po_token=subs:{subs_token}"
+                    cmd.extend(["--extractor-args", extractor_arg])
+                    logger.info("Subs token added to metadata fetch command")
 
-        cmd.append(url)
+                cmd.append(url)
 
-        try:
-            logger.info(
-                f"Fetching metadata with client: {client_name}",
-                extra={"command": redact_tokens_from_command(cmd)}
-            )
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            metadata_json = result.stdout
-            return json.loads(metadata_json)
-        except subprocess.CalledProcessError as e:
-            last_error = e
-            stderr = e.stderr or ""
+                logger.info(
+                    f"Fetching metadata with client: {cname}",
+                    extra={"command": redact_tokens_from_command(cmd)}
+                )
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=settings.YTDLP_REQUEST_TIMEOUT,
+                )
+                metadata_json = result.stdout
+                return json.loads(metadata_json)
+            return fetch_metadata  # noqa: B023
 
-            # Check if error indicates invalid/expired Subs token
-            stderr_lower = stderr.lower()
-            is_token_error = (
-                ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
-                or (("403" in stderr_lower) and ("token" in stderr_lower or "po_token" in stderr_lower))
-                or ("token" in stderr_lower and "expired" in stderr_lower)
-            )
+        fetch_metadata = make_fetch_metadata(client_name, extractor_args)
 
-            if is_token_error and subs_token:
-                token_manager = get_token_manager()
-                token_manager.mark_token_invalid(TokenType.SUBS, reason="metadata_fetch_failed")
-                logger.warning(
-                    "Subs token marked invalid during metadata fetch",
-                    extra={"client": client_name, "returncode": e.returncode}
+        def make_classify_metadata_error(cname: str):
+            """Create error classifier with explicit parameter binding."""
+            def classify_metadata_error(e: Exception) -> ErrorClass:
+                """Classify metadata fetch error and handle token invalidation."""
+                stderr = getattr(e, "stderr", "") or str(e)
+                returncode = getattr(e, "returncode", 0)
+                error_class = classify_error(returncode, stderr, e)
+
+                # Check if error indicates invalid/expired Subs token
+                stderr_lower = stderr.lower()
+                is_token_error = (
+                    error_class == ErrorClass.TOKEN
+                    or ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
+                    or (("403" in stderr_lower) and ("token" in stderr_lower or "po_token" in stderr_lower))
+                    or ("token" in stderr_lower and "expired" in stderr_lower)
                 )
 
+                if is_token_error:
+                    token_manager = get_token_manager()
+                    token_manager.mark_token_invalid(TokenType.SUBS, reason="metadata_fetch_failed")
+                    logger.warning(
+                        "Subs token marked invalid during metadata fetch",
+                        extra={"client": cname, "returncode": returncode}
+                    )
+
+                return error_class
+            return classify_metadata_error  # noqa: B023
+
+        classify_metadata_error = make_classify_metadata_error(client_name)
+
+        try:
+            # Use retry with backoff for metadata fetch
+            result = retry_with_backoff(
+                fetch_metadata,
+                max_attempts=settings.YTDLP_TRIES_PER_CLIENT,
+                base_delay=settings.YTDLP_BACKOFF_BASE_DELAY,
+                max_delay=settings.YTDLP_BACKOFF_MAX_DELAY,
+                circuit_breaker=circuit_breaker,
+                classify_func=classify_metadata_error,
+            )
+            youtube_requests_total.labels(operation="metadata", result="success").inc()
+            return result
+
+        except subprocess.CalledProcessError as e:
+            last_error = e
+            error_class = classify_metadata_error(e)
             logger.warning(
                 f"Metadata fetch failed with {client_name}: {e.returncode}",
-                extra={"stderr_snippet": stderr[:200] if stderr else ""}
+                extra={"error_class": error_class.value, "stderr_snippet": (e.stderr or "")[:200]}
             )
         except Exception as e:
             last_error = e
-            logger.warning(f"Metadata fetch raised exception with {client_name}: {e}")
+            error_class = classify_metadata_error(e)
+            logger.warning(
+                f"Metadata fetch raised exception with {client_name}: {e}",
+                extra={"error_class": error_class.value}
+            )
 
     # All strategies failed
+    youtube_requests_total.labels(operation="metadata", result="failure").inc()
     if last_error:
         raise last_error
     raise RuntimeError("Failed to fetch metadata with all client strategies")

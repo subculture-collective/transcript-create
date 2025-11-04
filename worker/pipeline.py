@@ -18,6 +18,9 @@ logger = get_logger(__name__)
 
 
 def expand_channel_if_needed(conn):
+    from worker.metrics import youtube_requests_total
+    from worker.youtube_resilience import classify_error, get_circuit_breaker, retry_with_backoff
+
     logger.debug("Checking for pending channel jobs to expand")
     jobs = (
         conn.execute(
@@ -38,34 +41,81 @@ def expand_channel_if_needed(conn):
         .mappings()
         .all()
     )
+
+    # Get circuit breaker for metadata operations
+    circuit_breaker = None
+    if settings.YTDLP_CIRCUIT_BREAKER_ENABLED:
+        circuit_breaker = get_circuit_breaker("youtube_metadata")
+
     for job in jobs:
         url = job["input_url"]
         logger.info("Expanding channel job", extra={"job_id": str(job["id"]), "url": url})
-        cmd = ["yt-dlp", "--flat-playlist", "-J", url]
-        meta = subprocess.check_output(cmd)
-        data = json.loads(meta)
-        entries = data.get("entries", [])
-        logger.info("Channel expansion found entries", extra={"count": len(entries)})
-        for idx, e in enumerate(entries):
-            yid = e["id"]
-            # Extract metadata for each channel video
-            title = e.get("title", "")
-            duration = e.get("duration")  # duration in seconds
-            conn.execute(
-                text(
-                    """
-                INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
-                VALUES (:j,:y,:idx,:title,:dur)
-                ON CONFLICT (job_id, youtube_id) DO NOTHING
-            """
-                ),
-                {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration},
+
+        def make_fetch_channel_metadata(channel_url: str):
+            """Create channel metadata fetch function with explicit parameter binding."""
+            def fetch_channel_metadata():
+                """Fetch channel metadata with timeout."""
+                cmd = ["yt-dlp", "--flat-playlist", "-J", channel_url]
+                meta = subprocess.check_output(cmd, timeout=settings.YTDLP_REQUEST_TIMEOUT)
+                return json.loads(meta)
+            return fetch_channel_metadata  # noqa: B023
+
+        fetch_channel_metadata = make_fetch_channel_metadata(url)
+
+        def classify_channel_error(e: Exception):
+            """Classify channel expansion error."""
+            stderr = getattr(e, "stderr", b"")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="ignore")
+            returncode = getattr(e, "returncode", 0)
+            return classify_error(returncode, stderr or str(e), e)
+
+        try:
+            # Use retry with backoff for channel expansion
+            data = retry_with_backoff(
+                fetch_channel_metadata,
+                max_attempts=settings.YTDLP_MAX_RETRY_ATTEMPTS,
+                base_delay=settings.YTDLP_BACKOFF_BASE_DELAY,
+                max_delay=settings.YTDLP_BACKOFF_MAX_DELAY,
+                circuit_breaker=circuit_breaker,
+                classify_func=classify_channel_error,
             )
-        logger.info("Marking job as downloading after expansion", extra={"job_id": str(job["id"])})
-        conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
+
+            entries = data.get("entries", [])
+            logger.info("Channel expansion found entries", extra={"count": len(entries)})
+            for idx, e in enumerate(entries):
+                yid = e["id"]
+                # Extract metadata for each channel video
+                title = e.get("title", "")
+                duration = e.get("duration")  # duration in seconds
+                conn.execute(
+                    text(
+                        """
+                    INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
+                    VALUES (:j,:y,:idx,:title,:dur)
+                    ON CONFLICT (job_id, youtube_id) DO NOTHING
+                """
+                    ),
+                    {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration},
+                )
+            logger.info("Marking job as downloading after expansion", extra={"job_id": str(job["id"])})
+            conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
+            youtube_requests_total.labels(operation="channel_expansion", result="success").inc()
+
+        except Exception as e:
+            logger.error(
+                "Channel expansion failed after retries",
+                extra={"job_id": str(job["id"]), "error": str(e)[:200]}
+            )
+            youtube_requests_total.labels(operation="channel_expansion", result="failure").inc()
+            # Re-raise to mark job as failed
+            raise
 
 
 def expand_single_if_needed(conn):
+    from worker.metrics import youtube_requests_total
+    from worker.youtube_resilience import classify_error, get_circuit_breaker, retry_with_backoff
+
     logger.debug("Checking for pending single jobs to expand")
     jobs = (
         conn.execute(
@@ -86,43 +136,88 @@ def expand_single_if_needed(conn):
         .mappings()
         .all()
     )
+
+    # Get circuit breaker for metadata operations
+    circuit_breaker = None
+    if settings.YTDLP_CIRCUIT_BREAKER_ENABLED:
+        circuit_breaker = get_circuit_breaker("youtube_metadata")
+
     for job in jobs:
         url = job["input_url"]
         logger.info("Expanding single job", extra={"job_id": str(job["id"]), "url": url})
-        # Use yt-dlp to robustly extract the video id for any YouTube URL form
-        meta = subprocess.check_output(["yt-dlp", "-J", url])
-        data = json.loads(meta)
-        vid = data.get("id")
-        if not vid:
-            # Some structures may nest under 'entries' when URL points to a playlist link
-            entries = data.get("entries") or []
-            if entries:
-                vid = entries[0].get("id")
-        if not vid:
-            raise RuntimeError(f"Unable to determine YouTube ID for URL: {url}")
-        logger.info("Job resolved video id", extra={"job_id": str(job["id"]), "youtube_id": vid})
-        # Extract title and duration from metadata
-        title = data.get("title", "")
-        duration = data.get("duration")  # duration in seconds
-        logger.info(
-            "Video metadata extracted",
-            extra={
-                "title": title[:50] + ("..." if len(title) > 50 else ""),
-                "duration_seconds": duration,
-            },
-        )
-        conn.execute(
-            text(
-                """
-            INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
-            VALUES (:j,:y,:idx,:title,:dur)
-            ON CONFLICT (job_id, youtube_id) DO NOTHING
-        """
-            ),
-            {"j": job["id"], "y": vid, "idx": 0, "title": title, "dur": duration},
-        )
-        logger.info("Marking job as downloading after single expansion", extra={"job_id": str(job["id"])})
-        conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
+
+        def make_fetch_video_metadata(video_url: str):
+            """Create video metadata fetch function with explicit parameter binding."""
+            def fetch_video_metadata():
+                """Fetch video metadata with timeout."""
+                # Use yt-dlp to robustly extract the video id for any YouTube URL form
+                meta = subprocess.check_output(["yt-dlp", "-J", video_url], timeout=settings.YTDLP_REQUEST_TIMEOUT)
+                return json.loads(meta)
+            return fetch_video_metadata  # noqa: B023
+
+        fetch_video_metadata = make_fetch_video_metadata(url)
+
+        def classify_video_error(e: Exception):
+            """Classify video expansion error."""
+            stderr = getattr(e, "stderr", b"")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="ignore")
+            returncode = getattr(e, "returncode", 0)
+            return classify_error(returncode, stderr or str(e), e)
+
+        try:
+            # Use retry with backoff for single video expansion
+            data = retry_with_backoff(
+                fetch_video_metadata,
+                max_attempts=settings.YTDLP_MAX_RETRY_ATTEMPTS,
+                base_delay=settings.YTDLP_BACKOFF_BASE_DELAY,
+                max_delay=settings.YTDLP_BACKOFF_MAX_DELAY,
+                circuit_breaker=circuit_breaker,
+                classify_func=classify_video_error,
+            )
+
+            vid = data.get("id")
+            if not vid:
+                # Some structures may nest under 'entries' when URL points to a playlist link
+                entries = data.get("entries") or []
+                if entries:
+                    vid = entries[0].get("id")
+            if not vid:
+                raise RuntimeError(f"Unable to determine YouTube ID for URL: {url}")
+
+            logger.info("Job resolved video id", extra={"job_id": str(job["id"]), "youtube_id": vid})
+            # Extract title and duration from metadata
+            title = data.get("title", "")
+            duration = data.get("duration")  # duration in seconds
+            logger.info(
+                "Video metadata extracted",
+                extra={
+                    "title": title[:50] + ("..." if len(title) > 50 else ""),
+                    "duration_seconds": duration,
+                },
+            )
+            conn.execute(
+                text(
+                    """
+                INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
+                VALUES (:j,:y,:idx,:title,:dur)
+                ON CONFLICT (job_id, youtube_id) DO NOTHING
+            """
+                ),
+                {"j": job["id"], "y": vid, "idx": 0, "title": title, "dur": duration},
+            )
+            logger.info("Marking job as downloading after single expansion", extra={"job_id": str(job["id"])})
+            conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
+            youtube_requests_total.labels(operation="video_expansion", result="success").inc()
+
+        except Exception as e:
+            logger.error(
+                "Single video expansion failed after retries",
+                extra={"job_id": str(job["id"]), "error": str(e)[:200]}
+            )
+            youtube_requests_total.labels(operation="video_expansion", result="failure").inc()
+            # Re-raise to mark job as failed
+            raise
 
 
 def process_video(engine, video_id):

@@ -1,7 +1,6 @@
 import logging
 import shlex
 import subprocess
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -203,17 +202,71 @@ def _yt_dlp_cmd(base_out: Path, url: str, strategy: Optional[ClientStrategy] = N
     return cmd
 
 
+def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attempt: int) -> subprocess.CompletedProcess:
+    """Execute a single download attempt with a specific client strategy.
+
+    Args:
+        url: YouTube URL to download
+        out: Output path for downloaded file
+        strategy: Client strategy to use
+        attempt: Attempt number for logging
+
+    Returns:
+        Completed subprocess result
+
+    Raises:
+        subprocess.CalledProcessError: If download fails
+    """
+    cmd = _yt_dlp_cmd(out, url, strategy)
+    logger.info(
+        "Running yt-dlp command",
+        extra={
+            "client": strategy.name,
+            "attempt": attempt,
+            "command": redact_tokens_from_command(cmd),
+        },
+    )
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=settings.YTDLP_REQUEST_TIMEOUT,
+    )
+
+    # Log stderr if present even on success (may contain warnings)
+    if result.stderr:
+        logger.debug(
+            "yt-dlp stderr output",
+            extra={
+                "client": strategy.name,
+                "stderr_snippet": result.stderr[:200],
+            },
+        )
+
+    return result
+
+
 def download_audio(url: str, dest_dir: Path) -> Path:
     """Download audio from YouTube URL with client fallback strategy.
 
     Tries each configured client strategy in order until one succeeds.
+    Uses retry with exponential backoff and circuit breaker for resilience.
     Logs structured information about attempts and failures.
     """
+    from worker.metrics import youtube_requests_total
+    from worker.youtube_resilience import ErrorClass, classify_error, get_circuit_breaker, retry_with_backoff
+
     out = dest_dir / "raw.m4a"
     strategies = _build_client_strategies()
 
+    # Get circuit breaker for download operations
+    circuit_breaker = None
+    if settings.YTDLP_CIRCUIT_BREAKER_ENABLED:
+        circuit_breaker = get_circuit_breaker("youtube_download")
+
     last_err: Exception | None = None
-    last_stderr: str = ""
 
     for strategy_idx, strategy in enumerate(strategies):
         logger.info(
@@ -225,106 +278,90 @@ def download_audio(url: str, dest_dir: Path) -> Path:
             },
         )
 
-        for try_idx in range(1, settings.YTDLP_TRIES_PER_CLIENT + 1):
-            cmd = _yt_dlp_cmd(out, url, strategy)
-            logger.info(
-                "Running yt-dlp command",
-                extra={
-                    "client": strategy.name,
-                    "attempt": try_idx,
-                    "command": redact_tokens_from_command(cmd),
-                },
+        # Create closures with explicit binding to avoid loop variable issues
+        def make_download_attempt(strat: ClientStrategy, idx: int):
+            """Create download attempt function with explicit parameter binding."""
+            def download_attempt():
+                """Single download attempt that can be retried."""
+                return _download_with_strategy(url, out, strat, idx + 1)
+            return download_attempt  # noqa: B023
+
+        download_attempt = make_download_attempt(strategy, strategy_idx)
+
+        def classify_download_error(e: Exception) -> ErrorClass:
+            """Classify download error and handle token invalidation."""
+            stderr = getattr(e, "stderr", "") or str(e)
+            returncode = getattr(e, "returncode", 0)
+            error_class = classify_error(returncode, stderr, e)
+
+            # Check if error indicates invalid/expired PO token
+            stderr_lower = stderr.lower()
+            is_token_error = (
+                error_class == ErrorClass.TOKEN
+                or ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
+                or (("403" in stderr_lower) and ("token" in stderr_lower or "po_token" in stderr_lower))
             )
 
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                # Calculate total attempts across all strategies
-                total_attempts_made = try_idx + (strategy_idx * settings.YTDLP_TRIES_PER_CLIENT)
-
-                # Log stderr if present even on success (may contain warnings)
-                if result.stderr:
-                    logger.debug(
-                        "yt-dlp stderr output",
-                        extra={
-                            "client": strategy.name,
-                            "stderr_snippet": result.stderr[:200],
-                        },
-                    )
-
-                logger.info(
-                    "Download succeeded",
-                    extra={
-                        "client": strategy.name,
-                        "attempt": try_idx,
-                        "total_attempts": total_attempts_made,
-                    },
-                )
-                return out
-            except subprocess.CalledProcessError as e:
-                last_err = e
-                last_stderr = e.stderr or ""
-                error_class = _classify_error(e.returncode, last_stderr)
-
-                # Check if error indicates invalid/expired PO token
-                # Only mark tokens invalid for specific error patterns
-                stderr_lower = last_stderr.lower()
-                is_token_error = (
-                    # Explicit PO token errors
-                    ("po_token" in stderr_lower and ("invalid" in stderr_lower or "expired" in stderr_lower))
-                    # 403 errors only if token-related
-                    or (("403" in stderr_lower) and ("token" in stderr_lower or "po_token" in stderr_lower))
-                    # Auth/forbidden errors that might be token-related, but only if "token" mentioned
-                    or (error_class in ["forbidden", "authentication_required"] and "token" in stderr_lower)
-                )
-
-                if is_token_error:
-                    token_manager = get_token_manager()
-                    # Mark only player and GVS tokens as potentially invalid
-                    # (most download failures involve these, not subs)
-                    for token_type in [TokenType.PLAYER, TokenType.GVS]:
-                        token_manager.mark_token_invalid(token_type, reason=error_class)
-                    logger.warning(
-                        "Token-related error detected, marking player/gvs tokens invalid",
-                        extra={"error_classification": error_class, "returncode": e.returncode}
-                    )
-
+            if is_token_error:
+                token_manager = get_token_manager()
+                # Mark only player and GVS tokens as potentially invalid
+                for token_type in [TokenType.PLAYER, TokenType.GVS]:
+                    token_manager.mark_token_invalid(token_type, reason=error_class.value)
                 logger.warning(
-                    "yt-dlp attempt failed",
-                    extra={
-                        "client": strategy.name,
-                        "attempt": try_idx,
-                        "returncode": e.returncode,
-                        "error_classification": error_class,
-                        "stderr_snippet": last_stderr[:200] if last_stderr else "",
-                    },
-                )
-            except Exception as e:
-                last_err = e
-                logger.warning(
-                    "yt-dlp attempt raised exception",
-                    extra={
-                        "client": strategy.name,
-                        "attempt": try_idx,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
+                    "Token-related error detected, marking player/gvs tokens invalid",
+                    extra={"error_classification": error_class.value, "returncode": returncode}
                 )
 
-            # Brief pause before retry within the same client
-            if try_idx < settings.YTDLP_TRIES_PER_CLIENT:
-                time.sleep(settings.YTDLP_RETRY_SLEEP)
+            return error_class
+
+        try:
+            # Use retry with backoff for each client strategy
+            retry_with_backoff(
+                download_attempt,
+                max_attempts=settings.YTDLP_TRIES_PER_CLIENT,
+                base_delay=settings.YTDLP_BACKOFF_BASE_DELAY,
+                max_delay=settings.YTDLP_BACKOFF_MAX_DELAY,
+                circuit_breaker=circuit_breaker,
+                classify_func=classify_download_error,
+            )
+
+            logger.info(
+                "Download succeeded",
+                extra={
+                    "client": strategy.name,
+                },
+            )
+            youtube_requests_total.labels(operation="download", result="success").inc()
+            return out
+
+        except subprocess.CalledProcessError as e:
+            last_err = e
+            error_class = classify_download_error(e)
+            logger.warning(
+                "Client strategy failed after retries",
+                extra={
+                    "client": strategy.name,
+                    "error_classification": error_class.value,
+                    "returncode": e.returncode,
+                },
+            )
+        except Exception as e:
+            last_err = e
+            error_class = classify_download_error(e)
+            logger.warning(
+                "Client strategy raised exception",
+                extra={
+                    "client": strategy.name,
+                    "error": str(e)[:200],
+                    "error_type": type(e).__name__,
+                },
+            )
 
         # Log failure for this client before moving to next
         logger.info(
             "Client strategy exhausted, trying next",
             extra={
                 "client": strategy.name,
-                "attempts": settings.YTDLP_TRIES_PER_CLIENT,
             },
         )
 
@@ -337,6 +374,7 @@ def download_audio(url: str, dest_dir: Path) -> Path:
             "url": url,
         },
     )
+    youtube_requests_total.labels(operation="download", result="failure").inc()
 
     if last_err:
         raise last_err

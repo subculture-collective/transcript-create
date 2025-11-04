@@ -315,15 +315,17 @@ class TestDownloadAudio:
 
     @patch("worker.audio.settings")
     @patch("worker.audio.subprocess.run")
-    @patch("worker.audio.time.sleep")
-    def test_retry_within_client(self, mock_sleep, mock_run, mock_settings, tmp_path):
+    def test_retry_within_client(self, mock_run, mock_settings, tmp_path):
         """Test retries within same client strategy."""
         mock_settings.YTDLP_CLIENT_ORDER = "web_safari"
         mock_settings.YTDLP_CLIENTS_DISABLED = ""
         mock_settings.YTDLP_TRIES_PER_CLIENT = 3
-        mock_settings.YTDLP_RETRY_SLEEP = 0.5
+        mock_settings.YTDLP_BACKOFF_BASE_DELAY = 0.01
+        mock_settings.YTDLP_BACKOFF_MAX_DELAY = 0.1
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
+        mock_settings.YTDLP_CIRCUIT_BREAKER_ENABLED = False  # Disable circuit breaker for this test
+        mock_settings.YTDLP_REQUEST_TIMEOUT = 30.0
 
         # First two attempts fail, third succeeds
         mock_run.side_effect = [
@@ -341,8 +343,6 @@ class TestDownloadAudio:
         assert result == dest_dir / "raw.m4a"
         # Should call three times (two failures, one success)
         assert mock_run.call_count == 3
-        # Should sleep twice (after first two failures)
-        assert mock_sleep.call_count == 2
 
     @patch("worker.audio.settings")
     @patch("worker.audio.subprocess.run")
@@ -351,9 +351,12 @@ class TestDownloadAudio:
         mock_settings.YTDLP_CLIENT_ORDER = "web_safari,ios,android,tv"
         mock_settings.YTDLP_CLIENTS_DISABLED = "ios,android"
         mock_settings.YTDLP_TRIES_PER_CLIENT = 1
-        mock_settings.YTDLP_RETRY_SLEEP = 0.1
+        mock_settings.YTDLP_BACKOFF_BASE_DELAY = 0.01
+        mock_settings.YTDLP_BACKOFF_MAX_DELAY = 0.1
         mock_settings.YTDLP_COOKIES_PATH = ""
         mock_settings.YTDLP_EXTRA_ARGS = ""
+        mock_settings.YTDLP_CIRCUIT_BREAKER_ENABLED = False  # Disable circuit breaker for this test
+        mock_settings.YTDLP_REQUEST_TIMEOUT = 30.0
 
         # First (web_safari) fails, second (tv, since ios/android disabled) succeeds
         mock_run.side_effect = [

@@ -133,6 +133,38 @@ po_token_failures_total = Counter(
     ["token_type", "reason"],
 )
 
+# YouTube Resilience Metrics
+youtube_retry_attempts_total = Counter(
+    "youtube_retry_attempts_total",
+    "Total number of retry attempts for YouTube requests",
+    ["operation", "error_class"],  # operation: download, metadata, captions
+)
+
+youtube_backoff_delays_seconds = Histogram(
+    "youtube_backoff_delays_seconds",
+    "Backoff delays applied between retries in seconds",
+    ["operation"],
+    buckets=(0.5, 1, 2, 5, 10, 20, 30, 60),
+)
+
+youtube_circuit_breaker_state = Gauge(
+    "youtube_circuit_breaker_state",
+    "Circuit breaker state (0=closed, 1=half_open, 2=open)",
+    ["name"],
+)
+
+youtube_circuit_breaker_transitions_total = Counter(
+    "youtube_circuit_breaker_transitions_total",
+    "Total number of circuit breaker state transitions",
+    ["name", "from_state", "to_state"],
+)
+
+youtube_requests_total = Counter(
+    "youtube_requests_total",
+    "Total number of YouTube requests",
+    ["operation", "result"],  # result: success, failure
+)
+
 
 def setup_worker_info(whisper_model: str, whisper_backend: str, force_gpu: bool):
     """Set worker information metric."""

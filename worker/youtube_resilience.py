@@ -7,7 +7,6 @@ This module provides utilities to handle YouTube's aggressive throttling:
 - Configurable retry wrapper for yt-dlp operations
 """
 
-import logging
 import random
 import time
 from dataclasses import dataclass

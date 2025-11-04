@@ -389,7 +389,7 @@ def retry_with_backoff(
         Last exception if all attempts fail
     """
     last_exception: Optional[Exception] = None
-    last_error_class = ErrorClass.UNKNOWN
+    last_error_class: ErrorClass
 
     for attempt in range(max_attempts):
         try:

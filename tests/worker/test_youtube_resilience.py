@@ -181,6 +181,7 @@ class TestCircuitBreaker:
             try:
                 breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")))
             except ValueError:
+                # Exception is expected here to simulate a failure for the circuit breaker
                 pass
 
         assert breaker.state == CircuitBreakerState.OPEN
@@ -194,6 +195,7 @@ class TestCircuitBreaker:
             try:
                 breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")))
             except ValueError:
+                # Exception is expected here to simulate failures for opening the circuit
                 pass
 
         # Circuit should be open and block calls
@@ -230,6 +232,7 @@ class TestCircuitBreaker:
             try:
                 breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")))
             except ValueError:
+                # Exception is expected here to open the circuit before testing recovery
                 pass
 
         # Wait and transition to half-open
@@ -262,6 +265,7 @@ class TestCircuitBreaker:
         try:
             breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")))
         except ValueError:
+            # Exception is expected here to test circuit breaker reopening
             pass
 
         assert breaker.state == CircuitBreakerState.OPEN
@@ -275,6 +279,7 @@ class TestCircuitBreaker:
             try:
                 breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")), ErrorClass.NOT_FOUND)
             except ValueError:
+                # Exception is expected; testing that NOT_FOUND errors don't trigger breaker
                 pass
 
         # Circuit should still be closed
@@ -289,6 +294,7 @@ class TestCircuitBreaker:
             try:
                 breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")), ErrorClass.TOKEN)
             except ValueError:
+                # Exception is expected; testing that TOKEN errors don't trigger breaker
                 pass
 
         # Circuit should still be closed
@@ -311,6 +317,7 @@ class TestCircuitBreaker:
         try:
             breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")))
         except ValueError:
+            # Exception is expected here to test failure tracking
             pass
 
         stats = breaker.stats
@@ -326,6 +333,7 @@ class TestCircuitBreaker:
             try:
                 breaker.call(lambda: (_ for _ in ()).throw(ValueError("error")))
             except ValueError:
+                # Exception is expected here to open the circuit for reset test
                 pass
 
         assert breaker.state == CircuitBreakerState.OPEN

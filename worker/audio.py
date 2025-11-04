@@ -349,7 +349,6 @@ def download_audio(url: str, dest_dir: Path) -> Path:
             )
         except Exception as e:
             last_err = e
-            error_class = classify_download_error(e)
             logger.warning(
                 "Client strategy raised exception",
                 extra={

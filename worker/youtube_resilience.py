@@ -395,7 +395,8 @@ def retry_with_backoff(
         try:
             if circuit_breaker:
                 # Use circuit breaker for execution
-                return circuit_breaker.call(func, last_error_class if attempt > 0 else None)
+                # Let circuit breaker classify errors internally for consistency
+                return circuit_breaker.call(func)
             else:
                 # Direct execution without circuit breaker
                 return func()

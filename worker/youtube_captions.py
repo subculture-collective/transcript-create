@@ -94,6 +94,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
     last_error = None
 
     for client_name, extractor_args in strategies:
+        # Use factory functions to capture loop variables correctly for retry closures
         def make_fetch_metadata(cname: str, cargs: List[str]):
             """Create metadata fetch function with explicit parameter binding."""
             def fetch_metadata():
@@ -128,7 +129,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                 )
                 metadata_json = result.stdout
                 return json.loads(metadata_json)
-            return fetch_metadata  # noqa: B023
+            return fetch_metadata  # noqa: B023 (false positive - function returned immediately)
 
         fetch_metadata = make_fetch_metadata(client_name, extractor_args)
 
@@ -158,7 +159,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                     )
 
                 return error_class
-            return classify_metadata_error  # noqa: B023
+            return classify_metadata_error  # noqa: B023 (false positive - function returned immediately)
 
         classify_metadata_error = make_classify_metadata_error(client_name)
 

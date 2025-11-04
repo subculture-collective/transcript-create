@@ -51,6 +51,7 @@ def expand_channel_if_needed(conn):
         url = job["input_url"]
         logger.info("Expanding channel job", extra={"job_id": str(job["id"]), "url": url})
 
+        # Use factory function to capture loop variable correctly for retry closure
         def make_fetch_channel_metadata(channel_url: str):
             """Create channel metadata fetch function with explicit parameter binding."""
             def fetch_channel_metadata():
@@ -58,7 +59,7 @@ def expand_channel_if_needed(conn):
                 cmd = ["yt-dlp", "--flat-playlist", "-J", channel_url]
                 meta = subprocess.check_output(cmd, timeout=settings.YTDLP_REQUEST_TIMEOUT)
                 return json.loads(meta)
-            return fetch_channel_metadata  # noqa: B023
+            return fetch_channel_metadata  # noqa: B023 (false positive - function returned immediately)
 
         fetch_channel_metadata = make_fetch_channel_metadata(url)
 
@@ -146,6 +147,7 @@ def expand_single_if_needed(conn):
         url = job["input_url"]
         logger.info("Expanding single job", extra={"job_id": str(job["id"]), "url": url})
 
+        # Use factory function to capture loop variable correctly for retry closure
         def make_fetch_video_metadata(video_url: str):
             """Create video metadata fetch function with explicit parameter binding."""
             def fetch_video_metadata():
@@ -153,7 +155,7 @@ def expand_single_if_needed(conn):
                 # Use yt-dlp to robustly extract the video id for any YouTube URL form
                 meta = subprocess.check_output(["yt-dlp", "-J", video_url], timeout=settings.YTDLP_REQUEST_TIMEOUT)
                 return json.loads(meta)
-            return fetch_video_metadata  # noqa: B023
+            return fetch_video_metadata  # noqa: B023 (false positive - function returned immediately)
 
         fetch_video_metadata = make_fetch_video_metadata(url)
 

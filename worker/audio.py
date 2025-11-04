@@ -279,12 +279,14 @@ def download_audio(url: str, dest_dir: Path) -> Path:
         )
 
         # Create closures with explicit binding to avoid loop variable issues
+        # We use a factory function pattern to ensure loop variables are captured correctly
+        # Without this, the inner function would reference the loop variable which may change
         def make_download_attempt(strat: ClientStrategy, idx: int):
             """Create download attempt function with explicit parameter binding."""
             def download_attempt():
                 """Single download attempt that can be retried."""
                 return _download_with_strategy(url, out, strat, idx + 1)
-            return download_attempt  # noqa: B023
+            return download_attempt  # noqa: B023 (false positive - function returned immediately)
 
         download_attempt = make_download_attempt(strategy, strategy_idx)
 

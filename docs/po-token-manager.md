@@ -796,7 +796,7 @@ curl -s http://localhost:8001/metrics | grep ytdlp_operation_attempts_total
 sum(rate(po_token_retrievals_total{result="success"}[1h])) /
 sum(rate(po_token_retrievals_total[1h]))
 
-# Cache hit rate
+# Cache hit rate (check both metrics exist before calculating)
 sum(po_token_cache_hits_total) /
 (sum(po_token_cache_hits_total) + sum(po_token_cache_misses_total))
 

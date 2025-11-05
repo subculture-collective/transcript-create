@@ -205,7 +205,7 @@ docker compose logs worker | grep -i "javascript\|runtime"
 ls -la /path/to/youtube_cookies.txt
 
 # Verify format (should show .youtube.com)
-head -5 /path/to/youtube_cookies.txt
+head -n 5 /path/to/youtube_cookies.txt
 
 # Test with yt-dlp
 yt-dlp --cookies /path/to/youtube_cookies.txt \

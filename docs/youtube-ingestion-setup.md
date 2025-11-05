@@ -45,7 +45,8 @@ sudo apt update && sudo apt install nodejs
 brew install node
 
 # Windows
-# Download from https://nodejs.org/
+# Download installer from https://nodejs.org/ and run it
+# Or use winget: winget install OpenJS.NodeJS
 
 # Verify
 node --version
@@ -161,12 +162,7 @@ Cookies help bypass YouTube restrictions and access age-restricted or member-onl
 
 1. Install the **"Get cookies.txt"** extension or use a third-party tool
 
-2. Alternatively, use a command-line tool:
-   ```bash
-   # Using cookiemonster (install via Homebrew)
-   brew install cookiemonster
-   cookiemonster youtube.com > youtube_cookies.txt
-   ```
+2. Alternatively, use a command-line tool or Python script to extract cookies from Safari's database
 
 ### Cookie File Format
 
@@ -426,7 +422,7 @@ yt-dlp --version
 
 ```bash
 # Test cookie file format
-head -5 /path/to/youtube_cookies.txt
+head -n 5 /path/to/youtube_cookies.txt
 
 # Test with yt-dlp
 yt-dlp --cookies /path/to/youtube_cookies.txt \
@@ -497,7 +493,7 @@ WARNING: Failed to download video: Sign in to confirm your age
 
 2. **Check cookie file format**:
    ```bash
-   head -5 /path/to/youtube_cookies.txt
+   head -n 5 /path/to/youtube_cookies.txt
    ```
    Should show Netscape format with `.youtube.com` domain
 

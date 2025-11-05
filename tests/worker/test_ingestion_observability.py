@@ -1,7 +1,6 @@
 """Tests for ingestion observability: structured logs and metrics."""
 
 import subprocess
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -62,7 +61,7 @@ class TestDownloadAudioObservability:
             if hasattr(record, "operation") or "operation" in getattr(record, "extra", {}):
                 found_structured = True
                 break
-        
+
         # Also check message content for key fields
         log_messages = " ".join([r.getMessage() for r in log_records])
         assert "client" in log_messages.lower() or found_structured
@@ -72,7 +71,7 @@ class TestDownloadAudioObservability:
     def test_download_increments_metrics_on_success(self, mock_get_tokens, mock_run, tmp_path):
         """Test that successful downloads increment success metrics."""
         from worker.audio import download_audio
-        from worker.metrics import ytdlp_operation_attempts_total, ytdlp_operation_duration_seconds
+        from worker.metrics import ytdlp_operation_attempts_total
 
         url = "https://www.youtube.com/watch?v=test123"
         dest_dir = tmp_path / "test_video"
@@ -102,7 +101,7 @@ class TestDownloadAudioObservability:
     def test_download_increments_error_metrics_on_failure(self, mock_get_tokens, mock_run, tmp_path):
         """Test that failed downloads increment failure metrics."""
         from worker.audio import download_audio
-        from worker.metrics import ytdlp_operation_attempts_total, ytdlp_operation_errors_total
+        from worker.metrics import ytdlp_operation_attempts_total
 
         url = "https://www.youtube.com/watch?v=test123"
         dest_dir = tmp_path / "test_video"
@@ -228,9 +227,6 @@ class TestCircuitBreakerMetrics:
         # Create a new circuit breaker
         breaker = CircuitBreaker(failure_threshold=2, cooldown_seconds=1, name="test_breaker")
 
-        # Get initial state metric
-        initial_state = youtube_circuit_breaker_state.labels(name="test_breaker")._value.get()
-
         # Force a transition by recording failures
         from worker.youtube_resilience import ErrorClass
 
@@ -290,7 +286,7 @@ class TestTokenRedaction:
         # Verify token value is not in logs
         all_logs = " ".join([r.getMessage() for r in caplog.records])
         assert mock_token not in all_logs
-        
+
         # Verify redaction marker is present
         if "po_token" in all_logs.lower():
             assert "REDACTED" in all_logs or "***" in all_logs

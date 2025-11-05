@@ -222,11 +222,11 @@ def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attem
     from worker.metrics import ytdlp_operation_attempts_total, ytdlp_operation_duration_seconds, ytdlp_token_usage_total
 
     cmd = _yt_dlp_cmd(out, url, strategy)
-    
+
     # Check if PO tokens are present
     po_tokens = _get_po_tokens()
     has_token = bool(po_tokens)
-    
+
     logger.info(
         "Running yt-dlp download command",
         extra={
@@ -281,11 +281,11 @@ def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attem
 
     except subprocess.CalledProcessError as e:
         duration = time.time() - start_time
-        
+
         # Classify error for structured logging
         from worker.youtube_resilience import classify_error
         error_class = classify_error(e.returncode, e.stderr or "", e)
-        
+
         logger.warning(
             "yt-dlp download failed",
             extra={

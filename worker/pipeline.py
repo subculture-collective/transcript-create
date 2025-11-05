@@ -20,31 +20,31 @@ logger = get_logger(__name__)
 def normalize_channel_url(url: str) -> str:
     """
     Normalize a YouTube channel URL to ensure it includes /videos suffix.
-    
+
     This ensures we get all videos from the channel rather than a truncated list.
     Works with channel IDs and handles (@username).
-    
+
     Args:
         url: Input YouTube channel URL
-        
+
     Returns:
         Normalized URL with /videos suffix
-        
+
     Examples:
         https://youtube.com/channel/UCtest -> https://youtube.com/channel/UCtest/videos
         https://youtube.com/@user -> https://youtube.com/@user/videos
         https://youtube.com/channel/UCtest/videos -> https://youtube.com/channel/UCtest/videos (unchanged)
     """
     url = url.rstrip("/")
-    
+
     # Check if already has /videos suffix
     if url.endswith("/videos"):
         return url
-    
+
     # Append /videos to channel URLs and handle URLs
     if "/channel/" in url or "/@" in url:
         return f"{url}/videos"
-    
+
     return url
 
 
@@ -82,7 +82,7 @@ def expand_channel_if_needed(conn):
         url = job["input_url"]
         # Normalize channel URL to ensure /videos suffix for complete enumeration
         normalized_url = normalize_channel_url(url)
-        
+
         logger.info(
             "Expanding channel job",
             extra={
@@ -126,10 +126,10 @@ def expand_channel_if_needed(conn):
 
             entries = data.get("entries", [])
             entry_count = len(entries)
-            
+
             # Extract channel ID for logging
             channel_id = data.get("channel_id") or data.get("uploader_id") or "unknown"
-            
+
             logger.info(
                 "Channel expansion found entries",
                 extra={
@@ -139,7 +139,7 @@ def expand_channel_if_needed(conn):
                     "url": normalized_url,
                 }
             )
-            
+
             for idx, e in enumerate(entries):
                 yid = e["id"]
                 # Extract metadata for each channel video
@@ -155,7 +155,7 @@ def expand_channel_if_needed(conn):
                     ),
                     {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration},
                 )
-            
+
             logger.info(
                 "Channel expansion complete",
                 extra={

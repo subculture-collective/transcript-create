@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -292,9 +292,9 @@ class TestExpandChannelJob:
                 call for call in mock_logger.info.call_args_list
                 if len(call[0]) > 0 and "expansion found entries" in call[0][0].lower()
             ]
-            
+
             assert len(expansion_log_calls) > 0, "Expected log about channel expansion found entries"
-            
+
             # Verify the log contains channel_id and entry_count in extra
             log_call = expansion_log_calls[0]
             if "extra" in log_call[1]:

@@ -106,6 +106,9 @@ yt-dlp --version
 ```
 
 **Test with a simple YouTube video:**
+
+**Note:** The example video may be region-locked in some countries. Use a video that's reliably available in your region for testing.
+
 ```bash
 yt-dlp -f bestaudio --get-url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
@@ -136,7 +139,7 @@ Cookies help bypass YouTube restrictions and access age-restricted or member-onl
 #### Chrome/Edge
 
 1. Install the **"Get cookies.txt LOCALLY"** extension:
-   - Chrome: [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+   - Chrome: [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/cclelndahbckbenkjhflpdbgdldlbecc)
    - Edge: Available in Edge Add-ons
 
 2. Navigate to `youtube.com` and ensure you're logged in
@@ -443,6 +446,8 @@ yt-dlp --cookies /path/to/youtube_cookies.txt \
 ```
 
 ### 4. Test Full Pipeline
+
+**Note:** The example video may be region-locked in some countries. For actual testing, use a video that's reliably available in your region.
 
 Create a test job:
 ```bash

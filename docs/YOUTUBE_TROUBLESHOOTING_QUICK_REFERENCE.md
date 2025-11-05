@@ -234,6 +234,9 @@ docker compose exec worker printenv | grep YTDLP
 ```
 
 ### 5. Test Full Pipeline
+
+**Note:** The example video below may be region-locked or unavailable in some countries. For actual testing, use a video that's reliably available in your region.
+
 ```bash
 # Submit test job
 curl -X POST http://localhost:8000/jobs \

@@ -608,7 +608,11 @@ Calculate hit rate:
 # Should be >80% for good performance
 hits=$(curl -s http://localhost:8001/metrics | grep po_token_cache_hits_total | awk '{print $2}')
 misses=$(curl -s http://localhost:8001/metrics | grep po_token_cache_misses_total | awk '{print $2}')
-echo "Hit rate: $(echo "scale=2; $hits / ($hits + $misses) * 100" | bc)%"
+if [ $((hits + misses)) -eq 0 ]; then
+  echo "Hit rate: No data yet"
+else
+  echo "Hit rate: $(echo "scale=2; $hits / ($hits + $misses) * 100" | bc)%"
+fi
 ```
 
 **Root causes:**

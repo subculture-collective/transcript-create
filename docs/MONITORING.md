@@ -463,8 +463,8 @@ curl -G 'http://localhost:9090/api/v1/query' \
 ```
 
 If specific clients are failing frequently:
-- Disable underperforming clients: `YTDLP_CLIENTS_DISABLED=android,ios`
-- Reorder client priority: `YTDLP_CLIENT_ORDER=web_safari,tv,ios,android`
+- Disable underperforming clients: `YTDLP_CLIENTS_DISABLED=Android,iOS`
+- Reorder client priority: `YTDLP_CLIENT_ORDER=web_safari,tv,iOS,Android`
 
 #### Structured Log Analysis
 

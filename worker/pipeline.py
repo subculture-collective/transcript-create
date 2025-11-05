@@ -42,7 +42,9 @@ def normalize_channel_url(url: str) -> str:
         return url
 
     # Append /videos to channel URLs and handle URLs
-    if "/channel/" in url or "/@" in url:
+    # Match patterns like youtube.com/channel/UCxxx or youtube.com/@username
+    # Using simple string matching is sufficient for YouTube URLs
+    if "youtube.com/channel/" in url or "youtube.com/@" in url:
         return f"{url}/videos"
 
     return url
@@ -127,8 +129,8 @@ def expand_channel_if_needed(conn):
             entries = data.get("entries", [])
             entry_count = len(entries)
 
-            # Extract channel ID for logging
-            channel_id = data.get("channel_id") or data.get("uploader_id") or "unknown"
+            # Extract channel ID for logging (None if not available)
+            channel_id = data.get("channel_id") or data.get("uploader_id")
 
             logger.info(
                 "Channel expansion found entries",

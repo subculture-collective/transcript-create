@@ -287,22 +287,21 @@ class TestExpandChannelJob:
         with patch("worker.pipeline.logger") as mock_logger:
             pipeline.expand_channel_if_needed(mock_conn)
 
-            # Find the log call that contains expansion results
+            # Find the log call that contains expansion results by checking for entry_count in extra
             expansion_log_calls = [
                 call for call in mock_logger.info.call_args_list
-                if len(call[0]) > 0 and "expansion found entries" in call[0][0].lower()
+                if "extra" in call[1] and "entry_count" in call[1].get("extra", {})
             ]
 
-            assert len(expansion_log_calls) > 0, "Expected log about channel expansion found entries"
+            assert len(expansion_log_calls) > 0, "Expected log with entry_count in extra"
 
             # Verify the log contains channel_id and entry_count in extra
             log_call = expansion_log_calls[0]
-            if "extra" in log_call[1]:
-                extra = log_call[1]["extra"]
-                assert "channel_id" in extra
-                assert extra["channel_id"] == "UCtest"
-                assert "entry_count" in extra
-                assert extra["entry_count"] == 3
+            extra = log_call[1]["extra"]
+            assert "channel_id" in extra
+            assert extra["channel_id"] == "UCtest"
+            assert "entry_count" in extra
+            assert extra["entry_count"] == 3
 
     @patch("worker.pipeline.subprocess.check_output")
     def test_expand_channel_job_empty_channel(self, mock_check_output, mock_conn):

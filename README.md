@@ -38,6 +38,7 @@ See the [SDK documentation](clients/) for detailed usage examples and API refere
 
 - **[Getting Started Guide](docs/getting-started.md)** - Set up and run your first transcription
 - **[YouTube Ingestion Setup](docs/youtube-ingestion-setup.md)** - JS runtime, cookies, and troubleshooting
+- **[YouTube Quick Reference](docs/YOUTUBE_TROUBLESHOOTING_QUICK_REFERENCE.md)** - Fast troubleshooting for common issues
 - **[PO Token Manager](docs/po-token-manager.md)** - Configure YouTube PO tokens for reliable downloads
 - **[API Documentation](docs/api-reference.md)** - Complete API reference with examples
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project

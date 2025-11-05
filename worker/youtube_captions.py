@@ -8,16 +8,39 @@ from urllib.request import Request, urlopen
 
 from app.logging_config import get_logger
 from app.settings import settings
-from worker.metrics import (
-    ytdlp_operation_attempts_total,
-    ytdlp_operation_duration_seconds,
-    ytdlp_operation_errors_total,
-    ytdlp_token_usage_total,
-)
 from worker.po_token_manager import TokenType, get_token_manager
 from worker.token_utils import redact_tokens_from_command
 
 logger = get_logger(__name__)
+
+# Import metrics at module level, but handle gracefully if not available
+try:
+    from worker.metrics import (
+        ytdlp_operation_attempts_total,
+        ytdlp_operation_duration_seconds,
+        ytdlp_operation_errors_total,
+        ytdlp_token_usage_total,
+    )
+
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
+
+    # Define no-op dummies if metrics are unavailable
+    class _DummyMetric:
+        def labels(self, *args, **kwargs):
+            return self
+
+        def inc(self, *args, **kwargs):
+            pass
+
+        def observe(self, *args, **kwargs):
+            pass
+
+    ytdlp_operation_attempts_total = _DummyMetric()
+    ytdlp_operation_duration_seconds = _DummyMetric()
+    ytdlp_operation_errors_total = _DummyMetric()
+    ytdlp_token_usage_total = _DummyMetric()
 
 
 @dataclass

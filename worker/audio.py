@@ -1,6 +1,7 @@
 import logging
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -11,6 +12,42 @@ from worker.po_token_manager import TokenType, get_token_manager
 from worker.token_utils import redact_tokens_from_command
 
 logger = get_logger(__name__)
+
+# Import metrics at module level, but handle gracefully if not available
+try:
+    from worker.metrics import (
+        ytdlp_operation_attempts_total,
+        ytdlp_operation_duration_seconds,
+        ytdlp_operation_errors_total,
+        ytdlp_token_usage_total,
+    )
+    from worker.youtube_resilience import classify_error
+
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
+
+    # Define no-op dummies if metrics are unavailable
+    class _DummyMetric:
+        def labels(self, *args, **kwargs):
+            return self
+
+        def inc(self, *args, **kwargs):
+            pass
+
+        def observe(self, *args, **kwargs):
+            pass
+
+    ytdlp_operation_attempts_total = _DummyMetric()
+    ytdlp_operation_duration_seconds = _DummyMetric()
+    ytdlp_operation_errors_total = _DummyMetric()
+    ytdlp_token_usage_total = _DummyMetric()
+
+    # Define classify_error as a no-op if not available
+    def classify_error(*args, **kwargs):
+        from worker.youtube_resilience import ErrorClass
+
+        return ErrorClass.UNKNOWN
 
 
 @dataclass
@@ -217,16 +254,6 @@ def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attem
     Raises:
         subprocess.CalledProcessError: If download fails
     """
-    import time
-
-    from worker.metrics import (
-        ytdlp_operation_attempts_total,
-        ytdlp_operation_duration_seconds,
-        ytdlp_operation_errors_total,
-        ytdlp_token_usage_total,
-    )
-    from worker.youtube_resilience import classify_error
-
     cmd = _yt_dlp_cmd(out, url, strategy)
 
     # Check if PO tokens are present

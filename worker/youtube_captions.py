@@ -1,12 +1,19 @@
 import json
 import logging
 import subprocess
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.request import Request, urlopen
 
 from app.logging_config import get_logger
 from app.settings import settings
+from worker.metrics import (
+    ytdlp_operation_attempts_total,
+    ytdlp_operation_duration_seconds,
+    ytdlp_operation_errors_total,
+    ytdlp_token_usage_total,
+)
 from worker.po_token_manager import TokenType, get_token_manager
 from worker.token_utils import redact_tokens_from_command
 
@@ -99,15 +106,6 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
             """Create metadata fetch function with explicit parameter binding."""
             def fetch_metadata():
                 """Single metadata fetch attempt that can be retried."""
-                import time
-
-                from worker.metrics import (
-                    ytdlp_operation_attempts_total,
-                    ytdlp_operation_duration_seconds,
-                    ytdlp_operation_errors_total,
-                    ytdlp_token_usage_total,
-                )
-
                 cmd = ["yt-dlp", "-J"]
                 cmd.extend(cargs)
 
@@ -168,8 +166,6 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
 
                 except subprocess.CalledProcessError as e:
                     duration = time.time() - start_time
-
-                    from worker.youtube_resilience import classify_error
 
                     error_class = classify_error(e.returncode, e.stderr or "", e)
 
@@ -368,10 +364,6 @@ def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrac
 
     Returns (track, segments) or None if unavailable.
     """
-    import time
-
-    from worker.metrics import ytdlp_operation_attempts_total, ytdlp_operation_duration_seconds
-
     url = f"https://www.youtube.com/watch?v={youtube_id}"
     logger.info("Probing yt-dlp metadata for captions", extra={"youtube_id": youtube_id, "url": url})
     data = _yt_dlp_json(url)

@@ -203,7 +203,7 @@ Recommended alerting thresholds for YouTube ingestion operations:
 
 - **CircuitBreakerOpen**: Circuit breaker has been open for 5 minutes
   ```promql
-  youtube_circuit_breaker_state{state="open"} == 2
+  youtube_circuit_breaker_state == 2
   ```
 
 - **HighThrottlingRate**: YouTube throttling errors >5/min for 10 minutes

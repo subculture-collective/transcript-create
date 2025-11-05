@@ -219,7 +219,13 @@ def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attem
     """
     import time
 
-    from worker.metrics import ytdlp_operation_attempts_total, ytdlp_operation_duration_seconds, ytdlp_token_usage_total
+    from worker.metrics import (
+        ytdlp_operation_attempts_total,
+        ytdlp_operation_duration_seconds,
+        ytdlp_operation_errors_total,
+        ytdlp_token_usage_total,
+    )
+    from worker.youtube_resilience import classify_error
 
     cmd = _yt_dlp_cmd(out, url, strategy)
 
@@ -283,7 +289,6 @@ def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attem
         duration = time.time() - start_time
 
         # Classify error for structured logging
-        from worker.youtube_resilience import classify_error
         error_class = classify_error(e.returncode, e.stderr or "", e)
 
         logger.warning(
@@ -302,7 +307,6 @@ def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attem
         # Update metrics
         ytdlp_operation_duration_seconds.labels(operation="download", client=strategy.name).observe(duration)
         ytdlp_operation_attempts_total.labels(operation="download", client=strategy.name, result="failure").inc()
-        from worker.metrics import ytdlp_operation_errors_total
         ytdlp_operation_errors_total.labels(
             operation="download", client=strategy.name, error_class=error_class.value
         ).inc()

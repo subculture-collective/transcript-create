@@ -324,6 +324,24 @@ class CircuitBreaker:
         elif new_state == CircuitBreakerState.HALF_OPEN:
             self._stats.success_count = 0
 
+        # Update Prometheus metrics
+        try:
+            from worker.metrics import youtube_circuit_breaker_state, youtube_circuit_breaker_transitions_total
+
+            # Map state to numeric value for gauge
+            state_values = {
+                CircuitBreakerState.CLOSED: 0,
+                CircuitBreakerState.HALF_OPEN: 1,
+                CircuitBreakerState.OPEN: 2,
+            }
+            youtube_circuit_breaker_state.labels(name=self.name).set(state_values[new_state])
+            youtube_circuit_breaker_transitions_total.labels(
+                name=self.name, from_state=old_state.value, to_state=new_state.value
+            ).inc()
+        except Exception:
+            # Don't fail if metrics aren't available
+            pass
+
         logger.info(
             f"Circuit breaker '{self.name}' transitioned",
             extra={"from": old_state.value, "to": new_state.value},

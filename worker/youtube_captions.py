@@ -99,6 +99,15 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
             """Create metadata fetch function with explicit parameter binding."""
             def fetch_metadata():
                 """Single metadata fetch attempt that can be retried."""
+                import time
+
+                from worker.metrics import (
+                    ytdlp_operation_attempts_total,
+                    ytdlp_operation_duration_seconds,
+                    ytdlp_operation_errors_total,
+                    ytdlp_token_usage_total,
+                )
+
                 cmd = ["yt-dlp", "-J"]
                 cmd.extend(cargs)
 
@@ -108,6 +117,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
 
                 # Add Subs PO token if available
                 subs_token = _get_subs_token()
+                has_token = bool(subs_token)
                 if subs_token:
                     # Format: --extractor-args "youtube:po_token=subs:TOKEN"
                     extractor_arg = f"youtube:po_token=subs:{subs_token}"
@@ -117,18 +127,75 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                 cmd.append(url)
 
                 logger.info(
-                    f"Fetching metadata with client: {cname}",
-                    extra={"command": redact_tokens_from_command(cmd)}
+                    "Fetching metadata with client",
+                    extra={
+                        "operation": "metadata",
+                        "client": cname,
+                        "command": redact_tokens_from_command(cmd),
+                        "has_token": has_token,
+                    },
                 )
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=settings.YTDLP_REQUEST_TIMEOUT,
-                )
-                metadata_json = result.stdout
-                return json.loads(metadata_json)
+
+                start_time = time.time()
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                        timeout=settings.YTDLP_REQUEST_TIMEOUT,
+                    )
+                    duration = time.time() - start_time
+
+                    logger.info(
+                        "Metadata fetch succeeded",
+                        extra={
+                            "operation": "metadata",
+                            "client": cname,
+                            "exit_code": result.returncode,
+                            "duration_seconds": round(duration, 2),
+                            "has_token": has_token,
+                        },
+                    )
+
+                    # Update metrics
+                    ytdlp_operation_duration_seconds.labels(operation="metadata", client=cname).observe(duration)
+                    ytdlp_operation_attempts_total.labels(operation="metadata", client=cname, result="success").inc()
+                    ytdlp_token_usage_total.labels(operation="metadata", has_token=str(has_token).lower()).inc()
+
+                    metadata_json = result.stdout
+                    return json.loads(metadata_json)
+
+                except subprocess.CalledProcessError as e:
+                    duration = time.time() - start_time
+
+                    from worker.youtube_resilience import classify_error
+
+                    error_class = classify_error(e.returncode, e.stderr or "", e)
+
+                    logger.warning(
+                        "Metadata fetch failed",
+                        extra={
+                            "operation": "metadata",
+                            "client": cname,
+                            "exit_code": e.returncode,
+                            "error_class": error_class.value,
+                            "duration_seconds": round(duration, 2),
+                            "has_token": has_token,
+                            "stderr_snippet": (e.stderr or "")[:200],
+                        },
+                    )
+
+                    # Update metrics
+                    ytdlp_operation_duration_seconds.labels(operation="metadata", client=cname).observe(duration)
+                    ytdlp_operation_attempts_total.labels(operation="metadata", client=cname, result="failure").inc()
+                    ytdlp_operation_errors_total.labels(
+                        operation="metadata", client=cname, error_class=error_class.value
+                    ).inc()
+                    ytdlp_token_usage_total.labels(operation="metadata", has_token=str(has_token).lower()).inc()
+
+                    raise
+
             return fetch_metadata  # noqa: B023 (false positive - function returned immediately)
 
         fetch_metadata = make_fetch_metadata(client_name, extractor_args)
@@ -301,21 +368,68 @@ def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrac
 
     Returns (track, segments) or None if unavailable.
     """
+    import time
+
+    from worker.metrics import ytdlp_operation_attempts_total, ytdlp_operation_duration_seconds
+
     url = f"https://www.youtube.com/watch?v={youtube_id}"
-    logging.info("Probing yt-dlp metadata for captions: %s", url)
+    logger.info("Probing yt-dlp metadata for captions", extra={"youtube_id": youtube_id, "url": url})
     data = _yt_dlp_json(url)
     track = _pick_auto_caption(data)
     if not track:
-        logging.info("No auto captions found for %s", youtube_id)
+        logger.info("No auto captions found", extra={"youtube_id": youtube_id})
         return None
-    logging.info("Downloading captions: lang=%s ext=%s", track.language, track.ext)
+    logger.info(
+        "Downloading captions from YouTube",
+        extra={
+            "operation": "captions",
+            "youtube_id": youtube_id,
+            "language": track.language,
+            "ext": track.ext,
+        },
+    )
     # Download via stdlib (no extra deps)
+    start_time = time.time()
     try:
         req = Request(track.url, headers={"User-Agent": "Mozilla/5.0"})
         with urlopen(req, timeout=20) as resp:
             payload = resp.read()
+        duration = time.time() - start_time
+
+        logger.info(
+            "Caption download succeeded",
+            extra={
+                "operation": "captions",
+                "youtube_id": youtube_id,
+                "language": track.language,
+                "ext": track.ext,
+                "duration_seconds": round(duration, 2),
+                "size_bytes": len(payload),
+            },
+        )
+
+        # Update metrics (use "default" as client since this is direct HTTP download, not yt-dlp)
+        ytdlp_operation_duration_seconds.labels(operation="captions", client="direct").observe(duration)
+        ytdlp_operation_attempts_total.labels(operation="captions", client="direct", result="success").inc()
+
     except Exception as e:
-        logging.warning("Failed to download captions (%s): %s", track.ext, e)
+        duration = time.time() - start_time
+
+        logger.warning(
+            "Caption download failed",
+            extra={
+                "operation": "captions",
+                "youtube_id": youtube_id,
+                "ext": track.ext,
+                "duration_seconds": round(duration, 2),
+                "error": str(e)[:200],
+            },
+        )
+
+        # Update metrics
+        ytdlp_operation_duration_seconds.labels(operation="captions", client="direct").observe(duration)
+        ytdlp_operation_attempts_total.labels(operation="captions", client="direct", result="failure").inc()
+
         return None
     segments: List[YTSegment] = []
     if track.ext == "json3":

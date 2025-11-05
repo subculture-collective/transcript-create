@@ -165,6 +165,32 @@ youtube_requests_total = Counter(
     ["operation", "result"],  # result: success, failure
 )
 
+# Ingestion observability metrics
+ytdlp_operation_duration_seconds = Histogram(
+    "ytdlp_operation_duration_seconds",
+    "Duration of yt-dlp operations in seconds",
+    ["operation", "client"],  # operation: download, metadata, captions; client: web_safari, ios, android, tv, default
+    buckets=(1, 2, 5, 10, 20, 30, 60, 120, 180, 300, 600),
+)
+
+ytdlp_operation_attempts_total = Counter(
+    "ytdlp_operation_attempts_total",
+    "Total number of yt-dlp operation attempts",
+    ["operation", "client", "result"],  # result: success, failure
+)
+
+ytdlp_operation_errors_total = Counter(
+    "ytdlp_operation_errors_total",
+    "Total number of yt-dlp operation errors by classification",
+    ["operation", "client", "error_class"],  # error_class: network, throttle, auth, token, not_found, timeout, unknown
+)
+
+ytdlp_token_usage_total = Counter(
+    "ytdlp_token_usage_total",
+    "Total number of yt-dlp operations with/without PO tokens",
+    ["operation", "has_token"],  # has_token: true, false
+)
+
 
 def setup_worker_info(whisper_model: str, whisper_backend: str, force_gpu: bool):
     """Set worker information metric."""

@@ -37,6 +37,8 @@ See the [SDK documentation](clients/) for detailed usage examples and API refere
 ### Quick Links
 
 - **[Getting Started Guide](docs/getting-started.md)** - Set up and run your first transcription
+- **[YouTube Ingestion Setup](docs/youtube-ingestion-setup.md)** - JS runtime, cookies, and troubleshooting
+- **[PO Token Manager](docs/po-token-manager.md)** - Configure YouTube PO tokens for reliable downloads
 - **[API Documentation](docs/api-reference.md)** - Complete API reference with examples
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
 - **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community guidelines
@@ -486,16 +488,49 @@ For detailed documentation, see [docs/MONITORING.md](docs/MONITORING.md) includi
 
 ## Troubleshooting
 
+### YouTube Ingestion Issues
+
+For comprehensive troubleshooting of YouTube downloads, see **[YouTube Ingestion Setup Guide](docs/youtube-ingestion-setup.md)**.
+
+**Quick fixes:**
+
 - **JavaScript runtime not found**: If API or worker fails to start with "JavaScript runtime not available":
   - Install a JS runtime (Deno recommended): See [Prerequisites](#prerequisites) section above
   - Verify runtime is in PATH: `which deno` or `which node`
   - Configure in `.env`: `JS_RUNTIME_CMD=deno` or `JS_RUNTIME_CMD=node`
   - To bypass validation (not recommended): Set `YTDLP_REQUIRE_JS_RUNTIME=false` in `.env`
+  - **[Full JS runtime guide →](docs/youtube-ingestion-setup.md#javascript-runtime-required)**
+
+- **403 Forbidden / Video unavailable**: YouTube requires cookies and PO tokens for many videos:
+  - Export cookies from your browser ([guide](docs/youtube-ingestion-setup.md#cookies-configuration))
+  - Configure PO tokens ([guide](docs/po-token-manager.md))
+  - Enable client fallback (default: `YTDLP_CLIENT_ORDER=web_safari,ios,android,tv`)
+  - **[Full troubleshooting guide →](docs/youtube-ingestion-setup.md#troubleshooting)**
+
+- **Circuit breaker open**: Too many consecutive failures triggered the breaker:
+  - Check logs: `docker compose logs worker | grep "circuit breaker"`
+  - Wait for cooldown (default 60s) or fix underlying issue
+  - **[Circuit breaker guide →](docs/youtube-ingestion-setup.md#circuit-breaker-configuration)**
+
+- **PO token issues**: Tokens expired, in cooldown, or provider unreachable:
+  - Check token status: `docker compose logs worker | grep "token"`
+  - Regenerate tokens or configure provider
+  - **[PO token troubleshooting →](docs/po-token-manager.md#troubleshooting)**
+
+### General Issues
+
 - Worker fails to start on GPU: verify ROCm drivers; try a different `ROCM_WHEEL_INDEX` build arg; set `FORCE_GPU=false` to allow CPU fallback when using `faster-whisper`
 - 402 responses on export/search: expected for Free plan beyond quotas; upgrade or adjust limits in `.env`
 - Webhook not firing: ensure `STRIPE_WEBHOOK_SECRET` matches and that Stripe CLI or a public URL forwards to `/stripe/webhook`
 - CORS: set `FRONTEND_ORIGIN` to your web app origin
 - Schema: Compose auto-applies `sql/schema.sql`; to re-apply manually: `psql $DATABASE_URL -f sql/schema.sql`
+
+### Additional Resources
+
+- **[YouTube Ingestion Setup](docs/youtube-ingestion-setup.md)** - Comprehensive setup and troubleshooting
+- **[PO Token Manager](docs/po-token-manager.md)** - Token configuration and troubleshooting
+- **[Health Checks](docs/health-checks.md)** - System health monitoring
+- **[Error Handling](docs/ERROR_HANDLING.md)** - Error recovery patterns
 
 ## Testing
 

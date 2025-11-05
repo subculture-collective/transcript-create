@@ -320,36 +320,601 @@ When detected:
 
 ### Troubleshooting
 
-#### No tokens available
+This section provides comprehensive troubleshooting for PO token issues.
 
+#### Common Failure Modes
+
+##### 1. HTTP 403 Forbidden Errors
+
+**Symptoms:**
+```
+ERROR: HTTP Error 403: Forbidden
+ERROR: Video unavailable
+```
+
+**Root causes:**
+- Invalid or expired PO tokens
+- Missing required tokens (PLAYER/GVS)
+- YouTube rate limiting or IP blocking
+- Token type mismatch (wrong token for operation)
+
+**Diagnosis:**
+
+Check logs for token-related errors:
+```bash
+docker compose logs worker | grep -E "token|403|forbidden"
+```
+
+Check metrics:
+```bash
+# Token usage
+curl -s http://localhost:8001/metrics | grep ytdlp_token_usage_total
+
+# Token failures
+curl -s http://localhost:8001/metrics | grep po_token_failures_total
+```
+
+**Solutions:**
+
+1. **Configure tokens** (if not set):
+   ```bash
+   PO_TOKEN_PLAYER=your_player_token
+   PO_TOKEN_GVS=your_gvs_token
+   ```
+
+2. **Verify tokens are being used**:
+   ```bash
+   docker compose logs worker | grep "PO tokens added"
+   ```
+
+3. **Check token expiration**: Tokens typically expire after 1-24 hours
+   - Re-generate tokens from provider
+   - Or update manual tokens in `.env`
+
+4. **Enable provider** for automatic refresh:
+   ```bash
+   PO_TOKEN_PROVIDER_ENABLED=true
+   PO_TOKEN_PROVIDER_URL=http://your-token-service:8080
+   ```
+
+5. **Check cooldown status**:
+   ```bash
+   docker compose logs worker | grep "cooldown"
+   ```
+
+##### 2. Circuit Breaker Open
+
+**Symptoms:**
+```
+WARNING: Circuit breaker is open, rejecting request
+WARNING: Circuit breaker opened after 5 consecutive failures
+```
+
+**Root causes:**
+- Multiple consecutive token failures (≥5 by default)
+- YouTube API outage or rate limiting
+- Network connectivity issues
+- Invalid token configuration
+
+**Diagnosis:**
+
+Check circuit breaker state:
+```bash
+# Logs
+docker compose logs worker | grep "circuit breaker"
+
+# Metrics
+curl -s http://localhost:8001/metrics | grep ytdlp_circuit_breaker
+```
+
+**Circuit breaker states:**
+- `0` = Closed (normal)
+- `1` = Open (blocking requests)
+- `2` = Half-open (testing recovery)
+
+**Solutions:**
+
+1. **Wait for cooldown**: Circuit breaker will test recovery after cooldown period
+   - Default: 60 seconds
+   - Check: `YTDLP_CIRCUIT_BREAKER_COOLDOWN` in `.env`
+
+2. **Verify YouTube is accessible**:
+   ```bash
+   docker compose exec worker curl -I https://www.youtube.com/
+   ```
+
+3. **Check token validity**: Invalid tokens cause repeated failures
+   - Regenerate tokens
+   - Test tokens manually with yt-dlp
+
+4. **Adjust threshold** if too sensitive:
+   ```bash
+   YTDLP_CIRCUIT_BREAKER_THRESHOLD=10  # Increase from default 5
+   ```
+
+5. **Manual reset** (restart worker):
+   ```bash
+   docker compose restart worker
+   ```
+
+##### 3. No Tokens Available
+
+**Symptoms:**
 ```
 WARNING: Failed to retrieve token from any provider
+DEBUG: No token available for type: player
 ```
 
-**Solution**: Configure at least one token source (manual or provider)
+**Root causes:**
+- No providers configured
+- All providers failed
+- Provider service unreachable
 
-#### Tokens in cooldown
+**Diagnosis:**
 
+Check token manager initialization:
+```bash
+docker compose logs worker | grep -E "token provider|token manager"
+```
+
+Check provider configuration:
+```bash
+grep PO_TOKEN .env
+```
+
+**Solutions:**
+
+1. **Configure manual tokens** (simplest):
+   ```bash
+   PO_TOKEN_PLAYER=your_token_here
+   PO_TOKEN_GVS=your_gvs_token_here
+   ```
+
+2. **Enable and test provider**:
+   ```bash
+   PO_TOKEN_PROVIDER_ENABLED=true
+   PO_TOKEN_PROVIDER_URL=http://token-service:8080
+   
+   # Test provider endpoint
+   curl http://token-service:8080/token?type=player
+   ```
+
+3. **Check provider logs** for errors:
+   ```bash
+   docker compose logs token-service  # If using external service
+   ```
+
+4. **Verify provider timeout** isn't too short:
+   ```bash
+   PO_TOKEN_PROVIDER_TIMEOUT=10.0  # Increase if needed
+   ```
+
+##### 4. Tokens in Cooldown
+
+**Symptoms:**
 ```
 DEBUG: Token in cooldown period
+INFO: Token marked as invalid, entering cooldown
 ```
 
-**Solution**: Wait for cooldown to expire or investigate why tokens are failing
+**Root causes:**
+- Token was recently marked invalid due to 403 error
+- Token used during cooldown period (≤60s by default)
+- Provider returned invalid token
 
-#### Provider timeout
+**Diagnosis:**
+
+Check cooldown events:
+```bash
+docker compose logs worker | grep "cooldown"
+```
+
+Check last invalidation reason:
+```bash
+docker compose logs worker | grep "marked as invalid"
+```
+
+**Solutions:**
+
+1. **Wait for cooldown to expire**: Default is 60 seconds
+   ```bash
+   PO_TOKEN_COOLDOWN_SECONDS=60
+   ```
+
+2. **Investigate why tokens fail**:
+   - Check token expiration
+   - Verify token format is correct
+   - Test tokens manually:
+     ```bash
+     yt-dlp --extractor-args "youtube:po_token=player:YOUR_TOKEN" \
+            --get-url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+     ```
+
+3. **Increase cooldown** if tokens are getting rate limited:
+   ```bash
+   PO_TOKEN_COOLDOWN_SECONDS=300  # 5 minutes
+   ```
+
+4. **Decrease cooldown** if tokens are valid but marked incorrectly:
+   ```bash
+   PO_TOKEN_COOLDOWN_SECONDS=30  # 30 seconds
+   ```
+
+##### 5. Provider Timeout
+
+**Symptoms:**
+```
+WARNING: HTTP provider timeout after 5.0 seconds
+ERROR: Failed to retrieve token from HTTP provider
+```
+
+**Root causes:**
+- Provider service is slow or overloaded
+- Network latency between worker and provider
+- Provider is down or unreachable
+
+**Diagnosis:**
+
+Test provider manually:
+```bash
+time curl -s http://your-provider:8080/token?type=player
+```
+
+Check provider logs:
+```bash
+docker compose logs token-provider  # If using docker compose
+```
+
+**Solutions:**
+
+1. **Increase timeout**:
+   ```bash
+   PO_TOKEN_PROVIDER_TIMEOUT=15.0  # Increase from default 5.0
+   ```
+
+2. **Check network connectivity**:
+   ```bash
+   docker compose exec worker ping -c 3 token-provider
+   docker compose exec worker curl -v http://token-provider:8080/health
+   ```
+
+3. **Add manual tokens as fallback**:
+   ```bash
+   PO_TOKEN_PLAYER=fallback_token
+   PO_TOKEN_PROVIDER_ENABLED=true
+   ```
+
+4. **Scale provider** if it's overloaded
+   ```bash
+   docker compose up -d --scale token-provider=3
+   ```
+
+##### 6. Low Cache Hit Rate
+
+**Symptoms:**
+- Metrics show low `po_token_cache_hits_total` vs `po_token_cache_misses_total`
+- Frequent provider calls
+- High latency for token retrieval
+
+**Diagnosis:**
+
+Check cache metrics:
+```bash
+curl -s http://localhost:8001/metrics | grep po_token_cache
+```
+
+Calculate hit rate:
+```bash
+# Should be >80% for good performance
+hits=$(curl -s http://localhost:8001/metrics | grep po_token_cache_hits_total | awk '{print $2}')
+misses=$(curl -s http://localhost:8001/metrics | grep po_token_cache_misses_total | awk '{print $2}')
+if [ $((hits + misses)) -eq 0 ]; then
+  echo "Hit rate: No data yet"
+else
+  echo "Hit rate: $(echo "scale=2; $hits / ($hits + $misses) * 100" | bc)%"
+fi
+```
+
+**Root causes:**
+- TTL too short
+- Tokens invalidated frequently (due to failures)
+- Context varies too much (creates separate cache entries)
+- Cache not enabled or configured
+
+**Solutions:**
+
+1. **Increase TTL**:
+   ```bash
+   PO_TOKEN_CACHE_TTL=7200  # 2 hours (from default 1 hour)
+   ```
+
+2. **Reduce context variation**: Use fewer context fields
+   ```python
+   # Instead of:
+   context = {"region": "us", "session": uuid4(), "client": "web"}
+   
+   # Use:
+   context = {"client": "web"}  # Fewer keys = better cache hit rate
+   ```
+
+3. **Reduce token invalidation**: Fix underlying token issues
+   - Use valid tokens that don't expire quickly
+   - Configure provider for automatic refresh
+
+4. **Monitor invalidation reasons**:
+   ```bash
+   docker compose logs worker | grep "mark.*invalid"
+   ```
+
+#### Client Fallback Behavior
+
+When PO tokens fail, the worker uses client fallback to try alternative YouTube clients.
+
+**Fallback sequence:**
+1. Try **web_safari** with PO tokens
+2. If 403/token error, mark PLAYER/GVS tokens invalid
+3. Cooldown prevents immediate token retry
+4. Fall back to **ios** client (next in order)
+5. Fall back to **android** client
+6. Fall back to **tv** client (most reliable)
+
+**Observing fallback in logs:**
+```bash
+docker compose logs worker | grep -E "Trying client|fallback|client failed"
+```
+
+**Example log sequence:**
+```
+INFO: Trying client: web_safari with PO tokens
+ERROR: HTTP 403 Forbidden with web_safari
+INFO: Marking PLAYER and GVS tokens as invalid
+DEBUG: Token entering cooldown for 60 seconds
+INFO: Client web_safari failed, trying next...
+INFO: Trying client: ios without PO tokens
+INFO: Client ios succeeded
+```
+
+**Configuration:**
+```bash
+# Client order (tried in sequence)
+YTDLP_CLIENT_ORDER=web_safari,ios,android,tv
+
+# Retries per client
+YTDLP_TRIES_PER_CLIENT=2
+
+# Sleep between retries
+YTDLP_RETRY_SLEEP=1.0
+```
+
+**Metrics:**
+```bash
+# Track which clients succeed/fail
+curl -s http://localhost:8001/metrics | grep ytdlp_operation_attempts_total
+```
+
+#### Interpreting Logs
+
+**Key log patterns to watch:**
+
+1. **Token retrieval:**
+   ```
+   DEBUG: Retrieving PO token for type: player
+   DEBUG: Token retrieved from ManualTokenProvider
+   DEBUG: Token cache hit for player
+   ```
+
+2. **Token usage:**
+   ```
+   INFO: PO tokens added to yt-dlp command
+   DEBUG: Using PLAYER token: abc***
+   DEBUG: Using GVS token: def***
+   ```
+
+3. **Token failures:**
+   ```
+   ERROR: HTTP 403 Forbidden
+   WARNING: Detected PO token failure
+   INFO: Marking token as invalid: player (reason: forbidden_error)
+   DEBUG: Token entering cooldown for 60 seconds
+   ```
+
+4. **Circuit breaker:**
+   ```
+   WARNING: Circuit breaker opened after 5 consecutive failures
+   INFO: Circuit breaker entering half-open state
+   INFO: Circuit breaker closed after 2 successes
+   ```
+
+5. **Provider errors:**
+   ```
+   WARNING: HTTP provider request failed: Connection timeout
+   ERROR: Failed to retrieve token from HTTP provider
+   DEBUG: Falling back to next provider
+   ```
+
+**Log levels guide:**
+- `DEBUG`: Normal operations, cache hits, token retrievals
+- `INFO`: State changes, provider switches, token additions
+- `WARNING`: Failures, timeouts, circuit breaker events
+- `ERROR`: Critical failures, provider errors, download failures
+
+#### Interpreting Metrics
+
+**Essential metrics to monitor:**
+
+1. **Token usage:**
+   ```
+   ytdlp_token_usage_total{has_token="true"}  # Operations with tokens
+   ytdlp_token_usage_total{has_token="false"} # Operations without tokens
+   ```
+   - Goal: Most operations should have `has_token="true"`
+   - Alert if ratio drops below 80%
+
+2. **Token retrieval success rate:**
+   ```
+   po_token_retrievals_total{result="success"}
+   po_token_retrievals_total{result="failed"}
+   po_token_retrievals_total{result="cached"}
+   ```
+   - Goal: Success + cached > 95%
+   - Alert if failed > 5%
+
+3. **Cache performance:**
+   ```
+   po_token_cache_hits_total
+   po_token_cache_misses_total
+   ```
+   - Goal: Hit rate > 80%
+   - Calculate: `hits / (hits + misses)`
+
+4. **Token failures:**
+   ```
+   po_token_failures_total{token_type="player", reason="forbidden_error"}
+   po_token_failures_total{token_type="gvs", reason="timeout"}
+   ```
+   - Track failure reasons to identify patterns
+   - High `forbidden_error` = token validity issue
+   - High `timeout` = provider performance issue
+
+5. **Circuit breaker:**
+   ```
+   ytdlp_circuit_breaker_state  # 0=closed, 1=open, 2=half-open
+   ytdlp_circuit_breaker_opens_total
+   ytdlp_circuit_breaker_closes_total
+   ```
+   - Alert if state = 1 (open) for >5 minutes
+   - Track open/close ratio (should trend toward more closes)
+
+6. **Provider performance:**
+   ```
+   po_token_retrieval_latency_seconds{provider="manual"}
+   po_token_retrieval_latency_seconds{provider="http"}
+   ```
+   - Goal: p95 < 1s for HTTP provider
+   - Alert if p95 > 5s
+
+**Grafana query examples:**
+
+```promql
+# Token success rate (last 1h)
+sum(rate(po_token_retrievals_total{result="success"}[1h])) /
+sum(rate(po_token_retrievals_total[1h]))
+
+# Cache hit rate (check both metrics exist before calculating)
+sum(po_token_cache_hits_total) /
+(sum(po_token_cache_hits_total) + sum(po_token_cache_misses_total))
+
+# Circuit breaker open duration
+sum(increase(ytdlp_circuit_breaker_opens_total[1h])) by (component)
+
+# Token failure rate by reason
+sum(rate(po_token_failures_total[5m])) by (reason)
+```
+
+#### Feature Flag Configuration
+
+Use feature flags to enable/disable token usage for specific operations:
+
+```bash
+# Use PO tokens for audio downloads (Player/GVS)
+PO_TOKEN_USE_FOR_AUDIO=true
+
+# Use PO tokens for caption fetching (Subs)
+PO_TOKEN_USE_FOR_CAPTIONS=true
+```
+
+**Use cases:**
+- Gradual rollout: Enable for captions first, then audio
+- A/B testing: Compare success rates with/without tokens
+- Emergency disable: Turn off if tokens cause issues
+- Selective usage: Use tokens only for operations that need them
+
+**Metrics by feature flag:**
+```bash
+# Audio downloads with/without tokens
+curl -s http://localhost:8001/metrics | \
+  grep 'ytdlp_token_usage_total{operation="audio"}'
+
+# Caption fetches with/without tokens
+curl -s http://localhost:8001/metrics | \
+  grep 'ytdlp_token_usage_total{operation="captions"}'
+```
+
+#### Cooldown Period Behavior
+
+Understanding cooldown mechanics:
+
+1. **Trigger**: Token marked invalid due to 403 or token-related error
+2. **Duration**: `PO_TOKEN_COOLDOWN_SECONDS` (default: 60s)
+3. **Behavior**:
+   - Token won't be returned from cache during cooldown
+   - Provider will be consulted after cooldown expires
+   - Other token types not affected (PLAYER cooldown doesn't affect GVS)
+
+**Cooldown tuning:**
+
+- **Short cooldown (30s)**: Fast recovery, higher provider load
+  ```bash
+  PO_TOKEN_COOLDOWN_SECONDS=30
+  ```
+  Use when: Tokens are valid but occasionally marked incorrectly
+
+- **Medium cooldown (60s)**: Balanced (default)
+  ```bash
+  PO_TOKEN_COOLDOWN_SECONDS=60
+  ```
+  Use when: Standard operation
+
+- **Long cooldown (300s)**: Slow recovery, lower provider load
+  ```bash
+  PO_TOKEN_COOLDOWN_SECONDS=300
+  ```
+  Use when: Provider is expensive or rate-limited
+
+**Monitor cooldown events:**
+```bash
+# Count cooldown events per hour
+docker compose logs worker --since 1h | grep "entering cooldown" | wc -l
+
+# Average cooldown duration
+docker compose logs worker | \
+  grep -E "entering cooldown|exiting cooldown" | \
+  # Parse timestamps and calculate durations
+  awk '{print $1, $2, $NF}'
+```
+
+#### Quick Troubleshooting Flowchart
 
 ```
-WARNING: HTTP provider timeout
-```
-
-**Solution**: Increase `PO_TOKEN_PROVIDER_TIMEOUT` or check provider availability
-
-#### Low cache hit rate
-
-**Solution**: 
-- Increase `PO_TOKEN_CACHE_TTL`
-- Check if context varies too much (creates separate cache entries)
-- Verify tokens aren't being invalidated frequently
+Video download fails with 403
+    │
+    ├─> Check: Are PO tokens configured?
+    │   ├─> NO  → Configure PO_TOKEN_PLAYER and PO_TOKEN_GVS
+    │   └─> YES → Continue
+    │
+    ├─> Check: Are tokens being used?
+    │   │   (Look for "PO tokens added" in logs)
+    │   ├─> NO  → Check PO_TOKEN_USE_FOR_AUDIO=true
+    │   └─> YES → Continue
+    │
+    ├─> Check: Are tokens in cooldown?
+    │   │   (Look for "cooldown" in logs)
+    │   ├─> YES → Wait for cooldown or investigate why tokens fail
+    │   └─> NO  → Continue
+    │
+    ├─> Check: Is circuit breaker open?
+    │   │   (Look for "circuit breaker open")
+    │   ├─> YES → Wait for cooldown or fix underlying issue
+    │   └─> NO  → Continue
+    │
+    ├─> Check: Are tokens expired?
+    │   ├─> YES → Regenerate tokens (manual or provider)
+    │   └─> NO  → Continue
+    │
+    └─> Check: Does client fallback work?
+        ├─> YES → Success with fallback client
+        └─> NO  → Check cookies, circuit breaker threshold,
+                  network connectivity, YouTube status
 
 ## Example Configurations
 

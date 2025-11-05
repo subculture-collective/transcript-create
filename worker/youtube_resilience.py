@@ -19,6 +19,14 @@ from app.settings import settings
 
 logger = get_logger(__name__)
 
+# Import metrics at module level, but handle gracefully if not available
+try:
+    from worker.metrics import youtube_circuit_breaker_state, youtube_circuit_breaker_transitions_total
+
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
+
 T = TypeVar("T")
 
 
@@ -323,6 +331,19 @@ class CircuitBreaker:
             self._stats.success_count = 0
         elif new_state == CircuitBreakerState.HALF_OPEN:
             self._stats.success_count = 0
+
+        # Update Prometheus metrics if available
+        if _METRICS_AVAILABLE:
+            # Map state to numeric value for gauge
+            state_values = {
+                CircuitBreakerState.CLOSED: 0,
+                CircuitBreakerState.HALF_OPEN: 1,
+                CircuitBreakerState.OPEN: 2,
+            }
+            youtube_circuit_breaker_state.labels(name=self.name).set(state_values[new_state])
+            youtube_circuit_breaker_transitions_total.labels(
+                name=self.name, from_state=old_state.value, to_state=new_state.value
+            ).inc()
 
         logger.info(
             f"Circuit breaker '{self.name}' transitioned",

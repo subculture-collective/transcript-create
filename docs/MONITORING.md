@@ -106,6 +106,58 @@ Three dashboards are automatically provisioned:
 - `gpu_memory_used_bytes` (gauge): GPU memory in use by device
 - `gpu_memory_total_bytes` (gauge): Total GPU memory by device
 
+#### Ingestion Observability Metrics
+
+These metrics track yt-dlp operations for audio download, metadata fetch, and caption retrieval:
+
+- `ytdlp_operation_duration_seconds` (histogram): Duration of yt-dlp operations by operation type and client strategy
+  - Labels: `operation` (download, metadata, captions), `client` (web_safari, ios, android, tv, direct, default)
+  - Buckets: 1s, 2s, 5s, 10s, 20s, 30s, 60s, 120s, 180s, 300s, 600s
+  
+- `ytdlp_operation_attempts_total` (counter): Total operation attempts by result
+  - Labels: `operation`, `client`, `result` (success, failure)
+  
+- `ytdlp_operation_errors_total` (counter): Failed operations by error classification
+  - Labels: `operation`, `client`, `error_class` (network, throttle, auth, token, not_found, timeout, unknown)
+  
+- `ytdlp_token_usage_total` (counter): Operations tracked by PO token presence
+  - Labels: `operation`, `has_token` (true, false)
+
+- `youtube_circuit_breaker_state` (gauge): Circuit breaker state
+  - Labels: `name` (youtube_download, youtube_metadata)
+  - Values: 0=closed, 1=half_open, 2=open
+
+- `youtube_circuit_breaker_transitions_total` (counter): State transitions
+  - Labels: `name`, `from_state`, `to_state`
+
+##### Useful Queries
+
+**Success rate by client strategy:**
+```promql
+rate(ytdlp_operation_attempts_total{result="success"}[5m]) 
+/ 
+rate(ytdlp_operation_attempts_total[5m])
+```
+
+**95th percentile download duration by client:**
+```promql
+histogram_quantile(0.95, 
+  rate(ytdlp_operation_duration_seconds_bucket{operation="download"}[5m])
+)
+```
+
+**Error rate by classification:**
+```promql
+rate(ytdlp_operation_errors_total[5m])
+```
+
+**Token usage percentage:**
+```promql
+rate(ytdlp_token_usage_total{has_token="true"}[5m])
+/
+rate(ytdlp_token_usage_total[5m])
+```
+
 ## Alerting
 
 ### Pre-configured Alerts
@@ -128,6 +180,41 @@ Alerts are defined in `/config/prometheus/alerts.yml`:
 #### Database Alerts
 
 - **HighDatabaseErrors**: Database error rate >1/sec for 5 minutes
+
+#### Ingestion Alerts
+
+Recommended alerting thresholds for YouTube ingestion operations:
+
+- **HighYtdlpErrorRate**: yt-dlp operation error rate >10% for 10 minutes
+  ```promql
+  (
+    rate(ytdlp_operation_attempts_total{result="failure"}[10m])
+    /
+    rate(ytdlp_operation_attempts_total[10m])
+  ) > 0.1
+  ```
+
+- **SlowYtdlpOperations**: p95 operation duration >120s for 15 minutes
+  ```promql
+  histogram_quantile(0.95,
+    rate(ytdlp_operation_duration_seconds_bucket[15m])
+  ) > 120
+  ```
+
+- **CircuitBreakerOpen**: Circuit breaker has been open for 5 minutes
+  ```promql
+  youtube_circuit_breaker_state == 2
+  ```
+
+- **HighThrottlingRate**: YouTube throttling errors >5/min for 10 minutes
+  ```promql
+  rate(ytdlp_operation_errors_total{error_class="throttle"}[10m]) > 0.083
+  ```
+
+- **TokenFailures**: PO token errors increasing
+  ```promql
+  rate(ytdlp_operation_errors_total{error_class="token"}[5m]) > 0
+  ```
 
 ### Setting Up Alertmanager (Optional)
 
@@ -306,6 +393,93 @@ If overhead is high:
 - Reduce scrape frequency
 - Decrease histogram bucket count
 - Remove unused metrics
+
+### YouTube Ingestion Issues
+
+#### Common Error Classes and Remediation
+
+The ingestion metrics classify errors to help diagnose issues:
+
+**1. `throttle` errors (429, "too many requests")**
+- **Cause**: YouTube rate limiting
+- **Symptoms**: High `ytdlp_operation_errors_total{error_class="throttle"}`
+- **Remediation**:
+  - Circuit breaker will automatically back off
+  - Increase `YTDLP_BACKOFF_MAX_DELAY` to slow retry rate
+  - Enable PO tokens if not already active (`PO_TOKEN_USE_FOR_AUDIO=true`)
+  - Reduce concurrent worker instances
+
+**2. `token` errors (invalid/expired PO tokens)**
+- **Cause**: PO tokens expired or rejected by YouTube
+- **Symptoms**: High `ytdlp_operation_errors_total{error_class="token"}`
+- **Remediation**:
+  - Check PO token provider availability
+  - Verify `PO_TOKEN_PROVIDER_URL` is accessible
+  - Check token expiry with `po_token_failures_total` metric
+  - Review logs for token invalidation events
+
+**3. `auth` errors (403, "sign in required", "bot detected")**
+- **Cause**: YouTube requiring authentication or detecting automated access
+- **Symptoms**: High `ytdlp_operation_errors_total{error_class="auth"}`
+- **Remediation**:
+  - Enable PO tokens (required for most flows now)
+  - Configure cookies file via `YTDLP_COOKIES_PATH`
+  - Try different client strategies (ios, android as fallbacks)
+  - Add delays: increase `YTDLP_BACKOFF_BASE_DELAY`
+
+**4. `not_found` errors (404, unavailable, private)**
+- **Cause**: Video is deleted, private, or region-locked
+- **Symptoms**: High `ytdlp_operation_errors_total{error_class="not_found"}`
+- **Remediation**:
+  - These are expected and not retried automatically
+  - Mark jobs as failed in application logic
+  - No infrastructure changes needed
+
+**5. `network` errors (connection issues, timeouts)**
+- **Cause**: Network connectivity problems
+- **Symptoms**: High `ytdlp_operation_errors_total{error_class="network"}`
+- **Remediation**:
+  - Check network connectivity to YouTube
+  - Verify DNS resolution
+  - Increase `YTDLP_REQUEST_TIMEOUT` if timeouts are frequent
+  - Check firewall rules
+
+**6. `timeout` errors (operation exceeded timeout)**
+- **Cause**: Large files or slow connection
+- **Symptoms**: High `ytdlp_operation_duration_seconds` and timeout errors
+- **Remediation**:
+  - Increase `YTDLP_REQUEST_TIMEOUT` (default 120s)
+  - Check bandwidth availability
+  - Consider chunking or streaming approaches
+
+#### Monitoring Client Strategy Performance
+
+Compare success rates across different client strategies:
+
+```bash
+# Query Prometheus for client performance
+curl -G 'http://localhost:9090/api/v1/query' \
+  --data-urlencode 'query=rate(ytdlp_operation_attempts_total{result="success"}[5m]) by (client)'
+```
+
+If specific clients are failing frequently:
+- Disable underperforming clients: `YTDLP_CLIENTS_DISABLED=Android,iOS`
+- Reorder client priority: `YTDLP_CLIENT_ORDER=web_safari,tv,iOS,Android`
+
+#### Structured Log Analysis
+
+All ingestion operations log structured fields. Query logs with:
+
+```bash
+# Find slow downloads (>60s)
+docker compose logs worker | jq 'select(.duration_seconds > 60 and .operation == "download")'
+
+# Find operations without tokens
+docker compose logs worker | jq 'select(.has_token == false and .operation != "captions")'
+
+# Group errors by classification
+docker compose logs worker | jq 'select(.error_class) | .error_class' | sort | uniq -c
+```
 
 ## Backup and Restore
 

@@ -1,6 +1,7 @@
 import logging
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -11,6 +12,42 @@ from worker.po_token_manager import TokenType, get_token_manager
 from worker.token_utils import redact_tokens_from_command
 
 logger = get_logger(__name__)
+
+# Import metrics at module level, but handle gracefully if not available
+try:
+    from worker.metrics import (
+        ytdlp_operation_attempts_total,
+        ytdlp_operation_duration_seconds,
+        ytdlp_operation_errors_total,
+        ytdlp_token_usage_total,
+    )
+    from worker.youtube_resilience import classify_error
+
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
+
+    # Define no-op dummies if metrics are unavailable
+    class _DummyMetric:
+        def labels(self, *args, **kwargs):
+            return self
+
+        def inc(self, *args, **kwargs):
+            pass
+
+        def observe(self, *args, **kwargs):
+            pass
+
+    ytdlp_operation_attempts_total = _DummyMetric()
+    ytdlp_operation_duration_seconds = _DummyMetric()
+    ytdlp_operation_errors_total = _DummyMetric()
+    ytdlp_token_usage_total = _DummyMetric()
+
+    # Define classify_error as a no-op if not available
+    def classify_error(*args, **kwargs):
+        from worker.youtube_resilience import ErrorClass
+
+        return ErrorClass.UNKNOWN
 
 
 @dataclass
@@ -218,34 +255,91 @@ def _download_with_strategy(url: str, out: Path, strategy: ClientStrategy, attem
         subprocess.CalledProcessError: If download fails
     """
     cmd = _yt_dlp_cmd(out, url, strategy)
+
+    # Check if PO tokens are present
+    po_tokens = _get_po_tokens()
+    has_token = bool(po_tokens)
+
     logger.info(
-        "Running yt-dlp command",
+        "Running yt-dlp download command",
         extra={
+            "operation": "download",
             "client": strategy.name,
             "attempt": attempt,
             "command": redact_tokens_from_command(cmd),
+            "has_token": has_token,
         },
     )
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=settings.YTDLP_REQUEST_TIMEOUT,
-    )
+    start_time = time.time()
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=settings.YTDLP_REQUEST_TIMEOUT,
+        )
+        duration = time.time() - start_time
 
-    # Log stderr if present even on success (may contain warnings)
-    if result.stderr:
-        logger.debug(
-            "yt-dlp stderr output",
+        # Log success with structured fields
+        logger.info(
+            "yt-dlp download succeeded",
             extra={
+                "operation": "download",
                 "client": strategy.name,
-                "stderr_snippet": result.stderr[:200],
+                "exit_code": result.returncode,
+                "duration_seconds": round(duration, 2),
+                "has_token": has_token,
             },
         )
 
-    return result
+        # Update metrics
+        ytdlp_operation_duration_seconds.labels(operation="download", client=strategy.name).observe(duration)
+        ytdlp_operation_attempts_total.labels(operation="download", client=strategy.name, result="success").inc()
+        ytdlp_token_usage_total.labels(operation="download", has_token=str(has_token).lower()).inc()
+
+        # Log stderr if present even on success (may contain warnings)
+        if result.stderr:
+            logger.debug(
+                "yt-dlp stderr output",
+                extra={
+                    "operation": "download",
+                    "client": strategy.name,
+                    "stderr_snippet": result.stderr[:200],
+                },
+            )
+
+        return result
+
+    except subprocess.CalledProcessError as e:
+        duration = time.time() - start_time
+
+        # Classify error for structured logging
+        error_class = classify_error(e.returncode, e.stderr or "", e)
+
+        logger.warning(
+            "yt-dlp download failed",
+            extra={
+                "operation": "download",
+                "client": strategy.name,
+                "exit_code": e.returncode,
+                "error_class": error_class.value,
+                "duration_seconds": round(duration, 2),
+                "has_token": has_token,
+                "stderr_snippet": (e.stderr or "")[:200],
+            },
+        )
+
+        # Update metrics
+        ytdlp_operation_duration_seconds.labels(operation="download", client=strategy.name).observe(duration)
+        ytdlp_operation_attempts_total.labels(operation="download", client=strategy.name, result="failure").inc()
+        ytdlp_operation_errors_total.labels(
+            operation="download", client=strategy.name, error_class=error_class.value
+        ).inc()
+        ytdlp_token_usage_total.labels(operation="download", has_token=str(has_token).lower()).inc()
+
+        raise
 
 
 def download_audio(url: str, dest_dir: Path) -> Path:

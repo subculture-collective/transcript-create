@@ -41,7 +41,7 @@ def normalize_channel_url(url: str) -> str:
     if url.endswith("/videos"):
         return url
 
-    # Append /videos to channel URLs and handle URLs
+    # Append /videos to channel URLs and handle (@username) URLs
     # Match patterns like youtube.com/channel/UCxxx or youtube.com/@username
     # Using simple string matching is sufficient for YouTube URLs
     if "youtube.com/channel/" in url or "youtube.com/@" in url:

@@ -17,6 +17,39 @@ WORKDIR = Path("/data")  # mount volume externally
 logger = get_logger(__name__)
 
 
+def normalize_channel_url(url: str) -> str:
+    """
+    Normalize a YouTube channel URL to ensure it includes /videos suffix.
+
+    This ensures we get all videos from the channel rather than a truncated list.
+    Works with channel IDs and handles (@username).
+
+    Args:
+        url: Input YouTube channel URL
+
+    Returns:
+        Normalized URL with /videos suffix
+
+    Examples:
+        https://youtube.com/channel/UCtest -> https://youtube.com/channel/UCtest/videos
+        https://youtube.com/@user -> https://youtube.com/@user/videos
+        https://youtube.com/channel/UCtest/videos -> https://youtube.com/channel/UCtest/videos (unchanged)
+    """
+    url = url.rstrip("/")
+
+    # Check if already has /videos suffix
+    if url.endswith("/videos"):
+        return url
+
+    # Append /videos to channel URLs and handle (@username) URLs
+    # Match patterns like youtube.com/channel/UCxxx or youtube.com/@username
+    # Using simple string matching is sufficient for YouTube URLs
+    if "youtube.com/channel/" in url or "youtube.com/@" in url:
+        return f"{url}/videos"
+
+    return url
+
+
 def expand_channel_if_needed(conn):
     from worker.metrics import youtube_requests_total
     from worker.youtube_resilience import classify_error, get_circuit_breaker, retry_with_backoff
@@ -49,7 +82,18 @@ def expand_channel_if_needed(conn):
 
     for job in jobs:
         url = job["input_url"]
-        logger.info("Expanding channel job", extra={"job_id": str(job["id"]), "url": url})
+        # Normalize channel URL to ensure /videos suffix for complete enumeration
+        normalized_url = normalize_channel_url(url)
+
+        logger.info(
+            "Expanding channel job",
+            extra={
+                "job_id": str(job["id"]),
+                "original_url": url,
+                "normalized_url": normalized_url,
+                "url_modified": url != normalized_url,
+            }
+        )
 
         # Use factory function to capture loop variable correctly for retry closure
         def make_fetch_channel_metadata(channel_url: str):
@@ -61,7 +105,7 @@ def expand_channel_if_needed(conn):
                 return json.loads(meta)
             return fetch_channel_metadata  # noqa: B023 (false positive - function returned immediately)
 
-        fetch_channel_metadata = make_fetch_channel_metadata(url)
+        fetch_channel_metadata = make_fetch_channel_metadata(normalized_url)
 
         def classify_channel_error(e: Exception):
             """Classify channel expansion error."""
@@ -83,7 +127,21 @@ def expand_channel_if_needed(conn):
             )
 
             entries = data.get("entries", [])
-            logger.info("Channel expansion found entries", extra={"count": len(entries)})
+            entry_count = len(entries)
+
+            # Extract channel ID for logging (None if not available)
+            channel_id = data.get("channel_id") or data.get("uploader_id")
+
+            logger.info(
+                "Channel expansion found entries",
+                extra={
+                    "job_id": str(job["id"]),
+                    "channel_id": channel_id,
+                    "entry_count": entry_count,
+                    "url": normalized_url,
+                }
+            )
+
             for idx, e in enumerate(entries):
                 yid = e["id"]
                 # Extract metadata for each channel video
@@ -99,7 +157,15 @@ def expand_channel_if_needed(conn):
                     ),
                     {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration},
                 )
-            logger.info("Marking job as downloading after expansion", extra={"job_id": str(job["id"])})
+
+            logger.info(
+                "Channel expansion complete",
+                extra={
+                    "job_id": str(job["id"]),
+                    "channel_id": channel_id,
+                    "videos_inserted": entry_count,
+                }
+            )
             conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
             youtube_requests_total.labels(operation="channel_expansion", result="success").inc()
 

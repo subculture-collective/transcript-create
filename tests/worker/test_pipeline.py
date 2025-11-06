@@ -29,6 +29,58 @@ def mock_conn():
     return mock
 
 
+class TestNormalizeChannelUrl:
+    """Tests for normalize_channel_url function."""
+
+    def test_appends_videos_to_channel_id_url(self):
+        """Test that /videos is appended to channel ID URLs."""
+        url = "https://youtube.com/channel/UCtest123"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "https://youtube.com/channel/UCtest123/videos"
+
+    def test_appends_videos_to_handle_url(self):
+        """Test that /videos is appended to handle (@username) URLs."""
+        url = "https://youtube.com/@testuser"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "https://youtube.com/@testuser/videos"
+
+    def test_preserves_existing_videos_suffix(self):
+        """Test that URLs already ending with /videos are not modified."""
+        url = "https://youtube.com/channel/UCtest123/videos"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "https://youtube.com/channel/UCtest123/videos"
+
+    def test_handles_trailing_slash(self):
+        """Test that trailing slashes are handled correctly."""
+        url = "https://youtube.com/channel/UCtest123/"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "https://youtube.com/channel/UCtest123/videos"
+
+    def test_handles_www_prefix(self):
+        """Test URLs with www prefix."""
+        url = "https://www.youtube.com/channel/UCtest123"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "https://www.youtube.com/channel/UCtest123/videos"
+
+    def test_handles_http_protocol(self):
+        """Test URLs with http protocol."""
+        url = "http://youtube.com/@testuser"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "http://youtube.com/@testuser/videos"
+
+    def test_preserves_handle_with_videos_suffix(self):
+        """Test that handle URLs with /videos are preserved."""
+        url = "https://youtube.com/@testuser/videos"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "https://youtube.com/@testuser/videos"
+
+    def test_does_not_modify_non_channel_urls(self):
+        """Test that non-channel URLs are not modified."""
+        url = "https://youtube.com/watch?v=abc123"
+        result = pipeline.normalize_channel_url(url)
+        assert result == "https://youtube.com/watch?v=abc123"
+
+
 class TestExpandSingleJob:
     """Tests for expand_single_if_needed function."""
 
@@ -131,7 +183,8 @@ class TestExpandChannelJob:
                 {"id": "video1", "title": "Video 1", "duration": 100},
                 {"id": "video2", "title": "Video 2", "duration": 200},
                 {"id": "video3", "title": "Video 3", "duration": 300},
-            ]
+            ],
+            "channel_id": "UCtest",
         }
         mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
 
@@ -147,6 +200,108 @@ class TestExpandChannelJob:
         execute_calls = mock_conn.execute.call_args_list
         # Should have: job query, 3 video inserts, state update
         assert len(execute_calls) >= 5
+
+    @patch("worker.pipeline.subprocess.check_output")
+    def test_expand_channel_job_appends_videos_suffix(self, mock_check_output, mock_conn):
+        """Test that channel expansion appends /videos to channel URLs."""
+        job_id = uuid.uuid4()
+
+        # Test with channel URL without /videos suffix
+        mock_job = {"id": job_id, "input_url": "https://youtube.com/channel/UCtest"}
+        mock_conn.execute.return_value.mappings.return_value.all.return_value = [mock_job]
+
+        yt_dlp_response = {
+            "entries": [{"id": "video1", "title": "Video 1", "duration": 100}],
+            "channel_id": "UCtest",
+        }
+        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+
+        pipeline.expand_channel_if_needed(mock_conn)
+
+        # Verify yt-dlp was called with /videos appended to URL
+        call_args = mock_check_output.call_args[0][0]
+        assert "https://youtube.com/channel/UCtest/videos" in call_args
+
+    @patch("worker.pipeline.subprocess.check_output")
+    def test_expand_channel_job_handle_url_gets_videos_suffix(self, mock_check_output, mock_conn):
+        """Test that handle URLs (@username) get /videos suffix."""
+        job_id = uuid.uuid4()
+
+        mock_job = {"id": job_id, "input_url": "https://youtube.com/@testuser"}
+        mock_conn.execute.return_value.mappings.return_value.all.return_value = [mock_job]
+
+        yt_dlp_response = {
+            "entries": [
+                {"id": "video1", "title": "Video 1", "duration": 100},
+                {"id": "video2", "title": "Video 2", "duration": 200},
+            ],
+            "uploader_id": "testuser",
+        }
+        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+
+        pipeline.expand_channel_if_needed(mock_conn)
+
+        # Verify yt-dlp was called with /videos appended
+        call_args = mock_check_output.call_args[0][0]
+        assert "https://youtube.com/@testuser/videos" in call_args
+
+    @patch("worker.pipeline.subprocess.check_output")
+    def test_expand_channel_job_preserves_existing_videos_suffix(self, mock_check_output, mock_conn):
+        """Test that URLs already with /videos suffix are not double-appended."""
+        job_id = uuid.uuid4()
+
+        mock_job = {"id": job_id, "input_url": "https://youtube.com/channel/UCtest/videos"}
+        mock_conn.execute.return_value.mappings.return_value.all.return_value = [mock_job]
+
+        yt_dlp_response = {
+            "entries": [{"id": "video1", "title": "Video 1", "duration": 100}],
+            "channel_id": "UCtest",
+        }
+        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+
+        pipeline.expand_channel_if_needed(mock_conn)
+
+        # Verify URL was not double-appended
+        call_args = mock_check_output.call_args[0][0]
+        assert "https://youtube.com/channel/UCtest/videos" in call_args
+        assert "https://youtube.com/channel/UCtest/videos/videos" not in call_args
+
+    @patch("worker.pipeline.subprocess.check_output")
+    def test_expand_channel_job_logs_expansion_counts(self, mock_check_output, mock_conn):
+        """Test that expansion logs include channel_id and entry counts."""
+        job_id = uuid.uuid4()
+
+        mock_job = {"id": job_id, "input_url": "https://youtube.com/channel/UCtest"}
+        mock_conn.execute.return_value.mappings.return_value.all.return_value = [mock_job]
+
+        yt_dlp_response = {
+            "entries": [
+                {"id": "video1", "title": "Video 1", "duration": 100},
+                {"id": "video2", "title": "Video 2", "duration": 200},
+                {"id": "video3", "title": "Video 3", "duration": 300},
+            ],
+            "channel_id": "UCtest",
+        }
+        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+
+        with patch("worker.pipeline.logger") as mock_logger:
+            pipeline.expand_channel_if_needed(mock_conn)
+
+            # Find the log call that contains expansion results by checking for entry_count in extra
+            expansion_log_calls = [
+                call for call in mock_logger.info.call_args_list
+                if "extra" in call[1] and "entry_count" in call[1].get("extra", {})
+            ]
+
+            assert len(expansion_log_calls) > 0, "Expected log with entry_count in extra"
+
+            # Verify the log contains channel_id and entry_count in extra
+            log_call = expansion_log_calls[0]
+            extra = log_call[1]["extra"]
+            assert "channel_id" in extra
+            assert extra["channel_id"] == "UCtest"
+            assert "entry_count" in extra
+            assert extra["entry_count"] == 3
 
     @patch("worker.pipeline.subprocess.check_output")
     def test_expand_channel_job_empty_channel(self, mock_check_output, mock_conn):

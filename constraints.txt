@@ -4,7 +4,7 @@
 # Exclude NVIDIA CUDA packages from constraints as they conflict with ROCm builds
 
 aiohappyeyeballs==2.6.1
-aiohttp==3.13.1
+aiohttp==3.13.2
 aiosignal==1.4.0
 alembic==1.17.0
 annotated-types==0.7.0
@@ -21,11 +21,11 @@ coloredlogs==15.0.1
 colorlog==6.10.1
 contourpy==1.3.3
 cryptography==46.0.3
-ctranslate2==4.6.0
+ctranslate2==4.6.1
 cycler==0.12.1
 einops==0.8.1
 fastapi==0.119.0
-faster-whisper==1.2.0
+faster-whisper==1.2.1
 filelock==3.20.0
 flatbuffers==25.9.23
 fonttools==4.60.1
@@ -45,7 +45,7 @@ Jinja2==3.1.6
 joblib==1.5.2
 julius==0.2.7
 kiwisolver==1.4.9
-lightning==2.5.5
+lightning==2.5.6
 lightning-utilities==0.15.2
 llvmlite==0.45.1
 Mako==1.3.10
@@ -59,7 +59,7 @@ multidict==6.7.0
 networkx==3.5
 numba==0.62.1
 numpy==2.2.6
-onnxruntime==1.23.1
+onnxruntime==1.23.2
 openai-whisper==20250625
 opentelemetry-api==1.38.0
 opentelemetry-exporter-otlp==1.38.0
@@ -76,8 +76,8 @@ pillow==12.0.0
 primePy==1.3
 propcache==0.4.1
 protobuf==6.33.0
-psycopg==3.2.10
-psycopg-binary==3.2.10
+psycopg==3.2.12
+psycopg-binary==3.2.12
 pyannote-audio==4.0.1
 pyannote-core==6.0.1
 pyannote-database==6.1.0
@@ -85,14 +85,14 @@ pyannote-metrics==4.0.0
 pyannote-pipeline==4.0.0
 pyannoteai-sdk==0.3.0
 pycparser==2.23
-pydantic==2.12.3
+pydantic==2.12.4
 pydantic-settings==2.11.0
-pydantic_core==2.41.4
+pydantic_core==2.41.5
 Pygments==2.19.2
 pyparsing==3.2.5
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
-pytorch-lightning==2.5.5
+pytorch-lightning==2.5.6
 pytorch-metric-learning==2.9.0
 pytz==2025.2
 PyYAML==6.0.3
@@ -102,7 +102,7 @@ requests==2.32.5
 rich==14.2.0
 safetensors==0.6.2
 scikit-learn==1.7.2
-scipy==1.16.2
+scipy==1.16.3
 setuptools==80.9.0
 six==1.17.0
 sniffio==1.3.1
@@ -117,7 +117,7 @@ tiktoken==0.12.0
 tokenizers==0.22.1
 torch-audiomentations==0.12.0
 torch_pitch_shift==1.2.5
-torchcodec==0.8.0
+torchcodec==0.8.1
 torchmetrics==1.8.2
 tqdm==4.67.1
 triton==3.5.0
@@ -130,5 +130,5 @@ uvloop==0.22.1
 watchfiles==1.1.1
 websockets==15.0.1
 yarl==1.22.0
-yt-dlp==2025.10.14
+yt-dlp==2025.10.22
 zipp==3.23.0

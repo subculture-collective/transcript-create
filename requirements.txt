@@ -37,7 +37,7 @@ stripe==13.0.1
 reportlab==4.4.4
 
 # Metrics and monitoring
-prometheus-client==0.21.0
+prometheus-client==0.23.1
 
 # Rate limiting
 slowapi==0.1.9

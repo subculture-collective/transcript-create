@@ -43,7 +43,7 @@ prometheus-client==0.21.0
 slowapi==0.1.9
 
 # Redis caching
-redis==5.2.1
+redis==7.0.1
 
 # Optional: Error tracking (set SENTRY_DSN to enable)
 # sentry-sdk==2.19.2

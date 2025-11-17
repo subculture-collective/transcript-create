@@ -10,7 +10,7 @@ pytest-httpx==0.30.0
 pytest-timeout==2.3.1
 pytest-xdist==3.6.1
 pypdf2==3.0.1
-openapi-spec-validator==0.7.1
+openapi-spec-validator==0.7.2
 
 # Linting and formatting
 ruff==0.9.1
@@ -19,5 +19,5 @@ isort==6.1.0
 mypy==1.14.1
 
 # Security scanning
-bandit[toml]==1.8.0
+bandit[toml]==1.8.6
 pip-audit==2.8.0

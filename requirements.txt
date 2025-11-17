@@ -4,14 +4,14 @@ uvicorn[standard]==0.38.0
 
 # Database
 sqlalchemy==2.0.44
-psycopg[binary]==3.2.10
+psycopg[binary]==3.2.12
 alembic==1.14.0
 
 # YouTube and media processing
 yt-dlp==2025.10.14
 
 # Whisper transcription backends
-faster-whisper==1.2.0
+faster-whisper==1.2.1
 # Using 20240930 - latest working PyPI version
 openai-whisper==20240930
 
@@ -22,7 +22,7 @@ pyannote.audio==4.0.1
 # Pin to latest available on PyPI for Python 3.10/Ubuntu 22.04; 2.3.x not published yet
 numpy==2.2.6
 python-dotenv==1.1.1
-pydantic==2.12.3
+pydantic==2.12.4
 pydantic-settings==2.11.0
 requests==2.32.5
 

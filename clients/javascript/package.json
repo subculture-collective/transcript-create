@@ -54,7 +54,7 @@
     "ky": "^1.7.3"
   },
   "devDependencies": {
-    "@types/node": "^22.10.6",
+    "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
     "@vitest/coverage-v8": "^3.0.6",

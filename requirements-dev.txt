@@ -10,7 +10,7 @@ pytest-httpx==0.30.0
 pytest-timeout==2.3.1
 pytest-xdist==3.6.1
 pypdf2==3.0.1
-openapi-spec-validator==0.7.1
+openapi-spec-validator==0.7.2
 
 # Linting and formatting
 ruff==0.9.1

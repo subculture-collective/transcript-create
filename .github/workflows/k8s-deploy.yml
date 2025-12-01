@@ -35,7 +35,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
@@ -102,7 +102,7 @@ jobs:
       id-token: write  # For OIDC authentication with cloud providers
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
@@ -141,7 +141,7 @@ jobs:
       id-token: write  # For OIDC authentication with cloud providers
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
@@ -189,7 +189,7 @@ jobs:
       id-token: write  # For OIDC authentication with cloud providers
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
@@ -268,7 +268,7 @@ jobs:
       contents: write  # For creating GitHub releases
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
@@ -290,7 +290,7 @@ jobs:
           helm package charts/transcript-create -d /tmp/charts
 
       - name: Upload chart artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v5
         with:
           name: helm-chart
           path: /tmp/charts/*.tgz

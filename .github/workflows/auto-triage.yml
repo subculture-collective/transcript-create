@@ -14,7 +14,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Ensure default label status todo
-              uses: actions/github-script@v7
+              uses: actions/github-script@v8
               with:
                   github-token: ${{ github.token }}
                   script: |
@@ -28,7 +28,7 @@ jobs:
 
             - name: Add issue to Project 7
               id: add_to_project
-              uses: actions/add-to-project@v1.0.1
+              uses: actions/add-to-project@v1.0.2
               with:
                   project-url: https://github.com/users/onnwee/projects/7
                   github-token: ${{ github.token }}

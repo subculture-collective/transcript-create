@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text as _text
 
@@ -6,6 +8,10 @@ from ..common.session import get_user_from_session as _get_user_from_session
 from ..db import get_db
 
 router = APIRouter(prefix="", tags=["Events"])
+
+
+def _json_payload(value: object) -> str:
+    return json.dumps(value if value is not None else {})
 
 
 @router.post(
@@ -33,8 +39,8 @@ def ingest_event(payload: dict, request: Request, db=Depends(get_db)):
     etype = payload.get("type") or "unknown"
     data = payload.get("payload") or {}
     db.execute(
-        _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,:ty,:p)"),
-        {"u": str(user["id"]) if user else None, "t": tok, "ty": etype, "p": data},
+        _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,:ty,CAST(:p AS JSONB))"),
+        {"u": str(user["id"]) if user else None, "t": tok, "ty": etype, "p": _json_payload(data)},
     )
     db.commit()
     return {"ok": True}
@@ -72,8 +78,8 @@ def ingest_events_batch(payload: dict, request: Request, db=Depends(get_db)):
         etype = e.get("type") or "unknown"
         data = e.get("payload") or {}
         db.execute(
-            _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,:ty,:p)"),
-            {"u": str(user["id"]) if user else None, "t": tok, "ty": etype, "p": data},
+            _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,:ty,CAST(:p AS JSONB))"),
+            {"u": str(user["id"]) if user else None, "t": tok, "ty": etype, "p": _json_payload(data)},
         )
     db.commit()
     return {"ok": True, "count": len(events)}

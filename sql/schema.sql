@@ -86,6 +86,23 @@ CREATE TABLE IF NOT EXISTS segments (
 );
 CREATE INDEX IF NOT EXISTS segments_video_time_idx ON segments(video_id, start_ms);
 
+CREATE TABLE IF NOT EXISTS transcript_blocks (
+    id BIGSERIAL PRIMARY KEY,
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    block_index INT NOT NULL,
+    start_ms INT NOT NULL,
+    end_ms INT NOT NULL,
+    speaker_label TEXT,
+    text TEXT NOT NULL,
+    segment_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    kind TEXT NOT NULL DEFAULT 'paragraph' CHECK (kind IN ('paragraph', 'speaker_turn')),
+    formatter_version TEXT NOT NULL DEFAULT 'rule-v1',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (video_id, block_index)
+);
+CREATE INDEX IF NOT EXISTS transcript_blocks_video_idx ON transcript_blocks(video_id);
+CREATE INDEX IF NOT EXISTS transcript_blocks_video_time_idx ON transcript_blocks(video_id, start_ms);
+
 -- ---
 -- Full-text search support for segments
 -- Adds a tsvector column, GIN index, and triggers to keep it in sync

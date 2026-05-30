@@ -17,12 +17,18 @@ function msToTimestamp(ms: number) {
   return `${hh}:${mm}:${ss}`;
 }
 
+function sourceLabel(source?: SearchHit['source'] | 'native' | 'youtube' | 'best') {
+  if (source === 'merged') return 'Merged transcript';
+  if (source === 'youtube') return 'YouTube captions';
+  return 'Whisper transcript';
+}
+
 export default function SearchPage() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get('q') ?? '');
   const [hits, setHits] = useState<SearchHit[]>([]);
-  const [source, setSource] = useState<'native' | 'youtube'>(() =>
-    params.get('source') === 'youtube' ? 'youtube' : 'native'
+  const [source, setSource] = useState<'best' | 'native' | 'youtube'>(() =>
+    params.get('source') === 'native' || params.get('source') === 'youtube' ? params.get('source') as 'native' | 'youtube' : 'best'
   );
   const [loading, setLoading] = useState(false);
   const [recentVideos, setRecentVideos] = useState<VideoInfo[]>([]);
@@ -92,6 +98,15 @@ export default function SearchPage() {
     const next = new URLSearchParams(params);
     if (q) next.set('q', q);
     else next.delete('q');
+    next.set('source', source);
+    setParams(next);
+  }
+
+  function switchSource(nextSource: 'best' | 'native' | 'youtube') {
+    setSource(nextSource);
+    const next = new URLSearchParams(params);
+    next.set('source', nextSource);
+    if (q) next.set('q', q);
     setParams(next);
   }
 
@@ -139,15 +154,29 @@ export default function SearchPage() {
             </button>
           )}
         </div>
-        <select
-          value={source}
-          onChange={(e) => setSource(e.target.value as 'native' | 'youtube')}
-          className="form-control sm:w-auto"
-          aria-label="Select transcript source"
-        >
-          <option value="native">Our Transcript</option>
-          <option value="youtube">YouTube Auto-Captions</option>
-        </select>
+        <div className="flex flex-wrap rounded-xl border border-border bg-surface p-1" aria-label="Select transcript source">
+          <button
+            type="button"
+            className={source === 'best' ? 'btn-primary' : 'btn-ghost'}
+            onClick={() => switchSource('best')}
+          >
+            Best available
+          </button>
+          <button
+            type="button"
+            className={source === 'native' ? 'btn-primary' : 'btn-ghost'}
+            onClick={() => switchSource('native')}
+          >
+            Whisper transcript
+          </button>
+          <button
+            type="button"
+            className={source === 'youtube' ? 'btn-primary' : 'btn-ghost'}
+            onClick={() => switchSource('youtube')}
+          >
+            YouTube captions
+          </button>
+        </div>
         <button 
           className="btn" 
           disabled={!q || loading}
@@ -243,7 +272,7 @@ export default function SearchPage() {
                         {msToTimestamp(h.start_ms)}–{msToTimestamp(h.end_ms)}
                       </time>
                       {' • '}
-                      <span>{source === 'native' ? 'Our Transcript' : 'YouTube'}</span>
+                      <span>{sourceLabel(h.source ?? source)}</span>
                     </div>
                     <div
                       className="prose prose-sm dark:prose-invert max-w-none"
@@ -256,7 +285,7 @@ export default function SearchPage() {
                         onClick={() =>
                           track({
                             type: 'result_click',
-                            payload: { videoId, start_ms: h.start_ms, id: h.id, source },
+                            payload: { videoId, start_ms: h.start_ms, id: h.id, source: h.source ?? source },
                           })
                         }
                       >

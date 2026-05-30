@@ -28,6 +28,9 @@ export default function AppLayout() {
             <Link to="/" className="nav-link">
               Search
             </Link>
+            <Link to="/streams" className="nav-link">
+              Streams
+            </Link>
             <Link to="/favorites" className="nav-link">
               Favorites
             </Link>
@@ -122,6 +125,13 @@ export default function AppLayout() {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Search
+              </Link>
+              <Link 
+                to="/streams" 
+                className="nav-link block py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Streams
               </Link>
               <Link 
                 to="/favorites" 

@@ -4,6 +4,7 @@ import './index.css';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AppLayout from './routes/AppLayout';
 import SearchPage from './routes/SearchPage';
+import StreamsPage from './routes/StreamsPage';
 import VideoPage from './routes/VideoPage';
 import LoginPage from './routes/LoginPage';
 import FavoritesPage from './routes/FavoritesPage';
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <SearchPage /> },
+      { path: 'streams', element: <StreamsPage /> },
       { path: 'v/:videoId', element: <VideoPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'pricing', element: <PricingPage /> },

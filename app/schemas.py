@@ -114,6 +114,8 @@ class TranscriptResponse(BaseModel):
 
     video_id: uuid.UUID = Field(..., description="Unique identifier for the video")
     segments: List[Segment] = Field(..., description="List of transcript segments in chronological order")
+    source: Literal["whisper", "youtube", "merged"] = Field("whisper", description="Transcript source used for this response")
+    source_label: str = Field("Whisper transcript", description="Human-readable transcript source label")
 
     model_config = {
         "json_schema_extra": {
@@ -148,6 +150,9 @@ class YouTubeTranscriptResponse(BaseModel):
     kind: Optional[str] = Field(None, description="Caption type: 'asr' (auto-generated) or manual")
     full_text: Optional[str] = Field(None, description="Full transcript text concatenated")
     segments: List[YTSegment] = Field(..., description="List of caption segments")
+    blocks: List["TranscriptBlockResponse"] = Field(default_factory=list, description="Formatted caption blocks")
+    source: Literal["youtube"] = Field("youtube", description="Transcript source used for this response")
+    source_label: str = Field("YouTube captions", description="Human-readable transcript source label")
 
 
 class SearchHit(BaseModel):
@@ -158,6 +163,7 @@ class SearchHit(BaseModel):
     start_ms: int = Field(..., description="Start time in milliseconds", ge=0)
     end_ms: int = Field(..., description="End time in milliseconds", ge=0)
     snippet: str = Field(..., description="Text snippet with search term highlighted")
+    source: Literal["whisper", "youtube", "merged"] = Field("whisper", description="Transcript source containing this hit")
 
     model_config = {
         "json_schema_extra": {
@@ -225,6 +231,17 @@ class VideoInfo(BaseModel):
     youtube_id: str = Field(..., description="YouTube video ID")
     title: Optional[str] = Field(None, description="Video title")
     duration_seconds: Optional[int] = Field(None, description="Video duration in seconds", ge=0)
+    state: Optional[str] = Field(None, description="Processing state")
+    caption_ingest_state: Optional[str] = Field(None, description="YouTube caption ingest state")
+    diarization_state: Optional[str] = Field(None, description="Diarization state")
+    uploaded_at: Optional[datetime] = Field(None, description="YouTube upload or stream publish time")
+    created_at: Optional[datetime] = Field(None, description="Local row creation time")
+    updated_at: Optional[datetime] = Field(None, description="Local row update time")
+    channel_name: Optional[str] = Field(None, description="YouTube channel name")
+    language: Optional[str] = Field(None, description="Detected or declared language")
+    category: Optional[str] = Field(None, description="Video category")
+    has_whisper_transcript: bool = Field(False, description="Whether Whisper transcript segments exist")
+    has_youtube_transcript: bool = Field(False, description="Whether YouTube captions exist")
 
     model_config = {
         "json_schema_extra": {
@@ -260,7 +277,7 @@ class SearchQuery(BaseModel):
     """Query parameters for search endpoint."""
 
     q: str = Field(..., min_length=1, max_length=500, description="Search query")
-    source: Literal["native", "youtube"] = "native"
+    source: Literal["best", "native", "youtube"] = "best"
     video_id: Optional[uuid.UUID] = None
     limit: int = Field(50, ge=1, le=200, description="Number of results to return")
     offset: int = Field(0, ge=0, description="Offset for pagination")
@@ -520,13 +537,35 @@ class CleanedTranscriptResponse(BaseModel):
     }
 
 
+class TranscriptBlockResponse(BaseModel):
+    """A persisted or derived formatted transcript block."""
+
+    block_index: int = Field(..., description="Zero-based block order")
+    start_ms: int = Field(..., description="Start time in milliseconds", ge=0)
+    end_ms: int = Field(..., description="End time in milliseconds", ge=0)
+    speaker_label: Optional[str] = Field(None, description="Speaker label for the block")
+    text: str = Field(..., description="Formatted block text")
+    segment_ids: List[int] = Field(..., description="Source segment indices included in the block")
+    kind: Literal["paragraph", "speaker_turn"] = Field(..., description="Block kind")
+    formatter_version: str = Field(..., description="Formatter version used to build the block")
+    primary_source: Optional[Literal["whisper", "youtube", "merged"]] = Field(None, description="Primary source selected for this block")
+    supporting_sources: List[Literal["whisper", "youtube"]] = Field(default_factory=list, description="Sources that supported or contributed to this block")
+    needs_review: bool = Field(False, description="True when source disagreement should be reviewed")
+    merge_reason: Optional[str] = Field(None, description="Deterministic merge decision reason")
+    similarity: Optional[float] = Field(None, description="Token similarity between Whisper and YouTube text for this block")
+
+
 class FormattedTranscriptResponse(BaseModel):
     """Response containing formatted transcript text."""
 
     video_id: uuid.UUID = Field(..., description="Unique identifier for the video")
+    segments: List[Segment] = Field(..., description="Raw transcript segments used for seeking and search mapping")
     text: str = Field(..., description="Formatted transcript text")
     format: Literal["inline", "dialogue", "structured"] = Field(..., description="Formatting style used")
     cleanup_config: CleanupConfig = Field(..., description="Cleanup configuration used")
+    blocks: List[TranscriptBlockResponse] = Field(default_factory=list, description="Formatted transcript blocks")
+    source: Literal["whisper", "youtube", "merged"] = Field("whisper", description="Transcript source used for this response")
+    source_label: str = Field("Whisper transcript", description="Human-readable transcript source label")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of formatting"
     )

@@ -2,17 +2,24 @@ import uuid
 from typing import Literal, Union
 
 from fastapi import APIRouter, Depends, Query, Response
-from worker.formatter import TranscriptFormatter
 
 from .. import crud
 from ..db import get_db
 from ..exceptions import TranscriptNotReadyError, VideoNotFoundError
+from ..transcripts.blocks import FORMATTER_VERSION, build_transcript_blocks
+from ..transcripts.merged import build_merged_transcript
+from ..transcripts.youtube_formatting import build_youtube_caption_blocks, format_youtube_caption_text
 from ..transcripts.service import TranscriptPresentationService
+from ..transcripts.types import TranscriptSegment
 from ..schemas import (
     CleanedTranscriptResponse,
     CleanupConfig,
     ErrorResponse,
     FormattedTranscriptResponse,
+    PaginatedVideos,
+    PageInfo,
+    Segment,
+    TranscriptBlockResponse,
     TranscriptResponse,
     VideoInfo,
     YouTubeTranscriptResponse,
@@ -21,6 +28,61 @@ from ..schemas import (
 
 router = APIRouter(prefix="", tags=["Videos"])
 transcript_presentation_service = TranscriptPresentationService()
+
+
+def _cleanup_config() -> CleanupConfig:
+    return CleanupConfig(
+        normalize_unicode=True,
+        normalize_whitespace=True,
+        remove_special_tokens=True,
+        preserve_sound_events=False,
+        add_punctuation=True,
+        punctuation_mode="rule-based",
+        add_internal_punctuation=True,
+        capitalize=True,
+        fix_all_caps=True,
+        remove_fillers=True,
+        filler_level=1,
+        segment_sentences=False,
+        merge_short_segments=False,
+        min_segment_length_ms=1000,
+        max_gap_for_merge_ms=500,
+        speaker_format="structured",
+        detect_hallucinations=True,
+        language_specific_rules=True,
+    )
+
+
+def _block_response(block, include_merge_metadata: bool = False) -> TranscriptBlockResponse:
+    payload = {
+        "block_index": block.block_index,
+        "start_ms": block.start_ms,
+        "end_ms": block.end_ms,
+        "speaker_label": block.speaker_label,
+        "text": block.text,
+        "segment_ids": block.segment_ids,
+        "kind": block.kind,
+        "formatter_version": getattr(block, "formatter_version", FORMATTER_VERSION),
+    }
+    if include_merge_metadata:
+        payload.update(
+            {
+                "primary_source": block.primary_source,
+                "supporting_sources": block.supporting_sources,
+                "needs_review": block.needs_review,
+                "merge_reason": block.merge_reason,
+                "similarity": block.similarity,
+            }
+        )
+    return TranscriptBlockResponse(**payload)
+
+
+def _youtube_segments_for_merge(db, video_id: uuid.UUID) -> tuple[dict | None, list, list[TranscriptSegment]]:
+    yt = crud.get_youtube_transcript(db, video_id)
+    if not yt:
+        return None, [], []
+    rows = crud.list_youtube_segments(db, yt["id"])
+    return yt, rows, [TranscriptSegment(start_ms=r[0], end_ms=r[1], text=r[2], speaker_label=None) for r in rows]
 
 
 @router.get(
@@ -72,6 +134,10 @@ def get_transcript(
         "raw",
         description="Transcript mode: raw (default), cleaned (with cleanup), or formatted (with paragraphs)",
     ),
+    source: Literal["best", "merged", "whisper", "youtube"] = Query(
+        "whisper",
+        description="Transcript source policy: whisper (default), youtube, merged, or best (merged if both sources exist)",
+    ),
     db=Depends(get_db),
     response: Response = None,
 ):
@@ -82,14 +148,73 @@ def get_transcript(
         raise VideoNotFoundError(str(video_id))
 
     segs = crud.list_segments(db, video_id)
+    segments = [transcript_presentation_service.from_db_row(r) for r in segs]
+    yt, yt_segs, yt_segments_for_merge = _youtube_segments_for_merge(db, video_id) if source in ("best", "merged", "youtube") else (None, [], [])
+
+    if source in ("best", "merged") and segments and yt_segments_for_merge:
+        merged = build_merged_transcript(str(video_id), segments, yt_segments_for_merge)
+        merged_segments = [
+            Segment(start_ms=s.start_ms, end_ms=s.end_ms, text=s.text, speaker_label=s.speaker_label)
+            for s in merged.segments
+        ]
+        if response:
+            response.headers["ETag"] = f'"{video_id}-{mode}-merged"'
+            response.headers["Cache-Control"] = "public, max-age=3600"
+        if mode == "raw":
+            return TranscriptResponse(
+                video_id=video_id,
+                segments=merged_segments,
+                source="merged",
+                source_label="Merged transcript",
+            )
+        blocks = [_block_response(block, include_merge_metadata=True) for block in merged.blocks]
+        return FormattedTranscriptResponse(
+            video_id=video_id,
+            segments=merged_segments,
+            text="\n\n".join(f"{block.speaker_label}:\n{block.text}" if block.speaker_label else block.text for block in blocks),
+            format="structured",
+            cleanup_config=_cleanup_config(),
+            blocks=blocks,
+            source="merged",
+            source_label="Merged transcript",
+        )
+
+    if source == "youtube" or (source == "best" and not segs):
+        if yt:
+            yt_segments = [Segment(start_ms=r[0], end_ms=r[1], text=r[2], speaker_label=None) for r in yt_segs]
+            rows = [(r[0], r[1], r[2]) for r in yt_segs]
+            if response:
+                response.headers["ETag"] = f'"{video_id}-{mode}-youtube"'
+                response.headers["Cache-Control"] = "public, max-age=3600"
+            if mode == "raw":
+                return TranscriptResponse(
+                    video_id=video_id,
+                    segments=yt_segments,
+                    source="youtube",
+                    source_label="YouTube captions",
+                )
+            blocks = [
+                _block_response(b)
+                for b in build_youtube_caption_blocks(rows)
+            ]
+            return FormattedTranscriptResponse(
+                video_id=video_id,
+                segments=yt_segments,
+                text=format_youtube_caption_text(rows),
+                format="structured",
+                cleanup_config=_cleanup_config(),
+                blocks=blocks,
+                source="youtube",
+                source_label="YouTube captions",
+            )
+        if source == "youtube":
+            raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     if not segs:
         # No segments found; inferring that the video is still processing
         raise TranscriptNotReadyError(str(video_id), "processing")
 
-    segments = [transcript_presentation_service.from_db_row(r) for r in segs]
-
     # Set ETag based on mode and video_id for cache differentiation
-    etag = f'"{video_id}-{mode}"'
+    etag = f'"{video_id}-{mode}-whisper"'
     if response:
         response.headers["ETag"] = etag
         response.headers["Cache-Control"] = "public, max-age=3600"
@@ -102,88 +227,51 @@ def get_transcript(
         return transcript_presentation_service.present_cleaned(video_id, segments)
 
     elif mode == "formatted":
-        # Apply full formatting with paragraph structure
-        formatter = TranscriptFormatter(
-            config={
-                "enabled": True,
-                "normalize_unicode": True,
-                "normalize_whitespace": True,
-                "remove_special_tokens": True,
-                "remove_fillers": True,
-                "filler_level": 2,
-                "add_sentence_punctuation": True,
-                "punctuation_mode": "rule-based",
-                "add_internal_punctuation": True,
-                "capitalize_sentences": True,
-                "fix_all_caps": True,
-                "detect_hallucinations": True,
-                "segment_by_sentences": True,
-                "merge_short_segments": True,
-                "speaker_format": "structured",
-                "min_segment_length_ms": 2000,
-                "max_gap_for_merge_ms": 1000,
-            }
-        )
-
-        formatted_segments = formatter.format_segments(
-            [
-                {
-                    "start": s.start_ms,
-                    "end": s.end_ms,
-                    "text": s.text,
-                    "speaker": s.speaker_label,
-                    "speaker_label": s.speaker_label,
-                }
-                for s in segments
+        persisted_blocks = [
+            block for block in crud.list_transcript_blocks(db, video_id) if block["formatter_version"] == FORMATTER_VERSION
+        ]
+        if persisted_blocks:
+            blocks = [
+                TranscriptBlockResponse(
+                    block_index=r["block_index"],
+                    start_ms=r["start_ms"],
+                    end_ms=r["end_ms"],
+                    speaker_label=r["speaker_label"],
+                    text=r["text"],
+                    segment_ids=r["segment_ids"],
+                    kind=r["kind"],
+                    formatter_version=r["formatter_version"],
+                    primary_source="whisper",
+                )
+                for r in persisted_blocks
             ]
-        )
+        else:
+            blocks = [
+                _block_response(b)
+                for b in build_transcript_blocks(segments)
+            ]
 
-        # Build formatted text with speaker labels and paragraphs
-        text_lines = []
-        prev_speaker = None
-
-        for seg in formatted_segments:
-            speaker = seg.get("speaker_label") or seg.get("speaker")
-
-            # Add speaker label if changed
-            if speaker and speaker != prev_speaker:
-                if text_lines:
-                    text_lines.append("")  # Blank line between speakers
-                text_lines.append(f"{speaker}:")
-                prev_speaker = speaker
-
-            # Add the text
-            text_lines.append(seg["text"])
-
-        formatted_text = "\n".join(text_lines)
-
-        # Map formatter config to CleanupConfig schema fields
-        cleanup_config = CleanupConfig(
-            normalize_unicode=formatter.config.get("normalize_unicode", True),
-            normalize_whitespace=formatter.config.get("normalize_whitespace", True),
-            remove_special_tokens=formatter.config.get("remove_special_tokens", True),
-            preserve_sound_events=formatter.config.get("preserve_sound_events", False),
-            add_punctuation=formatter.config.get("add_sentence_punctuation", True),
-            punctuation_mode=formatter.config.get("punctuation_mode", "rule-based"),
-            add_internal_punctuation=formatter.config.get("add_internal_punctuation", True),
-            capitalize=formatter.config.get("capitalize_sentences", True),
-            fix_all_caps=formatter.config.get("fix_all_caps", True),
-            remove_fillers=formatter.config.get("remove_fillers", True),
-            filler_level=formatter.config.get("filler_level", 2),
-            segment_sentences=formatter.config.get("segment_by_sentences", True),
-            merge_short_segments=formatter.config.get("merge_short_segments", True),
-            min_segment_length_ms=formatter.config.get("min_segment_length_ms", 2000),
-            max_gap_for_merge_ms=formatter.config.get("max_gap_for_merge_ms", 1000),
-            speaker_format=formatter.config.get("speaker_format", "structured"),
-            detect_hallucinations=formatter.config.get("detect_hallucinations", True),
-            language_specific_rules=formatter.config.get("language_specific_rules", True),
+        formatted_text = "\n\n".join(
+            f"{block.speaker_label}:\n{block.text}" if block.speaker_label else block.text for block in blocks
         )
 
         return FormattedTranscriptResponse(
             video_id=video_id,
+            segments=[
+                Segment(
+                    start_ms=s.start_ms,
+                    end_ms=s.end_ms,
+                    text=s.text,
+                    speaker_label=s.speaker_label,
+                )
+                for s in segments
+            ],
             text=formatted_text,
             format="structured",
-            cleanup_config=cleanup_config,
+            cleanup_config=_cleanup_config(),
+            blocks=blocks,
+            source="whisper",
+            source_label="Whisper transcript",
         )
 
 
@@ -204,14 +292,12 @@ def get_video_info(video_id: uuid.UUID, db=Depends(get_db)):
     v = crud.get_video(db, video_id)
     if not v:
         raise VideoNotFoundError(str(video_id))
-    return VideoInfo(
-        id=v["id"], youtube_id=v["youtube_id"], title=v.get("title"), duration_seconds=v.get("duration_seconds")
-    )
+    return VideoInfo(**dict(v))
 
 
 @router.get(
     "/videos",
-    response_model=list[VideoInfo],
+    response_model=PaginatedVideos,
     summary="List videos",
     description="""
     List all videos with pagination support.
@@ -223,14 +309,25 @@ def get_video_info(video_id: uuid.UUID, db=Depends(get_db)):
             "description": "List of videos retrieved successfully",
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "id": "123e4567-e89b-12d3-a456-426614174000",
-                            "youtube_id": "dQw4w9WgXcQ",
-                            "title": "Example Video",
-                            "duration_seconds": 212,
-                        }
-                    ]
+                    "example": {
+                        "items": [
+                            {
+                                "id": "123e4567-e89b-12d3-a456-426614174000",
+                                "youtube_id": "dQw4w9WgXcQ",
+                                "title": "Example Video",
+                                "duration_seconds": 212,
+                                "has_whisper_transcript": True,
+                                "has_youtube_transcript": False,
+                            }
+                        ],
+                        "page_info": {
+                            "has_next_page": False,
+                            "has_previous_page": False,
+                            "next_cursor": None,
+                            "previous_cursor": None,
+                            "total_count": 1,
+                        },
+                    }
                 }
             },
         }
@@ -239,21 +336,45 @@ def get_video_info(video_id: uuid.UUID, db=Depends(get_db)):
 def list_videos(
     limit: int = Query(50, ge=1, le=100, description="Maximum number of videos to return"),
     offset: int = Query(0, ge=0, description="Number of videos to skip for pagination"),
+    q: str | None = Query(None, description="Search query for title, youtube ID, or channel name"),
+    date_field: Literal["uploaded_at", "created_at", "updated_at"] = Query(
+        "uploaded_at", description="Date field used for date filtering"
+    ),
+    date_from: str | None = Query(None, description="Inclusive YYYY-MM-DD date lower bound"),
+    date_to: str | None = Query(None, description="Inclusive YYYY-MM-DD date upper bound"),
     completed_only: bool = Query(False, description="Only include completed videos that have transcript segments"),
     db=Depends(get_db),
 ):
     """List all videos with pagination."""
-    rows = (
-        crud.list_completed_videos(db, limit=limit, offset=offset)
-        if completed_only
-        else crud.list_videos(db, limit=limit, offset=offset)
+    rows = crud.list_videos(
+        db,
+        limit=limit,
+        offset=offset,
+        q=q,
+        date_field=date_field,
+        date_from=date_from,
+        date_to=date_to,
+        completed_only=completed_only,
     )
-    return [
-        VideoInfo(
-            id=r["id"], youtube_id=r["youtube_id"], title=r.get("title"), duration_seconds=r.get("duration_seconds")
-        )
-        for r in rows
-    ]
+    total_count = crud.count_videos(
+        db,
+        q=q,
+        date_field=date_field,
+        date_from=date_from,
+        date_to=date_to,
+        completed_only=completed_only,
+    )
+    items = [VideoInfo(**dict(r)) for r in rows]
+    return PaginatedVideos(
+        items=items,
+        page_info=PageInfo(
+            has_next_page=offset + len(items) < total_count,
+            has_previous_page=offset > 0,
+            next_cursor=str(offset + limit) if offset + len(items) < total_count else None,
+            previous_cursor=str(max(0, offset - limit)) if offset > 0 else None,
+            total_count=total_count,
+        ),
+    )
 
 
 @router.get(
@@ -280,7 +401,11 @@ def list_videos(
         },
     },
 )
-def get_youtube_transcript(video_id: uuid.UUID, db=Depends(get_db)):
+def get_youtube_transcript(
+    video_id: uuid.UUID,
+    mode: Literal["raw", "formatted"] = Query("raw", description="Caption mode: raw or formatted"),
+    db=Depends(get_db),
+):
     """Get YouTube's native closed captions for a video."""
     # Check if video exists
     video = crud.get_video(db, video_id)
@@ -292,10 +417,32 @@ def get_youtube_transcript(video_id: uuid.UUID, db=Depends(get_db)):
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
 
     segs = crud.list_youtube_segments(db, yt["id"])
+    segments = [YTSegment(start_ms=r[0], end_ms=r[1], text=r[2]) for r in segs]
+    blocks = []
+    full_text = yt.get("full_text")
+
+    if mode == "formatted":
+        rows = [(r[0], r[1], r[2]) for r in segs]
+        caption_blocks = build_youtube_caption_blocks(rows)
+        blocks = [
+            TranscriptBlockResponse(
+                block_index=b.block_index,
+                start_ms=b.start_ms,
+                end_ms=b.end_ms,
+                speaker_label=b.speaker_label,
+                text=b.text,
+                segment_ids=b.segment_ids,
+                kind=b.kind,
+                formatter_version=b.formatter_version,
+            )
+            for b in caption_blocks
+        ]
+        full_text = format_youtube_caption_text(rows)
     return YouTubeTranscriptResponse(
         video_id=video_id,
         language=yt.get("language"),
         kind=yt.get("kind"),
-        full_text=yt.get("full_text"),
-        segments=[YTSegment(start_ms=r[0], end_ms=r[1], text=r[2]) for r in segs],
+        full_text=full_text,
+        segments=segments,
+        blocks=blocks,
     )

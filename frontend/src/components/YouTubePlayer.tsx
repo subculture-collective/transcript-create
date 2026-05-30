@@ -3,6 +3,8 @@ import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 're
 type YouTubePlayer = {
   destroy?: () => void;
   seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
+  playVideo?: () => void;
+  getPlayerState?: () => number;
 };
 
 type YouTubePlayerConstructor = {
@@ -25,10 +27,12 @@ declare global {
 }
 
 export type YouTubePlayerHandle = {
-  seekTo: (seconds: number) => void;
+  seekTo: (seconds: number, options?: { play?: boolean }) => void;
 };
 
 type Props = { videoId: string; start?: number; title?: string };
+
+const YOUTUBE_PLAYING_STATE = 1;
 
 export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
   { videoId, start = 0, title },
@@ -36,7 +40,21 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
+  const pendingSeekRef = useRef<{ seconds: number; play: boolean } | null>(null);
   const [ready, setReady] = useState(false);
+
+  function seek(seconds: number, play = false) {
+    pendingSeekRef.current = { seconds, play };
+    if (!ready || !playerRef.current) return;
+    try {
+      playerRef.current.seekTo?.(seconds, true);
+      const isPlaying = playerRef.current.getPlayerState?.() === YOUTUBE_PLAYING_STATE;
+      if (play && !isPlaying) playerRef.current.playVideo?.();
+      pendingSeekRef.current = null;
+    } catch {
+      // Suppress errors during seek; keep pending seek for the next ready transition
+    }
+  }
 
   useEffect(() => {
     function loadApi() {
@@ -51,8 +69,8 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
     loadApi().then(() => {
       if (!containerRef.current || !window.YT?.Player) return;
       playerRef.current = new window.YT.Player(containerRef.current, {
-        height: '390',
-        width: '640',
+        height: '100%',
+        width: '100%',
         videoId,
         playerVars: { start, autoplay: 0 },
         events: {
@@ -67,31 +85,25 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
         // Suppress errors on cleanup
       }
     };
-  }, [videoId, start]);
+  }, [videoId]);
 
   useEffect(() => {
-    if (ready && start) {
-      try {
-        playerRef.current?.seekTo?.(start, true);
-      } catch {
-        // Suppress errors during seek
-      }
+    if (ready) {
+      const pending = pendingSeekRef.current;
+      if (pending) seek(pending.seconds, pending.play);
+      else if (start) seek(start, false);
     }
   }, [ready, start]);
 
   useImperativeHandle(ref, () => ({
-    seekTo(seconds: number) {
-      try {
-        playerRef.current?.seekTo?.(seconds, true);
-      } catch {
-        // Suppress errors during seek
-      }
+    seekTo(seconds: number, options?: { play?: boolean }) {
+      seek(seconds, options?.play ?? false);
     },
   }));
 
   return (
     <div className="aspect-video w-full overflow-hidden rounded-lg border bg-black">
-      <div ref={containerRef} title={title ?? 'YouTube player'} />
+      <div ref={containerRef} title={title ?? 'YouTube player'} className="h-full w-full" />
     </div>
   );
 });

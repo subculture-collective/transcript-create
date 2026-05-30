@@ -167,7 +167,13 @@ def pending_video_claim_sql() -> str:
                       )
                     )
                   )
-                ORDER BY v.idx ASC NULLS LAST, v.created_at DESC
+                ORDER BY
+                  CASE
+                    WHEN EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) THEN 1
+                    ELSE 0
+                  END ASC,
+                  v.idx ASC NULLS LAST,
+                  v.created_at DESC
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             """

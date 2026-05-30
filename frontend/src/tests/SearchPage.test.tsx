@@ -45,8 +45,9 @@ describe('SearchPage Integration Tests', () => {
     })
 
     expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument()
-    expect(screen.getByText('Our Transcript')).toBeInTheDocument()
-    expect(screen.getByText('YouTube Auto-Captions')).toBeInTheDocument()
+    expect(screen.getByText('Best available')).toBeInTheDocument()
+    expect(screen.getByText('Whisper transcript')).toBeInTheDocument()
+    expect(screen.getByText('YouTube captions')).toBeInTheDocument()
   })
 
   it('shows prompt when no query is entered', async () => {
@@ -77,7 +78,7 @@ describe('SearchPage Integration Tests', () => {
     const input = screen.getByPlaceholderText('Search transcripts…')
     await user.type(input, 'test query')
 
-    const searchButton = screen.getByRole('button', { name: /search/i })
+    const searchButton = screen.getByRole('button', { name: 'Search' })
     expect(searchButton).not.toBeDisabled()
   })
 
@@ -95,7 +96,7 @@ describe('SearchPage Integration Tests', () => {
     expect(input.value).toBe('test query')
   })
 
-  it('changes search source between native and youtube', async () => {
+  it('changes search source between best, native and youtube', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SearchPage />)
 
@@ -103,10 +104,10 @@ describe('SearchPage Integration Tests', () => {
       expect(screen.getByPlaceholderText('Search transcripts…')).toBeInTheDocument()
     })
 
-    const select = screen.getByDisplayValue('Our Transcript')
-    expect(select).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Best available' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Whisper transcript' })).toBeInTheDocument()
 
-    await user.selectOptions(select, 'youtube')
-    expect(screen.getByDisplayValue('YouTube Auto-Captions')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'YouTube captions' }))
+    expect(screen.getByRole('button', { name: 'YouTube captions' })).toBeInTheDocument()
   })
 })

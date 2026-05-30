@@ -5,8 +5,10 @@ import uuid
 from unittest.mock import Mock, patch
 
 import pytest
+from sqlalchemy import text
 
 from worker import pipeline
+from app import crud
 
 
 @pytest.fixture
@@ -429,6 +431,72 @@ class TestProcessVideo:
         mock_chunk.assert_called_once_with(wav_path, 900)
         mock_transcribe.assert_called_once()
         mock_diarize.assert_called_once()
+
+    @patch("worker.pipeline.crud.replace_transcript_blocks")
+    @patch("worker.pipeline.diarize_and_align")
+    @patch("worker.pipeline.transcribe_chunk")
+    @patch("worker.pipeline.chunk_audio")
+    @patch("worker.pipeline.ensure_wav_16k")
+    @patch("worker.pipeline.download_audio")
+    @patch("worker.pipeline.settings")
+    def test_process_video_persists_transcript_blocks(
+        self,
+        mock_settings,
+        mock_download,
+        mock_ensure_wav,
+        mock_chunk,
+        mock_transcribe,
+        mock_diarize,
+        mock_replace_blocks,
+        mock_engine,
+        tmp_path,
+    ):
+        video_id = uuid.uuid4()
+        job_id = uuid.uuid4()
+        mock_settings.CHUNK_SECONDS = 900
+        mock_settings.WHISPER_MODEL = "medium"
+        mock_settings.CLEANUP_AFTER_PROCESS = False
+        mock_video = {"id": video_id, "youtube_id": "test123", "job_id": job_id}
+        mock_conn = Mock()
+        mock_conn.execute.return_value.mappings.return_value.first.return_value = mock_video
+        mock_conn.__enter__ = Mock(return_value=mock_conn)
+        mock_conn.__exit__ = Mock(return_value=False)
+        mock_engine.begin.return_value = mock_conn
+        raw_path = tmp_path / "raw.m4a"
+        wav_path = tmp_path / "audio_16k.wav"
+        chunk_path = tmp_path / "chunk_0000.wav"
+        mock_download.return_value = raw_path
+        mock_ensure_wav.return_value = wav_path
+        from worker.audio import Chunk
+        mock_chunk.return_value = [Chunk(path=chunk_path, offset=0.0)]
+        transcript_segments = [{"start": 0.0, "end": 5.0, "text": "Test transcript", "speaker": "Speaker 1"}]
+        mock_transcribe.return_value = (transcript_segments, {"language": "en"})
+        mock_diarize.return_value = transcript_segments
+        with patch("worker.pipeline.WORKDIR", tmp_path):
+            pipeline.process_video(mock_engine, video_id)
+        assert mock_replace_blocks.called
+        blocks = mock_replace_blocks.call_args.args[2]
+        assert len(blocks) == 1
+        assert blocks[0].speaker_label == "Speaker 1"
+
+
+class TestTranscriptBlockCrud:
+    def test_replace_and_list_transcript_blocks(self, db_session):
+        job_id = crud.create_job(db_session, "single", "https://youtube.com/watch?v=test")
+        video_id = uuid.uuid4()
+        db_session.execute(
+            text("INSERT INTO videos (id, job_id, youtube_id, idx) VALUES (:id, :job_id, :yt_id, 0)"),
+            {"id": str(video_id), "job_id": str(job_id), "yt_id": "test123"},
+        )
+        db_session.commit()
+
+        from app.transcripts.blocks import TranscriptBlock
+
+        blocks = [TranscriptBlock(0, 0, 1000, None, "Hello world.", [0], "paragraph")]
+        crud.replace_transcript_blocks(db_session, video_id, blocks)
+        rows = crud.list_transcript_blocks(db_session, video_id)
+        assert len(rows) == 1
+        assert rows[0]["text"] == "Hello world."
 
     @patch("worker.pipeline.download_audio")
     @patch("worker.pipeline.WORKDIR")

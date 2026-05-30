@@ -93,7 +93,9 @@ describe('api service', () => {
 
       await api.getTranscript('video1')
 
-      expect(getMock).toHaveBeenCalledWith('videos/video1/transcript')
+      expect(getMock).toHaveBeenCalledWith('videos/video1/transcript', {
+        searchParams: { mode: 'formatted', source: 'best' },
+      })
     })
 
     it('returns transcript data', async () => {
@@ -145,6 +147,117 @@ describe('api service', () => {
 
       const result = await api.getVideo('video1')
       expect(result).toEqual(mockResponse)
+    })
+  })
+
+  describe('listRecentVideos', () => {
+    it('unwraps paginated response items', async () => {
+      const mockResponse = {
+        items: [
+          {
+            id: 'video1',
+            youtube_id: 'abc123',
+            title: 'Test Video',
+          },
+        ],
+        page_info: {
+          has_next_page: false,
+          has_previous_page: false,
+          next_cursor: null,
+          previous_cursor: null,
+          total_count: 1,
+        },
+      }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await api.listRecentVideos(12)
+
+      expect(result).toEqual(mockResponse.items)
+      expect(getMock).toHaveBeenCalledWith('videos', {
+        searchParams: { completed_only: 'true', limit: '12' },
+      })
+    })
+
+    it('tolerates legacy array video response', async () => {
+      const legacyResponse = [
+        {
+          id: 'video1',
+          youtube_id: 'abc123',
+          title: 'Legacy Video',
+        },
+      ]
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(legacyResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await api.listRecentVideos(12)
+
+      expect(result).toEqual(legacyResponse)
+    })
+  })
+
+  describe('listStreamLibrary', () => {
+    it('lists stream library with filters', async () => {
+      const mockResponse = {
+        items: [],
+        page_info: {
+          has_next_page: false,
+          has_previous_page: false,
+          next_cursor: null,
+          previous_cursor: null,
+          total_count: 0,
+        },
+      }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await api.listStreamLibrary({
+        limit: 24,
+        offset: 48,
+        completed_only: true,
+        q: 'hasan',
+        date_field: 'uploaded_at',
+        date_from: '2026-05-01',
+        date_to: '2026-05-31',
+      })
+
+      expect(result).toEqual(mockResponse)
+      expect(getMock).toHaveBeenCalledWith('videos', {
+        searchParams: {
+          limit: '24',
+          offset: '48',
+          completed_only: 'true',
+          q: 'hasan',
+          date_field: 'uploaded_at',
+          date_from: '2026-05-01',
+          date_to: '2026-05-31',
+        },
+      })
+    })
+
+    it('normalizes legacy array response for stream library', async () => {
+      const legacyResponse = [
+        {
+          id: 'video1',
+          youtube_id: 'abc123',
+          title: 'Legacy Video',
+        },
+      ]
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(legacyResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await api.listStreamLibrary({ limit: 12 })
+
+      expect(result.items).toEqual(legacyResponse)
+      expect(result.page_info.total_count).toBe(1)
     })
   })
 })

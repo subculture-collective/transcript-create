@@ -350,7 +350,7 @@ class TranscriptClient:
     async def search(
         self,
         query: str,
-        source: Literal["native", "youtube"] = "native",
+        source: Literal["best", "native", "youtube"] = "best",
         video_id: Optional[UUID] = None,
         limit: int = 50,
         offset: int = 0,
@@ -359,7 +359,7 @@ class TranscriptClient:
 
         Args:
             query: Search query
-            source: Search source ('native' or 'youtube')
+            source: Search source ('best', 'native', or 'youtube')
             video_id: Optional video ID to limit search
             limit: Maximum results to return
             offset: Result offset for pagination
@@ -386,12 +386,12 @@ class TranscriptClient:
 
     # Export API
 
-    async def export_srt(self, video_id: UUID, source: Literal["native", "youtube"] = "native") -> bytes:
+    async def export_srt(self, video_id: UUID, source: Literal["best", "native", "youtube"] = "best") -> bytes:
         """Export transcript as SRT.
 
         Args:
             video_id: Video ID
-            source: Export source ('native' or 'youtube')
+            source: Export source ('best', 'native', or 'youtube')
 
         Returns:
             SRT file content
@@ -401,7 +401,7 @@ class TranscriptClient:
             NotFoundError: Video not found
             APIError: API error
         """
-        if source == "native":
+        if source in ("best", "native"):
             path = f"/videos/{video_id}/transcript.srt"
         else:
             path = f"/videos/{video_id}/youtube-transcript.srt"
@@ -409,12 +409,12 @@ class TranscriptClient:
         response = await self._request("GET", path)
         return response.content
 
-    async def export_vtt(self, video_id: UUID, source: Literal["native", "youtube"] = "native") -> bytes:
+    async def export_vtt(self, video_id: UUID, source: Literal["best", "native", "youtube"] = "best") -> bytes:
         """Export transcript as VTT.
 
         Args:
             video_id: Video ID
-            source: Export source ('native' or 'youtube')
+            source: Export source ('best', 'native', or 'youtube')
 
         Returns:
             VTT file content
@@ -424,7 +424,7 @@ class TranscriptClient:
             NotFoundError: Video not found
             APIError: API error
         """
-        if source == "native":
+        if source in ("best", "native"):
             path = f"/videos/{video_id}/transcript.vtt"
         else:
             path = f"/videos/{video_id}/youtube-transcript.vtt"

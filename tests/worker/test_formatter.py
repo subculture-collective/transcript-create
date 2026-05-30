@@ -518,6 +518,8 @@ class TestHallucinationDetection:
 
         segments = [
             {"text": "Real content", "start": 0, "end": 1000},
+            {"text": "You", "start": 500, "end": 900},
+            {"text": "You.", "start": 900, "end": 1000},
             {"text": "Thank you.", "start": 1000, "end": 2000},
             {"text": "Thanks for watching.", "start": 2000, "end": 3000},
             {"text": "More real content", "start": 3000, "end": 4000},
@@ -529,6 +531,26 @@ class TestHallucinationDetection:
         assert len(result) == 2
         assert result[0]["text"] == "Real content"
         assert result[1]["text"] == "More real content"
+
+    def test_detect_repetitive_music_hallucinations(self):
+        """Test filtering repeated non-speech syllables produced during music beds."""
+        config = {
+            "enabled": True,
+            "detect_hallucinations": True,
+            "add_sentence_punctuation": False,
+        }
+        formatter = TranscriptFormatter(config=config)
+
+        segments = [
+            {"text": "Real intro starts here", "start": 0, "end": 1000},
+            {"text": "నికికికికికికికికికికికికికికికికికికికికికికికి", "start": 1000, "end": 2000},
+            {"text": "కికికికికికికికికికికికికికికికికికికికికికి�.", "start": 2000, "end": 3000},
+            {"text": "Actual spoken content", "start": 3000, "end": 4000},
+        ]
+
+        result = formatter.format_segments(segments)
+
+        assert [segment["text"] for segment in result] == ["Real intro starts here", "Actual spoken content"]
 
 
 class TestConfigurationToggles:

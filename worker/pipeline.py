@@ -9,8 +9,11 @@ from typing import Any
 
 from sqlalchemy import text
 
+from app import crud
 from app.logging_config import get_logger
 from app.settings import settings
+from app.transcripts.blocks import build_transcript_blocks
+from app.transcripts.types import TranscriptSegment
 from worker.audio import chunk_audio, download_audio, ensure_wav_16k
 from worker.diarize import diarize_and_align
 from worker.state_model import ACTIVE_VIDEO_STATES, OPEN_CAPTION_INGEST_STATES, TERMINAL_VIDEO_STATES, sql_string_list
@@ -662,6 +665,18 @@ def process_video(engine, video_id):
                     "wts": word_ts_json,
                 },
             )
+        blocks = build_transcript_blocks(
+            [
+                TranscriptSegment(
+                    start_ms=int(s["start"] * 1000),
+                    end_ms=int(s["end"] * 1000),
+                    text=s["text"],
+                    speaker_label=s.get("speaker"),
+                )
+                for s in diar_segments
+            ]
+        )
+        crud.replace_transcript_blocks(conn, video_id, blocks)
         logger.info("Marking video as completed")
         diarization_state = "completed" if settings.ENABLE_DIARIZATION and settings.DIARIZATION_INLINE else (
             "pending" if settings.ENABLE_DIARIZATION else "skipped"

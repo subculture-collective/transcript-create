@@ -37,9 +37,33 @@ SOUND_EVENT_TOKENS = [
 HALLUCINATION_PATTERNS = [
     r"^(\w+)\s+\1\s+\1\s+\1",  # Repeated word patterns (word repeated 4+ times)
     r"^\s*[\.\,\!\?]+\s*$",  # Only punctuation
+    r"^You\.?$",  # Common Whisper silence hallucination
     r"^Thank you\.$",  # Common hallucination
     r"^Thanks for watching\.$",
 ]
+
+
+def _is_repetitive_gibberish(text: str) -> bool:
+    """Detect repeated-character/syllable artifacts produced during music or silence."""
+    normalized = re.sub(r"[\s\.\,\!\?\uFFFD]+", "", text.strip())
+    if len(normalized) < 24:
+        return False
+
+    unique_chars = set(normalized)
+    if len(unique_chars) <= 3:
+        return True
+
+    most_common_count = max(normalized.count(char) for char in unique_chars)
+    if most_common_count / len(normalized) >= 0.70:
+        return True
+
+    for width in range(1, 7):
+        units = [normalized[i : i + width] for i in range(0, len(normalized), width)]
+        full_units = [unit for unit in units if len(unit) == width]
+        if len(full_units) >= 8 and len(set(full_units)) <= 2:
+            return True
+
+    return False
 
 
 class TranscriptFormatter:
@@ -210,6 +234,9 @@ class TranscriptFormatter:
         for pattern in HALLUCINATION_PATTERNS:
             if re.match(pattern, text, re.IGNORECASE):
                 return True
+
+        if _is_repetitive_gibberish(text):
+            return True
 
         return False
 

@@ -2,9 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import {
   api,
-  apiAddFavorite,
   apiListFavorites,
-  apiDeleteFavorite,
   favorites,
   useAuth,
   track,
@@ -30,6 +28,81 @@ function msToHms(ms: number) {
     .padStart(2, '0');
   const ss = (total % 60).toString().padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
+}
+
+type TranscriptTurn = {
+  key: string;
+  speaker: string | null;
+  segments: Array<{ segment: Segment; id: number; match?: SearchHit }>;
+};
+
+function speakerName(seg: Segment) {
+  return seg.speaker_label?.trim() || null;
+}
+
+function normalizeTranscriptText(text: string) {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .trim();
+}
+
+function shouldStartNewUnlabeledParagraph(
+  previous: { segment: Segment; id: number; match?: SearchHit } | undefined,
+  current: Segment,
+  currentText: string
+) {
+  if (!previous) return true;
+
+  const previousText = normalizeTranscriptText(previous.segment.text);
+  const silenceGapMs = current.start_ms - previous.segment.end_ms;
+  const previousEndsSentence = /[.!?]["')\]]?$/.test(previousText);
+  const currentLooksLikeNewThought = /^[A-Z0-9"'“‘]/.test(currentText);
+  const previousWordCount = previousText.split(/\s+/).filter(Boolean).length;
+
+  return (
+    silenceGapMs >= 1200 ||
+    (previousEndsSentence && currentLooksLikeNewThought && previousWordCount >= 8)
+  );
+}
+
+function buildTranscriptTurns(segments: Segment[], hits: SearchHit[] | null): TranscriptTurn[] {
+  return segments.reduce<TranscriptTurn[]>((turns, segment, idx) => {
+    const id = idx + 1;
+    const speaker = speakerName(segment);
+    const match = hits?.find((h) => h.start_ms >= segment.start_ms && h.start_ms < segment.end_ms);
+    const last = turns.at(-1);
+    const currentText = normalizeTranscriptText(segment.text);
+
+    if (!currentText) return turns;
+
+    if (!speaker) {
+      const previous = last?.segments.at(-1);
+      if (last && last.speaker === null && !shouldStartNewUnlabeledParagraph(previous, segment, currentText)) {
+        last.segments.push({ segment, id, match });
+        return turns;
+      }
+
+      turns.push({
+        key: `paragraph-${id}`,
+        speaker: null,
+        segments: [{ segment, id, match }],
+      });
+      return turns;
+    }
+
+    if (last?.speaker === speaker) {
+      last.segments.push({ segment, id, match });
+      return turns;
+    }
+
+    turns.push({
+      key: `${speaker}-${id}`,
+      speaker,
+      segments: [{ segment, id, match }],
+    });
+    return turns;
+  }, []);
 }
 
 export default function VideoPage() {
@@ -103,7 +176,7 @@ export default function VideoPage() {
       p.set('t', String(s));
       return p;
     });
-    playerRef.current?.seekTo(s);
+    playerRef.current?.seekTo(s, { play: true });
     track({ type: 'seek', payload: { videoId, seconds: s } });
   }
 
@@ -112,54 +185,6 @@ export default function VideoPage() {
     jumpTo(seg.start_ms);
     // update hash for deep-linking this segment
     history.replaceState(null, '', `#seg-${id}`);
-  }
-
-  function copyLink(segIdx: number, startMs: number) {
-    const s = Math.floor(startMs / 1000);
-    const url = `${location.origin}/v/${videoId}?t=${s}#seg-${segIdx}`;
-    navigator.clipboard?.writeText(url);
-  }
-
-  async function toggleFavorite(id: number, seg: Segment) {
-    if (!videoId) return;
-    if (user) {
-      // Check if a server favorite exists for this time range
-      const existing = serverFavs.find(
-        (f) => f.start_ms === seg.start_ms && f.end_ms === seg.end_ms
-      );
-      if (existing) {
-        await apiDeleteFavorite(existing.id).catch(() => {});
-        setServerFavs((prev) => prev.filter((f) => f.id !== existing.id));
-        track({
-          type: 'favorite_remove',
-          payload: { videoId, start_ms: seg.start_ms, end_ms: seg.end_ms },
-        });
-      } else {
-        const res = await apiAddFavorite({
-          video_id: videoId,
-          start_ms: seg.start_ms,
-          end_ms: seg.end_ms,
-          text: seg.text,
-        }).catch(() => null);
-        if (res?.id)
-          setServerFavs((prev) => [
-            { id: res.id, start_ms: seg.start_ms, end_ms: seg.end_ms },
-            ...prev,
-          ]);
-        track({
-          type: 'favorite_add',
-          payload: { videoId, start_ms: seg.start_ms, end_ms: seg.end_ms },
-        });
-      }
-    } else {
-      favorites.toggle({
-        videoId,
-        segIndex: id,
-        startMs: seg.start_ms,
-        endMs: seg.end_ms,
-        text: seg.text,
-      });
-    }
   }
 
   const start = useMemo(() => secondsToYouTubeTs(startSeconds), [startSeconds]);
@@ -177,40 +202,46 @@ export default function VideoPage() {
   useEffect(() => {
     setMatchCursor(0);
   }, [matchIndicesKey]);
+  const formattedBlocks = useMemo(
+    () => transcript?.blocks?.filter((block) => block.text.trim()) ?? [],
+    [transcript?.blocks]
+  );
+  const hasFormattedBlocks = formattedBlocks.length > 0;
+
   function gotoMatch(direction: 1 | -1) {
     if (matchIndices.length === 0) return;
     const next = (matchCursor + direction + matchIndices.length) % matchIndices.length;
     setMatchCursor(next);
     const segId = matchIndices[next];
-    const el = document.getElementById(`seg-${segId}`);
+    const blockId = hasFormattedBlocks ? formattedBlocks.find((candidate) => candidate.segment_ids.includes(segId - 1))?.block_index : null;
+    const el = blockId !== null ? document.getElementById(`block-${blockId}`) : document.getElementById(`seg-${segId}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const seg = transcript?.segments[segId - 1];
     if (seg) jumpTo(seg.start_ms);
   }
 
+  const transcriptTurns = useMemo(
+    () => buildTranscriptTurns(transcript?.segments ?? [], hits),
+    [transcript?.segments, hits]
+  );
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      <div className="lg:col-span-7">
-        {video ? (
-          <YouTubePlayer
-            ref={playerRef}
-            videoId={video.youtube_id}
-            start={start}
-            title={video?.title ?? undefined}
-          />
-        ) : (
-          <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
-            <div className="flex h-full items-center justify-center text-subtle" role="status" aria-live="polite">
-              <span className="inline-block animate-spin text-3xl mr-3" aria-hidden="true">⟳</span>
-              Loading player…
-            </div>
+    <div className="space-y-6">
+      <header className="surface-card space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="mb-1 text-sm font-medium uppercase tracking-wide text-subtle">Transcript</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+              {video?.title ?? 'Loading video...'}
+            </h1>
+            {transcript?.source_label && (
+              <p className="mt-2 text-sm text-muted">
+                Showing {transcript.source_label}
+                {transcript.source === 'youtube' ? ' because Whisper is not available yet.' : ''}
+              </p>
+            )}
           </div>
-        )}
-        <div className="mt-4 space-y-3">
-          <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{video?.title ?? 'Loading video...'}</h1>
           {video && (
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span className="text-muted">Exports:</span>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               <ExportMenu
                 videoId={video.id}
                 isPro={user?.plan === 'pro'}
@@ -221,9 +252,16 @@ export default function VideoPage() {
         </div>
         <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} />
         <form
-          className="mt-4"
+          className="grid gap-3 sm:grid-cols-[1fr_auto]"
           onSubmit={(e) => {
             e.preventDefault();
+            const form = e.currentTarget;
+            const data = new FormData(form);
+            const val = String(data.get('transcript-search') ?? '').trim();
+            const next = new URLSearchParams(params);
+            if (val) next.set('q', val);
+            else next.delete('q');
+            setParams(next);
           }}
         >
           <label htmlFor="transcript-search" className="sr-only">
@@ -231,6 +269,7 @@ export default function VideoPage() {
           </label>
           <input
             id="transcript-search"
+            name="transcript-search"
             type="search"
             defaultValue={params.get('q') ?? ''}
             onKeyDown={(e) => {
@@ -246,11 +285,34 @@ export default function VideoPage() {
             className="form-control"
             aria-label="Search within transcript"
           />
+          <button className="btn-primary" type="submit">
+            Search transcript
+          </button>
         </form>
-      </div>
-      <div className="lg:col-span-5">
-        <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="section-title">Transcript</h2>
+      </header>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
+        <aside className="lg:sticky lg:top-6 lg:col-span-1">
+          {video ? (
+            <YouTubePlayer
+              ref={playerRef}
+              videoId={video.youtube_id}
+              start={start}
+              title={video?.title ?? undefined}
+            />
+          ) : (
+            <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
+              <div className="flex h-full items-center justify-center text-subtle" role="status" aria-live="polite">
+                <span className="inline-block animate-spin text-3xl mr-3" aria-hidden="true">⟳</span>
+                Loading player…
+              </div>
+            </div>
+          )}
+        </aside>
+
+        <section className="lg:col-span-2">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="section-title">Transcript</h2>
           {matchIndices.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-muted" role="group" aria-label="Search navigation">
               <button
@@ -272,87 +334,93 @@ export default function VideoPage() {
               </button>
             </div>
           )}
-        </div>
+          </div>
         {!transcript && (
           <div className="py-8 text-center text-muted" role="status" aria-live="polite">
             <span className="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⟳</span>
             <p>Loading transcript…</p>
           </div>
         )}
-        {transcript && (
-          <ol className="space-y-0.5" role="list" aria-label="Transcript segments">
-            {transcript.segments.map((seg, idx) => {
-              const id = idx + 1;
-              const match = hits?.find(
-                (h) => h.start_ms >= seg.start_ms && h.start_ms < seg.end_ms
-              );
-              const isServerFav = !!serverFavs.find(
-                (f) => f.start_ms === seg.start_ms && f.end_ms === seg.end_ms
-              );
-              return (
-                <li
-                  id={`seg-${id}`}
-                  key={id}
-                  className={`transcript-segment group ${activeSegId === id || match ? 'transcript-segment-active' : ''} ${isServerFav || favorites.has({ videoId: videoId!, segIndex: id }) ? 'transcript-segment-favorite' : ''}`}
-                  role="article"
-                  aria-label={`Segment ${id}, timestamp ${msToHms(seg.start_ms)}`}
-                >
-                  <button 
-                    onClick={() => onClickSegment(seg, id)} 
-                    className="min-h-[44px] w-full cursor-pointer text-left"
-                    aria-label={`Play from ${msToHms(seg.start_ms)}`}
+        {transcript &&
+          (hasFormattedBlocks ? (
+            <div className="surface-card space-y-6" role="list" aria-label="Formatted transcript paragraphs">
+              {formattedBlocks.map((block) => {
+                const isFavorite = block.segment_ids.some((segIdx) => favorites.has({ videoId: videoId!, segIndex: segIdx + 1 }));
+                const isHighlighted = block.segment_ids.some((segIdx) =>
+                  hits?.some((h) => h.start_ms >= transcript.segments[segIdx]?.start_ms && h.start_ms < transcript.segments[segIdx]?.end_ms)
+                );
+                return (
+                  <div
+                    key={block.block_index}
+                    id={`block-${block.block_index}`}
+                    className={block.speaker_label ? 'grid gap-3 sm:grid-cols-[8rem_1fr]' : 'block'}
+                    role="listitem"
                   >
-                    <div className="mb-1 font-mono text-xs text-subtle">
-                      <time dateTime={msToHms(seg.start_ms)}>
-                        {msToHms(seg.start_ms)}
-                      </time>
+                    {block.speaker_label && <div className="font-semibold text-ink">{block.speaker_label}:</div>}
+                    <div className="space-y-2 text-lg leading-8 text-ink">
+                      <button
+                        type="button"
+                        onClick={() => jumpTo(block.start_ms)}
+                        className={`w-full cursor-pointer rounded px-1 text-left transition-colors hover:bg-surface-muted focus:bg-surface-muted ${
+                          isHighlighted ? 'bg-accent-soft ring-1 ring-accent' : ''
+                        } ${isFavorite ? 'ring-1 ring-warning' : ''}`}
+                        aria-label={`Play ${block.speaker_label ?? 'paragraph'} from ${msToHms(block.start_ms)}`}
+                      >
+                        {block.text}
+                      </button>
                     </div>
-                    <p className="leading-relaxed text-ink">{seg.text}</p>
-                  </button>
-                  <div className="mt-2 hidden items-center gap-3 text-xs text-muted group-hover:flex">
-                    <button
-                      className="nav-link py-2"
-                      onClick={() => copyLink(id, seg.start_ms)}
-                      aria-label="Copy link to this segment"
-                    >
-                      Copy link
-                    </button>
-                    <button 
-                      className="nav-link py-2" 
-                      onClick={() => toggleFavorite(id, seg)}
-                      aria-label={
-                        user
-                          ? isServerFav
-                            ? 'Remove from saved'
-                            : 'Save this segment'
-                          : favorites.has({ videoId: videoId!, segIndex: id })
-                            ? 'Remove from favorites'
-                            : 'Add to favorites'
-                      }
-                    >
-                      {user
-                        ? isServerFav
-                          ? 'Unsave'
-                          : 'Save'
-                        : favorites.has({ videoId: videoId!, segIndex: id })
-                          ? 'Unfavorite'
-                          : 'Favorite'}
-                    </button>
                   </div>
-                  {match && (
-                    <div className="mt-2 rounded bg-warning-soft p-2 text-xs text-ink" role="note">
-                      <div className="mb-1 font-medium">Match</div>
-                      <div
-                        className="prose prose-xs max-w-none"
-                        dangerouslySetInnerHTML={{ __html: match.snippet }}
-                      />
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        )}
+                );
+              })}
+            </div>
+          ) : (
+            <div className="surface-card space-y-6" role="list" aria-label="Transcript paragraphs">
+              {transcriptTurns.map((turn) => (
+                <div
+                  key={turn.key}
+                  className={turn.speaker ? 'grid gap-3 sm:grid-cols-[8rem_1fr]' : 'block'}
+                  role="listitem"
+                >
+                  {turn.speaker && <div className="font-semibold text-ink">{turn.speaker}:</div>}
+                  <div className="space-y-2 text-lg leading-8 text-ink">
+                    <p className="whitespace-normal">
+                      {turn.segments.map(({ segment: seg, id, match }) => {
+                        const isServerFav = !!serverFavs.find(
+                          (f) => f.start_ms === seg.start_ms && f.end_ms === seg.end_ms
+                        );
+                        const isFavorite = isServerFav || favorites.has({ videoId: videoId!, segIndex: id });
+                        return (
+                          <button
+                            id={`seg-${id}`}
+                            key={id}
+                            type="button"
+                            onClick={() => onClickSegment(seg, id)}
+                            className={`mx-0.5 cursor-pointer rounded px-1 text-left leading-8 transition-colors hover:bg-surface-muted focus:bg-surface-muted ${
+                              activeSegId === id || match ? 'bg-accent-soft ring-1 ring-accent' : ''
+                            } ${isFavorite ? 'ring-1 ring-warning' : ''}`}
+                            aria-label={`Play ${turn.speaker ?? 'paragraph'} from ${msToHms(seg.start_ms)}`}
+                          >
+                            {normalizeTranscriptText(seg.text)}{' '}
+                          </button>
+                        );
+                      })}
+                    </p>
+                    {turn.segments.some(({ match }) => match) && (
+                      <div className="rounded bg-warning-soft p-2 text-xs text-ink" role="note">
+                        <div className="mb-1 font-medium">Search match in this turn</div>
+                        {turn.segments
+                          .filter(({ match }) => match)
+                          .map(({ match, id }) => (
+                            <div key={id} className="prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: match?.snippet ?? '' }} />
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </section>
       </div>
     </div>
   );

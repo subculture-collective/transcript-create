@@ -20,10 +20,15 @@ from .. import crud
 from ..billing.policy import can_export_format
 from ..common.session import get_session_token, get_user_from_session, is_admin
 from ..db import get_db
-from ..exceptions import TranscriptNotReadyError
+from ..exceptions import NotFoundError, TranscriptNotReadyError, VideoNotFoundError
 from ..settings import settings
+from ..transcripts.merged import build_merged_transcript
+from ..transcripts.service import TranscriptPresentationService
+from ..transcripts.types import TranscriptSegment
+from ..transcripts.youtube_formatting import build_youtube_caption_blocks, format_youtube_caption_text
 
 router = APIRouter(prefix="", tags=["Exports"])
+transcript_presentation_service = TranscriptPresentationService()
 
 SESSION_COOKIE = "tc_session"
 
@@ -33,6 +38,37 @@ def _fmt_time_ms(ms: int) -> str:
     h, s = divmod(s, 3600)
     m, s = divmod(s, 60)
     return f"{h:02d}:{m:02d}:{s:02d},{ms_rem:03d}"
+
+
+def _fmt_time_vtt(ms: int) -> str:
+    s, ms_rem = divmod(int(ms), 1000)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}.{ms_rem:03d}"
+
+
+def _block_to_payload(block):
+    payload = {
+        "block_index": block.block_index,
+        "start_ms": block.start_ms,
+        "end_ms": block.end_ms,
+        "speaker_label": block.speaker_label,
+        "text": block.text,
+        "segment_ids": block.segment_ids,
+        "kind": block.kind,
+        "formatter_version": getattr(block, "formatter_version", "merged-v1"),
+    }
+    if hasattr(block, "primary_source"):
+        payload.update(
+            {
+                "primary_source": block.primary_source,
+                "supporting_sources": block.supporting_sources,
+                "needs_review": block.needs_review,
+                "merge_reason": block.merge_reason,
+                "similarity": block.similarity,
+            }
+        )
+    return payload
 
 
 def _export_allowed_or_402(
@@ -109,6 +145,37 @@ def _log_export(db, request: Request, user, payload: dict):
     exports_total.labels(format=fmt).inc()
 
 
+def _load_best_export_source(db, video_id: uuid.UUID):
+    """Return merged rows when possible, otherwise Whisper or formatted YouTube."""
+    v = crud.get_video(db, video_id)
+    if not v:
+        raise VideoNotFoundError(str(video_id))
+
+    segs = crud.list_segments(db, video_id)
+    yt = crud.get_youtube_transcript(db, video_id)
+    if segs and yt:
+        whisper_segments = [transcript_presentation_service.from_db_row(r) for r in segs]
+        yt_segs = crud.list_youtube_segments(db, yt["id"])
+        youtube_segments = [TranscriptSegment(start_ms=r[0], end_ms=r[1], text=r[2], speaker_label=None) for r in yt_segs]
+        merged = build_merged_transcript(str(video_id), whisper_segments, youtube_segments)
+        cue_rows = [(s.start_ms, s.end_ms, s.text, s.speaker_label) for s in merged.segments]
+        return "merged", v, cue_rows, merged.blocks
+
+    if segs:
+        return "native", v, segs, None
+
+    if yt:
+        yt_segs = crud.list_youtube_segments(db, yt["id"])
+        blocks = build_youtube_caption_blocks([(r[0], r[1], r[2]) for r in yt_segs])
+        return "youtube", v, yt_segs, blocks
+
+    raise NotFoundError(
+        message=f"Transcript for video {video_id} not found",
+        resource_type="transcript",
+        details={"video_id": str(video_id)},
+    )
+
+
 @router.get(
     "/videos/{video_id}/youtube-transcript.srt",
     summary="Export YouTube captions as SRT",
@@ -145,11 +212,12 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
     if gate is not None:
         return gate
     segs = crud.list_youtube_segments(db, yt["id"])
+    blocks = build_youtube_caption_blocks([(r[0], r[1], r[2]) for r in segs])
     lines = []
-    for i, (start_ms, end_ms, textv) in enumerate(segs, start=1):
+    for i, block in enumerate(blocks, start=1):
         lines.append(str(i))
-        lines.append(f"{_fmt_time_ms(start_ms)} --> {_fmt_time_ms(end_ms)}")
-        lines.append(textv)
+        lines.append(f"{_fmt_time_ms(block.start_ms)} --> {_fmt_time_ms(block.end_ms)}")
+        lines.append(block.text)
         lines.append("")
     body = "\n".join(lines)
     _log_export(db, request, user, {"format": "srt", "source": "youtube", "video_id": str(video_id)})
@@ -190,17 +258,12 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
     if gate is not None:
         return gate
     segs = crud.list_youtube_segments(db, yt["id"])
-
-    def vtt_time(ms: int) -> str:
-        s, ms_rem = divmod(ms, 1000)
-        h, s = divmod(s, 3600)
-        m, s = divmod(s, 60)
-        return f"{h:02d}:{m:02d}:{s:02d}.{ms_rem:03d}"
+    blocks = build_youtube_caption_blocks([(r[0], r[1], r[2]) for r in segs])
 
     lines = ["WEBVTT", ""]
-    for start_ms, end_ms, textv in segs:
-        lines.append(f"{vtt_time(start_ms)} --> {vtt_time(end_ms)}")
-        lines.append(textv)
+    for block in blocks:
+        lines.append(f"{_fmt_time_vtt(block.start_ms)} --> {_fmt_time_vtt(block.end_ms)}")
+        lines.append(block.text)
         lines.append("")
     body = "\n".join(lines)
     _log_export(db, request, user, {"format": "vtt", "source": "youtube", "video_id": str(video_id)})
@@ -225,43 +288,33 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
     },
 )
 def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
-    """Export Whisper transcript as SRT subtitle file."""
-    # Ensure video exists first -> return 404 for unknown video ids
-    v = crud.get_video(db, video_id)
-    if not v:
-        from ..exceptions import NotFoundError, VideoNotFoundError
-
-        raise VideoNotFoundError(str(video_id))
-
-    segs = crud.list_segments(db, video_id)
-    if not segs:
-        # Treat missing transcript/segments as 404 per tests' expectation
-        from ..exceptions import NotFoundError
-
-        raise NotFoundError(
-            message=f"Transcript for video {video_id} not found",
-            resource_type="transcript",
-            details={"video_id": str(video_id)},
-        )
+    """Export best available transcript as SRT subtitle file."""
+    source, _v, segs, blocks = _load_best_export_source(db, video_id)
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db,
         request,
         user,
         redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        require_auth=source == "youtube",
         export_format="srt",
     )
     if gate is not None:
         return gate
     lines = []
-    for i, (start_ms, end_ms, textv, _speaker) in enumerate(segs, start=1):
+    if blocks is not None:
+        cue_rows = [(block.start_ms, block.end_ms, block.text, None) for block in blocks]
+    else:
+        cue_rows = segs
+    for i, (start_ms, end_ms, textv, _speaker) in enumerate(cue_rows, start=1):
         lines.append(str(i))
         lines.append(f"{_fmt_time_ms(start_ms)} --> {_fmt_time_ms(end_ms)}")
         lines.append(textv)
         lines.append("")
     body = "\n".join(lines)
-    _log_export(db, request, user, {"format": "srt", "source": "native", "video_id": str(video_id)})
-    headers = {"Content-Disposition": f"attachment; filename=video-{video_id}.srt"}
+    _log_export(db, request, user, {"format": "srt", "source": source, "policy": "best", "video_id": str(video_id)})
+    suffix = ".youtube" if source == "youtube" else (".merged" if source == "merged" else "")
+    headers = {"Content-Disposition": f"attachment; filename=video-{video_id}{suffix}.srt"}
     return Response(content=body, media_type="text/plain", headers=headers)
 
 
@@ -282,48 +335,33 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
     },
 )
 def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
-    """Export Whisper transcript as WebVTT subtitle file."""
-    # Ensure video exists first
-    v = crud.get_video(db, video_id)
-    if not v:
-        from ..exceptions import VideoNotFoundError
-
-        raise VideoNotFoundError(str(video_id))
-
-    segs = crud.list_segments(db, video_id)
-    if not segs:
-        from ..exceptions import NotFoundError
-
-        raise NotFoundError(
-            message=f"Transcript for video {video_id} not found",
-            resource_type="transcript",
-            details={"video_id": str(video_id)},
-        )
+    """Export best available transcript as WebVTT subtitle file."""
+    source, _v, segs, blocks = _load_best_export_source(db, video_id)
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db,
         request,
         user,
         redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        require_auth=source == "youtube",
         export_format="vtt",
     )
     if gate is not None:
         return gate
 
-    def vtt_time(ms: int) -> str:
-        s, ms_rem = divmod(ms, 1000)
-        h, s = divmod(s, 3600)
-        m, s = divmod(s, 60)
-        return f"{h:02d}:{m:02d}:{s:02d}.{ms_rem:03d}"
-
     lines = ["WEBVTT", ""]
-    for start_ms, end_ms, textv, _speaker in segs:
-        lines.append(f"{vtt_time(start_ms)} --> {vtt_time(end_ms)}")
+    if blocks is not None:
+        cue_rows = [(block.start_ms, block.end_ms, block.text, None) for block in blocks]
+    else:
+        cue_rows = segs
+    for start_ms, end_ms, textv, _speaker in cue_rows:
+        lines.append(f"{_fmt_time_vtt(start_ms)} --> {_fmt_time_vtt(end_ms)}")
         lines.append(textv)
         lines.append("")
     body = "\n".join(lines)
-    _log_export(db, request, user, {"format": "vtt", "source": "native", "video_id": str(video_id)})
-    headers = {"Content-Disposition": f"attachment; filename=video-{video_id}.vtt"}
+    _log_export(db, request, user, {"format": "vtt", "source": source, "policy": "best", "video_id": str(video_id)})
+    suffix = ".youtube" if source == "youtube" else (".merged" if source == "merged" else "")
+    headers = {"Content-Disposition": f"attachment; filename=video-{video_id}{suffix}.vtt"}
     return Response(content=body, media_type="text/vtt", headers=headers)
 
 
@@ -358,36 +396,50 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
     },
 )
 def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
-    """Export Whisper transcript as JSON."""
-    # Ensure video exists first
-    v = crud.get_video(db, video_id)
-    if not v:
-        from ..exceptions import VideoNotFoundError
-
-        raise VideoNotFoundError(str(video_id))
-
-    segs = crud.list_segments(db, video_id)
-    if not segs:
-        from ..exceptions import NotFoundError
-
-        raise NotFoundError(
-            message=f"Transcript for video {video_id} not found",
-            resource_type="transcript",
-            details={"video_id": str(video_id)},
-        )
+    """Export best available transcript as JSON."""
+    source, _v, segs, blocks = _load_best_export_source(db, video_id)
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
         db,
         request,
         user,
         redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        require_auth=source == "youtube",
         export_format="json",
     )
     if gate is not None:
         return gate
-    payload = [{"start_ms": r[0], "end_ms": r[1], "text": r[2], "speaker_label": r[3]} for r in segs]
-    _log_export(db, request, user, {"format": "json", "source": "native", "video_id": str(video_id)})
-    headers = {"Content-Disposition": f"attachment; filename=video-{video_id}.json"}
+    if source == "youtube":
+        payload = {
+            "video_id": str(video_id),
+            "source": "youtube",
+            "source_label": "YouTube captions",
+            "segments": [{"start_ms": r[0], "end_ms": r[1], "text": r[2]} for r in segs],
+            "full_text": "\n\n".join(block.text for block in (blocks or [])),
+            "blocks": [_block_to_payload(block) for block in (blocks or [])],
+        }
+    elif source == "merged":
+        payload = {
+            "video_id": str(video_id),
+            "source": "merged",
+            "source_label": "Merged transcript",
+            "segments": [
+                {"start_ms": r[0], "end_ms": r[1], "text": r[2], "speaker_label": r[3]}
+                for r in segs
+            ],
+            "full_text": "\n\n".join(block.text for block in (blocks or [])),
+            "blocks": [_block_to_payload(block) for block in (blocks or [])],
+        }
+    else:
+        payload = {
+            "video_id": str(video_id),
+            "source": "whisper",
+            "source_label": "Whisper transcript",
+            "segments": [{"start_ms": r[0], "end_ms": r[1], "text": r[2], "speaker_label": r[3]} for r in segs],
+        }
+    _log_export(db, request, user, {"format": "json", "source": source, "policy": "best", "video_id": str(video_id)})
+    suffix = ".youtube" if source == "youtube" else (".merged" if source == "merged" else "")
+    headers = {"Content-Disposition": f"attachment; filename=video-{video_id}{suffix}.json"}
     return JSONResponse(payload, headers=headers)
 
 
@@ -424,7 +476,15 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
     if not yt:
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     segs = crud.list_youtube_segments(db, yt["id"])
-    payload = [{"start_ms": r[0], "end_ms": r[1], "text": r[2]} for r in segs]
+    blocks = build_youtube_caption_blocks([(r[0], r[1], r[2]) for r in segs])
+    payload = {
+        "video_id": str(video_id),
+        "language": yt.get("language"),
+        "kind": yt.get("kind"),
+        "segments": [{"start_ms": r[0], "end_ms": r[1], "text": r[2]} for r in segs],
+        "full_text": format_youtube_caption_text([(r[0], r[1], r[2]) for r in segs]),
+        "blocks": [_block_to_payload(block) for block in blocks],
+    }
     _log_export(db, request, user, {"format": "json", "source": "youtube", "video_id": str(video_id)})
     headers = {"Content-Disposition": f"attachment; filename=video-{video_id}.youtube.json"}
     return JSONResponse(payload, headers=headers)

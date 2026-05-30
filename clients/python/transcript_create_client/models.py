@@ -50,6 +50,8 @@ class TranscriptResponse(BaseModel):
 
     video_id: UUID = Field(..., description="Video ID")
     segments: List[Segment] = Field(..., description="Transcript segments")
+    source: Literal["whisper", "youtube", "merged"] = "whisper"
+    source_label: str = "Whisper transcript"
 
 
 class YTSegment(BaseModel):
@@ -68,6 +70,9 @@ class YouTubeTranscriptResponse(BaseModel):
     kind: Optional[str] = None
     full_text: Optional[str] = None
     segments: List[YTSegment]
+    blocks: List["TranscriptBlockResponse"] = Field(default_factory=list)
+    source: Literal["youtube"] = "youtube"
+    source_label: str = "YouTube captions"
 
 
 class VideoInfo(BaseModel):
@@ -87,6 +92,7 @@ class SearchHit(BaseModel):
     start_ms: int = Field(..., ge=0)
     end_ms: int = Field(..., ge=0)
     snippet: str
+    source: Literal["whisper", "youtube", "merged"] = "whisper"
 
 
 class SearchResponse(BaseModel):
@@ -161,11 +167,33 @@ class CleanedTranscriptResponse(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class TranscriptBlockResponse(BaseModel):
+    """A formatted transcript block with source segment mapping."""
+
+    block_index: int
+    start_ms: int = Field(..., ge=0)
+    end_ms: int = Field(..., ge=0)
+    speaker_label: Optional[str] = None
+    text: str
+    segment_ids: List[int]
+    kind: Literal["paragraph", "speaker_turn"]
+    formatter_version: str
+    primary_source: Optional[Literal["whisper", "youtube", "merged"]] = None
+    supporting_sources: List[Literal["whisper", "youtube"]] = Field(default_factory=list)
+    needs_review: bool = False
+    merge_reason: Optional[str] = None
+    similarity: Optional[float] = None
+
+
 class FormattedTranscriptResponse(BaseModel):
     """Response containing formatted transcript text."""
 
     video_id: UUID
+    segments: List[Segment]
     text: str
     format: Literal["inline", "dialogue", "structured"]
     cleanup_config: CleanupConfig
+    blocks: List[TranscriptBlockResponse] = Field(default_factory=list)
+    source: Literal["whisper", "youtube", "merged"] = "whisper"
+    source_label: str = "Whisper transcript"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

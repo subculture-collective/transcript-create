@@ -12,6 +12,7 @@ from app.schemas import (
     SearchHit,
     SearchResponse,
     Segment,
+    TranscriptBlockResponse,
     TranscriptResponse,
     VideoInfo,
     YouTubeTranscriptResponse,
@@ -111,6 +112,34 @@ class TestTranscriptSchemas:
         """Test TranscriptResponse with empty segments list."""
         response = TranscriptResponse(video_id=uuid.uuid4(), segments=[])
         assert len(response.segments) == 0
+
+    def test_formatted_transcript_response_blocks_default_empty(self):
+        from app.schemas import CleanupConfig, FormattedTranscriptResponse
+
+        response = FormattedTranscriptResponse(
+            video_id=uuid.uuid4(),
+            segments=[],
+            text="Hello",
+            format="structured",
+            cleanup_config=CleanupConfig(),
+        )
+
+        assert response.blocks == []
+
+    def test_transcript_block_response_valid(self):
+        block = TranscriptBlockResponse(
+            block_index=0,
+            start_ms=0,
+            end_ms=1000,
+            speaker_label="Speaker 1",
+            text="Hello world.",
+            segment_ids=[0, 1],
+            kind="speaker_turn",
+            formatter_version="rule-v1",
+        )
+
+        assert block.segment_ids == [0, 1]
+        assert block.kind == "speaker_turn"
 
     def test_youtube_transcript_response_valid(self):
         """Test creating a valid YouTubeTranscriptResponse schema."""

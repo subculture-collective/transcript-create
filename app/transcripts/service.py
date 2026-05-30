@@ -80,6 +80,8 @@ class TranscriptPresentationService:
                 )
                 for s in segments
             ],
+            source="whisper",
+            source_label="Whisper transcript",
         )
 
     def present_cleaned(self, video_id, segments: Sequence[TranscriptSegment]) -> CleanedTranscriptResponse:

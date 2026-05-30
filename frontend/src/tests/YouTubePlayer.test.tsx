@@ -14,6 +14,8 @@ describe('YouTubePlayer', () => {
     // Mock YouTube IFrame API
     mockPlayer = {
       seekTo: vi.fn(),
+      playVideo: vi.fn(),
+      getPlayerState: vi.fn(() => 2),
       destroy: vi.fn(),
     }
 
@@ -21,6 +23,8 @@ describe('YouTubePlayer', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Player: vi.fn(function (this: any, _element: any, config: any) {
         this.seekTo = mockPlayer.seekTo
+        this.playVideo = mockPlayer.playVideo
+        this.getPlayerState = mockPlayer.getPlayerState
         this.destroy = mockPlayer.destroy
         // Simulate onReady callback
         setTimeout(() => config.events.onReady(), 0)
@@ -56,6 +60,8 @@ describe('YouTubePlayer', () => {
     const config = call[1]
 
     expect(config.videoId).toBe('test-video-id')
+    expect(config.height).toBe('100%')
+    expect(config.width).toBe('100%')
     expect(config.playerVars.start).toBe(30)
     expect(config.playerVars.autoplay).toBe(0)
   })
@@ -92,6 +98,47 @@ describe('YouTubePlayer', () => {
     ref.current?.seekTo(120)
 
     expect(mockPlayer.seekTo).toHaveBeenCalledWith(120, true)
+  })
+
+  it('can seek and play via ref', async () => {
+    const ref = createRef<YouTubePlayerHandle>()
+    render(<YouTubePlayer ref={ref} videoId="test-video-id" />)
+
+    await waitFor(() => {
+      expect(window.YT!.Player).toHaveBeenCalled()
+    })
+
+    ref.current?.seekTo(120, { play: true })
+
+    expect(mockPlayer.seekTo).toHaveBeenCalledWith(120, true)
+    expect(mockPlayer.playVideo).toHaveBeenCalled()
+  })
+
+  it('does not call playVideo when already playing', async () => {
+    mockPlayer.getPlayerState = vi.fn(() => 1)
+    const ref = createRef<YouTubePlayerHandle>()
+    render(<YouTubePlayer ref={ref} videoId="test-video-id" />)
+
+    await waitFor(() => {
+      expect(window.YT!.Player).toHaveBeenCalled()
+    })
+
+    ref.current?.seekTo(120, { play: true })
+
+    expect(mockPlayer.seekTo).toHaveBeenCalledWith(120, true)
+    expect(mockPlayer.playVideo).not.toHaveBeenCalled()
+  })
+
+  it('does not recreate player when start prop changes', async () => {
+    const { rerender } = render(<YouTubePlayer videoId="test-video-id" start={30} />)
+
+    await waitFor(() => {
+      expect(window.YT!.Player).toHaveBeenCalledTimes(1)
+    })
+
+    rerender(<YouTubePlayer videoId="test-video-id" start={90} />)
+
+    expect(window.YT!.Player).toHaveBeenCalledTimes(1)
   })
 
   it('handles seekTo errors gracefully', async () => {

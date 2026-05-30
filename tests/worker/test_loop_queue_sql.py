@@ -23,3 +23,12 @@ def test_pending_video_claim_sql_treats_caption_failures_as_terminal_for_whisper
 
     for state in TERMINAL_CAPTION_INGEST_STATES:
         assert f"'{state}'" in sql
+
+
+def test_pending_video_claim_sql_prioritizes_videos_without_youtube_captions():
+    sql = pending_video_claim_sql()
+
+    assert "youtube_transcripts" in sql
+    assert "yt.video_id = v.id" in sql
+    assert "THEN 1" in sql
+    assert "ELSE 0" in sql

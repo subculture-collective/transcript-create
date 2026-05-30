@@ -1,9 +1,10 @@
 import functools
+import json
 import time
 import uuid
 
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.cache import cache
 from app.logging_config import get_logger
@@ -63,7 +64,7 @@ def _retry_on_transient_error(func):
 
 
 @_retry_on_transient_error
-def create_job(db, kind: str, url: str, meta: dict = None):
+def create_job(db, kind: str, url: str, meta: dict | None = None):
     import json
 
     from app.metrics import jobs_created_total
@@ -115,22 +116,73 @@ def get_video(db, video_id: uuid.UUID):
 
 
 @_retry_on_transient_error
-def list_videos(db, limit: int = 50, offset: int = 0):
-    return (
-        db.execute(
-            text(
-                """
-            SELECT id, youtube_id, title, duration_seconds
-            FROM videos
-            ORDER BY created_at DESC
-            LIMIT :limit OFFSET :offset
-        """
-            ),
-            {"limit": limit, "offset": offset},
-        )
-        .mappings()
-        .all()
-    )
+def list_videos(
+    db,
+    limit: int = 50,
+    offset: int = 0,
+    q: str | None = None,
+    date_field: str = "uploaded_at",
+    date_from=None,
+    date_to=None,
+    completed_only: bool = False,
+):
+    date_column = date_field if date_field in {"uploaded_at", "created_at", "updated_at"} else "uploaded_at"
+    where_clauses = []
+    params: dict[str, object] = {"limit": limit, "offset": offset}
+
+    if q:
+        where_clauses.append("(v.title ILIKE :q OR v.youtube_id ILIKE :q OR v.channel_name ILIKE :q)")
+        params["q"] = f"%{q}%"
+    if date_from is not None:
+        where_clauses.append(f"v.{date_column} >= CAST(:date_from AS timestamptz)")
+        params["date_from"] = date_from
+    if date_to is not None:
+        where_clauses.append(f"v.{date_column} < CAST(:date_to AS timestamptz) + INTERVAL '1 day'")
+        params["date_to"] = date_to
+    if completed_only:
+        where_clauses.append("v.state = 'completed'")
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    sql = f"""
+        SELECT
+            v.id, v.youtube_id, v.title, v.duration_seconds, v.state,
+            v.caption_ingest_state, v.diarization_state, v.uploaded_at,
+            v.created_at, v.updated_at, v.channel_name, v.language, v.category,
+            EXISTS (SELECT 1 FROM segments s WHERE s.video_id = v.id) AS has_whisper_transcript,
+            EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
+        FROM videos v
+        {where_sql}
+        ORDER BY COALESCE(v.uploaded_at, v.created_at) DESC, v.created_at DESC
+        LIMIT :limit OFFSET :offset
+    """
+    return db.execute(text(sql), params).mappings().all()
+
+
+@_retry_on_transient_error
+def count_videos(
+    db,
+    q: str | None = None,
+    date_field: str = "uploaded_at",
+    date_from=None,
+    date_to=None,
+    completed_only: bool = False,
+):
+    date_column = date_field if date_field in {"uploaded_at", "created_at", "updated_at"} else "uploaded_at"
+    where_clauses = []
+    params = {}
+    if q:
+        where_clauses.append("(v.title ILIKE :q OR v.youtube_id ILIKE :q OR v.channel_name ILIKE :q)")
+        params["q"] = f"%{q}%"
+    if date_from is not None:
+        where_clauses.append(f"v.{date_column} >= CAST(:date_from AS timestamptz)")
+        params["date_from"] = date_from
+    if date_to is not None:
+        where_clauses.append(f"v.{date_column} < CAST(:date_to AS timestamptz) + INTERVAL '1 day'")
+        params["date_to"] = date_to
+    if completed_only:
+        where_clauses.append("v.state = 'completed'")
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    return db.execute(text(f"SELECT count(*) AS count FROM videos v {where_sql}"), params).mappings().first()["count"]
 
 
 @_retry_on_transient_error
@@ -172,6 +224,67 @@ def list_youtube_segments(db, youtube_transcript_id):
         text("SELECT start_ms,end_ms,text FROM youtube_segments WHERE youtube_transcript_id=:t ORDER BY start_ms"),
         {"t": str(youtube_transcript_id)},
     ).all()
+
+
+@_retry_on_transient_error
+def replace_transcript_blocks(conn, video_id, blocks):
+    conn.execute(text("DELETE FROM transcript_blocks WHERE video_id = :v"), {"v": str(video_id)})
+    for block in blocks:
+        conn.execute(
+            text(
+                """
+                INSERT INTO transcript_blocks (
+                    video_id, block_index, start_ms, end_ms, speaker_label,
+                    text, segment_ids, kind, formatter_version
+                )
+                VALUES (
+                    :video_id, :block_index, :start_ms, :end_ms, :speaker_label,
+                    :text, :segment_ids, :kind, :formatter_version
+                )
+                """
+            ),
+            {
+                "video_id": str(video_id),
+                "block_index": block.block_index,
+                "start_ms": block.start_ms,
+                "end_ms": block.end_ms,
+                "speaker_label": block.speaker_label,
+                "text": block.text,
+                "segment_ids": json.dumps(block.segment_ids),
+                "kind": block.kind,
+                "formatter_version": block.formatter_version,
+            },
+        )
+
+
+@_retry_on_transient_error
+def list_transcript_blocks(db, video_id):
+    try:
+        return (
+            db.execute(
+                text(
+                    """
+                    SELECT block_index, start_ms, end_ms, speaker_label, text,
+                           segment_ids, kind, formatter_version
+                    FROM transcript_blocks
+                    WHERE video_id = :v
+                    ORDER BY block_index
+                    """
+                ),
+                {"v": str(video_id)},
+            )
+            .mappings()
+            .all()
+        )
+    except (OperationalError, ProgrammingError) as exc:
+        if "transcript_blocks" in str(exc).lower():
+            logger.warning(
+                "transcript_blocks table is unavailable; falling back to derived formatted blocks",
+                extra={"video_id": str(video_id), "error": str(exc)},
+            )
+            db.rollback()
+            return []
+        raise
 
 
 @_retry_on_transient_error
@@ -398,4 +511,124 @@ def search_youtube_segments_advanced(
     """
 
     rows = db.execute(text(sql), params).mappings().all()
+    return rows
+
+
+@_retry_on_transient_error
+def search_best_segments_advanced(
+    db,
+    q: str,
+    video_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = "relevance",
+    filters: dict | None = None,
+):
+    """Search the best available transcript source per video.
+
+    Policy: use Whisper/native segments when a video has them; otherwise use
+    YouTube caption segments. This lets caption-only videos appear in default
+    search without duplicating videos that already have Whisper transcripts.
+    """
+    from app.metrics import search_queries_total
+
+    filters = filters or {}
+    params = {"q": q, "limit": limit, "offset": offset, "title_q": f"%{q.strip()}%"}
+    native_where = ["(s.text_tsv @@ websearch_to_tsquery('english', :q) OR v.title ILIKE :title_q)"]
+    youtube_where = ["ys.text_tsv @@ websearch_to_tsquery('english', :q)"]
+
+    if video_id:
+        native_where.append("s.video_id = :vid")
+        youtube_where.append("yt.video_id = :vid")
+        params["vid"] = str(video_id)
+
+    if filters.get("date_from"):
+        native_where.append("v.uploaded_at >= :date_from")
+        youtube_where.append("v.uploaded_at >= :date_from")
+        params["date_from"] = filters["date_from"]
+    if filters.get("date_to"):
+        native_where.append("v.uploaded_at <= :date_to")
+        youtube_where.append("v.uploaded_at <= :date_to")
+        params["date_to"] = filters["date_to"]
+    if filters.get("min_duration") is not None:
+        native_where.append("v.duration_seconds >= :min_duration")
+        youtube_where.append("v.duration_seconds >= :min_duration")
+        params["min_duration"] = filters["min_duration"]
+    if filters.get("max_duration") is not None:
+        native_where.append("v.duration_seconds <= :max_duration")
+        youtube_where.append("v.duration_seconds <= :max_duration")
+        params["max_duration"] = filters["max_duration"]
+    if filters.get("channel"):
+        native_where.append("v.channel_name ILIKE :channel")
+        youtube_where.append("v.channel_name ILIKE :channel")
+        params["channel"] = f"%{filters['channel']}%"
+    if filters.get("language"):
+        native_where.append("v.language = :language")
+        youtube_where.append("v.language = :language")
+        params["language"] = filters["language"]
+    if filters.get("has_speaker_labels") is not None:
+        if filters["has_speaker_labels"]:
+            native_where.append("s.speaker_label IS NOT NULL")
+            youtube_where.append("FALSE")
+        else:
+            native_where.append("s.speaker_label IS NULL")
+
+    youtube_where.append("NOT EXISTS (SELECT 1 FROM segments native_s WHERE native_s.video_id = yt.video_id)")
+
+    if sort_by == "date_desc":
+        order_by = "uploaded_at DESC NULLS LAST, start_ms ASC"
+    elif sort_by == "date_asc":
+        order_by = "uploaded_at ASC NULLS LAST, start_ms ASC"
+    elif sort_by == "duration_desc":
+        order_by = "duration_seconds DESC NULLS LAST, start_ms ASC"
+    elif sort_by == "duration_asc":
+        order_by = "duration_seconds ASC NULLS LAST, start_ms ASC"
+    else:
+        order_by = "rank DESC, title_match DESC, start_ms ASC"
+
+    sql = f"""
+        SELECT id, video_id, start_ms, end_ms, snippet, source, rank, title_match,
+               uploaded_at, duration_seconds
+        FROM (
+            SELECT
+                s.id,
+                s.video_id,
+                s.start_ms,
+                s.end_ms,
+                CASE WHEN s.text_tsv @@ websearch_to_tsquery('english', :q)
+                    THEN ts_headline('english', s.text, websearch_to_tsquery('english', :q))
+                    ELSE coalesce(v.title, s.text)
+                END AS snippet,
+                'whisper' AS source,
+                ts_rank_cd(s.text_tsv, websearch_to_tsquery('english', :q)) AS rank,
+                CASE WHEN v.title ILIKE :title_q THEN 1 ELSE 0 END AS title_match,
+                v.uploaded_at,
+                v.duration_seconds
+            FROM segments s
+            JOIN videos v ON s.video_id = v.id
+            WHERE {' AND '.join(native_where)}
+
+            UNION ALL
+
+            SELECT
+                ys.id,
+                yt.video_id,
+                ys.start_ms,
+                ys.end_ms,
+                ts_headline('english', ys.text, websearch_to_tsquery('english', :q)) AS snippet,
+                'youtube' AS source,
+                ts_rank_cd(ys.text_tsv, websearch_to_tsquery('english', :q)) AS rank,
+                0 AS title_match,
+                v.uploaded_at,
+                v.duration_seconds
+            FROM youtube_segments ys
+            JOIN youtube_transcripts yt ON yt.id = ys.youtube_transcript_id
+            JOIN videos v ON yt.video_id = v.id
+            WHERE {' AND '.join(youtube_where)}
+        ) best_hits
+        ORDER BY {order_by}
+        LIMIT :limit OFFSET :offset
+    """
+    rows = db.execute(text(sql), params).mappings().all()
+    search_queries_total.labels(backend="postgres").inc()
     return rows

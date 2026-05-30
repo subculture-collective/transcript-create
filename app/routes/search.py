@@ -40,6 +40,7 @@ router = APIRouter(prefix="", tags=["Search"])
     backend for enhanced relevance and performance.
 
     **Search Sources:**
+    - `best`: Search Whisper where available, otherwise YouTube captions
     - `native`: Search Whisper-generated transcripts
     - `youtube`: Search YouTube's native closed captions
 
@@ -107,7 +108,7 @@ router = APIRouter(prefix="", tags=["Search"])
 def search(
     request: Request,
     q: str = Query(..., min_length=1, max_length=500, description="Search query text"),
-    source: str = Query("native", description="Search source: 'native' or 'youtube'"),
+    source: str = Query("best", description="Search source: 'best', 'native', or 'youtube'"),
     video_id: uuid.UUID | None = Query(None, description="Filter results to specific video"),
     limit: int = Query(50, ge=1, le=200, description="Maximum number of results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip for pagination"),
@@ -129,8 +130,8 @@ def search(
 
     if not q or not q.strip():
         raise ValidationError("Search query cannot be empty", field="q")
-    if source not in ("native", "youtube"):
-        raise ValidationError("Invalid source. Must be 'native' or 'youtube'", field="source")
+    if source not in ("best", "native", "youtube"):
+        raise ValidationError("Invalid source. Must be 'best', 'native', or 'youtube'", field="source")
     if limit < 1 or limit > 200:
         raise ValidationError("Limit must be between 1 and 200", field="limit")
     if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
@@ -167,7 +168,8 @@ def search(
             )
             db.commit()
     if settings.SEARCH_BACKEND == "opensearch":
-        index = settings.OPENSEARCH_INDEX_NATIVE if source == "native" else settings.OPENSEARCH_INDEX_YOUTUBE
+        effective_source = "native" if source == "best" else source
+        index = settings.OPENSEARCH_INDEX_NATIVE if effective_source == "native" else settings.OPENSEARCH_INDEX_YOUTUBE
         query: Dict[str, Any] = {
             "from": offset,
             "size": limit,
@@ -213,6 +215,7 @@ def search(
                     start_ms=int(src.get("start_ms", 0)),
                     end_ms=int(src.get("end_ms", 0)),
                     snippet=hl[0],
+                    source="whisper" if effective_source == "native" else "youtube",
                 )
             )
         total = (
@@ -262,7 +265,28 @@ def search(
     if has_speaker_labels is not None:
         filters["has_speaker_labels"] = has_speaker_labels
 
-    if source == "native":
+    if source == "best":
+        rows = crud.search_best_segments_advanced(
+            db,
+            q=q,
+            video_id=str(video_id) if video_id else None,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            filters=filters,
+        )
+        hits = [
+            SearchHit(
+                id=r["id"],
+                video_id=r["video_id"],
+                start_ms=r["start_ms"],
+                end_ms=r["end_ms"],
+                snippet=r["snippet"] or "",
+                source=r["source"],
+            )
+            for r in rows
+        ]
+    elif source == "native":
         service = SearchService(backend=PostgresSearchBackend(db))
         native_results = service.search(
             SearchRequest(
@@ -282,6 +306,7 @@ def search(
                 start_ms=r.start_ms,
                 end_ms=r.end_ms,
                 snippet=r.snippet,
+                source="whisper",
             )
             for r in native_results
         ]
@@ -302,6 +327,7 @@ def search(
                 start_ms=r["start_ms"],
                 end_ms=r["end_ms"],
                 snippet=r["snippet"] or "",
+                source="youtube",
             )
             for r in rows
         ]
@@ -658,7 +684,7 @@ def export_search_results(
     request: Request,
     q: str = Query(..., min_length=1, max_length=500, description="Search query text"),
     format: str = Query("csv", description="Export format: 'csv' or 'json'"),
-    source: str = Query("native", description="Search source: 'native' or 'youtube'"),
+    source: str = Query("best", description="Search source: 'best', 'native', or 'youtube'"),
     video_id: uuid.UUID | None = Query(None, description="Filter results to specific video"),
     limit: int = Query(500, ge=1, le=1000, description="Maximum number of results to export"),
     # Advanced filters
@@ -675,8 +701,8 @@ def export_search_results(
     """Export search results to CSV or JSON."""
     if not q or not q.strip():
         raise ValidationError("Search query cannot be empty", field="q")
-    if source not in ("native", "youtube"):
-        raise ValidationError("Invalid source. Must be 'native' or 'youtube'", field="source")
+    if source not in ("best", "native", "youtube"):
+        raise ValidationError("Invalid source. Must be 'best', 'native', or 'youtube'", field="source")
     if format not in ("csv", "json"):
         raise ValidationError("Invalid format. Must be 'csv' or 'json'", field="format")
 
@@ -701,7 +727,17 @@ def export_search_results(
 
     from .. import crud
 
-    if source == "native":
+    if source == "best":
+        rows = crud.search_best_segments_advanced(
+            db,
+            q=q,
+            video_id=str(video_id) if video_id else None,
+            limit=limit,
+            offset=0,
+            sort_by=sort_by,
+            filters=filters,
+        )
+    elif source == "native":
         rows = crud.search_segments_advanced(
             db,
             q=q,

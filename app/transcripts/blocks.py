@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Literal, Sequence
 
 from worker.formatter import TranscriptFormatter
@@ -8,7 +9,7 @@ from worker.formatter import TranscriptFormatter
 from .types import TranscriptSegment
 
 
-FORMATTER_VERSION = "rule-v3"
+FORMATTER_VERSION = "rule-v4"
 
 
 @dataclass(frozen=True)
@@ -32,10 +33,10 @@ def _formatter() -> TranscriptFormatter:
             "remove_special_tokens": True,
             "remove_fillers": True,
             "filler_level": 1,
-            "add_sentence_punctuation": True,
+            "add_sentence_punctuation": False,
             "punctuation_mode": "rule-based",
-            "add_internal_punctuation": True,
-            "capitalize_sentences": True,
+            "add_internal_punctuation": False,
+            "capitalize_sentences": False,
             "fix_all_caps": True,
             "detect_hallucinations": True,
             "segment_by_sentences": False,
@@ -67,16 +68,68 @@ def _ends_sentence(text: str) -> bool:
     return text.rstrip().endswith((".", "!", "?"))
 
 
+def _looks_like_fragment(text: str) -> bool:
+    words = text.strip().split()
+    if not words:
+        return True
+    if len(words) <= 8:
+        return True
+    if words[-1].lower().strip(".,!?;:") in {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "but",
+        "by",
+        "for",
+        "from",
+        "in",
+        "is",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "to",
+        "with",
+    }:
+        return True
+    return False
+
+
 def _should_break_unlabeled(previous: dict | None, current: dict, current_text: str) -> bool:
     if previous is None:
         return True
     gap_ms = int(current["start"]) - int(previous["end"])
     previous_text = str(previous.get("text", ""))
-    return gap_ms >= 1200 or (_ends_sentence(previous_text) and len(previous_text.split()) >= 14 and len(current_text.split()) >= 3)
+    return gap_ms >= 1200 or (_ends_sentence(previous_text) and not _looks_like_fragment(previous_text) and len(previous_text.split()) >= 18 and len(current_text.split()) >= 4)
 
 
 def _join_text(parts: Sequence[str]) -> str:
     return " ".join(part.strip() for part in parts if part.strip()).strip()
+
+
+def _capitalize_sentence_starts(text: str) -> str:
+    if not text:
+        return text
+    text = text[0].upper() + text[1:] if text[0].islower() else text
+    return re.sub(r"([.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+
+
+def _punctuate_block_text(text: str) -> str:
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return text
+
+    text = re.sub(r"\s+([,.!?;:])", r"\1", text)
+    text = re.sub(r"\b(and|but|or),\s+", r"\1 ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+([,.!?])\s*", r"\1 ", text).strip()
+
+    if text[-1] not in ".!?":
+        text += "."
+    return _capitalize_sentence_starts(text)
 
 
 def build_transcript_blocks(segments: Sequence[TranscriptSegment]) -> list[TranscriptBlock]:
@@ -95,7 +148,7 @@ def build_transcript_blocks(segments: Sequence[TranscriptSegment]) -> list[Trans
                 start_ms=int(current[0]["start"]),
                 end_ms=int(current[-1]["end"]),
                 speaker_label=current_speaker,
-                text=_join_text([str(segment["text"]) for segment in current]),
+                text=_punctuate_block_text(_join_text([str(segment["text"]) for segment in current])),
                 segment_ids=[int(segment["source_index"]) for segment in current],
                 kind="speaker_turn" if current_speaker else "paragraph",
             )

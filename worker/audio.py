@@ -69,6 +69,10 @@ class ClientStrategy:
 def _get_user_agent(client: str = "web_safari") -> str:
     """Return appropriate user agent for a given client."""
     user_agents = {
+        "mweb": (
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+        ),
         "web_safari": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
@@ -90,6 +94,8 @@ def _build_client_strategies() -> List[ClientStrategy]:
 
     # Client descriptions
     client_descriptions = {
+        "default": "yt-dlp default client selection",
+        "mweb": "Mobile web client (simple default)",
         "web_safari": "Safari web client with HLS streaming",
         "ios": "iOS mobile client",
         "android": "Android mobile client",
@@ -104,11 +110,10 @@ def _build_client_strategies() -> List[ClientStrategy]:
             continue
 
         extractor_args = get_client_extractor_args(client)
-        if extractor_args:
-            headers = ["--user-agent", _get_user_agent(client)]
-            # Add Referer header for web_safari
-            if client == "web_safari":
-                headers.extend(["--add-header", "Referer:https://www.youtube.com"])
+        if extractor_args is not None:
+            # Let yt-dlp own headers/user agents by default. Extra headers can still be
+            # supplied explicitly via YTDLP_EXTRA_ARGS when debugging a specific YouTube issue.
+            headers: List[str] = []
 
             strategies.append(
                 ClientStrategy(
@@ -123,18 +128,13 @@ def _build_client_strategies() -> List[ClientStrategy]:
 
     if not strategies:
         # Fallback to default strategy if none configured
-        logger.warning("No client strategies configured, using default web_safari")
+        logger.warning("No client strategies configured, using yt-dlp default client selection")
         strategies.append(
             ClientStrategy(
-                name="web_safari",
-                extractor_args=["--extractor-args", "youtube:player_client=web_safari"],
-                headers=[
-                    "--user-agent",
-                    _get_user_agent("web_safari"),
-                    "--add-header",
-                    "Referer:https://www.youtube.com",
-                ],
-                description="Safari web client with HLS streaming (default)",
+                name="default",
+                extractor_args=[],
+                headers=[],
+                description="yt-dlp default client selection",
             )
         )
 
@@ -190,7 +190,7 @@ def _yt_dlp_cmd(base_out: Path, url: str, strategy: Optional[ClientStrategy] = N
         "yt-dlp",
         "-v",
         "-f",
-        "bestaudio",
+        "bestaudio/best",
         "-o",
         str(base_out),
         # be nice to YouTube infra
@@ -350,7 +350,13 @@ def download_audio(url: str, dest_dir: Path) -> Path:
     Logs structured information about attempts and failures.
     """
     from worker.metrics import youtube_requests_total
-    from worker.youtube_resilience import ErrorClass, classify_error, get_circuit_breaker, retry_with_backoff
+    from worker.youtube_resilience import (
+        ErrorClass,
+        YouTubeAuthError,
+        classify_error,
+        get_circuit_breaker,
+        retry_with_backoff,
+    )
 
     out = dest_dir / "raw.m4a"
     strategies = _build_client_strategies()
@@ -441,16 +447,25 @@ def download_audio(url: str, dest_dir: Path) -> Path:
                     "returncode": e.returncode,
                 },
             )
+            if error_class == ErrorClass.AUTH:
+                raise YouTubeAuthError(
+                    "YouTube authentication failed during download. Refresh the mounted cookies.txt "
+                    "or disable YTDLP_COOKIES_PATH if cookies are no longer valid."
+                ) from e
         except Exception as e:
             last_err = e
+            error_class = classify_download_error(e)
             logger.warning(
                 "Client strategy raised exception",
                 extra={
                     "client": strategy.name,
                     "error": str(e)[:200],
                     "error_type": type(e).__name__,
+                    "error_classification": error_class.value,
                 },
             )
+            if error_class == ErrorClass.AUTH:
+                raise
 
         # Log failure for this client before moving to next
         logger.info(

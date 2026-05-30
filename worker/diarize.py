@@ -12,8 +12,11 @@ _pyannote_import_error = None
 def _get_pipeline():
     global _pipeline
     if _pipeline is None:
+        if not settings.ENABLE_DIARIZATION:
+            logger.info("Diarization disabled; returning Whisper segments")
+            return None
         if not settings.HF_TOKEN:
-            logger.warning("HF_TOKEN missing; skipping diarization (returning Whisper segments)")
+            logger.warning("ENABLE_DIARIZATION is true but HF_TOKEN is missing; skipping diarization")
             return None
         # Lazy import to avoid hard dependency when diarization isn't needed
         try:
@@ -26,16 +29,83 @@ def _get_pipeline():
         os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", settings.HF_TOKEN)
         os.environ.setdefault("HF_TOKEN", settings.HF_TOKEN)
         try:
-            _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-community-1", token=settings.HF_TOKEN)
+            _pipeline = Pipeline.from_pretrained(settings.DIARIZATION_MODEL, token=settings.HF_TOKEN)
         except Exception as e:
             logger.warning("Failed to initialize pyannote Pipeline; skipping diarization", extra={"error": str(e)})
             try:
                 # Fallback to older model
-                _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization", token=settings.HF_TOKEN)
+                _pipeline = Pipeline.from_pretrained(settings.DIARIZATION_FALLBACK_MODEL, token=settings.HF_TOKEN)
             except Exception as e2:
                 logger.warning("Fallback pipeline also failed; skipping diarization", extra={"error": str(e2)})
                 _pipeline = None
+        if _pipeline is not None:
+            device = settings.DIARIZATION_DEVICE.strip().lower()
+            if device and device != "auto":
+                try:
+                    import torch
+
+                    if device == "cuda" and not torch.cuda.is_available():
+                        logger.warning(
+                            "DIARIZATION_DEVICE=cuda requested but CUDA is not available; "
+                            "leaving pyannote device unchanged"
+                        )
+                    elif hasattr(_pipeline, "to"):
+                        _pipeline.to(torch.device(device))
+                        logger.info("Diarization pipeline moved to device", extra={"device": device})
+                except Exception as e:
+                    logger.warning(
+                        "Failed to move diarization pipeline to requested device",
+                        extra={"device": device, "error": str(e)},
+                    )
     return _pipeline
+
+
+def _build_audio_input(wav_path):
+    """Build pyannote input while avoiding torchcodec path decoding when possible.
+
+    pyannote.audio 4.x may try to decode file paths through torchcodec. The CUDA
+    image currently pins Torch/Torchaudio for GTX 1080 compatibility, which can
+    leave torchcodec unavailable or incompatible. Passing a preloaded waveform
+    keeps diarization optional and prevents that decoder mismatch from breaking
+    the worker.
+    """
+    try:
+        import torchaudio  # type: ignore
+
+        waveform, sample_rate = torchaudio.load(str(wav_path))
+        return {"waveform": waveform, "sample_rate": sample_rate}
+    except Exception as e:
+        logger.warning(
+            "Failed to preload audio for diarization; falling back to path input",
+            extra={"error": str(e)},
+        )
+        return {"audio": str(wav_path)}
+
+
+def run_diarization(wav_path):
+    """Run pyannote diarization and return raw diarization tracks.
+
+    Unlike diarize_and_align, this does not swallow pyannote exceptions. Use it
+    from the standalone worker where failures should be visible/retryable by DB
+    state rather than hidden as unlabeled transcript segments.
+    """
+    pipe = _get_pipeline()
+    if pipe is None:
+        raise RuntimeError("Diarization pipeline not available")
+    logger.info("Running diarization", extra={"wav_path": str(wav_path)})
+    diar_input = _build_audio_input(wav_path)
+    diar_output = pipe(diar_input) if callable(pipe) else pipe(str(wav_path))
+    diar = getattr(diar_output, "speaker_diarization", diar_output)
+    diar_list = []
+    label_first_time = {}
+    for seg, _track, label in diar.itertracks(yield_label=True):
+        diar_list.append((seg.start, seg.end, label))
+        if label not in label_first_time:
+            label_first_time[label] = seg.start
+    ordered_labels = sorted(label_first_time.items(), key=lambda kv: kv[1])
+    friendly = {raw: f"Speaker {i + 1}" for i, (raw, _t) in enumerate(ordered_labels)}
+    logger.info("Diarization produced speaker segments", extra={"segment_count": len(diar_list)})
+    return diar_list, friendly
 
 
 def diarize_and_align(wav_path, whisper_segments):
@@ -44,21 +114,7 @@ def diarize_and_align(wav_path, whisper_segments):
         if pipe is None:
             logger.info("Diarization pipeline not available; returning whisper segments as-is")
             return whisper_segments
-        logger.info("Running diarization", extra={"wav_path": str(wav_path)})
-        # pyannote Pipeline accepts raw path or dict with key 'audio'
-        diar = pipe({"audio": str(wav_path)}) if callable(pipe) else pipe(str(wav_path))
-        diar_list = []
-        # itertracks(yield_label=True) yields (segment, track, label)
-        label_first_time = {}
-        for seg, _track, label in diar.itertracks(yield_label=True):
-            diar_list.append((seg.start, seg.end, label))
-            # record first occurrence to derive stable speaker ordering
-            if label not in label_first_time:
-                label_first_time[label] = seg.start
-        logger.info("Diarization produced speaker segments", extra={"segment_count": len(diar_list)})
-        # Build friendly names like "Speaker 1", "Speaker 2" based on first appearance
-        ordered_labels = sorted(label_first_time.items(), key=lambda kv: kv[1])
-        friendly = {raw: f"Speaker {i + 1}" for i, (raw, _t) in enumerate(ordered_labels)}
+        diar_list, friendly = run_diarization(wav_path)
         diar_segments = []
         speakers_assigned = 0
         for w in whisper_segments:

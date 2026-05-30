@@ -16,6 +16,7 @@ from typing import Callable, Optional, TypeVar
 
 from app.logging_config import get_logger
 from app.settings import settings
+from worker.youtube.errors import YouTubeErrorKind, classify_youtube_error
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,8 @@ try:
     _METRICS_AVAILABLE = True
 except ImportError:
     _METRICS_AVAILABLE = False
+    youtube_circuit_breaker_state = None
+    youtube_circuit_breaker_transitions_total = None
 
 T = TypeVar("T")
 
@@ -42,6 +45,14 @@ class ErrorClass(Enum):
     UNKNOWN = "unknown"  # Unclassified error
 
 
+class YouTubeAuthError(RuntimeError):
+    """Non-retryable YouTube authentication/cookie failure."""
+
+
+class YouTubeRateLimitError(RuntimeError):
+    """YouTube has rate-limited the current session/IP/cookies."""
+
+
 def classify_error(returncode: int, stderr: str = "", exception: Optional[Exception] = None) -> ErrorClass:
     """Classify error from yt-dlp or YouTube request.
 
@@ -54,10 +65,18 @@ def classify_error(returncode: int, stderr: str = "", exception: Optional[Except
         ErrorClass enum value
     """
     stderr_lower = stderr.lower() if stderr else ""
+    normalized = classify_youtube_error(stderr, returncode=returncode)
+    mapped = error_class_from_youtube_kind(normalized.kind)
+    if mapped != ErrorClass.UNKNOWN:
+        return mapped
 
     # Check exception type first
     if exception:
         exc_name = type(exception).__name__.lower()
+        if isinstance(exception, YouTubeRateLimitError) or "ratelimit" in exc_name or "rate_limit" in exc_name:
+            return ErrorClass.THROTTLE
+        if isinstance(exception, YouTubeAuthError) or "auth" in exc_name:
+            return ErrorClass.AUTH
         if "timeout" in exc_name:
             return ErrorClass.TIMEOUT
         if "connection" in exc_name or "network" in exc_name:
@@ -74,11 +93,25 @@ def classify_error(returncode: int, stderr: str = "", exception: Optional[Except
         return ErrorClass.THROTTLE
     if "throttl" in stderr_lower:
         return ErrorClass.THROTTLE
+    if "rate-limited" in stderr_lower or "rate limited" in stderr_lower:
+        return ErrorClass.THROTTLE
+    if "current session has been rate" in stderr_lower:
+        return ErrorClass.THROTTLE
+    if "up to an hour" in stderr_lower and "youtube" in stderr_lower:
+        return ErrorClass.THROTTLE
 
     # Authentication / authorization errors
     if "403" in stderr_lower or "forbidden" in stderr_lower:
         return ErrorClass.AUTH
     if "sign in" in stderr_lower or "bot" in stderr_lower:
+        return ErrorClass.AUTH
+    if "cookies" in stderr_lower and (
+        "expired" in stderr_lower
+        or "invalid" in stderr_lower
+        or "rotated" in stderr_lower
+        or "no longer" in stderr_lower
+        or "authentication" in stderr_lower
+    ):
         return ErrorClass.AUTH
 
     # Not found / unavailable
@@ -93,6 +126,22 @@ def classify_error(returncode: int, stderr: str = "", exception: Optional[Except
     if "timeout" in stderr_lower or "timed out" in stderr_lower:
         return ErrorClass.TIMEOUT
 
+    return ErrorClass.UNKNOWN
+
+
+def error_class_from_youtube_kind(kind: YouTubeErrorKind) -> ErrorClass:
+    if kind == YouTubeErrorKind.THROTTLE:
+        return ErrorClass.THROTTLE
+    if kind == YouTubeErrorKind.AUTH:
+        return ErrorClass.AUTH
+    if kind == YouTubeErrorKind.TOKEN:
+        return ErrorClass.TOKEN
+    if kind == YouTubeErrorKind.NOT_FOUND:
+        return ErrorClass.NOT_FOUND
+    if kind == YouTubeErrorKind.NETWORK:
+        return ErrorClass.NETWORK
+    if kind == YouTubeErrorKind.TIMEOUT:
+        return ErrorClass.TIMEOUT
     return ErrorClass.UNKNOWN
 
 
@@ -218,7 +267,7 @@ class CircuitBreaker:
         """
         # Don't count NOT_FOUND errors (video unavailable is not a service issue)
         # Don't count TOKEN errors (token manager handles these separately)
-        return error_class not in (ErrorClass.NOT_FOUND, ErrorClass.TOKEN)
+        return error_class not in (ErrorClass.NOT_FOUND, ErrorClass.TOKEN, ErrorClass.AUTH, ErrorClass.THROTTLE)
 
     def call(self, func: Callable[[], T], error_class: Optional[ErrorClass] = None) -> T:
         """Execute function through circuit breaker.
@@ -259,8 +308,11 @@ class CircuitBreaker:
             self._record_success()
             return result
         except Exception as e:
-            # Use provided error_class or classify from exception
-            err_class = error_class or classify_error(0, str(e), e)
+            # Use provided error_class or classify from exception details.
+            # subprocess.CalledProcessError.__str__ omits stderr, so read it explicitly
+            # to avoid treating auth/cookie failures as generic service outages.
+            stderr = getattr(e, "stderr", "") or str(e)
+            err_class = error_class or classify_error(getattr(e, "returncode", 0), stderr, e)
             self._record_failure(err_class)
             raise
 
@@ -340,10 +392,11 @@ class CircuitBreaker:
                 CircuitBreakerState.HALF_OPEN: 1,
                 CircuitBreakerState.OPEN: 2,
             }
-            youtube_circuit_breaker_state.labels(name=self.name).set(state_values[new_state])
-            youtube_circuit_breaker_transitions_total.labels(
-                name=self.name, from_state=old_state.value, to_state=new_state.value
-            ).inc()
+            state_metric = youtube_circuit_breaker_state
+            transitions_metric = youtube_circuit_breaker_transitions_total
+            if state_metric is not None and transitions_metric is not None:
+                state_metric.labels(name=self.name).set(state_values[new_state])
+                transitions_metric.labels(name=self.name, from_state=old_state.value, to_state=new_state.value).inc()
 
         logger.info(
             f"Circuit breaker '{self.name}' transitioned",
@@ -444,8 +497,8 @@ def retry_with_backoff(
             )
 
             # Don't retry certain error types
-            if last_error_class == ErrorClass.NOT_FOUND:
-                logger.info("Not retrying NOT_FOUND error")
+            if last_error_class in (ErrorClass.NOT_FOUND, ErrorClass.AUTH, ErrorClass.TOKEN, ErrorClass.THROTTLE):
+                logger.info("Not retrying non-retryable YouTube error", extra={"error_class": last_error_class.value})
                 raise
 
             # Check if we have more attempts

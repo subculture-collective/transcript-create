@@ -160,7 +160,7 @@ class TestDownloadAudioObservability:
 class TestMetadataFetchObservability:
     """Tests for metadata fetch observability."""
 
-    @patch("worker.youtube_captions.subprocess.run")
+    @patch("worker.youtube_captions.YtDlpExecutor")
     @patch("worker.youtube_captions._get_subs_token")
     def test_metadata_logs_structured_fields(self, mock_get_token, mock_run, caplog):
         """Test that metadata fetch logs structured fields."""
@@ -168,10 +168,7 @@ class TestMetadataFetchObservability:
 
         url = "https://www.youtube.com/watch?v=test123"
 
-        # Mock successful subprocess run
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout='{"id": "test123", "title": "Test"}', stderr=""
-        )
+        mock_run.return_value.run_json.return_value = {"id": "test123", "title": "Test"}
         mock_get_token.return_value = None
 
         with caplog.at_level("INFO"):
@@ -185,7 +182,7 @@ class TestMetadataFetchObservability:
         log_messages = " ".join([r.getMessage() for r in log_records])
         assert "client" in log_messages.lower() or "operation" in log_messages.lower()
 
-    @patch("worker.youtube_captions.subprocess.run")
+    @patch("worker.youtube_captions.YtDlpExecutor")
     @patch("worker.youtube_captions._get_subs_token")
     def test_metadata_increments_metrics_on_success(self, mock_get_token, mock_run):
         """Test that successful metadata fetch increments metrics."""
@@ -194,10 +191,7 @@ class TestMetadataFetchObservability:
 
         url = "https://www.youtube.com/watch?v=test123"
 
-        # Mock successful subprocess run
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout='{"id": "test123", "title": "Test"}', stderr=""
-        )
+        mock_run.return_value.run_json.return_value = {"id": "test123", "title": "Test"}
         mock_get_token.return_value = None
 
         # Get metric values before - use first strategy client

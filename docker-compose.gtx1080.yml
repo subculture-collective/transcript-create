@@ -1,0 +1,115 @@
+services:
+    migrations:
+        build:
+            context: .
+            dockerfile: Dockerfile.cuda
+        image: transcript-create:gtx1080
+
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile.cuda
+        image: transcript-create:gtx1080
+        environment:
+            SEARCH_BACKEND: postgres
+            REDIS_URL: ''
+            OPENSEARCH_URL: ''
+            ROCM: 'false'
+        devices: !override []
+        group_add: !override []
+        depends_on:
+            db:
+                condition: service_healthy
+            migrations:
+                condition: service_completed_successfully
+
+    worker:
+        build:
+            context: .
+            dockerfile: Dockerfile.cuda
+        image: transcript-create:gtx1080
+        environment:
+            SEARCH_BACKEND: postgres
+            OPENSEARCH_URL: ''
+            REDIS_URL: ''
+            ROCM: 'false'
+            WHISPER_BACKEND: faster-whisper
+            WHISPER_MODEL: ${WHISPER_MODEL:-small}
+            FORCE_GPU: 'true'
+            GPU_DEVICE_PREFERENCE: cuda
+            GPU_COMPUTE_TYPES: ${GPU_COMPUTE_TYPES:-int8,float32}
+            GPU_MODEL_FALLBACKS: ${GPU_MODEL_FALLBACKS:-small,base,tiny}
+            WHISPER_BEAM_SIZE: ${WHISPER_BEAM_SIZE:-3}
+            WHISPER_VAD_FILTER: ${WHISPER_VAD_FILTER:-true}
+            ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-false}
+            DIARIZATION_INLINE: 'false'
+            DIARIZATION_DEVICE: ${DIARIZATION_DEVICE:-cuda}
+            DIARIZATION_MODEL: ${DIARIZATION_MODEL:-pyannote/speaker-diarization-community-1}
+            DIARIZATION_FALLBACK_MODEL: ${DIARIZATION_FALLBACK_MODEL:-pyannote/speaker-diarization}
+            DIARIZATION_RUNNING_TIMEOUT_MINUTES: ${DIARIZATION_RUNNING_TIMEOUT_MINUTES:-5}
+            ENABLE_CUSTOM_VOCABULARY: ${ENABLE_CUSTOM_VOCABULARY:-false}
+            ENABLE_TRANSLATION: 'false'
+            CLEANUP_AFTER_PROCESS: ${CLEANUP_AFTER_PROCESS:-true}
+            CLEANUP_DELETE_WAV: ${CLEANUP_DELETE_WAV:-false}
+            YTDLP_COOKIES_PATH: ${YTDLP_COOKIES_PATH:-}
+            YTDLP_CLIENT_ORDER: ${YTDLP_CLIENT_ORDER:-default,mweb,web_safari,ios,android,tv}
+            YTDLP_TRIES_PER_CLIENT: ${YTDLP_TRIES_PER_CLIENT:-1}
+            PO_TOKEN_USE_FOR_AUDIO: ${PO_TOKEN_USE_FOR_AUDIO:-false}
+            PO_TOKEN_USE_FOR_CAPTIONS: ${PO_TOKEN_USE_FOR_CAPTIONS:-false}
+        gpus: all
+        devices: !override []
+        group_add: !override []
+        depends_on:
+            db:
+                condition: service_healthy
+            migrations:
+                condition: service_completed_successfully
+
+    diarization-worker:
+        build:
+            context: .
+            dockerfile: Dockerfile.cuda
+        image: transcript-create:gtx1080
+        env_file: .env
+        environment:
+            DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+            HF_HOME: /root/.cache/hf
+            HF_HUB_CACHE: /root/.cache/hf/hub
+            TRANSFORMERS_CACHE: /root/.cache/hf/transformers
+            SEARCH_BACKEND: postgres
+            OPENSEARCH_URL: ''
+            REDIS_URL: ''
+            ROCM: 'false'
+            ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-false}
+            DIARIZATION_INLINE: 'false'
+            DIARIZATION_DEVICE: ${DIARIZATION_DEVICE:-cuda}
+            DIARIZATION_MODEL: ${DIARIZATION_MODEL:-pyannote/speaker-diarization-community-1}
+            DIARIZATION_FALLBACK_MODEL: ${DIARIZATION_FALLBACK_MODEL:-pyannote/speaker-diarization}
+            DIARIZATION_RUNNING_TIMEOUT_MINUTES: ${DIARIZATION_RUNNING_TIMEOUT_MINUTES:-5}
+        command: ['python3', '-m', 'worker.diarization_loop']
+        volumes:
+            - ./data:/data
+            - ./cache:/root/.cache
+        gpus: all
+        devices: !override []
+        group_add: !override []
+        depends_on:
+            db:
+                condition: service_healthy
+            migrations:
+                condition: service_completed_successfully
+
+    opensearch:
+        profiles: ['full']
+
+    dashboards:
+        profiles: ['full']
+
+    prometheus:
+        profiles: ['full']
+
+    grafana:
+        profiles: ['full']
+
+    backup:
+        profiles: ['full']

@@ -416,8 +416,8 @@ class TestRetryWithBackoff:
         with pytest.raises(ValueError):
             retry_with_backoff(mock_func, max_attempts=2, base_delay=0.01, classify_func=mock_classifier)
 
-        # Classifier should be called for each failure
-        assert mock_classifier.call_count == 2
+        # THROTTLE is non-retryable, so classification stops after the first failure.
+        assert mock_classifier.call_count == 1
 
 
 class TestGetCircuitBreaker:

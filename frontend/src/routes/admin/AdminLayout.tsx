@@ -14,15 +14,15 @@ function ProtectedAdmin({ children }: { children: React.ReactNode }) {
 export default function AdminLayout() {
   return (
     <ProtectedAdmin>
-      <div className="mx-auto max-w-7xl p-4">
-        <nav className="mb-4 flex gap-4">
-          <Link className="text-stone-700 hover:underline" to="/admin/dashboard">
+      <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+        <nav className="flex flex-wrap gap-2 border-b border-border pb-4">
+          <Link className="nav-link rounded-md px-3 py-2" to="/admin/dashboard">
             Dashboard
           </Link>
-          <Link className="text-stone-700 hover:underline" to="/admin/events">
+          <Link className="nav-link rounded-md px-3 py-2" to="/admin/events">
             Events
           </Link>
-          <Link className="text-stone-700 hover:underline" to="/admin/users">
+          <Link className="nav-link rounded-md px-3 py-2" to="/admin/users">
             Users
           </Link>
         </nav>

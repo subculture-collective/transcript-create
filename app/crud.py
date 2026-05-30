@@ -134,6 +134,27 @@ def list_videos(db, limit: int = 50, offset: int = 0):
 
 
 @_retry_on_transient_error
+def list_completed_videos(db, limit: int = 12, offset: int = 0):
+    return (
+        db.execute(
+            text(
+                """
+            SELECT v.id, v.youtube_id, v.title, v.duration_seconds
+            FROM videos v
+            WHERE v.state = 'completed'
+              AND EXISTS (SELECT 1 FROM segments s WHERE s.video_id = v.id)
+            ORDER BY v.updated_at DESC, v.created_at DESC
+            LIMIT :limit OFFSET :offset
+        """
+            ),
+            {"limit": limit, "offset": offset},
+        )
+        .mappings()
+        .all()
+    )
+
+
+@_retry_on_transient_error
 def get_youtube_transcript(db, video_id):
     return (
         db.execute(
@@ -217,18 +238,18 @@ def search_segments_advanced(
 
     filters = filters or {}
 
-    # Build WHERE clause with filters
-    where_clauses = ["text_tsv @@ websearch_to_tsquery('english', :q)"]
+    # Build WHERE clause with filters. Search transcript text and video title so
+    # users can find newly processed videos by title from the main search box.
+    where_clauses = ["(s.text_tsv @@ websearch_to_tsquery('english', :q) OR v.title ILIKE :title_q)"]
     params = {"q": q, "limit": limit, "offset": offset}
+    params["title_q"] = f"%{q.strip()}%"
 
     if video_id:
         where_clauses.append("s.video_id = :vid")
         params["vid"] = str(video_id)
 
-    # Join with videos table for filter support
-    needs_video_join = any(
-        k in filters for k in ["date_from", "date_to", "min_duration", "max_duration", "channel", "language"]
-    )
+    # Join with videos table for title search, sorting, and filter support.
+    needs_video_join = True
 
     if needs_video_join:
         if filters.get("date_from"):
@@ -267,14 +288,17 @@ def search_segments_advanced(
     elif sort_by == "duration_asc":
         order_by = "v.duration_seconds ASC NULLS LAST, s.start_ms ASC"
     else:  # relevance (default)
-        order_by = "rank DESC, s.start_ms ASC"
+        order_by = "rank DESC, title_match DESC, s.start_ms ASC"
 
     # Build query
     from_clause = "segments s"
     select_fields = (
         "s.id, s.video_id, s.start_ms, s.end_ms, "
-        "ts_headline('english', s.text, websearch_to_tsquery('english', :q)) AS snippet, "
-        "ts_rank_cd(s.text_tsv, websearch_to_tsquery('english', :q)) AS rank"
+        "CASE WHEN s.text_tsv @@ websearch_to_tsquery('english', :q) "
+        "THEN ts_headline('english', s.text, websearch_to_tsquery('english', :q)) "
+        "ELSE coalesce(v.title, s.text) END AS snippet, "
+        "ts_rank_cd(s.text_tsv, websearch_to_tsquery('english', :q)) AS rank, "
+        "CASE WHEN v.title ILIKE :title_q THEN 1 ELSE 0 END AS title_match"
     )
 
     if needs_video_join:

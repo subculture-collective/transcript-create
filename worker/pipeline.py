@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import json
+import shlex
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import text
 
@@ -9,12 +13,166 @@ from app.logging_config import get_logger
 from app.settings import settings
 from worker.audio import chunk_audio, download_audio, ensure_wav_16k
 from worker.diarize import diarize_and_align
+from worker.state_model import ACTIVE_VIDEO_STATES, OPEN_CAPTION_INGEST_STATES, TERMINAL_VIDEO_STATES, sql_string_list
 from worker.whisper_runner import transcribe_chunk
-from worker.youtube_captions import fetch_youtube_auto_captions
+from worker.repositories import VideoRepository
+from worker.youtube_captions import (
+    YouTubeCaptionFetchError,
+    YouTubeCaptionRateLimitError,
+    fetch_youtube_auto_captions,
+)
 
 WORKDIR = Path("/data")  # mount volume externally
 
 logger = get_logger(__name__)
+
+ACTIVE_VIDEO_STATES_SQL = sql_string_list(ACTIVE_VIDEO_STATES)
+OPEN_CAPTION_INGEST_STATES_SQL = sql_string_list(OPEN_CAPTION_INGEST_STATES)
+TERMINAL_VIDEO_STATES_SQL = sql_string_list(TERMINAL_VIDEO_STATES)
+
+
+def refresh_job_state(conn, job_id, *, error: str | None = None) -> None:
+    """Update a parent job based on child video terminal states."""
+    counts = conn.execute(
+        text(
+            f"""
+            SELECT
+              COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE state = 'completed') AS completed,
+              COUNT(*) FILTER (WHERE state = 'failed') AS failed,
+              COUNT(*) FILTER (WHERE state IN ({ACTIVE_VIDEO_STATES_SQL})) AS active
+            FROM videos
+            WHERE job_id = :j
+            """
+        ),
+        {"j": job_id},
+    ).mappings().first()
+
+    if not counts or int(counts["total"] or 0) == 0:
+        return
+
+    total = int(counts["total"] or 0)
+    completed = int(counts["completed"] or 0)
+    failed = int(counts["failed"] or 0)
+    active = int(counts["active"] or 0)
+
+    if total == completed:
+        logger.info("Marking job completed", extra={"job_id": str(job_id), "videos_completed": completed})
+        conn.execute(text("UPDATE jobs SET state='completed', error=NULL, updated_at=now() WHERE id=:j"), {"j": job_id})
+    elif active == 0 and failed > 0:
+        msg = error or f"{failed} of {total} videos failed"
+        logger.warning(
+            "Marking job failed",
+            extra={"job_id": str(job_id), "videos_completed": completed, "videos_failed": failed},
+        )
+        conn.execute(
+            text("UPDATE jobs SET state='failed', error=:e, updated_at=now() WHERE id=:j"),
+            {"j": job_id, "e": msg[:5000]},
+        )
+
+
+def reconcile_terminal_jobs(conn) -> None:
+    """Repair parent jobs whose child videos have already reached terminal states."""
+    completed = conn.execute(
+        text(
+            f"""
+            UPDATE jobs j
+            SET state='completed', error=NULL, updated_at=now()
+            WHERE j.state NOT IN ({TERMINAL_VIDEO_STATES_SQL})
+              AND EXISTS (SELECT 1 FROM videos v WHERE v.job_id = j.id)
+              AND NOT EXISTS (
+                SELECT 1 FROM videos v
+                WHERE v.job_id = j.id AND v.state <> 'completed'
+              )
+            RETURNING j.id
+            """
+        ),
+    ).fetchall()
+    if completed:
+        logger.info("Reconciled completed jobs", extra={"count": len(completed)})
+
+    failed = conn.execute(
+        text(
+            f"""
+            UPDATE jobs j
+            SET state='failed',
+                error=COALESCE(j.error, 'One or more videos failed'),
+                updated_at=now()
+            WHERE j.state NOT IN ({TERMINAL_VIDEO_STATES_SQL})
+              AND EXISTS (SELECT 1 FROM videos v WHERE v.job_id = j.id AND v.state = 'failed')
+              AND NOT EXISTS (
+                SELECT 1 FROM videos v
+                WHERE v.job_id = j.id AND v.state IN ({ACTIVE_VIDEO_STATES_SQL})
+              )
+            RETURNING j.id
+            """
+        ),
+    ).fetchall()
+    if failed:
+        logger.info("Reconciled failed jobs", extra={"count": len(failed)})
+
+
+def _yt_dlp_metadata_commands(url: str, *, flat_playlist: bool = False) -> list[tuple[str, list[str]]]:
+    """Build simple yt-dlp metadata commands using the configured client fallback order."""
+    from worker.ytdlp_client_utils import get_client_extractor_args
+
+    clients = [c.strip() for c in settings.YTDLP_CLIENT_ORDER.split(",") if c.strip()]
+    disabled = {c.strip() for c in settings.YTDLP_CLIENTS_DISABLED.split(",") if c.strip()}
+    commands: list[tuple[str, list[str]]] = []
+
+    for client in clients:
+        if client in disabled:
+            continue
+        extractor_args = get_client_extractor_args(client)
+        if extractor_args is None:
+            logger.warning("Unknown YTDLP client in metadata strategy; skipping", extra={"client": client})
+            continue
+        cmd = ["yt-dlp"]
+        if flat_playlist:
+            cmd.append("--flat-playlist")
+        cmd.append("-J")
+        cmd.extend(extractor_args)
+        if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
+            cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
+        if settings.YTDLP_EXTRA_ARGS:
+            cmd.extend(shlex.split(settings.YTDLP_EXTRA_ARGS))
+        cmd.append(url)
+        commands.append((client, cmd))
+
+    if not commands:
+        cmd = ["yt-dlp"]
+        if flat_playlist:
+            cmd.append("--flat-playlist")
+        cmd.extend(["-J", url])
+        commands.append(("default", cmd))
+
+    return commands
+
+
+def _fetch_ytdlp_metadata(url: str, *, flat_playlist: bool = False) -> dict[str, Any]:
+    """Fetch yt-dlp JSON metadata using configured client fallback commands."""
+    last_error: subprocess.CalledProcessError | None = None
+    for client, cmd in _yt_dlp_metadata_commands(url, flat_playlist=flat_playlist):
+        try:
+            logger.info("Fetching yt-dlp metadata", extra={"client": client, "flat_playlist": flat_playlist})
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=settings.YTDLP_REQUEST_TIMEOUT,
+            )
+            return json.loads(result.stdout)
+        except subprocess.CalledProcessError as e:
+            last_error = e
+            logger.warning(
+                "yt-dlp metadata strategy failed",
+                extra={"client": client, "stderr_snippet": (e.stderr or "")[:200]},
+            )
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Failed to fetch yt-dlp metadata")
 
 
 def normalize_channel_url(url: str) -> str:
@@ -100,9 +258,7 @@ def expand_channel_if_needed(conn):
             """Create channel metadata fetch function with explicit parameter binding."""
             def fetch_channel_metadata():
                 """Fetch channel metadata with timeout."""
-                cmd = ["yt-dlp", "--flat-playlist", "-J", channel_url]
-                meta = subprocess.check_output(cmd, timeout=settings.YTDLP_REQUEST_TIMEOUT)
-                return json.loads(meta)
+                return _fetch_ytdlp_metadata(channel_url, flat_playlist=True)
             return fetch_channel_metadata  # noqa: B023 (false positive - function returned immediately)
 
         fetch_channel_metadata = make_fetch_channel_metadata(normalized_url)
@@ -175,8 +331,10 @@ def expand_channel_if_needed(conn):
                 extra={"job_id": str(job["id"]), "error": str(e)[:200]}
             )
             youtube_requests_total.labels(operation="channel_expansion", result="failure").inc()
-            # Re-raise to mark job as failed
-            raise
+            conn.execute(
+                text("UPDATE jobs SET state='failed', error=:e, updated_at=now() WHERE id=:i"),
+                {"i": job["id"], "e": str(e)[:5000]},
+            )
 
 
 def expand_single_if_needed(conn):
@@ -219,8 +377,7 @@ def expand_single_if_needed(conn):
             def fetch_video_metadata():
                 """Fetch video metadata with timeout."""
                 # Use yt-dlp to robustly extract the video id for any YouTube URL form
-                meta = subprocess.check_output(["yt-dlp", "-J", video_url], timeout=settings.YTDLP_REQUEST_TIMEOUT)
-                return json.loads(meta)
+                return _fetch_ytdlp_metadata(video_url)
             return fetch_video_metadata  # noqa: B023 (false positive - function returned immediately)
 
         fetch_video_metadata = make_fetch_video_metadata(url)
@@ -284,8 +441,10 @@ def expand_single_if_needed(conn):
                 extra={"job_id": str(job["id"]), "error": str(e)[:200]}
             )
             youtube_requests_total.labels(operation="video_expansion", result="failure").inc()
-            # Re-raise to mark job as failed
-            raise
+            conn.execute(
+                text("UPDATE jobs SET state='failed', error=:e, updated_at=now() WHERE id=:i"),
+                {"i": job["id"], "e": str(e)[:5000]},
+            )
 
 
 def process_video(engine, video_id):
@@ -416,13 +575,17 @@ def process_video(engine, video_id):
     transcription_duration_seconds.labels(model=settings.WHISPER_MODEL).observe(total_transcription_duration)
     logger.info("All chunks transcribed", extra={"duration_seconds": round(total_transcription_duration, 2)})
 
-    logger.info("Diarization phase starting", extra={"segment_count": len(all_segments)})
-    diarization_start = time.time()
-    diar_segments = diarize_and_align(wav_path, all_segments)
-    diarization_duration = time.time() - diarization_start
-    if diarization_duration > 1.0:  # Only track if diarization actually ran
-        diarization_duration_seconds.observe(diarization_duration)
-        logger.info("Diarization completed", extra={"duration_seconds": round(diarization_duration, 2)})
+    diar_segments = all_segments
+    if settings.ENABLE_DIARIZATION and settings.DIARIZATION_INLINE:
+        logger.info("Inline diarization phase starting", extra={"segment_count": len(all_segments)})
+        diarization_start = time.time()
+        diar_segments = diarize_and_align(wav_path, all_segments)
+        diarization_duration = time.time() - diarization_start
+        if diarization_duration > 1.0:
+            diarization_duration_seconds.observe(diarization_duration)
+            logger.info("Inline diarization completed", extra={"duration_seconds": round(diarization_duration, 2)})
+    elif settings.ENABLE_DIARIZATION:
+        logger.info("Diarization queued for separate worker", extra={"segment_count": len(all_segments)})
 
     # Apply custom vocabulary corrections if enabled
     if getattr(settings, "ENABLE_CUSTOM_VOCABULARY", True):
@@ -479,9 +642,12 @@ def process_video(engine, video_id):
             conn.execute(
                 text(
                     """
-                INSERT INTO segments (video_id,start_ms,end_ms,text,speaker_label,confidence,avg_logprob,temperature,token_count,word_timestamps)
+                INSERT INTO segments (
+                    video_id,start_ms,end_ms,text,speaker_label,confidence,
+                    avg_logprob,temperature,token_count,word_timestamps
+                )
                 VALUES (:v,:s,:e,:txt,:spk,:conf,:lp,:temp,:tc,:wts)
-            """  # noqa: E501
+            """
                 ),
                 {
                     "v": video_id,
@@ -497,19 +663,37 @@ def process_video(engine, video_id):
                 },
             )
         logger.info("Marking video as completed")
-        conn.execute(text("UPDATE videos SET state='completed', updated_at=now() WHERE id=:i"), {"i": video_id})
+        diarization_state = "completed" if settings.ENABLE_DIARIZATION and settings.DIARIZATION_INLINE else (
+            "pending" if settings.ENABLE_DIARIZATION else "skipped"
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE videos
+                SET state='completed', error=NULL, diarization_state=:ds, updated_at=now()
+                WHERE id=:i
+                """
+            ),
+            {"i": video_id, "ds": diarization_state},
+        )
+        refresh_job_state(conn, v["job_id"])
 
     # Cleanup large intermediates if configured
     if settings.CLEANUP_AFTER_PROCESS:
         try:
             removed = []
+            preserve_wav_for_diarization = (
+                settings.ENABLE_DIARIZATION
+                and not settings.DIARIZATION_INLINE
+                and diarization_state == "pending"
+            )
             # Delete chunk files
             if settings.CLEANUP_DELETE_CHUNKS:
                 for p in dest_dir.glob("chunk_*.wav"):
                     p.unlink(missing_ok=True)
                     removed.append(p.name)
             # Delete wav
-            if settings.CLEANUP_DELETE_WAV and wav_path.exists():
+            if settings.CLEANUP_DELETE_WAV and not preserve_wav_for_diarization and wav_path.exists():
                 wav_path.unlink(missing_ok=True)
                 removed.append(Path(wav_path).name)
             # Delete raw
@@ -532,11 +716,17 @@ def process_video(engine, video_id):
         "Video processing completed successfully",
         extra={"total_duration_seconds": round(processing_time, 2)},
     )
+    return len(diar_segments)
 
-    # YouTube captions are handled by a pre-processing loop step; see capture_youtube_captions_for_unprocessed
 
-
-def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
+def capture_youtube_captions_for_unprocessed(
+    conn,
+    limit: int = 5,
+    *,
+    staged_only: bool = False,
+    active_only: bool = False,
+    terminal_failures: bool = False,
+) -> int:
     """Select a few videos lacking youtube_transcripts and attempt to fetch/persist captions.
 
     Run inside the worker loop before audio processing to make captions available early.
@@ -546,30 +736,45 @@ def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
             """
         SELECT v.id, v.youtube_id
         FROM videos v
+        JOIN jobs j ON j.id = v.job_id
         WHERE NOT EXISTS (
             SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id
         )
-        ORDER BY v.created_at
+          AND (:active_only IS FALSE OR v.caption_ingest_state = 'pending')
+          AND (:active_only IS FALSE OR v.state IN ('pending','downloading','transcoding','transcribing'))
+          AND (:active_only IS FALSE OR j.state NOT IN ('failed','completed'))
+          AND (:staged_only IS FALSE OR j.meta->>'staged' = 'true')
+        ORDER BY v.idx ASC NULLS LAST, v.created_at DESC
         FOR UPDATE SKIP LOCKED
         LIMIT :lim
         """
         ),
-        {"lim": limit},
+        {"lim": limit, "staged_only": staged_only, "active_only": active_only},
     ).all()
+    from worker.youtube_resilience import ErrorClass, YouTubeRateLimitError, classify_error
+
+    video_repo = VideoRepository(conn)
     processed = 0
     for vid, yid in rows:
         try:
+            video_repo.mark_caption_running(str(vid))
             logger.info("Fetching YouTube captions for video %s (yid=%s)", vid, yid)
             res = fetch_youtube_auto_captions(yid)
             if not res:
                 logger.info("No auto captions for %s", yid)
+                video_repo.mark_caption_unavailable(str(vid))
                 continue
             track, segs = res
             yt_full_text = " ".join(s.text for s in segs)
             # delete + insert for idempotency
             conn.execute(
                 text(
-                    "DELETE FROM youtube_segments WHERE youtube_transcript_id IN (SELECT id FROM youtube_transcripts WHERE video_id=:v)"  # noqa: E501
+                    """
+                    DELETE FROM youtube_segments
+                    WHERE youtube_transcript_id IN (
+                        SELECT id FROM youtube_transcripts WHERE video_id=:v
+                    )
+                    """
                 ),
                 {"v": str(vid)},
             )
@@ -596,7 +801,56 @@ def capture_youtube_captions_for_unprocessed(conn, limit: int = 5) -> int:
                     {"t": yt_tr_id, "s": int(s.start * 1000), "e": int(s.end * 1000), "txt": s.text},
                 )
             logger.info("Persisted %d YouTube caption segments for %s", len(segs), yid)
+            video_repo.mark_caption_completed(str(vid))
             processed += 1
+        except YouTubeCaptionRateLimitError as e:
+            logger.warning("YouTube rate limit hit during caption download; leaving video pending and pausing batch")
+            video_repo.mark_caption_pending_with_error(str(vid), str(e))
+            raise YouTubeRateLimitError(str(e)) from e
+        except YouTubeCaptionFetchError as e:
+            logger.warning("YouTube captions fetch/parse failed for %s: %s", yid, e)
+            if terminal_failures:
+                video_repo.mark_caption_failed(str(vid), str(e))
+            else:
+                video_repo.mark_caption_pending_with_error(str(vid), str(e))
         except Exception as e:
+            error_class = classify_error(getattr(e, "returncode", 0), getattr(e, "stderr", "") or str(e), e)
+            if error_class == ErrorClass.THROTTLE:
+                logger.warning("YouTube rate limit hit during caption ingest; leaving video pending and pausing batch")
+                video_repo.mark_caption_pending_with_error(str(vid), str(e))
+                raise YouTubeRateLimitError(str(e)) from e
             logger.warning("YouTube captions fetch failed for %s: %s", yid, e)
+            if terminal_failures:
+                video_repo.mark_caption_failed(str(vid), str(e))
+            else:
+                video_repo.mark_caption_pending_with_error(str(vid), str(e))
     return processed
+
+
+def promote_staged_batches_if_ready(conn) -> int:
+    """Log staged batches whose caption phase is complete.
+
+    Native transcription locking is enforced in worker.loop's queue SELECT so we
+    do not need a custom video state that would conflict with the existing DB
+    enum. This helper is intentionally observational.
+    """
+    rows = conn.execute(
+        text(
+            f"""
+            SELECT COALESCE(j.meta->>'batch_id', j.id::text) AS batch_id
+            FROM jobs j
+            JOIN videos v ON v.job_id = j.id
+            WHERE j.meta->>'staged' = 'true'
+              AND j.state NOT IN ('failed','completed')
+            GROUP BY COALESCE(j.meta->>'batch_id', j.id::text)
+            HAVING COUNT(DISTINCT j.id) >= COALESCE(MAX((j.meta->>'batch_expected_jobs')::int), 1)
+               AND COUNT(*) FILTER (WHERE v.caption_ingest_state IN ({OPEN_CAPTION_INGEST_STATES_SQL})) = 0
+            """
+        )
+    ).fetchall()
+
+    ready = 0
+    for (batch_id,) in rows:
+        ready += 1
+        logger.info("Staged caption batch ready for native transcription", extra={"batch_id": batch_id})
+    return ready

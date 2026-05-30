@@ -20,38 +20,38 @@ export default function UpgradePage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl">
-      <h1 className="mb-2 text-2xl font-semibold">Upgrade to Pro</h1>
+    <div className="mx-auto max-w-xl space-y-4">
+      <h1 className="page-title">Upgrade to Pro</h1>
       {reason === 'export' && (
-        <p className="mb-4 text-stone-600">
+        <p className="text-muted">
           Exports are a Pro feature. Upgrade to unlock SRT, VTT, JSON, and PDF downloads.
         </p>
       )}
       {!user ? (
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-800">
+        <div className="alert-warning">
           Please log in to continue.{' '}
-          <button onClick={login} className="underline">
+          <button onClick={login} className="cursor-pointer underline">
             Login
           </button>
         </div>
       ) : (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => startCheckout('monthly')}
-            className="inline-block rounded-md bg-stone-900 px-4 py-2 text-white"
+            className="btn-primary"
           >
             Go Pro Monthly
           </button>
           <button
             onClick={() => startCheckout('yearly')}
-            className="inline-block rounded-md border px-4 py-2"
+            className="btn-secondary"
           >
             Go Pro Yearly
           </button>
         </div>
       )}
-      <div className="mt-4 text-sm">
-        <Link to={redirect} className="text-stone-600 underline">
+      <div className="text-sm">
+        <Link to={redirect} className="action-link">
           Back to your video
         </Link>
       </div>

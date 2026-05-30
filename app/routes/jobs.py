@@ -81,6 +81,12 @@ def create_job(payload: JobCreate, db=Depends(get_db)):
         meta["quality"] = payload.quality.model_dump(exclude_none=True)
     if payload.vocabulary_ids:
         meta["vocabulary_ids"] = [str(vid) for vid in payload.vocabulary_ids]
+    if payload.batch_id:
+        meta["batch_id"] = payload.batch_id
+    if payload.batch_expected_jobs:
+        meta["batch_expected_jobs"] = payload.batch_expected_jobs
+    if payload.staged:
+        meta["staged"] = True
 
     job_id = crud.create_job(db, payload.kind, str(payload.url), meta=meta)
     job = crud.fetch_job(db, job_id)

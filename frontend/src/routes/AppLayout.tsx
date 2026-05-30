@@ -8,16 +8,16 @@ export default function AppLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-serif transition-colors">
+    <div className="min-h-screen bg-canvas text-ink transition-colors">
       {/* Skip to main content link for keyboard navigation */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:m-2 focus:min-h-[44px]"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:min-h-[44px] focus:bg-accent focus:px-4 focus:py-2 focus:text-white"
       >
         Skip to main content
       </a>
 
-      <header className="border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900" role="banner">
+      <header className="border-b border-border bg-surface" role="banner">
         <div className="mx-auto flex max-w-7xl items-center justify-between p-4">
           <Link to="/" className="font-semibold tracking-tight text-lg" aria-label="Home - Transcript Search">
             Transcript Search
@@ -25,20 +25,20 @@ export default function AppLayout() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-4" aria-label="Main navigation">
-            <Link to="/" className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors">
+            <Link to="/" className="nav-link">
               Search
             </Link>
-            <Link to="/favorites" className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors">
+            <Link to="/favorites" className="nav-link">
               Favorites
             </Link>
-            <Link to="/pricing" className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors">
+            <Link to="/pricing" className="nav-link">
               Pricing
             </Link>
             
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 min-h-[44px] min-w-[44px] text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+              className="icon-button"
               aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
               title={theme === 'light' ? 'Dark mode' : 'Light mode'}
             >
@@ -54,34 +54,34 @@ export default function AppLayout() {
             </button>
 
             {loading ? (
-              <span className="text-stone-500 dark:text-stone-500" aria-live="polite" aria-label="Loading user information">…</span>
+              <span className="text-subtle" aria-live="polite" aria-label="Loading user information">…</span>
             ) : user ? (
               <div className="flex items-center gap-3">
                 {user.avatar_url && (
                   <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full" />
                 )}
-                <span className="text-stone-700 dark:text-stone-300 hidden lg:inline">{user.name || user.email}</span>
+                <span className="hidden text-muted lg:inline">{user.name || user.email}</span>
                 {user.plan === 'pro' && (
                   <>
-                    <span className="rounded bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300" aria-label="Pro plan member">
+                    <span className="badge-success" aria-label="Pro plan member">
                       Pro
                     </span>
-                    <a href="/api/billing/portal" className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors">
+                    <a href="/api/billing/portal" className="nav-link">
                       Manage billing
                     </a>
                   </>
                 )}
-                <button onClick={logout} className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors" aria-label="Logout">
+                <button onClick={logout} className="nav-link" aria-label="Logout">
                   Logout
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <button onClick={login} className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors" aria-label="Login with Google">
+                <button onClick={login} className="nav-link" aria-label="Login with Google">
                   Login with Google
                 </button>
-                <span className="text-stone-400 dark:text-stone-600" aria-hidden="true">|</span>
-                <button onClick={loginTwitch} className="text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors" aria-label="Login with Twitch">
+                <span className="text-subtle" aria-hidden="true">|</span>
+                <button onClick={loginTwitch} className="nav-link" aria-label="Login with Twitch">
                   Login with Twitch
                 </button>
               </div>
@@ -90,7 +90,7 @@ export default function AppLayout() {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden p-2 min-h-[44px] min-w-[44px] text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            className="icon-button md:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={mobileMenuOpen}
@@ -109,7 +109,7 @@ export default function AppLayout() {
         {/* Mobile Navigation Menu */}
         <nav 
           id="mobile-menu" 
-          className={`md:hidden border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 overflow-hidden transition-all duration-300 ease-in-out motion-reduce:transition-none ${
+          className={`md:hidden border-t border-border bg-surface overflow-hidden transition-all duration-300 ease-in-out motion-reduce:transition-none ${
             mobileMenuOpen ? 'max-h-screen overflow-y-auto opacity-100' : 'max-h-0 opacity-0'
           }`}
           aria-label="Mobile navigation"
@@ -118,21 +118,21 @@ export default function AppLayout() {
           <div className="px-4 py-3 space-y-3">
               <Link 
                 to="/" 
-                className="block py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+                className="nav-link block py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Search
               </Link>
               <Link 
                 to="/favorites" 
-                className="block py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+                className="nav-link block py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Favorites
               </Link>
               <Link 
                 to="/pricing" 
-                className="block py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+                className="nav-link block py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Pricing
@@ -141,7 +141,7 @@ export default function AppLayout() {
               {/* Mobile Theme Toggle */}
               <button
                 onClick={toggleTheme}
-                className="flex items-center gap-2 py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+                className="nav-link flex items-center gap-2 py-2"
                 aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
               >
                 {theme === 'light' ? (
@@ -162,28 +162,28 @@ export default function AppLayout() {
               </button>
 
               {loading ? (
-                <span className="block py-2 text-stone-500 dark:text-stone-500" aria-live="polite">Loading…</span>
+                <span className="block py-2 text-subtle" aria-live="polite">Loading…</span>
               ) : user ? (
                 <>
                   <div className="flex items-center gap-2 py-2">
                     {user.avatar_url && (
                       <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full" />
                     )}
-                    <span className="text-stone-700 dark:text-stone-300">{user.name || user.email}</span>
+                    <span className="text-muted">{user.name || user.email}</span>
                     {user.plan === 'pro' && (
-                      <span className="rounded bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                      <span className="badge-success">
                         Pro
                       </span>
                     )}
                   </div>
                   {user.plan === 'pro' && (
-                    <a href="/api/billing/portal" className="block py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors">
+                    <a href="/api/billing/portal" className="nav-link block py-2">
                       Manage billing
                     </a>
                   )}
                   <button 
                     onClick={() => { logout(); setMobileMenuOpen(false); }} 
-                    className="block w-full text-left py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+                    className="nav-link block w-full py-2 text-left"
                   >
                     Logout
                   </button>
@@ -192,13 +192,13 @@ export default function AppLayout() {
                 <>
                   <button 
                     onClick={() => { login(); setMobileMenuOpen(false); }} 
-                    className="block w-full text-left py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+                    className="nav-link block w-full py-2 text-left"
                   >
                     Login with Google
                   </button>
                   <button 
                     onClick={() => { loginTwitch(); setMobileMenuOpen(false); }} 
-                    className="block w-full text-left py-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+                    className="nav-link block w-full py-2 text-left"
                   >
                     Login with Twitch
                   </button>
@@ -212,8 +212,8 @@ export default function AppLayout() {
         <Outlet />
       </main>
 
-      <footer className="border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 mt-12" role="contentinfo">
-        <div className="mx-auto max-w-7xl px-4 py-6 text-center text-sm text-stone-600 dark:text-stone-400">
+      <footer className="mt-12 border-t border-border bg-surface" role="contentinfo">
+        <div className="mx-auto max-w-7xl px-4 py-6 text-center text-sm text-muted">
           <p>&copy; {new Date().getFullYear()} Transcript Search. All rights reserved.</p>
         </div>
       </footer>

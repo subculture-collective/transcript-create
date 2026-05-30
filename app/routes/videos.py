@@ -2,20 +2,17 @@ import uuid
 from typing import Literal, Union
 
 from fastapi import APIRouter, Depends, Query, Response
-
 from worker.formatter import TranscriptFormatter
 
 from .. import crud
 from ..db import get_db
 from ..exceptions import TranscriptNotReadyError, VideoNotFoundError
+from ..transcripts.service import TranscriptPresentationService
 from ..schemas import (
-    CleanedSegment,
     CleanedTranscriptResponse,
     CleanupConfig,
-    CleanupStats,
     ErrorResponse,
     FormattedTranscriptResponse,
-    Segment,
     TranscriptResponse,
     VideoInfo,
     YouTubeTranscriptResponse,
@@ -23,6 +20,7 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="", tags=["Videos"])
+transcript_presentation_service = TranscriptPresentationService()
 
 
 @router.get(
@@ -88,8 +86,7 @@ def get_transcript(
         # No segments found; inferring that the video is still processing
         raise TranscriptNotReadyError(str(video_id), "processing")
 
-    # Convert raw database segments to dicts for formatter
-    segments = [{"start": r[0], "end": r[1], "text": r[2], "speaker": r[3], "speaker_label": r[3]} for r in segs]
+    segments = [transcript_presentation_service.from_db_row(r) for r in segs]
 
     # Set ETag based on mode and video_id for cache differentiation
     etag = f'"{video_id}-{mode}"'
@@ -99,102 +96,10 @@ def get_transcript(
 
     # Handle different modes
     if mode == "raw":
-        # Return raw segments without any processing
-        return TranscriptResponse(
-            video_id=video_id,
-            segments=[Segment(start_ms=r[0], end_ms=r[1], text=r[2], speaker_label=r[3]) for r in segs],
-        )
+        return transcript_presentation_service.present_raw(video_id, segments)
 
     elif mode == "cleaned":
-        # Apply cleanup transformations but preserve segment structure
-        formatter = TranscriptFormatter(
-            config={
-                "enabled": True,
-                "normalize_unicode": True,
-                "normalize_whitespace": True,
-                "remove_special_tokens": True,
-                "remove_fillers": True,
-                "filler_level": 1,
-                "add_sentence_punctuation": True,
-                "punctuation_mode": "rule-based",
-                "capitalize_sentences": True,
-                "fix_all_caps": True,
-                "detect_hallucinations": True,
-                "segment_by_sentences": False,  # Keep original segment boundaries
-                "merge_short_segments": False,
-                "speaker_format": "structured",
-            }
-        )
-
-        formatted_segments = formatter.format_segments(segments)
-
-        # Create lookup dictionary for performance
-        orig_segments_by_start = {s["start"]: s for s in segments}
-
-        # Track statistics - compare before and after counts
-        orig_filler_count = sum(1 for s in segments if any(f in s["text"].lower() for f in ["um", "uh", "er"]))
-        cleaned_filler_count = sum(
-            1 for s in formatted_segments if any(f in s["text"].lower() for f in ["um", "uh", "er"])
-        )
-        orig_token_count = sum(
-            1 for s in segments if any(t in s["text"] for t in ["[MUSIC]", "[APPLAUSE]", "[LAUGHTER]"])
-        )
-        cleaned_token_count = sum(
-            1 for s in formatted_segments if any(t in s["text"] for t in ["[MUSIC]", "[APPLAUSE]", "[LAUGHTER]"])
-        )
-
-        stats = CleanupStats(
-            fillers_removed=max(0, orig_filler_count - cleaned_filler_count),
-            special_tokens_removed=max(0, orig_token_count - cleaned_token_count),
-            segments_merged=0,
-            segments_split=max(0, len(formatted_segments) - len(segments)),
-            hallucinations_detected=0,  # Would need actual hallucination detection logic
-            punctuation_added=sum(1 for s in formatted_segments if s["text"].endswith(".")),
-        )
-
-        # Convert to cleaned segments with both raw and cleaned text
-        cleaned_segs = []
-        for seg in formatted_segments:
-            # Find original text using lookup dictionary
-            orig_seg = orig_segments_by_start.get(seg["start"])
-            orig_text = orig_seg["text"] if orig_seg else seg["text"]
-            cleaned_segs.append(
-                CleanedSegment(
-                    start_ms=seg["start"],
-                    end_ms=seg["end"],
-                    text_raw=orig_text,
-                    text_cleaned=seg["text"],
-                    speaker_label=seg.get("speaker_label"),
-                    sentence_boundary=seg["text"].rstrip().endswith((".", "!", "?")),
-                    likely_hallucination=False,
-                )
-            )
-
-        # Map formatter config to CleanupConfig schema fields
-        cleanup_config = CleanupConfig(
-            normalize_unicode=formatter.config.get("normalize_unicode", True),
-            normalize_whitespace=formatter.config.get("normalize_whitespace", True),
-            remove_special_tokens=formatter.config.get("remove_special_tokens", True),
-            preserve_sound_events=formatter.config.get("preserve_sound_events", False),
-            add_punctuation=formatter.config.get("add_sentence_punctuation", True),
-            punctuation_mode=formatter.config.get("punctuation_mode", "rule-based"),
-            add_internal_punctuation=formatter.config.get("add_internal_punctuation", False),
-            capitalize=formatter.config.get("capitalize_sentences", True),
-            fix_all_caps=formatter.config.get("fix_all_caps", True),
-            remove_fillers=formatter.config.get("remove_fillers", True),
-            filler_level=formatter.config.get("filler_level", 1),
-            segment_sentences=formatter.config.get("segment_by_sentences", False),
-            merge_short_segments=formatter.config.get("merge_short_segments", False),
-            min_segment_length_ms=formatter.config.get("min_segment_length_ms", 1000),
-            max_gap_for_merge_ms=formatter.config.get("max_gap_for_merge_ms", 500),
-            speaker_format=formatter.config.get("speaker_format", "structured"),
-            detect_hallucinations=formatter.config.get("detect_hallucinations", True),
-            language_specific_rules=formatter.config.get("language_specific_rules", True),
-        )
-
-        return CleanedTranscriptResponse(
-            video_id=video_id, segments=cleaned_segs, cleanup_config=cleanup_config, stats=stats
-        )
+        return transcript_presentation_service.present_cleaned(video_id, segments)
 
     elif mode == "formatted":
         # Apply full formatting with paragraph structure
@@ -220,7 +125,18 @@ def get_transcript(
             }
         )
 
-        formatted_segments = formatter.format_segments(segments)
+        formatted_segments = formatter.format_segments(
+            [
+                {
+                    "start": s.start_ms,
+                    "end": s.end_ms,
+                    "text": s.text,
+                    "speaker": s.speaker_label,
+                    "speaker_label": s.speaker_label,
+                }
+                for s in segments
+            ]
+        )
 
         # Build formatted text with speaker labels and paragraphs
         text_lines = []
@@ -323,10 +239,15 @@ def get_video_info(video_id: uuid.UUID, db=Depends(get_db)):
 def list_videos(
     limit: int = Query(50, ge=1, le=100, description="Maximum number of videos to return"),
     offset: int = Query(0, ge=0, description="Number of videos to skip for pagination"),
+    completed_only: bool = Query(False, description="Only include completed videos that have transcript segments"),
     db=Depends(get_db),
 ):
     """List all videos with pagination."""
-    rows = crud.list_videos(db, limit=limit, offset=offset)
+    rows = (
+        crud.list_completed_videos(db, limit=limit, offset=offset)
+        if completed_only
+        else crud.list_videos(db, limit=limit, offset=offset)
+    )
     return [
         VideoInfo(
             id=r["id"], youtube_id=r["youtube_id"], title=r.get("title"), duration_seconds=r.get("duration_seconds")

@@ -1,7 +1,7 @@
 """Add transcript cleanup support
 
 Revision ID: 003_transcript_cleanup
-Revises: 002_advanced_features
+Revises: 20251102_01
 Create Date: 2025-11-02 23:12:00.000000
 
 """
@@ -10,7 +10,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "003_transcript_cleanup"
-down_revision = "002_advanced_features"
+down_revision = "20251102_01"
 branch_labels = None
 depends_on = None
 

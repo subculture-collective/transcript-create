@@ -10,6 +10,7 @@ from sqlalchemy import text as _text
 from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import is_admin as _is_admin
+from .. import crud
 from ..db import get_db
 from ..exceptions import ExternalServiceError, QuotaExceededError, ValidationError
 from ..schemas import (
@@ -21,6 +22,9 @@ from ..schemas import (
     SearchSuggestionsResponse,
 )
 from ..settings import settings
+from ..search.repositories import PostgresSearchBackend
+from ..search.service import SearchService
+from ..search.types import SearchRequest
 
 router = APIRouter(prefix="", tags=["Search"])
 
@@ -241,8 +245,6 @@ def search(
             )
 
         return SearchResponse(total=total, hits=hits, query_time_ms=query_time_ms)
-    from .. import crud
-
     # Build filter parameters
     filters = {}
     if date_from:
@@ -261,15 +263,28 @@ def search(
         filters["has_speaker_labels"] = has_speaker_labels
 
     if source == "native":
-        rows = crud.search_segments_advanced(
-            db,
-            q=q,
-            video_id=str(video_id) if video_id else None,
-            limit=limit,
-            offset=offset,
-            sort_by=sort_by,
-            filters=filters,
+        service = SearchService(backend=PostgresSearchBackend(db))
+        native_results = service.search(
+            SearchRequest(
+                q=q,
+                source=source,
+                video_id=str(video_id) if video_id else None,
+                limit=limit,
+                offset=offset,
+                sort_by=sort_by,
+                filters=filters,
+            )
         )
+        hits = [
+            SearchHit(
+                id=r.id,
+                video_id=uuid.UUID(r.video_id),
+                start_ms=r.start_ms,
+                end_ms=r.end_ms,
+                snippet=r.snippet,
+            )
+            for r in native_results
+        ]
     else:
         rows = crud.search_youtube_segments_advanced(
             db,
@@ -280,12 +295,16 @@ def search(
             sort_by=sort_by,
             filters=filters,
         )
-    hits = [
-        SearchHit(
-            id=r["id"], video_id=r["video_id"], start_ms=r["start_ms"], end_ms=r["end_ms"], snippet=r["snippet"] or ""
-        )
-        for r in rows
-    ]
+        hits = [
+            SearchHit(
+                id=r["id"],
+                video_id=r["video_id"],
+                start_ms=r["start_ms"],
+                end_ms=r["end_ms"],
+                snippet=r["snippet"] or "",
+            )
+            for r in rows
+        ]
 
     query_time_ms = int((time.time() - start_time) * 1000)
 

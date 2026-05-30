@@ -94,7 +94,9 @@ ENV PDF_FONT_PATH=/app/fonts/DejaVuSerif.ttf \
     HF_HUB_CACHE=/root/.cache/hf/hub \
     TRANSFORMERS_CACHE=/root/.cache/hf/transformers \
     FORCE_GPU=true \
-    WHISPER_BACKEND=whisper
+    WHISPER_BACKEND=faster-whisper \
+    GPU_DEVICE_PREFERENCE=cuda \
+    GPU_COMPUTE_TYPES=int8,float32
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \

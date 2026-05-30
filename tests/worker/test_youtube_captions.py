@@ -3,7 +3,10 @@
 import json
 from unittest.mock import Mock, patch
 
+import pytest
+
 from worker.youtube_captions import (
+    YouTubeCaptionFetchError,
     YTCaptionTrack,
     YTSegment,
     _parse_vtt_to_segments,
@@ -16,32 +19,32 @@ from worker.youtube_captions import (
 class TestYTDlpJson:
     """Tests for _yt_dlp_json function."""
 
-    @patch("worker.youtube_captions.subprocess.check_output")
-    def test_yt_dlp_json_success(self, mock_check_output):
+    @patch("worker.youtube_captions.YtDlpExecutor")
+    def test_yt_dlp_json_success(self, mock_executor_cls):
         """Test successful yt-dlp JSON extraction."""
         test_data = {"id": "test123", "title": "Test Video"}
-        mock_check_output.return_value = json.dumps(test_data).encode()
+        mock_executor = mock_executor_cls.return_value
+        mock_executor.run_json.return_value = test_data
 
         result = _yt_dlp_json("https://www.youtube.com/watch?v=test123")
 
         assert result == test_data
-        mock_check_output.assert_called_once()
-        call_args = mock_check_output.call_args[0][0]
-        assert "yt-dlp" in call_args
+        mock_executor.run_json.assert_called_once()
+        call_args = mock_executor.run_json.call_args[0][0]
         assert "-J" in call_args
 
-    @patch("worker.youtube_captions.subprocess.check_output")
-    def test_yt_dlp_json_command_structure(self, mock_check_output):
+    @patch("worker.youtube_captions.YtDlpExecutor")
+    def test_yt_dlp_json_command_structure(self, mock_executor_cls):
         """Test yt-dlp command structure includes client strategy."""
-        mock_check_output.return_value = b'{"id": "test"}'
+        mock_executor = mock_executor_cls.return_value
+        mock_executor.run_json.return_value = {"id": "test"}
         url = "https://www.youtube.com/watch?v=abc"
 
         _yt_dlp_json(url)
 
-        call_args = mock_check_output.call_args[0][0]
-        # Command should include yt-dlp, -J, and the URL
+        call_args = mock_executor.run_json.call_args[0][0]
+        # Command should include -J and the URL, but not the yt-dlp binary.
         # May also include extractor args based on settings
-        assert call_args[0] == "yt-dlp"
         assert "-J" in call_args
         assert url in call_args
 
@@ -126,16 +129,15 @@ class TestPickAutoCaption:
         assert result is None
 
     def test_pick_auto_caption_unsupported_format(self):
-        """Test unsupported formats are ignored."""
+        """Test unsupported formats raise a fetch error."""
         data = {
             "automatic_captions": {
                 "en": [{"ext": "srv1", "url": "http://example.com/en.srv1"}],
             }
         }
 
-        result = _pick_auto_caption(data)
-
-        assert result is None
+        with pytest.raises(YouTubeCaptionFetchError):
+            _pick_auto_caption(data)
 
     def test_pick_auto_caption_missing_url(self):
         """Test tracks without URLs are skipped."""
@@ -384,9 +386,10 @@ Caption text
 
         mock_urlopen.side_effect = Exception("Network error")
 
-        result = fetch_youtube_auto_captions("test123")
+        import pytest
 
-        assert result is None
+        with pytest.raises(YouTubeCaptionFetchError):
+            fetch_youtube_auto_captions("test123")
 
     @patch("worker.youtube_captions.urlopen")
     @patch("worker.youtube_captions._yt_dlp_json")
@@ -402,9 +405,10 @@ Caption text
         mock_response.__exit__ = Mock(return_value=False)
         mock_urlopen.return_value = mock_response
 
-        result = fetch_youtube_auto_captions("test123")
+        import pytest
 
-        assert result is None
+        with pytest.raises(YouTubeCaptionFetchError):
+            fetch_youtube_auto_captions("test123")
 
     @patch("worker.youtube_captions.urlopen")
     @patch("worker.youtube_captions._yt_dlp_json")

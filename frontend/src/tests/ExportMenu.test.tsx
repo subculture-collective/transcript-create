@@ -59,7 +59,7 @@ describe('ExportMenu', () => {
     })
   })
 
-  it('blocks download and shows upgrade modal when user is not Pro', async () => {
+  it('allows non-PDF download when user is not Pro', async () => {
     const user = userEvent.setup()
     render(
       <ExportMenu videoId={mockVideoId} isPro={false} onRequireUpgrade={mockOnRequireUpgrade} />
@@ -70,6 +70,24 @@ describe('ExportMenu', () => {
 
     const srtLinks = screen.getAllByText('SRT')
     await user.click(srtLinks[0])
+
+    expect(mockOnRequireUpgrade).not.toHaveBeenCalled()
+    expect(services.track).toHaveBeenCalledWith({
+      type: 'export_click',
+      payload: { videoId: mockVideoId, format: 'srt', source: 'native' },
+    })
+  })
+
+  it('blocks PDF download and shows upgrade modal when user is not Pro', async () => {
+    const user = userEvent.setup()
+    render(
+      <ExportMenu videoId={mockVideoId} isPro={false} onRequireUpgrade={mockOnRequireUpgrade} />
+    )
+
+    const exportButton = screen.getByText('Export')
+    await user.click(exportButton)
+
+    await user.click(screen.getByText('PDF'))
 
     expect(mockOnRequireUpgrade).toHaveBeenCalled()
     expect(services.track).not.toHaveBeenCalled()

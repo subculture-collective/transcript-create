@@ -141,7 +141,7 @@ class TestAudioTokenIntegration:
 class TestCaptionTokenIntegration:
     """Tests for PO token integration in caption fetching."""
 
-    @patch("worker.youtube_captions.subprocess.run")
+    @patch("worker.youtube_captions.YtDlpExecutor")
     @patch("worker.youtube_captions.get_token_manager")
     @patch("worker.youtube_captions.settings")
     def test_caption_fetch_with_subs_token(self, mock_settings, mock_get_manager, mock_run):
@@ -161,7 +161,8 @@ class TestCaptionTokenIntegration:
 
         # Mock successful metadata fetch
         metadata = {"id": "test123", "title": "Test Video", "automatic_captions": {}}
-        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(metadata), stderr="")
+        mock_executor = mock_run.return_value
+        mock_executor.run_json.return_value = metadata
 
         url = "https://www.youtube.com/watch?v=test123"
         result = _yt_dlp_json(url)
@@ -173,8 +174,8 @@ class TestCaptionTokenIntegration:
         mock_manager.get_token.assert_called_with(TokenType.SUBS)
 
         # Verify subprocess was called with token
-        assert mock_run.call_count >= 1
-        call_args = mock_run.call_args_list[0][0][0]
+        assert mock_executor.run_json.call_count >= 1
+        call_args = mock_executor.run_json.call_args_list[0][0][0]
 
         # Verify command includes Subs token (may have multiple extractor-args)
         assert "--extractor-args" in call_args
@@ -188,7 +189,7 @@ class TestCaptionTokenIntegration:
                     break
         assert found_subs_token, "Subs token not found in command"
 
-    @patch("worker.youtube_captions.subprocess.run")
+    @patch("worker.youtube_captions.YtDlpExecutor")
     @patch("worker.youtube_captions.get_token_manager")
     @patch("worker.youtube_captions.settings")
     def test_caption_fetch_without_token_when_disabled(self, mock_settings, mock_get_manager, mock_run):
@@ -207,7 +208,8 @@ class TestCaptionTokenIntegration:
 
         # Mock successful metadata fetch
         metadata = {"id": "test123", "automatic_captions": {}}
-        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(metadata), stderr="")
+        mock_executor = mock_run.return_value
+        mock_executor.run_json.return_value = metadata
 
         url = "https://www.youtube.com/watch?v=test123"
         result = _yt_dlp_json(url)
@@ -218,7 +220,7 @@ class TestCaptionTokenIntegration:
         # Verify token manager was not called
         mock_manager.get_token.assert_not_called()
 
-    @patch("worker.youtube_captions.subprocess.run")
+    @patch("worker.youtube_captions.YtDlpExecutor")
     @patch("worker.youtube_captions.get_token_manager")
     @patch("worker.youtube_captions.settings")
     def test_caption_fetch_marks_token_invalid_on_error(self, mock_settings, mock_get_manager, mock_run):
@@ -237,9 +239,14 @@ class TestCaptionTokenIntegration:
         mock_get_manager.return_value = mock_manager
 
         # Mock failed fetch with token error
-        mock_run.side_effect = subprocess.CalledProcessError(
+        from worker.youtube.yt_dlp_executor import YtDlpError
+        from worker.youtube.errors import YouTubeErrorKind
+
+        mock_executor = mock_run.return_value
+        mock_executor.run_json.side_effect = YtDlpError(
+            kind=YouTubeErrorKind.TOKEN,
+            command=["yt-dlp"],
             returncode=1,
-            cmd=["yt-dlp"],
             stderr="ERROR: po_token expired or invalid",
         )
 
@@ -251,7 +258,7 @@ class TestCaptionTokenIntegration:
         # Verify token was marked invalid
         mock_manager.mark_token_invalid.assert_called_with(TokenType.SUBS, reason="metadata_fetch_failed")
 
-    @patch("worker.youtube_captions.subprocess.run")
+    @patch("worker.youtube_captions.YtDlpExecutor")
     @patch("worker.youtube_captions.get_token_manager")
     @patch("worker.youtube_captions.settings")
     def test_caption_fetch_fallback_without_token(self, mock_settings, mock_get_manager, mock_run):
@@ -271,7 +278,8 @@ class TestCaptionTokenIntegration:
 
         # Mock successful metadata fetch
         metadata = {"id": "test123", "automatic_captions": {}}
-        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(metadata), stderr="")
+        mock_executor = mock_run.return_value
+        mock_executor.run_json.return_value = metadata
 
         url = "https://www.youtube.com/watch?v=test123"
         result = _yt_dlp_json(url)
@@ -280,7 +288,7 @@ class TestCaptionTokenIntegration:
         assert result["id"] == "test123"
 
         # Verify command does not include token args when no token available
-        call_args = mock_run.call_args_list[0][0][0]
+        call_args = mock_executor.run_json.call_args_list[0][0][0]
         # If there are extractor args, they should not contain po_token=subs
         for i, arg in enumerate(call_args):
             if arg == "--extractor-args" and i + 1 < len(call_args):
@@ -335,7 +343,7 @@ class TestTokenLoggingSafety:
                 assert secret_token not in extra_str, "Token value leaked in log extra fields"
 
     @patch("worker.youtube_captions.logger")
-    @patch("worker.youtube_captions.subprocess.run")
+    @patch("worker.youtube_captions.YtDlpExecutor")
     @patch("worker.youtube_captions.get_token_manager")
     @patch("worker.youtube_captions.settings")
     def test_caption_logs_do_not_contain_token_values(
@@ -358,7 +366,8 @@ class TestTokenLoggingSafety:
 
         # Mock successful metadata fetch
         metadata = {"id": "test123", "automatic_captions": {}}
-        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(metadata), stderr="")
+        mock_executor = mock_run.return_value
+        mock_executor.run_json.return_value = metadata
 
         url = "https://www.youtube.com/watch?v=test123"
         _yt_dlp_json(url)

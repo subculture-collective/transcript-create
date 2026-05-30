@@ -75,11 +75,11 @@ function MetricCard({
   trend?: string;
 }) {
   return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
-      <div className="text-sm text-stone-500">{title}</div>
+    <div className="surface-card">
+      <div className="text-sm text-muted">{title}</div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {subtitle && <div className="mt-1 text-xs text-stone-600">{subtitle}</div>}
-      {trend && <div className="mt-1 text-xs text-green-600">{trend}</div>}
+      {subtitle && <div className="mt-1 text-xs text-muted">{subtitle}</div>}
+      {trend && <div className="mt-1 text-xs text-success">{trend}</div>}
     </div>
   );
 }
@@ -93,12 +93,12 @@ function SimpleBarChart({ data, labels }: { data: number[]; labels: string[] }) 
         const percentage = (value / maxValue) * 100;
         return (
           <div key={idx} className="flex items-center gap-2">
-            <div className="w-24 truncate text-sm text-stone-700" title={labels[idx]}>
+            <div className="w-24 truncate text-sm text-ink" title={labels[idx]}>
               {labels[idx]}
             </div>
             <div className="flex-1">
-              <div className="h-6 w-full rounded bg-stone-100">
-                <div className="h-full rounded bg-blue-500" style={{ width: `${percentage}%` }} />
+              <div className="h-6 w-full rounded bg-surface-muted">
+                <div className="h-full rounded bg-accent" style={{ width: `${percentage}%` }} />
               </div>
             </div>
             <div className="w-12 text-right text-sm font-medium">{value}</div>
@@ -156,13 +156,13 @@ function SimpleLineChart({ data, labels }: { data: number[]; labels: string[] })
 
   return (
     <div className="overflow-x-auto">
-      <svg width={chartWidth} height={chartHeight} className="border-b border-l border-stone-200">
-        <polyline points={points} fill="none" stroke="#3b82f6" strokeWidth="2" />
+      <svg width={chartWidth} height={chartHeight} className="border-b border-l border-border text-accent">
+        <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" />
         {data.map((value, idx) => {
           const x = padding + (idx * (chartWidth - 2 * padding)) / divisor;
           const y = chartHeight - padding - (value / maxValue) * (chartHeight - 2 * padding);
           return (
-            <circle key={idx} cx={x} cy={y} r="3" fill="#3b82f6">
+            <circle key={idx} cx={x} cy={y} r="3" className="fill-current">
               <title>
                 {labels[idx]}: {value}
               </title>
@@ -171,7 +171,7 @@ function SimpleLineChart({ data, labels }: { data: number[]; labels: string[] })
         })}
       </svg>
       {labels.length > 0 && (
-        <div className="mt-1 flex justify-between text-xs text-stone-500">
+        <div className="mt-1 flex justify-between text-xs text-muted">
           <span>{labels[0]}</span>
           <span>{labels[labels.length - 1]}</span>
         </div>
@@ -235,7 +235,7 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+        <h1 className="page-title">Admin Dashboard</h1>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -248,7 +248,7 @@ export default function AdminDashboard() {
           <button onClick={fetchData} className="btn">
             Refresh Now
           </button>
-          <div className="text-xs text-stone-500">
+          <div className="text-xs text-muted">
             Last update: {lastUpdate.toLocaleTimeString()}
           </div>
         </div>
@@ -256,7 +256,7 @@ export default function AdminDashboard() {
 
       {/* Key Metrics */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Key Metrics</h2>
+        <h2 className="section-title mb-3">Key Metrics</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             title="Total Jobs"
@@ -299,9 +299,9 @@ export default function AdminDashboard() {
 
       {/* System Health */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold">System Health</h2>
+        <h2 className="section-title mb-3">System Health</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="surface-card">
             <h3 className="mb-2 font-semibold">Database</h3>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
@@ -309,8 +309,8 @@ export default function AdminDashboard() {
                 <span
                   className={
                     health.database.status === 'healthy'
-                      ? 'font-medium text-green-600'
-                      : 'font-medium text-red-600'
+                      ? 'font-medium text-success'
+                      : 'font-medium text-danger'
                   }
                 >
                   {health.database.status}
@@ -327,7 +327,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="surface-card">
             <h3 className="mb-2 font-semibold">Workers</h3>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
@@ -343,10 +343,10 @@ export default function AdminDashboard() {
                 <span
                   className={
                     health.workers.error_rate_percent > 10
-                      ? 'text-red-600'
+                      ? 'text-danger'
                       : health.workers.error_rate_percent > 5
-                        ? 'text-yellow-600'
-                        : 'text-green-600'
+                        ? 'text-warning'
+                        : 'text-success'
                   }
                 >
                   {health.workers.error_rate_percent}%
@@ -355,7 +355,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="surface-card">
             <h3 className="mb-2 font-semibold">Queue</h3>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
@@ -373,11 +373,11 @@ export default function AdminDashboard() {
 
       {/* Charts */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Analytics Charts</h2>
+        <h2 className="section-title mb-3">Analytics Charts</h2>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Jobs Over Time */}
           {jobsOverTime && jobsOverTime.data.length > 0 && (
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="surface-card">
               <h3 className="mb-3 font-semibold">Jobs Over Time (Last 30 Days)</h3>
               <SimpleLineChart data={jobsOverTime.data} labels={jobsOverTime.labels} />
             </div>
@@ -385,7 +385,7 @@ export default function AdminDashboard() {
 
           {/* Job Status Breakdown */}
           {jobStatusBreakdown && jobStatusBreakdown.data.length > 0 && (
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="surface-card">
               <h3 className="mb-3 font-semibold">Job Status Breakdown</h3>
               <SimplePieChart data={jobStatusBreakdown.data} labels={jobStatusBreakdown.labels} />
             </div>
@@ -393,7 +393,7 @@ export default function AdminDashboard() {
 
           {/* Export Format Breakdown */}
           {exportBreakdown && exportBreakdown.data.length > 0 && (
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="surface-card">
               <h3 className="mb-3 font-semibold">Export Formats (Last 30 Days)</h3>
               <SimpleBarChart data={exportBreakdown.data} labels={exportBreakdown.labels} />
             </div>
@@ -401,19 +401,19 @@ export default function AdminDashboard() {
 
           {/* Search Analytics */}
           {searchAnalytics && (
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="surface-card">
               <h3 className="mb-3 font-semibold">Search Analytics (Last 30 Days)</h3>
               <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <div className="text-stone-500">Zero Results</div>
+                  <div className="text-muted">Zero Results</div>
                   <div className="font-semibold">{searchAnalytics.zero_result_searches}</div>
                 </div>
                 <div>
-                  <div className="text-stone-500">Avg Results</div>
+                  <div className="text-muted">Avg Results</div>
                   <div className="font-semibold">{searchAnalytics.avg_results_per_query}</div>
                 </div>
                 <div>
-                  <div className="text-stone-500">Avg Time</div>
+                  <div className="text-muted">Avg Time</div>
                   <div className="font-semibold">{searchAnalytics.avg_query_time_ms}ms</div>
                 </div>
               </div>

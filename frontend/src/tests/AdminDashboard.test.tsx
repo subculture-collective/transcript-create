@@ -2,6 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import AdminDashboard from '../routes/admin/AdminDashboard';
+import type { ResponsePromise } from 'ky';
+
+type HttpInput = Parameters<typeof http.get>[0];
+
+function mockJsonResponse<T>(value: T | Promise<T>): ResponsePromise<T> {
+  return {
+    json: () => Promise.resolve(value),
+  } as ResponsePromise<T>;
+}
 
 // Mock the http service
 vi.mock('../services/api', () => ({
@@ -21,7 +30,7 @@ describe('AdminDashboard', () => {
     // Mock the API responses with promises that don't resolve immediately
     vi.mocked(http.get).mockReturnValue({
       json: () => new Promise(() => {}), // Never resolves
-    } as any);
+    } as ResponsePromise<never>);
 
     render(
       <BrowserRouter>
@@ -75,24 +84,30 @@ describe('AdminDashboard', () => {
     };
 
     // Mock http.get to return different responses based on the URL
-    vi.mocked(http.get).mockImplementation((url: string) => {
-      let response: any;
-      if (url === 'admin/dashboard/metrics') {
+    vi.mocked(http.get).mockImplementation((url: HttpInput) => {
+      const path = String(url);
+      let response:
+        | typeof mockMetrics
+        | typeof mockHealth
+        | typeof mockJobsOverTime
+        | typeof mockJobStatusBreakdown
+        | typeof mockExportBreakdown
+        | typeof mockSearchAnalytics
+        | Record<string, never> = {};
+      if (path === 'admin/dashboard/metrics') {
         response = mockMetrics;
-      } else if (url === 'admin/dashboard/system-health') {
+      } else if (path === 'admin/dashboard/system-health') {
         response = mockHealth;
-      } else if (url.includes('jobs-over-time')) {
+      } else if (path.includes('jobs-over-time')) {
         response = mockJobsOverTime;
-      } else if (url.includes('job-status-breakdown')) {
+      } else if (path.includes('job-status-breakdown')) {
         response = mockJobStatusBreakdown;
-      } else if (url.includes('export-format-breakdown')) {
+      } else if (path.includes('export-format-breakdown')) {
         response = mockExportBreakdown;
-      } else if (url.includes('search-analytics')) {
+      } else if (path.includes('search-analytics')) {
         response = mockSearchAnalytics;
       }
-      return {
-        json: () => Promise.resolve(response),
-      } as any;
+      return mockJsonResponse(response);
     });
 
     render(
@@ -127,7 +142,7 @@ describe('AdminDashboard', () => {
     // Mock API to reject
     vi.mocked(http.get).mockReturnValue({
       json: () => Promise.reject(new Error('API Error')),
-    } as any);
+    } as ResponsePromise<never>);
 
     // Suppress console.error for this test
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import json
 import logging
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.logging_config import get_logger
 from app.settings import settings
 from worker.po_token_manager import TokenType, get_token_manager
 from worker.token_utils import redact_tokens_from_command
+from worker.youtube.errors import YouTubeErrorKind, classify_youtube_error
+from worker.youtube.yt_dlp_executor import YtDlpError, YtDlpExecutor
 
 logger = get_logger(__name__)
 
@@ -58,6 +63,14 @@ class YTCaptionTrack:
     ext: str  # 'json3', 'vtt', etc.
 
 
+class YouTubeCaptionFetchError(RuntimeError):
+    """Caption track exists, but download or parsing failed transiently/ambiguously."""
+
+
+class YouTubeCaptionRateLimitError(YouTubeCaptionFetchError):
+    """Caption download hit an explicit YouTube rate limit."""
+
+
 def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
     """Build list of client strategies for metadata extraction.
 
@@ -74,7 +87,7 @@ def _build_metadata_strategies() -> List[Tuple[str, List[str]]]:
             continue
 
         extractor_args = get_client_extractor_args(client)
-        if extractor_args:
+        if extractor_args is not None:
             strategies.append((client, extractor_args))
         else:
             logger.warning(f"Unknown YTDLP client '{client}' in YTDLP_CLIENT_ORDER; skipping.")
@@ -112,7 +125,13 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
     from pathlib import Path
 
     from worker.metrics import youtube_requests_total
-    from worker.youtube_resilience import ErrorClass, classify_error, get_circuit_breaker, retry_with_backoff
+    from worker.youtube_resilience import (
+        ErrorClass,
+        YouTubeRateLimitError,
+        classify_error,
+        get_circuit_breaker,
+        retry_with_backoff,
+    )
 
     strategies = _build_metadata_strategies()
 
@@ -129,7 +148,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
             """Create metadata fetch function with explicit parameter binding."""
             def fetch_metadata():
                 """Single metadata fetch attempt that can be retried."""
-                cmd = ["yt-dlp", "-J"]
+                cmd = ["-J"]
                 cmd.extend(cargs)
 
                 # Add cookies if configured
@@ -152,20 +171,15 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                     extra={
                         "operation": "metadata",
                         "client": cname,
-                        "command": redact_tokens_from_command(cmd),
+                        "command": redact_tokens_from_command(["yt-dlp", *cmd]),
                         "has_token": has_token,
                     },
                 )
 
                 start_time = time.time()
                 try:
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                        timeout=settings.YTDLP_REQUEST_TIMEOUT,
-                    )
+                    executor = YtDlpExecutor(timeout=settings.YTDLP_REQUEST_TIMEOUT)
+                    metadata = executor.run_json(cmd)
                     duration = time.time() - start_time
 
                     logger.info(
@@ -173,7 +187,7 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                         extra={
                             "operation": "metadata",
                             "client": cname,
-                            "exit_code": result.returncode,
+                            "exit_code": 0,
                             "duration_seconds": round(duration, 2),
                             "has_token": has_token,
                         },
@@ -184,8 +198,34 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                     ytdlp_operation_attempts_total.labels(operation="metadata", client=cname, result="success").inc()
                     ytdlp_token_usage_total.labels(operation="metadata", has_token=str(has_token).lower()).inc()
 
-                    metadata_json = result.stdout
-                    return json.loads(metadata_json)
+                    return metadata
+
+                except YtDlpError as e:
+                    duration = time.time() - start_time
+
+                    error_class = classify_error(e.returncode or 1, e.stderr, e)
+
+                    logger.warning(
+                        "Metadata fetch failed",
+                        extra={
+                            "operation": "metadata",
+                            "client": cname,
+                            "exit_code": e.returncode,
+                            "error_class": error_class.value,
+                            "duration_seconds": round(duration, 2),
+                            "has_token": has_token,
+                            "stderr_snippet": e.stderr[:200],
+                        },
+                    )
+
+                    ytdlp_operation_duration_seconds.labels(operation="metadata", client=cname).observe(duration)
+                    ytdlp_operation_attempts_total.labels(operation="metadata", client=cname, result="failure").inc()
+                    ytdlp_operation_errors_total.labels(
+                        operation="metadata", client=cname, error_class=error_class.value
+                    ).inc()
+                    ytdlp_token_usage_total.labels(operation="metadata", has_token=str(has_token).lower()).inc()
+
+                    raise subprocess.CalledProcessError(e.returncode or 1, e.command, stderr=e.stderr) from e
 
                 except subprocess.CalledProcessError as e:
                     duration = time.time() - start_time
@@ -269,6 +309,10 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                 f"Metadata fetch failed with {client_name}: {e.returncode}",
                 extra={"error_class": error_class.value, "stderr_snippet": (e.stderr or "")[:200]}
             )
+            if error_class == ErrorClass.THROTTLE:
+                raise YouTubeRateLimitError(
+                    "YouTube rate-limited caption metadata fetching; pause caption ingest before retrying."
+                ) from e
         except Exception as e:
             last_error = e
             error_class = classify_metadata_error(e)
@@ -276,6 +320,8 @@ def _yt_dlp_json(url: str) -> Dict[str, Any]:
                 f"Metadata fetch raised exception with {client_name}: {e}",
                 extra={"error_class": error_class.value}
             )
+            if error_class == ErrorClass.THROTTLE:
+                raise
 
     # All strategies failed
     youtube_requests_total.labels(operation="metadata", result="failure").inc()
@@ -298,12 +344,17 @@ def _pick_auto_caption(data: dict) -> Optional[YTCaptionTrack]:
     # Prefer json3, then vtt
     prefer_ext_order = ["json3", "vtt"]
     candidates: List[Tuple[str, str, str]] = []  # (lang, url, ext)
+    saw_caption_track = False
     for lang, tracks in auto.items():
         for t in tracks:
+            if t.get("url"):
+                saw_caption_track = True
             ext = t.get("ext")
             if ext in ("json3", "vtt") and t.get("url"):
                 candidates.append((lang, t.get("url"), ext))
     if not candidates:
+        if saw_caption_track:
+            raise YouTubeCaptionFetchError("Caption tracks found, but none use supported json3/vtt formats")
         return None
     # choose preferred language and preferred ext
     for ext in prefer_ext_order:
@@ -445,14 +496,29 @@ def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrac
         ytdlp_operation_duration_seconds.labels(operation="captions", client="direct").observe(duration)
         ytdlp_operation_attempts_total.labels(operation="captions", client="direct", result="failure").inc()
 
-        return None
+        status = getattr(e, "code", None)
+        reason = getattr(e, "reason", "")
+        error_text = f"{status or ''} {reason or ''} {e}".strip()
+        if isinstance(e, HTTPError):
+            try:
+                body = e.read(2048).decode("utf-8", errors="ignore")
+            except Exception:
+                body = ""
+            error_text = f"{error_text} {body}".strip()
+        elif isinstance(e, URLError):
+            error_text = f"{error_text} {getattr(e, 'reason', '')}".strip()
+
+        if classify_youtube_error(error_text).kind == YouTubeErrorKind.THROTTLE:
+            raise YouTubeCaptionRateLimitError(f"Caption download rate-limited: {e}") from e
+
+        raise YouTubeCaptionFetchError(f"Caption download failed: {e}") from e
     segments: List[YTSegment] = []
     if track.ext == "json3":
         try:
             j = json.loads(payload)
         except Exception as e:
             logging.warning("Invalid json3 payload: %s", e)
-            return None
+            raise YouTubeCaptionFetchError(f"Invalid json3 caption payload: {e}") from e
         # json3 structure has 'events' with 'tStartMs' and 'dDurationMs'; text in 'segs'
         for ev in j.get("events", []) or []:
             start_ms = ev.get("tStartMs")
@@ -477,8 +543,8 @@ def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrac
             segments = _parse_vtt_to_segments(payload)
         except Exception as e:
             logging.warning("Failed to parse VTT: %s", e)
-            return None
+            raise YouTubeCaptionFetchError(f"Failed to parse VTT captions: {e}") from e
     else:
         logging.info("Unsupported caption ext: %s", track.ext)
-        return None
+        raise YouTubeCaptionFetchError(f"Unsupported caption ext: {track.ext}")
     return track, segments

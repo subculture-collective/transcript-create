@@ -31,3 +31,5 @@ export interface VideoInfo {
   title?: string | null;
   duration_seconds?: number | null;
 }
+
+export type RecentVideo = VideoInfo;

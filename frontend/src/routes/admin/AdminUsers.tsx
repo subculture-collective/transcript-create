@@ -27,14 +27,14 @@ export default function AdminUsers() {
   }, [fetchUsers]);
 
   return (
-    <div>
-      <div className="mb-4 flex items-end gap-2">
+    <div className="space-y-6">
+      <div className="flex items-end gap-3">
         <div>
-          <label className="block text-sm">Search</label>
+          <label className="mb-1 block text-sm font-medium text-ink">Search</label>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="rounded border px-2 py-1"
+            className="form-control min-w-72"
           />
         </div>
         <button className="btn" onClick={fetchUsers}>
@@ -44,7 +44,7 @@ export default function AdminUsers() {
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b bg-stone-100">
+            <tr className="border-b border-border bg-surface-muted">
               <th className="px-2 py-1 text-left">ID</th>
               <th className="px-2 py-1 text-left">Email</th>
               <th className="px-2 py-1 text-left">Name</th>
@@ -53,7 +53,7 @@ export default function AdminUsers() {
           </thead>
           <tbody>
             {items.map((u) => (
-              <tr key={u.id} className="border-b">
+              <tr key={u.id} className="border-b border-border">
                 <td className="px-2 py-1">{u.id}</td>
                 <td className="px-2 py-1">{u.email}</td>
                 <td className="px-2 py-1">{u.name}</td>

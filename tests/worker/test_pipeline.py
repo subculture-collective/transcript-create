@@ -84,8 +84,8 @@ class TestNormalizeChannelUrl:
 class TestExpandSingleJob:
     """Tests for expand_single_if_needed function."""
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_single_job_success(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_single_job_success(self, mock_fetch_metadata, mock_conn):
         """Test successful single job expansion."""
         job_id = uuid.uuid4()
         video_id = "test_video_123"
@@ -100,23 +100,22 @@ class TestExpandSingleJob:
             "title": "Test Video",
             "duration": 300,
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_single_if_needed(mock_conn)
 
         # Verify yt-dlp was called
-        assert mock_check_output.called
-        call_args = mock_check_output.call_args[0][0]
-        assert "yt-dlp" in call_args
-        assert "-J" in call_args
+        assert mock_fetch_metadata.called
+        call_args = mock_fetch_metadata.call_args[0]
+        assert call_args[0] == "https://youtube.com/watch?v=test_video_123"
 
         # Verify video insert was called
         execute_calls = mock_conn.execute.call_args_list
         # Should have: job query, video insert, state update
         assert len(execute_calls) >= 3
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_single_job_from_entries(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_single_job_from_entries(self, mock_fetch_metadata, mock_conn):
         """Test single job expansion when video ID in entries."""
         job_id = uuid.uuid4()
 
@@ -133,16 +132,16 @@ class TestExpandSingleJob:
                 }
             ]
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_single_if_needed(mock_conn)
 
         # Should have extracted video from entries
-        assert mock_check_output.called
+        assert mock_fetch_metadata.called
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_single_job_no_video_id_raises(self, mock_check_output, mock_conn):
-        """Test raises error when video ID cannot be determined."""
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_single_job_no_video_id_marks_job_failed(self, mock_fetch_metadata, mock_conn):
+        """Test marks job failed when video ID cannot be determined."""
         job_id = uuid.uuid4()
 
         mock_job = {"id": job_id, "input_url": "https://youtube.com/watch?v=test"}
@@ -150,27 +149,29 @@ class TestExpandSingleJob:
 
         # yt-dlp response without id
         yt_dlp_response = {"title": "Video", "duration": 100}
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
-        with pytest.raises(RuntimeError, match="Unable to determine YouTube ID"):
-            pipeline.expand_single_if_needed(mock_conn)
+        pipeline.expand_single_if_needed(mock_conn)
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_single_job_no_pending_jobs(self, mock_check_output, mock_conn):
+        execute_sql = "\n".join(str(call.args[0]) for call in mock_conn.execute.call_args_list if call.args)
+        assert "UPDATE jobs SET state='failed'" in execute_sql
+
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_single_job_no_pending_jobs(self, mock_fetch_metadata, mock_conn):
         """Test no action when no pending jobs."""
         mock_conn.execute.return_value.mappings.return_value.all.return_value = []
 
         pipeline.expand_single_if_needed(mock_conn)
 
         # Should not call yt-dlp
-        mock_check_output.assert_not_called()
+        mock_fetch_metadata.assert_not_called()
 
 
 class TestExpandChannelJob:
     """Tests for expand_channel_if_needed function."""
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_channel_job_success(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_channel_job_success(self, mock_fetch_metadata, mock_conn):
         """Test successful channel job expansion."""
         job_id = uuid.uuid4()
 
@@ -186,23 +187,22 @@ class TestExpandChannelJob:
             ],
             "channel_id": "UCtest",
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_channel_if_needed(mock_conn)
 
         # Verify yt-dlp was called with --flat-playlist
-        call_args = mock_check_output.call_args[0][0]
-        assert "yt-dlp" in call_args
-        assert "--flat-playlist" in call_args
-        assert "-J" in call_args
+        call_args = mock_fetch_metadata.call_args
+        assert call_args[0][0] == "https://youtube.com/channel/UCtest/videos"
+        assert call_args[1]["flat_playlist"] is True
 
         # Verify multiple video inserts
         execute_calls = mock_conn.execute.call_args_list
         # Should have: job query, 3 video inserts, state update
         assert len(execute_calls) >= 5
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_channel_job_appends_videos_suffix(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_channel_job_appends_videos_suffix(self, mock_fetch_metadata, mock_conn):
         """Test that channel expansion appends /videos to channel URLs."""
         job_id = uuid.uuid4()
 
@@ -214,16 +214,17 @@ class TestExpandChannelJob:
             "entries": [{"id": "video1", "title": "Video 1", "duration": 100}],
             "channel_id": "UCtest",
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_channel_if_needed(mock_conn)
 
         # Verify yt-dlp was called with /videos appended to URL
-        call_args = mock_check_output.call_args[0][0]
-        assert "https://youtube.com/channel/UCtest/videos" in call_args
+        call_args = mock_fetch_metadata.call_args
+        assert call_args[0][0] == "https://youtube.com/channel/UCtest/videos"
+        assert call_args[1]["flat_playlist"] is True
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_channel_job_handle_url_gets_videos_suffix(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_channel_job_handle_url_gets_videos_suffix(self, mock_fetch_metadata, mock_conn):
         """Test that handle URLs (@username) get /videos suffix."""
         job_id = uuid.uuid4()
 
@@ -237,16 +238,17 @@ class TestExpandChannelJob:
             ],
             "uploader_id": "testuser",
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_channel_if_needed(mock_conn)
 
         # Verify yt-dlp was called with /videos appended
-        call_args = mock_check_output.call_args[0][0]
-        assert "https://youtube.com/@testuser/videos" in call_args
+        call_args = mock_fetch_metadata.call_args
+        assert call_args[0][0] == "https://youtube.com/@testuser/videos"
+        assert call_args[1]["flat_playlist"] is True
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_channel_job_preserves_existing_videos_suffix(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_channel_job_preserves_existing_videos_suffix(self, mock_fetch_metadata, mock_conn):
         """Test that URLs already with /videos suffix are not double-appended."""
         job_id = uuid.uuid4()
 
@@ -257,17 +259,18 @@ class TestExpandChannelJob:
             "entries": [{"id": "video1", "title": "Video 1", "duration": 100}],
             "channel_id": "UCtest",
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_channel_if_needed(mock_conn)
 
         # Verify URL was not double-appended
-        call_args = mock_check_output.call_args[0][0]
-        assert "https://youtube.com/channel/UCtest/videos" in call_args
-        assert "https://youtube.com/channel/UCtest/videos/videos" not in call_args
+        call_args = mock_fetch_metadata.call_args
+        assert call_args[0][0] == "https://youtube.com/channel/UCtest/videos"
+        assert call_args[1]["flat_playlist"] is True
+        assert call_args[0][0] != "https://youtube.com/channel/UCtest/videos/videos"
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_channel_job_logs_expansion_counts(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_channel_job_logs_expansion_counts(self, mock_fetch_metadata, mock_conn):
         """Test that expansion logs include channel_id and entry counts."""
         job_id = uuid.uuid4()
 
@@ -282,7 +285,7 @@ class TestExpandChannelJob:
             ],
             "channel_id": "UCtest",
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         with patch("worker.pipeline.logger") as mock_logger:
             pipeline.expand_channel_if_needed(mock_conn)
@@ -303,8 +306,8 @@ class TestExpandChannelJob:
             assert "entry_count" in extra
             assert extra["entry_count"] == 3
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_channel_job_empty_channel(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_channel_job_empty_channel(self, mock_fetch_metadata, mock_conn):
         """Test channel expansion with no videos."""
         job_id = uuid.uuid4()
 
@@ -313,15 +316,15 @@ class TestExpandChannelJob:
 
         # Empty channel
         yt_dlp_response = {"entries": []}
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_channel_if_needed(mock_conn)
 
         # Should still update job state
         assert mock_conn.execute.called
 
-    @patch("worker.pipeline.subprocess.check_output")
-    def test_expand_channel_job_preserves_order(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline._fetch_ytdlp_metadata")
+    def test_expand_channel_job_preserves_order(self, mock_fetch_metadata, mock_conn):
         """Test channel videos maintain order via idx."""
         job_id = uuid.uuid4()
 
@@ -334,7 +337,7 @@ class TestExpandChannelJob:
                 {"id": "v2", "title": "Second", "duration": 200},
             ]
         }
-        mock_check_output.return_value = json.dumps(yt_dlp_response).encode()
+        mock_fetch_metadata.return_value = yt_dlp_response
 
         pipeline.expand_channel_if_needed(mock_conn)
 
@@ -400,7 +403,7 @@ class TestProcessVideo:
         mock_chunk.return_value = [Chunk(path=chunk_path, offset=0.0)]
 
         # Mock transcription
-        mock_transcribe.return_value = [
+        transcript_segments = [
             {
                 "start": 0.0,
                 "end": 5.0,
@@ -411,9 +414,10 @@ class TestProcessVideo:
                 "confidence": 0.95,
             }
         ]
+        mock_transcribe.return_value = (transcript_segments, {"language": "en"})
 
         # Mock diarization
-        mock_diarize.return_value = mock_transcribe.return_value
+        mock_diarize.return_value = transcript_segments
 
         # Patch WORKDIR
         with patch("worker.pipeline.WORKDIR", tmp_path):
@@ -504,10 +508,11 @@ class TestProcessVideo:
 
         mock_chunk.return_value = [Chunk(path=chunk_path, offset=0.0)]
 
-        mock_transcribe.return_value = [
+        transcript_segments = [
             {"start": 0.0, "end": 5.0, "text": "Test", "avg_logprob": -0.5, "temperature": 0.0, "token_count": 1}
         ]
-        mock_diarize.return_value = mock_transcribe.return_value
+        mock_transcribe.return_value = (transcript_segments, {"language": "en"})
+        mock_diarize.return_value = transcript_segments
 
         with patch("worker.pipeline.WORKDIR", tmp_path):
             pipeline.process_video(mock_engine, video_id)
@@ -566,8 +571,8 @@ class TestProcessVideo:
 
         # Mock transcription for each chunk
         mock_transcribe.side_effect = [
-            [{"start": 0.0, "end": 5.0, "text": "First", "avg_logprob": -0.5, "temperature": 0.0, "token_count": 1}],
-            [{"start": 0.0, "end": 5.0, "text": "Second", "avg_logprob": -0.5, "temperature": 0.0, "token_count": 1}],
+            ([{"start": 0.0, "end": 5.0, "text": "First", "avg_logprob": -0.5, "temperature": 0.0, "token_count": 1}], {"language": "en"}),
+            ([{"start": 0.0, "end": 5.0, "text": "Second", "avg_logprob": -0.5, "temperature": 0.0, "token_count": 1}], {"language": "en"}),
         ]
 
         # Diarization returns all segments
@@ -589,8 +594,8 @@ class TestProcessVideo:
 class TestCaptureYouTubeCaptions:
     """Tests for capture_youtube_captions_for_unprocessed function."""
 
-    @patch("worker.youtube_captions.subprocess.check_output")
-    def test_capture_youtube_captions_success(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline.fetch_youtube_auto_captions")
+    def test_capture_youtube_captions_success(self, mock_fetch, mock_conn):
         """Test successful YouTube caption capture."""
         video_id = uuid.uuid4()
         youtube_id = "test123"
@@ -598,36 +603,16 @@ class TestCaptureYouTubeCaptions:
         # Mock video query
         mock_conn.execute.return_value.all.return_value = [(video_id, youtube_id)]
 
-        # Mock yt-dlp response
-        yt_dlp_data = {"automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}}
-        mock_check_output.return_value = json.dumps(yt_dlp_data).encode()
-
-        # Mock urlopen for caption download
-        caption_data = {
-            "events": [
-                {
-                    "tStartMs": 0,
-                    "dDurationMs": 5000,
-                    "segs": [{"utf8": "Test caption"}],
-                }
-            ]
-        }
-
-        with patch("worker.youtube_captions.urlopen") as mock_urlopen:
-            mock_response = Mock()
-            mock_response.read.return_value = json.dumps(caption_data).encode()
-            mock_response.__enter__ = Mock(return_value=mock_response)
-            mock_response.__exit__ = Mock(return_value=False)
-            mock_urlopen.return_value = mock_response
-
-            # Mock RETURNING clause
-            mock_conn.execute.return_value.first.return_value = (1,)
-
-            count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
+        mock_fetch.return_value = (
+            Mock(language="en", kind="auto", url="http://example.com/captions.json3"),
+            [Mock(start=0.0, end=5.0, text="Test caption")],
+        )
+        mock_conn.execute.return_value.first.return_value = (1,)
+        count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
 
         assert count == 1
 
-    @patch("worker.youtube_captions.fetch_youtube_auto_captions")
+    @patch("worker.pipeline.fetch_youtube_auto_captions")
     def test_capture_youtube_captions_no_captions(self, mock_fetch, mock_conn):
         """Test when no captions are available."""
         video_id = uuid.uuid4()
@@ -640,7 +625,7 @@ class TestCaptureYouTubeCaptions:
 
         assert count == 0
 
-    @patch("worker.youtube_captions.fetch_youtube_auto_captions")
+    @patch("worker.pipeline.fetch_youtube_auto_captions")
     def test_capture_youtube_captions_fetch_error(self, mock_fetch, mock_conn):
         """Test handling of caption fetch errors."""
         video_id = uuid.uuid4()
@@ -654,8 +639,8 @@ class TestCaptureYouTubeCaptions:
 
         assert count == 0
 
-    @patch("worker.youtube_captions.subprocess.check_output")
-    def test_capture_youtube_captions_multiple_videos(self, mock_check_output, mock_conn):
+    @patch("worker.pipeline.fetch_youtube_auto_captions")
+    def test_capture_youtube_captions_multiple_videos(self, mock_fetch, mock_conn):
         """Test processing multiple videos."""
         videos = [
             (uuid.uuid4(), "video1"),
@@ -664,34 +649,15 @@ class TestCaptureYouTubeCaptions:
 
         mock_conn.execute.return_value.all.return_value = videos
 
-        # Mock yt-dlp responses
-        yt_dlp_data = {"automatic_captions": {"en": [{"ext": "json3", "url": "http://example.com/captions.json3"}]}}
-        mock_check_output.return_value = json.dumps(yt_dlp_data).encode()
-
-        # Mock caption download
-        caption_data = {
-            "events": [
-                {
-                    "tStartMs": 0,
-                    "dDurationMs": 5000,
-                    "segs": [{"utf8": "Test"}],
-                }
-            ]
-        }
-
-        with patch("worker.youtube_captions.urlopen") as mock_urlopen:
-            mock_response = Mock()
-            mock_response.read.return_value = json.dumps(caption_data).encode()
-            mock_response.__enter__ = Mock(return_value=mock_response)
-            mock_response.__exit__ = Mock(return_value=False)
-            mock_urlopen.return_value = mock_response
-
-            mock_conn.execute.return_value.first.return_value = (1,)
-
-            count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
+        mock_fetch.return_value = (
+            Mock(language="en", kind="auto", url="http://example.com/captions.json3"),
+            [Mock(start=0.0, end=5.0, text="Test")],
+        )
+        mock_conn.execute.return_value.first.return_value = (1,)
+        count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
 
         assert count == 2
-        assert mock_check_output.call_count == 2
+        assert mock_fetch.call_count == 2
 
     def test_capture_youtube_captions_no_pending(self, mock_conn):
         """Test when no videos need caption processing."""

@@ -28,26 +28,26 @@ export default function FavoritesPage() {
     }
   }, [user]);
   return (
-    <div>
-      <h1 className="mb-4 text-2xl font-semibold">Favorites</h1>
+    <div className="space-y-4">
+      <h1 className="page-title">Favorites</h1>
       {user && remote !== null ? (
         remote.length === 0 ? (
-          <p className="text-gray-600">No favorites yet.</p>
+          <p className="text-muted">No favorites yet.</p>
         ) : (
           <ul className="space-y-3">
             {remote.map((f) => (
-              <li key={f.id} className="flex items-start justify-between gap-4 rounded border p-3">
+              <li key={f.id} className="surface-card-compact flex items-start justify-between gap-4">
                 <div>
                   <div className="mb-2 line-clamp-2">{f.text}</div>
                   <Link
-                    className="text-blue-600 hover:underline"
+                    className="action-link"
                     to={`/v/${f.video_id}?t=${Math.floor(f.start_ms / 1000)}`}
                   >
                     Open
                   </Link>
                 </div>
                 <button
-                  className="text-red-600 hover:underline"
+                  className="cursor-pointer text-danger hover:underline"
                   onClick={async () => {
                     await apiDeleteFavorite(f.id).catch(() => {});
                     const next = await apiListFavorites().catch(() => null);
@@ -62,22 +62,22 @@ export default function FavoritesPage() {
         )
       ) : (
         <>
-          {items.length === 0 && <p className="text-gray-600">No favorites yet.</p>}
+          {items.length === 0 && <p className="text-muted">No favorites yet.</p>}
           <ul className="space-y-3">
             {items.map((f, i) => (
-              <li key={i} className="flex items-start justify-between gap-4 rounded border p-3">
+              <li key={i} className="surface-card-compact flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-xs text-gray-500">Segment {f.segIndex}</div>
+                  <div className="text-xs text-subtle">Segment {f.segIndex}</div>
                   <div className="mb-2 line-clamp-2">{f.text}</div>
                   <Link
-                    className="text-blue-600 hover:underline"
+                    className="action-link"
                     to={`/v/${f.videoId}?t=${Math.floor(f.startMs / 1000)}#seg-${f.segIndex}`}
                   >
                     Open
                   </Link>
                 </div>
                 <button
-                  className="text-red-600 hover:underline"
+                  className="cursor-pointer text-danger hover:underline"
                   onClick={() => {
                     favorites.toggle(f);
                     setItems(favorites.list());

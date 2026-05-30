@@ -10,11 +10,23 @@ from app.logging_config import configure_logging, get_logger, video_id_ctx
 from app.settings import settings
 from app.ytdlp_validation import validate_js_runtime_or_exit
 from worker.metrics import setup_worker_info, try_collect_gpu_metrics
-from worker.pipeline import capture_youtube_captions_for_unprocessed, expand_channel_if_needed, process_video
+from worker.pipeline import capture_youtube_captions_for_unprocessed, expand_channel_if_needed
+from worker.video_pipeline import ProcessVideoCommand, default_video_processing_pipeline
+from worker.state_model import (
+    IN_PROGRESS_VIDEO_STATES,
+    OPEN_CAPTION_INGEST_STATES,
+    TERMINAL_CAPTION_INGEST_STATES,
+    VideoState,
+    sql_string_list,
+)
 
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 POLL_INTERVAL = 3
 HEARTBEAT_INTERVAL = 60  # seconds
+youtube_caption_cooldown_until = 0.0
+IN_PROGRESS_VIDEO_STATES_SQL = sql_string_list(IN_PROGRESS_VIDEO_STATES)
+OPEN_CAPTION_INGEST_STATES_SQL = sql_string_list(OPEN_CAPTION_INGEST_STATES)
+TERMINAL_CAPTION_INGEST_STATES_SQL = sql_string_list(TERMINAL_CAPTION_INGEST_STATES)
 
 # Configure structured logging for worker service
 configure_logging(
@@ -23,6 +35,7 @@ configure_logging(
     json_format=(settings.LOG_FORMAT == "json"),
 )
 logger = get_logger(__name__)
+video_processing_pipeline = default_video_processing_pipeline(engine)
 
 # Generate a unique worker ID based on hostname and PID
 WORKER_ID = f"{socket.gethostname()}-{os.getpid()}"
@@ -65,23 +78,26 @@ def update_queue_metrics():
     try:
         with engine.begin() as conn:
             # Count pending videos
-            pending_count = conn.execute(text("SELECT COUNT(*) FROM videos WHERE state = 'pending'")).scalar_one()
+            pending_count = conn.execute(
+                text("SELECT COUNT(*) FROM videos WHERE state = :state"),
+                {"state": VideoState.PENDING.value},
+            ).scalar_one()
             videos_pending.set(pending_count)
 
             # Count in-progress videos by state
             states = conn.execute(
                 text(
-                    """
+                    f"""
                     SELECT state, COUNT(*)
                     FROM videos
-                    WHERE state IN ('downloading', 'transcoding', 'transcribing')
+                    WHERE state IN ({IN_PROGRESS_VIDEO_STATES_SQL})
                     GROUP BY state
                 """
                 )
             ).all()
 
             # Reset all in-progress gauges first
-            for state in ["downloading", "transcoding", "transcribing"]:
+            for state in IN_PROGRESS_VIDEO_STATES:
                 videos_in_progress.labels(state=state).set(0)
 
             # Set current counts
@@ -109,6 +125,52 @@ def heartbeat_updater():
         except Exception as e:
             logger.debug("Heartbeat update failed", extra={"error": str(e)})
         time.sleep(HEARTBEAT_INTERVAL)
+
+
+def pending_video_claim_sql() -> str:
+    """SQL for claiming native transcription work.
+
+    Staged batches are released only after each expected staged job has expanded
+    at least one video and all caption ingest work in the batch is terminal.
+    Caption failures are terminal by design here: after the staged caption pass
+    has exhausted a video, native Whisper may proceed as the fallback.
+    """
+    return f"""
+                SELECT v.id
+                FROM videos v
+                JOIN jobs j ON j.id = v.job_id
+                WHERE v.state = :pending_state
+                  AND (
+                    j.meta->>'staged' IS DISTINCT FROM 'true'
+                    OR (
+                      v.caption_ingest_state IN ({TERMINAL_CAPTION_INGEST_STATES_SQL})
+                      AND (
+                        SELECT COUNT(DISTINCT j2.id)
+                        FROM jobs j2
+                        WHERE j2.meta->>'staged' = 'true'
+                          AND j2.state <> 'pending'
+                          AND EXISTS (SELECT 1 FROM videos v3 WHERE v3.job_id = j2.id)
+                          AND COALESCE(j2.meta->>'batch_id', j2.id::text) = COALESCE(j.meta->>'batch_id', j.id::text)
+                      ) >= (
+                        SELECT COALESCE(MAX((j3.meta->>'batch_expected_jobs')::int), 1)
+                        FROM jobs j3
+                        WHERE j3.meta->>'staged' = 'true'
+                          AND COALESCE(j3.meta->>'batch_id', j3.id::text) = COALESCE(j.meta->>'batch_id', j.id::text)
+                      )
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM videos v2
+                        JOIN jobs j2 ON j2.id = v2.job_id
+                        WHERE j2.meta->>'staged' = 'true'
+                          AND COALESCE(j2.meta->>'batch_id', j2.id::text) = COALESCE(j.meta->>'batch_id', j.id::text)
+                          AND v2.caption_ingest_state IN ({OPEN_CAPTION_INGEST_STATES_SQL})
+                      )
+                    )
+                  )
+                ORDER BY v.idx ASC NULLS LAST, v.created_at DESC
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            """
 
 
 def run():
@@ -165,11 +227,45 @@ def run():
             except Exception as e:
                 logger.exception("Error expanding jobs", extra={"error": str(e)})
 
+            try:
+                from worker.pipeline import reconcile_terminal_jobs
+
+                reconcile_terminal_jobs(conn)
+            except Exception as e:
+                logger.warning("Job lifecycle reconciliation failed", extra={"error": str(e)})
+
             # Opportunistically capture YouTube captions early for videos without captions yet
             try:
-                capture_youtube_captions_for_unprocessed(conn, limit=5)
+                global youtube_caption_cooldown_until
+                now = time.time()
+                if now >= youtube_caption_cooldown_until:
+                    capture_youtube_captions_for_unprocessed(
+                        conn,
+                        limit=10,
+                        staged_only=True,
+                        active_only=True,
+                        terminal_failures=True,
+                    )
+                    from worker.pipeline import promote_staged_batches_if_ready
+
+                    promote_staged_batches_if_ready(conn)
+                else:
+                    logger.info(
+                        "Skipping YouTube caption ingest during cooldown",
+                        extra={"cooldown_remaining_seconds": round(youtube_caption_cooldown_until - now)},
+                    )
             except Exception as e:
-                logger.warning("YouTube captions capture step failed", extra={"error": str(e)})
+                from worker.youtube_resilience import ErrorClass, classify_error
+
+                error_class = classify_error(getattr(e, "returncode", 0), getattr(e, "stderr", "") or str(e), e)
+                if error_class == ErrorClass.THROTTLE:
+                    youtube_caption_cooldown_until = time.time() + settings.YTDLP_RATE_LIMIT_COOLDOWN_SECONDS
+                    logger.warning(
+                        "YouTube caption ingest rate-limited; entering cooldown",
+                        extra={"cooldown_seconds": settings.YTDLP_RATE_LIMIT_COOLDOWN_SECONDS, "error": str(e)[:200]},
+                    )
+                else:
+                    logger.warning("YouTube captions capture step failed", extra={"error": str(e)})
 
             # Rescue stuck videos: if a video has been in a non-terminal state for too long, mark it pending again
             try:
@@ -212,7 +308,7 @@ def run():
                         SET state = 'pending', updated_at = now()
                         FROM transcripts t
                         WHERE v.id = t.video_id
-                          AND v.state = 'completed'
+                          AND v.state = :completed_state
                           AND t.model IS NOT NULL
                           AND (
                             -- Requeue if transcript model rank is lower than current
@@ -230,7 +326,7 @@ def run():
                         RETURNING v.id, t.model
                     """
                         ),
-                        {"current_rank": current_rank},
+                        {"current_rank": current_rank, "completed_state": VideoState.COMPLETED.value},
                     )
                     requeued = requeue_result.fetchall()
                     if requeued:
@@ -249,16 +345,8 @@ def run():
             update_queue_metrics()
 
             row = conn.execute(
-                text(
-                    """
-                SELECT v.id
-                FROM videos v
-                WHERE v.state = 'pending'
-                ORDER BY v.created_at
-                FOR UPDATE SKIP LOCKED
-                LIMIT 1
-            """
-                )
+                text(pending_video_claim_sql()),
+                {"pending_state": VideoState.PENDING.value},
             ).first()
             if not row:
                 logger.debug("No pending videos found. Sleeping", extra={"sleep_seconds": POLL_INTERVAL})
@@ -273,7 +361,7 @@ def run():
             conn.execute(text("UPDATE videos SET state='downloading', updated_at=now() WHERE id=:i"), {"i": video_id})
         try:
             logger.info("Starting video processing")
-            process_video(engine, video_id)
+            video_processing_pipeline.process_video(ProcessVideoCommand(video_id=video_id))
             logger.info("Video processing completed successfully")
 
             # Track successful video processing
@@ -289,10 +377,14 @@ def run():
             videos_processed_total.labels(result="failed").inc()
 
             with engine.begin() as conn:
-                conn.execute(
-                    text("UPDATE videos SET state='failed', error=:e, updated_at=now() WHERE id=:i"),
+                row = conn.execute(
+                    text("UPDATE videos SET state='failed', error=:e, updated_at=now() WHERE id=:i RETURNING job_id"),
                     {"i": video_id, "e": str(e)[:5000]},
-                )
+                ).first()
+                if row:
+                    from worker.pipeline import refresh_job_state
+
+                    refresh_job_state(conn, row[0], error=str(e))
         finally:
             # Clear video context
             video_id_ctx.set(None)

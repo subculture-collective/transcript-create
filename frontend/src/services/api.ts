@@ -23,6 +23,9 @@ export const api = {
   async getVideo(videoId: string) {
     return http.get(`videos/${videoId}`).json<VideoInfo>();
   },
+  async listRecentVideos(limit = 12) {
+    return http.get('videos', { searchParams: { completed_only: 'true', limit: String(limit) } }).json<VideoInfo[]>();
+  },
 };
 
 export async function apiListFavorites(videoId?: string) {

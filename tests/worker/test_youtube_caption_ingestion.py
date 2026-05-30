@@ -11,9 +11,13 @@ Tests cover:
 
 import json
 from unittest.mock import MagicMock, patch
+from http.client import HTTPMessage
 from urllib.error import HTTPError, URLError
 
+import pytest
+
 from worker.youtube_captions import (
+    YouTubeCaptionFetchError,
     YTCaptionTrack,
     YTSegment,
     _parse_vtt_to_segments,
@@ -105,7 +109,7 @@ class TestCaptionTrackSelection:
         assert track is None
 
     def test_returns_none_when_no_supported_formats(self):
-        """Test returns None when only unsupported formats available."""
+        """Test raises when only unsupported formats are available."""
         data = {
             "automatic_captions": {
                 "en": [
@@ -114,10 +118,9 @@ class TestCaptionTrackSelection:
                 ]
             }
         }
-        
-        track = _pick_auto_caption(data)
-        
-        assert track is None
+
+        with pytest.raises(YouTubeCaptionFetchError):
+            _pick_auto_caption(data)
 
     def test_returns_vtt_if_no_json3(self):
         """Test that VTT is used if json3 is not available."""
@@ -262,10 +265,8 @@ class TestJSON3Parsing:
         mock_response.__exit__.return_value = False
         mock_urlopen.return_value = mock_response
         
-        result = fetch_youtube_auto_captions("test_video_id")
-        
-        # Should return None on parse error
-        assert result is None
+        with pytest.raises(YouTubeCaptionFetchError):
+            fetch_youtube_auto_captions("test_video_id")
 
 
 class TestVTTParsing:
@@ -447,10 +448,8 @@ class TestErrorHandling:
         # Simulate network error
         mock_urlopen.side_effect = URLError("Network unreachable")
         
-        result = fetch_youtube_auto_captions("test_video_id")
-        
-        # Should return None on network error
-        assert result is None
+        with pytest.raises(YouTubeCaptionFetchError):
+            fetch_youtube_auto_captions("test_video_id")
 
     @patch('worker.youtube_captions._yt_dlp_json')
     @patch('worker.youtube_captions.urlopen')
@@ -469,13 +468,12 @@ class TestErrorHandling:
             "https://example.com/captions.json3", 
             404, 
             "Not Found", 
-            {}, 
+            HTTPMessage(),
             None
         )
         
-        result = fetch_youtube_auto_captions("test_video_id")
-        
-        assert result is None
+        with pytest.raises(YouTubeCaptionFetchError):
+            fetch_youtube_auto_captions("test_video_id")
 
     @patch('worker.youtube_captions._yt_dlp_json')
     @patch('worker.youtube_captions.urlopen')
@@ -493,9 +491,8 @@ class TestErrorHandling:
         import socket
         mock_urlopen.side_effect = socket.timeout("Request timed out")
         
-        result = fetch_youtube_auto_captions("test_video_id")
-        
-        assert result is None
+        with pytest.raises(YouTubeCaptionFetchError):
+            fetch_youtube_auto_captions("test_video_id")
 
 
 class TestDataclasses:

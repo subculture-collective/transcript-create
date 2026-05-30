@@ -40,6 +40,11 @@ class JobCreate(BaseModel):
     vocabulary_ids: Optional[List[uuid.UUID]] = Field(
         None, description="Custom vocabulary IDs to apply during transcription"
     )
+    batch_id: Optional[str] = Field(None, description="Optional batch identifier for coordinating multiple jobs")
+    batch_expected_jobs: Optional[int] = Field(
+        None, ge=1, description="Number of jobs expected in this batch before staged promotion is allowed"
+    )
+    staged: bool = Field(False, description="If true, ingest YouTube captions first, then queue native transcription")
 
     @field_validator("url")
     @classmethod
@@ -522,4 +527,6 @@ class FormattedTranscriptResponse(BaseModel):
     text: str = Field(..., description="Formatted transcript text")
     format: Literal["inline", "dialogue", "structured"] = Field(..., description="Formatting style used")
     cleanup_config: CleanupConfig = Field(..., description="Cleanup configuration used")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of formatting")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc), description="Timestamp of formatting"
+    )

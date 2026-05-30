@@ -19,8 +19,10 @@ class Settings(BaseSettings):
     FORCE_GPU: bool = False
     # GPU device preference order: try in this sequence
     GPU_DEVICE_PREFERENCE: str = "cuda,hip"
-    # Preferred compute types on GPU; will pick the first supported by the selected backend
-    GPU_COMPUTE_TYPES: str = "float16,int8_float16,bfloat16,float32"
+    # Preferred compute types on GPU; will pick the first supported by the selected backend.
+    # Keep plain int8 in the default order for older NVIDIA Pascal cards (for example GTX 1080),
+    # which do not have a practical FP16 path for faster-whisper/CTranslate2.
+    GPU_COMPUTE_TYPES: str = "float16,int8_float16,int8,bfloat16,float32"
     # Model fallbacks when forcing GPU to reduce VRAM: will try these in order if the primary model fails
     GPU_MODEL_FALLBACKS: str = "large-v3,medium,small,base,tiny"
     # Cleanup options: delete large media after successful processing
@@ -50,18 +52,18 @@ class Settings(BaseSettings):
     PO_TOKEN_CACHE_TTL: int = 3600  # Token cache TTL in seconds (1 hour)
     PO_TOKEN_COOLDOWN_SECONDS: int = 60  # Cooldown period after token failure (1 minute)
     # Feature flags for controlled rollout
-    PO_TOKEN_USE_FOR_AUDIO: bool = True  # Use PO tokens for audio downloads (Player/GVS)
-    PO_TOKEN_USE_FOR_CAPTIONS: bool = True  # Use PO tokens for caption fetching (Subs)
+    PO_TOKEN_USE_FOR_AUDIO: bool = False  # Use PO tokens for audio downloads (Player/GVS); advanced fallback only
+    PO_TOKEN_USE_FOR_CAPTIONS: bool = False  # Use PO tokens for caption fetching (Subs); advanced fallback only
 
     # yt-dlp client fallback strategy configuration
-    # Client order for fallback (comma-separated): web_safari, ios, android, tv
-    YTDLP_CLIENT_ORDER: str = "web_safari,ios,android,tv"
+    # Client order for fallback (comma-separated): default, mweb, web_safari, ios, android, tv
+    YTDLP_CLIENT_ORDER: str = "default,mweb,web_safari,ios,android,tv"
     # Enable/disable specific clients (comma-separated list of disabled clients)
     YTDLP_CLIENTS_DISABLED: str = ""
     # Path to cookies file for yt-dlp (Netscape format)
     YTDLP_COOKIES_PATH: str = ""
     # Number of retry attempts per client strategy
-    YTDLP_TRIES_PER_CLIENT: int = 2
+    YTDLP_TRIES_PER_CLIENT: int = 1
     # Sleep time between retries within same client (seconds)
     YTDLP_RETRY_SLEEP: float = 1.0
     # Additional extractor args (space-separated, applied to all clients)
@@ -73,6 +75,7 @@ class Settings(BaseSettings):
     YTDLP_BACKOFF_MAX_DELAY: float = 60.0  # Maximum backoff delay in seconds
     YTDLP_BACKOFF_JITTER: bool = True  # Add random jitter to backoff delays
     YTDLP_REQUEST_TIMEOUT: float = 120.0  # Timeout per request attempt in seconds
+    YTDLP_RATE_LIMIT_COOLDOWN_SECONDS: int = 3600  # Pause YouTube caption ingest after rate-limit detection
 
     # Circuit breaker configuration for YouTube requests
     YTDLP_CIRCUIT_BREAKER_ENABLED: bool = True  # Enable circuit breaker
@@ -179,6 +182,16 @@ class Settings(BaseSettings):
     WHISPER_TEMPERATURE: float = 0.0  # Temperature for sampling (0.0-1.0, 0.0 = greedy)
     WHISPER_VAD_FILTER: bool = False  # Voice Activity Detection filter (faster-whisper only)
     WHISPER_WORD_TIMESTAMPS: bool = True  # Extract word-level timestamps
+    # Speaker diarization assigns anonymous labels like "Speaker 1"/"Speaker 2".
+    # It does not identify real people without a separate voice-enrollment system.
+    ENABLE_DIARIZATION: bool = False
+    # Run inside transcription worker; false lets separate diarization worker handle it.
+    DIARIZATION_INLINE: bool = False
+    DIARIZATION_DEVICE: str = "cpu"  # 'cpu', 'cuda', or 'auto'. Separate worker can safely use cuda on GTX 1080.
+    DIARIZATION_MODEL: str = "pyannote/speaker-diarization-community-1"
+    DIARIZATION_FALLBACK_MODEL: str = "pyannote/speaker-diarization"
+    DIARIZATION_POLL_INTERVAL: int = 10
+    DIARIZATION_RUNNING_TIMEOUT_MINUTES: int = 5
     # Custom vocabulary post-processing
     ENABLE_CUSTOM_VOCABULARY: bool = True  # Apply custom vocabulary corrections
     # Translation support

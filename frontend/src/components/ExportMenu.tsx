@@ -1,4 +1,5 @@
 import { track } from '../services';
+import { canExportFormat, type ExportFormat, type Plan } from '../features/entitlements/policy';
 
 type Props = {
   videoId: string;
@@ -8,8 +9,9 @@ type Props = {
 };
 
 export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) {
-  function guard(e: React.MouseEvent, payload: Record<string, unknown>) {
-    if (!isPro) {
+  function guard(e: React.MouseEvent, payload: Record<string, unknown>, format: ExportFormat) {
+    const plan: Plan = isPro ? 'pro' : 'free';
+    if (!canExportFormat({ plan, format })) {
       e.preventDefault();
       onRequireUpgrade();
       return;
@@ -18,74 +20,74 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
   }
   return (
     <details className="relative inline-block group">
-      <summary className="inline-flex cursor-pointer list-none rounded border px-2 py-1 hover:bg-gray-50">
+      <summary className="btn-secondary list-none px-3 py-1.5 text-sm">
         Export
       </summary>
-      <div className="absolute z-10 mt-1 w-56 rounded border bg-white p-2 shadow-lg">
-        <div className="mb-1 text-xs font-medium text-gray-500">Native transcript</div>
+      <div className="absolute z-10 mt-1 w-56 rounded-lg border border-border bg-surface p-2 shadow-lg">
+        <div className="mb-1 text-xs font-medium text-muted">Native transcript</div>
         <div className="flex flex-wrap gap-2">
           <a
-            className="rounded border px-2 py-1 hover:bg-gray-50"
-            onClick={(e) => guard(e, { videoId, format: 'srt', source: 'native' })}
+            className="btn-secondary min-h-0 px-2 py-1 text-xs"
+            onClick={(e) => guard(e, { videoId, format: 'srt', source: 'native' }, 'srt')}
             href={`/api/videos/${videoId}/transcript.srt`}
             download={`video-${videoId}.srt`}
           >
             SRT
           </a>
           <a
-            className="rounded border px-2 py-1 hover:bg-gray-50"
-            onClick={(e) => guard(e, { videoId, format: 'vtt', source: 'native' })}
+            className="btn-secondary min-h-0 px-2 py-1 text-xs"
+            onClick={(e) => guard(e, { videoId, format: 'vtt', source: 'native' }, 'vtt')}
             href={`/api/videos/${videoId}/transcript.vtt`}
             download={`video-${videoId}.vtt`}
           >
             VTT
           </a>
           <a
-            className="rounded border px-2 py-1 hover:bg-gray-50"
-            onClick={(e) => guard(e, { videoId, format: 'json', source: 'native' })}
+            className="btn-secondary min-h-0 px-2 py-1 text-xs"
+            onClick={(e) => guard(e, { videoId, format: 'json', source: 'native' }, 'json')}
             href={`/api/videos/${videoId}/transcript.json`}
             download={`video-${videoId}.json`}
           >
             JSON
           </a>
           <a
-            className="rounded border px-2 py-1 hover:bg-gray-50"
-            onClick={(e) => guard(e, { videoId, format: 'pdf', source: 'native' })}
+            className="btn-secondary min-h-0 px-2 py-1 text-xs"
+            onClick={(e) => guard(e, { videoId, format: 'pdf', source: 'native' }, 'pdf')}
             href={`/api/videos/${videoId}/transcript.pdf`}
             download={`video-${videoId}.pdf`}
           >
             PDF
           </a>
         </div>
-        <div className="mt-2 mb-1 text-xs font-medium text-gray-500">YouTube captions</div>
+        <div className="mt-2 mb-1 text-xs font-medium text-muted">YouTube captions</div>
         <div className="flex flex-wrap gap-2">
           <a
-            className="rounded border px-2 py-1 hover:bg-gray-50"
-            onClick={(e) => guard(e, { videoId, format: 'srt', source: 'youtube' })}
+            className="btn-secondary min-h-0 px-2 py-1 text-xs"
+            onClick={(e) => guard(e, { videoId, format: 'srt', source: 'youtube' }, 'srt')}
             href={`/api/videos/${videoId}/youtube-transcript.srt`}
             download={`video-${videoId}.youtube.srt`}
           >
             SRT
           </a>
           <a
-            className="rounded border px-2 py-1 hover:bg-gray-50"
-            onClick={(e) => guard(e, { videoId, format: 'vtt', source: 'youtube' })}
+            className="btn-secondary min-h-0 px-2 py-1 text-xs"
+            onClick={(e) => guard(e, { videoId, format: 'vtt', source: 'youtube' }, 'vtt')}
             href={`/api/videos/${videoId}/youtube-transcript.vtt`}
             download={`video-${videoId}.youtube.vtt`}
           >
             VTT
           </a>
           <a
-            className="rounded border px-2 py-1 hover:bg-gray-50"
-            onClick={(e) => guard(e, { videoId, format: 'json', source: 'youtube' })}
+            className="btn-secondary min-h-0 px-2 py-1 text-xs"
+            onClick={(e) => guard(e, { videoId, format: 'json', source: 'youtube' }, 'json')}
             href={`/api/videos/${videoId}/youtube-transcript.json`}
             download={`video-${videoId}.youtube.json`}
           >
             JSON
           </a>
         </div>
-        <div className="mt-2 mb-1 text-xs font-medium text-gray-500">Per-section</div>
-        <div className="text-xs text-gray-600">
+        <div className="mt-2 mb-1 text-xs font-medium text-muted">Per-section</div>
+        <div className="text-xs text-muted">
           Use the inline copy link next to any segment, or select text to build a custom pack
           (coming soon).
         </div>

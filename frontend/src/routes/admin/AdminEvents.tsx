@@ -50,40 +50,40 @@ export default function AdminEvents() {
   }, [fetchEvents, fetchSummary]);
 
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-end gap-2">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-sm">Type</label>
+          <label className="mb-1 block text-sm font-medium text-ink">Type</label>
           <input
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="rounded border px-2 py-1"
+            className="form-control min-w-48"
           />
         </div>
         <div>
-          <label className="block text-sm">User Email</label>
+          <label className="mb-1 block text-sm font-medium text-ink">User Email</label>
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded border px-2 py-1"
+            className="form-control min-w-56"
           />
         </div>
         <div>
-          <label className="block text-sm">Start</label>
+          <label className="mb-1 block text-sm font-medium text-ink">Start</label>
           <input
             type="datetime-local"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className="rounded border px-2 py-1"
+            className="form-control min-w-56"
           />
         </div>
         <div>
-          <label className="block text-sm">End</label>
+          <label className="mb-1 block text-sm font-medium text-ink">End</label>
           <input
             type="datetime-local"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="rounded border px-2 py-1"
+            className="form-control min-w-56"
           />
         </div>
         <button
@@ -103,8 +103,8 @@ export default function AdminEvents() {
         </a>
       </div>
       {summary && (
-        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="rounded border p-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="surface-card-compact">
             <h3 className="mb-2 font-semibold">By Type</h3>
             <ul className="text-sm">
               {summary.by_type.map((x) => (
@@ -115,7 +115,7 @@ export default function AdminEvents() {
               ))}
             </ul>
           </div>
-          <div className="rounded border p-3">
+          <div className="surface-card-compact">
             <h3 className="mb-2 font-semibold">By Day</h3>
             <ul className="text-sm">
               {summary.by_day.map((x) => (
@@ -131,7 +131,7 @@ export default function AdminEvents() {
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b bg-stone-100">
+            <tr className="border-b border-border bg-surface-muted">
               <th className="px-2 py-1 text-left">ID</th>
               <th className="px-2 py-1 text-left">Time</th>
               <th className="px-2 py-1 text-left">User</th>
@@ -141,7 +141,7 @@ export default function AdminEvents() {
           </thead>
           <tbody>
             {items.map((e) => (
-              <tr key={e.id} className="border-b">
+              <tr key={e.id} className="border-b border-border">
                 <td className="px-2 py-1">{e.id}</td>
                 <td className="px-2 py-1">{new Date(e.created_at).toLocaleString()}</td>
                 <td className="px-2 py-1">{e.user_id || 'anon'}</td>

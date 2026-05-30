@@ -217,22 +217,24 @@ YouTube serves different content based on the client type. Configure fallback st
 
 ### Available Clients
 
-1. **web_safari** - Safari web client (best quality, HLS streaming)
-2. **ios** - iOS mobile client (good for bypassing restrictions)
-3. **android** - Android mobile client (alternative mobile option)
-4. **tv** - TV embedded client (most reliable fallback)
+1. **default** - yt-dlp default client selection; best when cookies are configured
+2. **mweb** - Mobile web client fallback
+3. **web_safari** - Safari web client fallback
+4. **ios** - iOS mobile client fallback
+5. **android** - Android mobile client fallback
+6. **tv** - TV embedded client fallback
 
 ### Configuration
 
 ```bash
 # Client order for fallback (comma-separated)
-YTDLP_CLIENT_ORDER=web_safari,ios,android,tv
+YTDLP_CLIENT_ORDER=default,mweb,web_safari,ios,android,tv
 
 # Disable specific clients (comma-separated)
 YTDLP_CLIENTS_DISABLED=
 
 # Retry attempts per client
-YTDLP_TRIES_PER_CLIENT=2
+YTDLP_TRIES_PER_CLIENT=1
 
 # Sleep between retries (seconds)
 YTDLP_RETRY_SLEEP=1.0
@@ -244,11 +246,10 @@ Common safe extractor args to add to `.env`:
 
 ```bash
 # Additional extractor arguments (space-separated)
-YTDLP_EXTRA_ARGS=--no-check-certificate --prefer-free-formats
+YTDLP_EXTRA_ARGS=--prefer-free-formats
 ```
 
 **Available options:**
-- `--no-check-certificate` - Skip SSL certificate validation (use cautiously)
 - `--prefer-free-formats` - Prefer free video formats over premium
 - `--geo-bypass` - Bypass geographic restrictions
 - `--user-agent "Mozilla/5.0..."` - Custom user agent string
@@ -256,10 +257,12 @@ YTDLP_EXTRA_ARGS=--no-check-certificate --prefer-free-formats
 ### How Fallback Works
 
 When a download fails:
-1. Worker tries `web_safari` client (first in order)
-2. If it fails, tries `ios` client
-3. If it fails, tries `android` client
-4. If it fails, tries `tv` client (final fallback)
+1. Worker tries yt-dlp default client selection first
+2. If it fails, tries `mweb` client
+3. If it fails, tries `web_safari` client
+4. If it fails, tries `ios` client
+5. If it fails, tries `android` client
+6. If it fails, tries `tv` client (final fallback)
 5. Each client is retried `YTDLP_TRIES_PER_CLIENT` times
 
 **Metrics tracked:**

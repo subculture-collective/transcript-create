@@ -223,8 +223,20 @@ class TestGetPipeline:
     """Tests for _get_pipeline function."""
 
     @patch("worker.diarize.settings")
+    def test_get_pipeline_disabled(self, mock_settings):
+        """Test returns None when diarization is disabled."""
+        mock_settings.ENABLE_DIARIZATION = False
+        mock_settings.HF_TOKEN = "test_token"
+        diarize._pipeline = None
+
+        result = diarize._get_pipeline()
+
+        assert result is None
+
+    @patch("worker.diarize.settings")
     def test_get_pipeline_no_hf_token(self, mock_settings):
         """Test returns None when HF_TOKEN is missing."""
+        mock_settings.ENABLE_DIARIZATION = True
         mock_settings.HF_TOKEN = ""
         diarize._pipeline = None
 
@@ -235,6 +247,7 @@ class TestGetPipeline:
     @patch("worker.diarize.settings")
     def test_get_pipeline_import_error(self, mock_settings):
         """Test returns None when pyannote.audio import fails."""
+        mock_settings.ENABLE_DIARIZATION = True
         mock_settings.HF_TOKEN = "test_token"
         diarize._pipeline = None
         diarize._pyannote_import_error = ImportError("pyannote not installed")
@@ -249,6 +262,7 @@ class TestGetPipeline:
     @patch("worker.diarize.settings")
     def test_get_pipeline_caches_result(self, mock_settings):
         """Test pipeline is cached after first load."""
+        mock_settings.ENABLE_DIARIZATION = True
         mock_settings.HF_TOKEN = "test_token"
 
         # Set pre-loaded pipeline
@@ -265,7 +279,11 @@ class TestGetPipeline:
     @patch("worker.diarize.settings")
     def test_get_pipeline_sets_env_vars(self, mock_settings):
         """Test pipeline sets required environment variables."""
+        mock_settings.ENABLE_DIARIZATION = True
         mock_settings.HF_TOKEN = "my_token"
+        mock_settings.DIARIZATION_MODEL = "pyannote/speaker-diarization-community-1"
+        mock_settings.DIARIZATION_FALLBACK_MODEL = "pyannote/speaker-diarization"
+        mock_settings.DIARIZATION_DEVICE = "cpu"
         diarize._pipeline = None
 
         # The code path for setting env vars exists in _get_pipeline

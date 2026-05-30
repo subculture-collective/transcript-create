@@ -17,6 +17,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from sqlalchemy import text
 
 from .. import crud
+from ..billing.policy import can_export_format
 from ..common.session import get_session_token, get_user_from_session, is_admin
 from ..db import get_db
 from ..exceptions import TranscriptNotReadyError
@@ -34,7 +35,14 @@ def _fmt_time_ms(ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms_rem:03d}"
 
 
-def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str] = None, require_auth: bool = False):
+def _export_allowed_or_402(
+    db,
+    request: Request,
+    user,
+    redirect_to: Optional[str] = None,
+    require_auth: bool = False,
+    export_format: Optional[str] = None,
+):
     """
     Check if export is allowed based on user plan and daily limits.
 
@@ -47,7 +55,16 @@ def _export_allowed_or_402(db, request: Request, user, redirect_to: Optional[str
     require_auth=False to allow anonymous access, with rate limiting enforced
     via daily export quotas for authenticated free users.
     """
-    # Pro users and admins allowed
+    # Paid export formats require entitlement before quota/auth checks.
+    effective_plan = "admin" if user and is_admin(user) else (user.get("plan") if user else None)
+    if export_format and not can_export_format(effective_plan, export_format):
+        accept = (request.headers.get("accept") or "").lower()
+        if "text/html" in accept and redirect_to:
+            return RedirectResponse(url=redirect_to, status_code=307)
+        return JSONResponse(
+            {"error": "upgrade_required", "message": "Upgrade to Pro to export this format."},
+            status_code=402,
+        )
     if user and (is_admin(user) or (user.get("plan") or "free").lower() == settings.PRO_PLAN_NAME.lower()):
         return None
     # For free users, enforce soft daily export limit
@@ -118,7 +135,12 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}", require_auth=True
+        db,
+        request,
+        user,
+        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        require_auth=True,
+        export_format="srt",
     )
     if gate is not None:
         return gate
@@ -158,7 +180,12 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}", require_auth=True
+        db,
+        request,
+        user,
+        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        require_auth=True,
+        export_format="vtt",
     )
     if gate is not None:
         return gate
@@ -218,7 +245,11 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
         )
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
+        db,
+        request,
+        user,
+        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        export_format="srt",
     )
     if gate is not None:
         return gate
@@ -270,7 +301,11 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
         )
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
+        db,
+        request,
+        user,
+        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        export_format="vtt",
     )
     if gate is not None:
         return gate
@@ -342,7 +377,11 @@ def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends
         )
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
+        db,
+        request,
+        user,
+        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        export_format="json",
     )
     if gate is not None:
         return gate
@@ -372,7 +411,12 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
     """Export YouTube captions as JSON."""
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}", require_auth=True
+        db,
+        request,
+        user,
+        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        require_auth=True,
+        export_format="json",
     )
     if gate is not None:
         return gate
@@ -428,7 +472,11 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
 
     user = get_user_from_session(db, get_session_token(request))
     gate = _export_allowed_or_402(
-        db, request, user, redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}"
+        db,
+        request,
+        user,
+        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
+        export_format="pdf",
     )
     if gate is not None:
         return gate

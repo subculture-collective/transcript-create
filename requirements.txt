@@ -8,7 +8,7 @@ psycopg[binary]==3.2.10
 alembic==1.14.0
 
 # YouTube and media processing
-yt-dlp==2025.10.14
+yt-dlp==2026.3.17
 
 # Whisper transcription backends
 faster-whisper==1.2.0

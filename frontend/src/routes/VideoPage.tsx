@@ -172,10 +172,11 @@ export default function VideoPage() {
     });
     return ids;
   }, [transcript, hits]);
+  const matchIndicesKey = useMemo(() => matchIndices.join(','), [matchIndices]);
   const [matchCursor, setMatchCursor] = useState(0);
   useEffect(() => {
     setMatchCursor(0);
-  }, [JSON.stringify(matchIndices)]);
+  }, [matchIndicesKey]);
   function gotoMatch(direction: 1 | -1) {
     if (matchIndices.length === 0) return;
     const next = (matchCursor + direction + matchIndices.length) % matchIndices.length;
@@ -198,18 +199,18 @@ export default function VideoPage() {
             title={video?.title ?? undefined}
           />
         ) : (
-          <div className="aspect-video w-full overflow-hidden rounded-lg border bg-black">
-            <div className="flex h-full items-center justify-center text-gray-400" role="status" aria-live="polite">
+          <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
+            <div className="flex h-full items-center justify-center text-subtle" role="status" aria-live="polite">
               <span className="inline-block animate-spin text-3xl mr-3" aria-hidden="true">⟳</span>
               Loading player…
             </div>
           </div>
         )}
         <div className="mt-4 space-y-3">
-          <h1 className="text-xl sm:text-2xl font-medium text-stone-900">{video?.title ?? 'Loading video...'}</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{video?.title ?? 'Loading video...'}</h1>
           {video && (
             <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span className="text-stone-600">Exports:</span>
+              <span className="text-muted">Exports:</span>
               <ExportMenu
                 videoId={video.id}
                 isPro={user?.plan === 'pro'}
@@ -242,18 +243,18 @@ export default function VideoPage() {
               }
             }}
             placeholder="Search within this transcript…"
-            className="w-full rounded-md border border-stone-300 px-3 py-3 focus:border-blue-600 focus:ring-2 focus:ring-blue-600"
+            className="form-control"
             aria-label="Search within transcript"
           />
         </form>
       </div>
       <div className="lg:col-span-5">
         <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="text-xl font-semibold">Transcript</h2>
+          <h2 className="section-title">Transcript</h2>
           {matchIndices.length > 0 && (
-            <div className="flex items-center gap-2 text-sm text-stone-600" role="group" aria-label="Search navigation">
+            <div className="flex items-center gap-2 text-sm text-muted" role="group" aria-label="Search navigation">
               <button
-                className="rounded border border-stone-300 px-3 py-2 hover:bg-stone-50 transition-colors min-h-[44px]"
+                className="btn-secondary"
                 onClick={() => gotoMatch(-1)}
                 aria-label="Go to previous match"
               >
@@ -263,7 +264,7 @@ export default function VideoPage() {
                 {matchCursor + 1} / {matchIndices.length}
               </span>
               <button
-                className="rounded border border-stone-300 px-3 py-2 hover:bg-stone-50 transition-colors min-h-[44px]"
+                className="btn-secondary"
                 onClick={() => gotoMatch(1)}
                 aria-label="Go to next match"
               >
@@ -273,7 +274,7 @@ export default function VideoPage() {
           )}
         </div>
         {!transcript && (
-          <div className="text-stone-500 py-8 text-center" role="status" aria-live="polite">
+          <div className="py-8 text-center text-muted" role="status" aria-live="polite">
             <span className="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⟳</span>
             <p>Loading transcript…</p>
           </div>
@@ -292,32 +293,32 @@ export default function VideoPage() {
                 <li
                   id={`seg-${id}`}
                   key={id}
-                  className={`group rounded-md px-2 py-2 transition-colors ${activeSegId === id || match ? 'bg-blue-50 ring-1 ring-blue-300' : ''} ${isServerFav || favorites.has({ videoId: videoId!, segIndex: id }) ? 'ring-1 ring-amber-400' : ''}`}
+                  className={`transcript-segment group ${activeSegId === id || match ? 'transcript-segment-active' : ''} ${isServerFav || favorites.has({ videoId: videoId!, segIndex: id }) ? 'transcript-segment-favorite' : ''}`}
                   role="article"
                   aria-label={`Segment ${id}, timestamp ${msToHms(seg.start_ms)}`}
                 >
                   <button 
                     onClick={() => onClickSegment(seg, id)} 
-                    className="text-left w-full min-h-[44px]"
+                    className="min-h-[44px] w-full cursor-pointer text-left"
                     aria-label={`Play from ${msToHms(seg.start_ms)}`}
                   >
-                    <div className="mb-1 text-xs text-stone-500 font-mono">
+                    <div className="mb-1 font-mono text-xs text-subtle">
                       <time dateTime={msToHms(seg.start_ms)}>
                         {msToHms(seg.start_ms)}
                       </time>
                     </div>
-                    <p className="font-serif leading-relaxed">{seg.text}</p>
+                    <p className="leading-relaxed text-ink">{seg.text}</p>
                   </button>
-                  <div className="mt-2 hidden items-center gap-3 text-xs text-stone-600 group-hover:flex">
+                  <div className="mt-2 hidden items-center gap-3 text-xs text-muted group-hover:flex">
                     <button
-                      className="hover:text-stone-900 py-2 transition-colors"
+                      className="nav-link py-2"
                       onClick={() => copyLink(id, seg.start_ms)}
                       aria-label="Copy link to this segment"
                     >
                       Copy link
                     </button>
                     <button 
-                      className="hover:text-stone-900 py-2 transition-colors" 
+                      className="nav-link py-2" 
                       onClick={() => toggleFavorite(id, seg)}
                       aria-label={
                         user
@@ -339,7 +340,7 @@ export default function VideoPage() {
                     </button>
                   </div>
                   {match && (
-                    <div className="mt-2 rounded bg-yellow-50 p-2 text-xs text-yellow-900" role="note">
+                    <div className="mt-2 rounded bg-warning-soft p-2 text-xs text-ink" role="note">
                       <div className="mb-1 font-medium">Match</div>
                       <div
                         className="prose prose-xs max-w-none"

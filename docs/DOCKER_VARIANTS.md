@@ -137,6 +137,14 @@ docker run -p 8000:8000 \
   transcript-create:cuda12.1
 ```
 
+For a GTX 1080/Pascal core-transcription path, prefer the minimal compose overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gtx1080.yml up --build db migrations api worker
+```
+
+That overlay uses `faster-whisper`, `WHISPER_MODEL=small`, and `GPU_COMPUTE_TYPES=int8,float32`. It also supports optional CPU-based pyannote speaker labels via `ENABLE_DIARIZATION=true` and `HF_TOKEN`. See [GTX 1080 Core Transcription Setup](gtx-1080-core.md).
+
 **Supported CUDA Versions:**
 - 12.1 (default, recommended)
 - 11.8
@@ -222,7 +230,8 @@ This maximizes cache hits during development.
 ### CUDA Variant
 
 - `FORCE_GPU=true` - Force GPU usage
-- `WHISPER_BACKEND=whisper` - Use PyTorch backend
+- `WHISPER_BACKEND=faster-whisper` - Use CTranslate2 backend by default
+- `GPU_COMPUTE_TYPES=int8,float32` - Pascal-safe default for older NVIDIA cards
 - `NVIDIA_VISIBLE_DEVICES=all` - All GPUs visible
 - `NVIDIA_DRIVER_CAPABILITIES=compute,utility` - GPU capabilities
 

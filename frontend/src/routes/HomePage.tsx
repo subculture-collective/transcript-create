@@ -32,10 +32,10 @@ export default function HomePage() {
   const suggested = summary?.popular_searches ?? [];
 
   return (
-    <div className="space-y-6 lg:space-y-8">
-      <section className="surface-card overflow-hidden">
+    <div className="flex min-h-[calc(100vh-11rem)] flex-col space-y-6 lg:space-y-8">
+      <section className="surface-card flex-1 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(183,255,60,0.12),transparent_22%),radial-gradient(circle_at_20%_15%,rgba(192,132,252,0.10),transparent_18%)]" />
-        <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(19rem,0.8fr)] lg:items-end">
+        <div className="relative grid h-full gap-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(19rem,0.8fr)] lg:items-center">
           <div className="space-y-6">
             <div className="archive-eyebrow">Broadcast archive noir</div>
 
@@ -56,9 +56,9 @@ export default function HomePage() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search any topic, line, guest, or phrase…"
-                  className="form-control min-h-[64px] rounded-[1.5rem] px-5 text-lg tracking-[-0.02em] placeholder:text-subtle"
+                  className="form-control min-h-[52px] px-4 text-base tracking-[-0.02em] placeholder:text-subtle"
                 />
-                <button type="submit" className="btn min-h-[64px] px-7 text-base">
+                <button type="submit" className="btn min-h-[52px] px-6 text-base">
                   Search archive
                 </button>
               </div>
@@ -84,25 +84,25 @@ export default function HomePage() {
           </div>
 
           <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-border/80 bg-surface-muted/70 p-4">
+            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4">
               <div className="meta-label">Episodes</div>
               <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">
                 {loading ? '—' : summary ? formatNumber(summary.video_count) : '—'}
               </div>
             </div>
-            <div className="rounded-2xl border border-border/80 bg-surface-muted/70 p-4">
+            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4">
               <div className="meta-label">Duration</div>
               <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">
                 {loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'}
               </div>
             </div>
-            <div className="rounded-2xl border border-border/80 bg-surface-muted/70 p-4">
+            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4">
               <div className="meta-label">Transcript words</div>
               <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">
                 {loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'}
               </div>
             </div>
-            <div className="rounded-2xl border border-border/80 bg-surface-muted/70 p-4 sm:col-span-2 lg:col-span-2">
+            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4 sm:col-span-2 lg:col-span-2">
               <div className="meta-label">Updated</div>
               <div className="meta-value text-sm">{loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}</div>
             </div>
@@ -141,7 +141,7 @@ export default function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted">
+            <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted">
               Recent episodes will appear here once the archive summary endpoint is available.
             </div>
           )}
@@ -163,7 +163,7 @@ export default function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted">
+            <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted">
               Search a topic above to start building a useful archive trail.
             </div>
           )}
@@ -171,7 +171,7 @@ export default function HomePage() {
           {recentVideos[0] && (
             <Link
               to={buildTimestampLink(recentVideos[0].id, 0)}
-              className="block rounded-2xl border border-border bg-surface-muted p-4 text-sm text-muted transition-colors hover:border-accent/70 hover:text-ink"
+              className="block rounded-lg border border-border bg-surface-muted p-4 text-sm text-muted transition-colors hover:border-accent/70 hover:text-ink"
             >
               Open the newest episode in the player.
             </Link>

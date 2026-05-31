@@ -389,7 +389,7 @@ export default function VideoPage() {
 
         {video && (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
-            <div className="rounded-2xl border border-border bg-surface-muted p-4">
+            <div className="rounded-lg border border-border bg-surface-muted p-4">
               <div className="text-xs uppercase tracking-[0.24em] text-subtle">Episode details</div>
               <dl className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
@@ -419,7 +419,7 @@ export default function VideoPage() {
               </dl>
             </div>
 
-            <div className="rounded-2xl border border-dashed border-border bg-surface p-4">
+            <div className="rounded-lg border border-dashed border-border bg-surface p-4">
               <div className="text-xs uppercase tracking-[0.24em] text-subtle">Future work</div>
               <div className="mt-2 font-medium text-ink">Topic extraction coming later</div>
               <p className="mt-2 text-sm text-muted">
@@ -431,7 +431,7 @@ export default function VideoPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-        <aside className="lg:sticky lg:top-6 lg:col-span-1">
+        <aside className="lg:sticky lg:top-24 lg:col-span-1">
           {video ? (
             <YouTubePlayer
               ref={playerRef}

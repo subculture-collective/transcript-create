@@ -17,7 +17,7 @@ export default function AppLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-canvas text-ink transition-colors">
+    <div className="flex min-h-screen flex-col bg-canvas text-ink transition-colors">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:min-h-[44px] focus:bg-accent focus:px-4 focus:py-2 focus:text-[#101014]"
@@ -26,10 +26,10 @@ export default function AppLayout() {
       </a>
 
       <header className="sticky top-0 z-40 border-b border-border/80 bg-canvas/85 backdrop-blur-2xl" role="banner">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
             <Link to="/" className="group flex items-center gap-3" aria-label="Home - Broadcast Archive Noir">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface-muted text-sm font-semibold tracking-[0.32em] text-accent shadow-[0_0_0_1px_rgba(183,255,60,0.08)]">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-muted text-xs font-semibold tracking-[0.28em] text-accent shadow-[0_0_0_1px_rgba(183,255,60,0.08)]">
                 A/
               </span>
               <span className="leading-none">
@@ -206,7 +206,7 @@ export default function AppLayout() {
         </nav>
       </header>
 
-      <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-6" role="main">
+      <main id="main-content" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 lg:px-6" role="main">
         <Outlet />
       </main>
 

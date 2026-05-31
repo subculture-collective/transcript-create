@@ -82,7 +82,7 @@ export default function TimelinePage() {
                             <div className="line-clamp-2 font-medium text-ink">{video.title || 'Untitled episode'}</div>
                             <div className="mt-2 text-sm text-muted">{video.channel_name || 'Unknown channel'}</div>
                             <div className="mt-3 flex flex-wrap gap-3 text-xs text-subtle">
-                              <span>{formatDate(video.uploaded_at ?? video.created_at ?? null)}</span>
+                              <span>{formatDate(video.uploaded_at ?? null)}</span>
                               <span>{formatDuration(video.duration_seconds)}</span>
                             </div>
                           </Link>

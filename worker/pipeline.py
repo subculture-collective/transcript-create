@@ -4,6 +4,7 @@ import json
 import shlex
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,62 @@ logger = get_logger(__name__)
 ACTIVE_VIDEO_STATES_SQL = sql_string_list(ACTIVE_VIDEO_STATES)
 OPEN_CAPTION_INGEST_STATES_SQL = sql_string_list(OPEN_CAPTION_INGEST_STATES)
 TERMINAL_VIDEO_STATES_SQL = sql_string_list(TERMINAL_VIDEO_STATES)
+
+
+def _parse_youtube_upload_date(value: Any) -> datetime | None:
+    """Parse yt-dlp's source upload date into an aware UTC datetime."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    for fmt in ("%Y%m%d", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _clean_channel_title(value: Any) -> str | None:
+    if not value:
+        return None
+    title = str(value).strip()
+    if title.endswith(" - Videos"):
+        title = title[: -len(" - Videos")].strip()
+    return title or None
+
+
+def _metadata_channel_name(metadata: dict[str, Any], fallback: str | None = None) -> str | None:
+    return _clean_channel_title(
+        metadata.get("uploader")
+        or metadata.get("channel")
+        or metadata.get("channel_name")
+        or metadata.get("uploader_id")
+        or fallback
+    )
+
+
+def _metadata_uploaded_at(metadata: dict[str, Any]) -> datetime | None:
+    upload_date = _parse_youtube_upload_date(metadata.get("upload_date"))
+    if upload_date:
+        return upload_date
+    timestamp = metadata.get("timestamp") or metadata.get("release_timestamp")
+    if timestamp is not None:
+        try:
+            return datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+        except (TypeError, ValueError, OSError):
+            return None
+    return _parse_youtube_upload_date(metadata.get("release_date"))
 
 
 def refresh_job_state(conn, job_id, *, error: str | None = None) -> None:
@@ -290,6 +347,7 @@ def expand_channel_if_needed(conn):
 
             # Extract channel ID for logging (None if not available)
             channel_id = data.get("channel_id") or data.get("uploader_id")
+            channel_name = _metadata_channel_name(data, data.get("title"))
 
             logger.info(
                 "Channel expansion found entries",
@@ -306,15 +364,25 @@ def expand_channel_if_needed(conn):
                 # Extract metadata for each channel video
                 title = e.get("title", "")
                 duration = e.get("duration")  # duration in seconds
+                video_channel_name = _metadata_channel_name(e, channel_name)
+                uploaded_at = _metadata_uploaded_at(e)
                 conn.execute(
                     text(
                         """
-                    INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
-                    VALUES (:j,:y,:idx,:title,:dur)
+                    INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds, uploaded_at, channel_name)
+                    VALUES (:j,:y,:idx,:title,:dur,:uploaded_at,:channel_name)
                     ON CONFLICT (job_id, youtube_id) DO NOTHING
                 """
                     ),
-                    {"j": job["id"], "y": yid, "idx": idx, "title": title, "dur": duration},
+                    {
+                        "j": job["id"],
+                        "y": yid,
+                        "idx": idx,
+                        "title": title,
+                        "dur": duration,
+                        "uploaded_at": uploaded_at,
+                        "channel_name": video_channel_name,
+                    },
                 )
 
             logger.info(
@@ -417,22 +485,34 @@ def expand_single_if_needed(conn):
             # Extract title and duration from metadata
             title = data.get("title", "")
             duration = data.get("duration")  # duration in seconds
+            uploaded_at = _metadata_uploaded_at(data)
+            channel_name = _metadata_channel_name(data)
             logger.info(
                 "Video metadata extracted",
                 extra={
                     "title": title[:50] + ("..." if len(title) > 50 else ""),
                     "duration_seconds": duration,
+                    "uploaded_at": uploaded_at.isoformat() if uploaded_at else None,
+                    "channel_name": channel_name,
                 },
             )
             conn.execute(
                 text(
                     """
-                INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds)
-                VALUES (:j,:y,:idx,:title,:dur)
+                INSERT INTO videos (job_id, youtube_id, idx, title, duration_seconds, uploaded_at, channel_name)
+                VALUES (:j,:y,:idx,:title,:dur,:uploaded_at,:channel_name)
                 ON CONFLICT (job_id, youtube_id) DO NOTHING
             """
                 ),
-                {"j": job["id"], "y": vid, "idx": 0, "title": title, "dur": duration},
+                {
+                    "j": job["id"],
+                    "y": vid,
+                    "idx": 0,
+                    "title": title,
+                    "dur": duration,
+                    "uploaded_at": uploaded_at,
+                    "channel_name": channel_name,
+                },
             )
             logger.info("Marking job as downloading after single expansion", extra={"job_id": str(job["id"])})
             conn.execute(text("UPDATE jobs SET state='downloading', updated_at=now() WHERE id=:i"), {"i": job["id"]})
@@ -472,6 +552,48 @@ def process_video(engine, video_id):
             .first()
         )
     youtube_id = v["youtube_id"]
+    if ("uploaded_at" in v and v.get("uploaded_at") is None) or ("channel_name" in v and not v.get("channel_name")):
+        try:
+            metadata = _fetch_ytdlp_metadata(f"https://www.youtube.com/watch?v={youtube_id}")
+            uploaded_at = _metadata_uploaded_at(metadata)
+            channel_name = _metadata_channel_name(metadata)
+            title = metadata.get("title") or v.get("title")
+            duration = metadata.get("duration") or v.get("duration_seconds")
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE videos
+                        SET uploaded_at = COALESCE(uploaded_at, :uploaded_at),
+                            channel_name = COALESCE(NULLIF(channel_name, ''), :channel_name),
+                            title = COALESCE(NULLIF(title, ''), :title),
+                            duration_seconds = COALESCE(duration_seconds, :duration),
+                            updated_at = now()
+                        WHERE id = :id
+                        """
+                    ),
+                    {
+                        "id": video_id,
+                        "uploaded_at": uploaded_at,
+                        "channel_name": channel_name,
+                        "title": title,
+                        "duration": duration,
+                    },
+                )
+            logger.info(
+                "Video source metadata enriched",
+                extra={
+                    "video_id": str(video_id),
+                    "youtube_id": youtube_id,
+                    "uploaded_at": uploaded_at.isoformat() if uploaded_at else None,
+                    "channel_name": channel_name,
+                },
+            )
+        except Exception as e:
+            logger.warning(
+                "Unable to enrich video source metadata before processing",
+                extra={"video_id": str(video_id), "youtube_id": youtube_id, "error": str(e)[:200]},
+            )
     dest_dir = WORKDIR / str(video_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
 

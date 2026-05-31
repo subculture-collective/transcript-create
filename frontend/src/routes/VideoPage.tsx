@@ -398,7 +398,7 @@ export default function VideoPage() {
                 </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-subtle">Upload date</dt>
-                  <dd className="mt-1 font-medium text-ink">{formatDate(video.uploaded_at ?? video.created_at ?? null)}</dd>
+                  <dd className="mt-1 font-medium text-ink">{formatDate(video.uploaded_at ?? null)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-subtle">Duration</dt>

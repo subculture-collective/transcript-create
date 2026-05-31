@@ -171,7 +171,7 @@ def list_videos(
             EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
         FROM videos v
         {where_sql}
-        ORDER BY COALESCE(v.uploaded_at, v.created_at) DESC, v.created_at DESC
+        ORDER BY v.uploaded_at DESC NULLS LAST, v.created_at DESC
         LIMIT :limit OFFSET :offset
     """
     return db.execute(text(sql), params).mappings().all()
@@ -229,7 +229,7 @@ def get_videos_by_ids(db, video_ids):
             EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
         FROM videos v
         WHERE v.id IN :video_ids
-        ORDER BY COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST, v.created_at DESC
+        ORDER BY v.uploaded_at DESC NULLS LAST, v.created_at DESC
         """
     ).bindparams(bindparam("video_ids", expanding=True))
     rows = db.execute(sql, {"video_ids": [str(video_id) for video_id in video_ids]}).mappings().all()
@@ -302,7 +302,7 @@ def get_archive_summary(db, recent_limit: int = 6, popular_limit: int = 8):
                     FROM videos v
                     WHERE v.state = 'completed'
                       AND ({archive_filter})
-                    ORDER BY COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST, v.created_at DESC
+                    ORDER BY v.uploaded_at DESC NULLS LAST, v.created_at DESC
                     LIMIT :limit
                     """
                 ),
@@ -359,11 +359,11 @@ def get_archive_timeline(db, limit: int = 100, granularity: str = "month"):
                     v.created_at, v.updated_at, v.channel_name, v.language, v.category,
                     EXISTS (SELECT 1 FROM segments s WHERE s.video_id = v.id) AS has_whisper_transcript,
                     EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript,
-                    date_trunc('{bucket_trunc}', COALESCE(v.uploaded_at, v.created_at)) AS bucket_start
+                    date_trunc('{bucket_trunc}', v.uploaded_at) AS bucket_start
                 FROM videos v
                 WHERE ({archive_filter})
-                  AND COALESCE(v.uploaded_at, v.created_at) IS NOT NULL
-                ORDER BY bucket_start DESC NULLS LAST, COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST, v.created_at DESC
+                  AND v.uploaded_at IS NOT NULL
+                ORDER BY bucket_start DESC NULLS LAST, v.uploaded_at DESC NULLS LAST, v.created_at DESC
                 LIMIT :limit
                 """
             ),
@@ -534,7 +534,7 @@ def get_mention_map(db, q: str, source: str = "best", video_id: str | None = Non
 
     top_episodes = sorted(
         grouped.groups,
-        key=lambda group: (-len(group.moments), group.video.uploaded_at or group.video.created_at or group.video.updated_at or baseline, str(group.video.id)),
+        key=lambda group: (-len(group.moments), group.video.uploaded_at or baseline, str(group.video.id)),
     )[:top_limit]
 
     return MentionMap(

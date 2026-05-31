@@ -500,7 +500,7 @@ export default function SearchPage() {
                     </Link>
                     <div className="flex flex-wrap gap-2 text-sm text-muted">
                       <span className="source-pill">{group.video.channel_name || 'Unknown channel'}</span>
-                      <span className="timestamp-pill">{formatDate(group.video.uploaded_at ?? group.video.created_at ?? null)}</span>
+                      <span className="timestamp-pill">{formatDate(group.video.uploaded_at ?? null)}</span>
                       <span className="source-pill">{formatDuration(group.video.duration_seconds)}</span>
                     </div>
                   </div>

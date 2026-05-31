@@ -134,7 +134,7 @@ export default function HomePage() {
                   <div className="mt-2 text-sm text-muted">{video.channel_name || 'Unknown channel'}</div>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs">
                     <span className="timestamp-pill">{formatDuration(video.duration_seconds)}</span>
-                    <span className="source-pill">{formatDate(video.uploaded_at ?? video.created_at ?? null)}</span>
+                    <span className="source-pill">{formatDate(video.uploaded_at ?? null)}</span>
                     <span className="match-pill">{video.has_whisper_transcript ? 'whisper ready' : 'pending transcript'}</span>
                   </div>
                 </Link>

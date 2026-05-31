@@ -169,7 +169,7 @@ export default function TopicPage() {
                         {entry.video.title || 'Untitled episode'}
                       </Link>
                       <div className="mt-1 text-sm text-muted">
-                        {entry.video.channel_name || 'Unknown channel'} · {formatDate(entry.video.uploaded_at ?? entry.video.created_at ?? null)}
+                        {entry.video.channel_name || 'Unknown channel'} · {formatDate(entry.video.uploaded_at ?? null)}
                       </div>
                     </div>
                     <div className="text-sm text-muted">{formatNumber(entry.moments.length)} mentions</div>

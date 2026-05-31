@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -9,6 +10,14 @@ from sqlalchemy import text
 
 from worker import pipeline
 from app import crud
+
+
+def _video_insert_params(mock_conn):
+    return [
+        call.args[1]
+        for call in mock_conn.execute.call_args_list
+        if call.args and "INSERT INTO videos" in str(call.args[0])
+    ]
 
 
 @pytest.fixture
@@ -101,6 +110,8 @@ class TestExpandSingleJob:
             "id": video_id,
             "title": "Test Video",
             "duration": 300,
+            "uploader": "Source Channel",
+            "upload_date": "20240517",
         }
         mock_fetch_metadata.return_value = yt_dlp_response
 
@@ -115,6 +126,9 @@ class TestExpandSingleJob:
         execute_calls = mock_conn.execute.call_args_list
         # Should have: job query, video insert, state update
         assert len(execute_calls) >= 3
+        [insert_params] = _video_insert_params(mock_conn)
+        assert insert_params["channel_name"] == "Source Channel"
+        assert insert_params["uploaded_at"] == datetime(2024, 5, 17, tzinfo=timezone.utc)
 
     @patch("worker.pipeline._fetch_ytdlp_metadata")
     def test_expand_single_job_from_entries(self, mock_fetch_metadata, mock_conn):
@@ -182,10 +196,17 @@ class TestExpandChannelJob:
 
         # Mock yt-dlp channel response
         yt_dlp_response = {
+            "title": "Test Channel - Videos",
             "entries": [
-                {"id": "video1", "title": "Video 1", "duration": 100},
-                {"id": "video2", "title": "Video 2", "duration": 200},
-                {"id": "video3", "title": "Video 3", "duration": 300},
+                {"id": "video1", "title": "Video 1", "duration": 100, "upload_date": "20240101"},
+                {"id": "video2", "title": "Video 2", "duration": 200, "upload_date": "20240203"},
+                {
+                    "id": "video3",
+                    "title": "Video 3",
+                    "duration": 300,
+                    "channel": "Entry Channel",
+                    "upload_date": "20240305",
+                },
             ],
             "channel_id": "UCtest",
         }
@@ -202,6 +223,11 @@ class TestExpandChannelJob:
         execute_calls = mock_conn.execute.call_args_list
         # Should have: job query, 3 video inserts, state update
         assert len(execute_calls) >= 5
+        insert_params = _video_insert_params(mock_conn)
+        assert insert_params[0]["channel_name"] == "Test Channel"
+        assert insert_params[0]["uploaded_at"] == datetime(2024, 1, 1, tzinfo=timezone.utc)
+        assert insert_params[2]["channel_name"] == "Entry Channel"
+        assert insert_params[2]["uploaded_at"] == datetime(2024, 3, 5, tzinfo=timezone.utc)
 
     @patch("worker.pipeline._fetch_ytdlp_metadata")
     def test_expand_channel_job_appends_videos_suffix(self, mock_fetch_metadata, mock_conn):

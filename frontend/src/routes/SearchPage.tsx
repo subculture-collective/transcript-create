@@ -1,324 +1,561 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, track } from '../services';
-import type { SearchHit, VideoInfo } from '../types/api';
-import { groupHitsByVideo } from '../features/searchTranscript/matches';
-// track imported via services barrel
+import { api, apiAddFavorite, favorites, track, useAuth } from '../services';
+import type {
+  ArchiveSearchFilters,
+  GroupedSearchResponse,
+  SearchHit,
+} from '../types/api';
+import { buildTimestampLink, formatDate, formatDuration, formatNumber, formatTimestamp, sourceLabel } from '../features/archive/format';
 
-function msToTimestamp(ms: number) {
-  const s = Math.floor(ms / 1000);
-  const hh = Math.floor(s / 3600)
-    .toString()
-    .padStart(2, '0');
-  const mm = Math.floor((s % 3600) / 60)
-    .toString()
-    .padStart(2, '0');
-  const ss = (s % 60).toString().padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
+type SearchMode = 'grouped' | 'flat' | null;
+
+function readFilters(params: URLSearchParams): ArchiveSearchFilters & { q: string } {
+  return {
+    q: params.get('q') ?? '',
+    source: (params.get('source') as ArchiveSearchFilters['source']) ?? undefined,
+    category: params.get('category') ?? undefined,
+    date_from: params.get('date_from') ?? undefined,
+    date_to: params.get('date_to') ?? undefined,
+    min_duration: params.get('min_duration') ? Number(params.get('min_duration')) : undefined,
+    max_duration: params.get('max_duration') ? Number(params.get('max_duration')) : undefined,
+    sort_by: params.get('sort_by') ?? undefined,
+    video_id: params.get('video_id') ?? undefined,
+    limit: params.get('limit') ? Number(params.get('limit')) : undefined,
+    offset: params.get('offset') ? Number(params.get('offset')) : undefined,
+  };
 }
 
-function sourceLabel(source?: SearchHit['source'] | 'native' | 'youtube' | 'best') {
-  if (source === 'merged') return 'Merged transcript';
-  if (source === 'youtube') return 'YouTube captions';
-  return 'Whisper transcript';
+function serializeFilters(filters: ArchiveSearchFilters & { q: string }) {
+  const next = new URLSearchParams();
+  if (filters.q.trim()) next.set('q', filters.q.trim());
+  if (filters.source) next.set('source', filters.source);
+  if (filters.category) next.set('category', filters.category);
+  if (filters.date_from) next.set('date_from', filters.date_from);
+  if (filters.date_to) next.set('date_to', filters.date_to);
+  if (filters.min_duration != null && !Number.isNaN(filters.min_duration)) next.set('min_duration', String(filters.min_duration));
+  if (filters.max_duration != null && !Number.isNaN(filters.max_duration)) next.set('max_duration', String(filters.max_duration));
+  if (filters.sort_by) next.set('sort_by', filters.sort_by);
+  if (filters.video_id) next.set('video_id', filters.video_id);
+  if (filters.limit != null && !Number.isNaN(filters.limit)) next.set('limit', String(filters.limit));
+  if (filters.offset != null && !Number.isNaN(filters.offset)) next.set('offset', String(filters.offset));
+  return next;
+}
+
+function buildCurrentFilters(
+  q: string,
+  source: ArchiveSearchFilters['source'],
+  dateFrom: string,
+  dateTo: string,
+  category: string,
+  minDuration: string,
+  maxDuration: string,
+  sortBy: string,
+  existing: ArchiveSearchFilters & { video_id?: string; limit?: number; offset?: number }
+) {
+  return serializeFilters({
+    q,
+    source,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+    category: category || undefined,
+    min_duration: minDuration ? Number(minDuration) : undefined,
+    max_duration: maxDuration ? Number(maxDuration) : undefined,
+    sort_by: sortBy,
+    video_id: existing.video_id,
+    limit: existing.limit,
+    offset: existing.offset,
+  });
+}
+
+function groupHitsByVideo(hits: SearchHit[]): Array<[string, SearchHit[]]> {
+  const groups = new Map<string, SearchHit[]>();
+  hits.forEach((hit) => {
+    const current = groups.get(hit.video_id) ?? [];
+    groups.set(hit.video_id, [...current, hit]);
+  });
+  return Array.from(groups.entries());
+}
+
+function copyText(text: string) {
+  void navigator.clipboard?.writeText(text);
+}
+
+function plainTextFromSnippet(snippet: string) {
+  return snippet.replace(/<mark>/gi, '').replace(/<\/mark>/gi, '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function buildQuoteText(videoId: string, moment: SearchHit, title: string) {
+  const url = `${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.id)}`;
+  return `“${plainTextFromSnippet(moment.snippet)}”\n\n— ${title}, ${formatTimestamp(moment.start_ms)}\n${url}`;
+}
+
+function buildPlayMatchesLink(videoId: string, moment: SearchHit, query: string) {
+  const seconds = Math.floor(moment.start_ms / 1000);
+  const params = new URLSearchParams({ t: String(seconds), q: query, play: 'matches' });
+  return `/v/${videoId}?${params.toString()}#seg-${moment.id}`;
+}
+
+function SearchMomentsList({
+  videoId,
+  moments,
+  fallbackTitle,
+  defaultSource,
+  query,
+  savedKeys,
+  onSaveMoment,
+}: {
+  videoId: string;
+  moments: SearchHit[];
+  fallbackTitle: string;
+  defaultSource?: ArchiveSearchFilters['source'];
+  query: string;
+  savedKeys: Set<string>;
+  onSaveMoment: (videoId: string, moment: SearchHit, title: string) => void;
+}) {
+  return (
+    <ul className="space-y-3">
+      {moments.map((moment) => (
+        <li key={moment.id} className="group rounded-[1.25rem] border border-border bg-surface-muted/80 p-4 transition-all hover:border-border-strong hover:bg-surface-muted/95">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <time className="timestamp-pill">
+              {formatTimestamp(moment.start_ms)}–{formatTimestamp(moment.end_ms)}
+            </time>
+            <span className="source-pill">{sourceLabel(moment.source ?? defaultSource ?? 'best')}</span>
+            {query && <span className="match-pill">match</span>}
+          </div>
+          <div className="archive-snippet" dangerouslySetInnerHTML={{ __html: moment.snippet }} />
+          <div className="mt-4 flex flex-wrap gap-3 text-sm">
+            <Link
+              to={buildTimestampLink(videoId, moment.start_ms, moment.id)}
+              className="action-link"
+              onClick={() => track({ type: 'result_click', payload: { videoId, start_ms: moment.start_ms, id: moment.id } })}
+            >
+              Open at timestamp
+            </Link>
+            <button
+              type="button"
+              className="nav-link"
+              onClick={() => copyText(`${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.id)}`)}
+            >
+              Copy timestamp
+            </button>
+            <button
+              type="button"
+              className="nav-link"
+              onClick={() => copyText(buildQuoteText(videoId, moment, fallbackTitle))}
+            >
+              Copy quote
+            </button>
+            <button
+              type="button"
+              className="nav-link"
+              disabled={savedKeys.has(`${videoId}:${moment.start_ms}:${moment.end_ms}`)}
+              onClick={() => onSaveMoment(videoId, moment, fallbackTitle)}
+            >
+              {savedKeys.has(`${videoId}:${moment.start_ms}:${moment.end_ms}`) ? 'Saved moment' : 'Save moment'}
+            </button>
+            {query && (
+              <Link to={buildPlayMatchesLink(videoId, moment, query)} className="action-link">
+                Play from here
+              </Link>
+            )}
+            <Link to={`/v/${videoId}`} className="action-link">
+              Open episode
+            </Link>
+          </div>
+          <p className="mt-3 text-xs text-subtle">{fallbackTitle}</p>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams();
-  const [q, setQ] = useState(params.get('q') ?? '');
-  const [hits, setHits] = useState<SearchHit[]>([]);
-  const [source, setSource] = useState<'best' | 'native' | 'youtube'>(() =>
-    params.get('source') === 'native' || params.get('source') === 'youtube' ? params.get('source') as 'native' | 'youtube' : 'best'
-  );
+  const filters = useMemo(() => readFilters(params), [params]);
+  const [q, setQ] = useState(filters.q);
+  const [source, setSource] = useState<ArchiveSearchFilters['source']>(filters.source);
+  const [category, setCategory] = useState(filters.category ?? '');
+  const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
+  const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+  const [minDuration, setMinDuration] = useState(filters.min_duration?.toString() ?? '');
+  const [maxDuration, setMaxDuration] = useState(filters.max_duration?.toString() ?? '');
+  const [sortBy, setSortBy] = useState(filters.sort_by ?? 'relevance');
   const [loading, setLoading] = useState(false);
-  const [recentVideos, setRecentVideos] = useState<VideoInfo[]>([]);
-  const [quotaError, setQuotaError] = useState<{
-    message: string;
-    used: number;
-    limit: number;
-  } | null>(null);
-
-  const grouped = useMemo(() => {
-    return groupHitsByVideo(hits);
-  }, [hits]);
+  const [mode, setMode] = useState<SearchMode>(null);
+  const [grouped, setGrouped] = useState<GroupedSearchResponse | null>(null);
+  const [flatHits, setFlatHits] = useState<SearchHit[]>([]);
+  const [quotaError, setQuotaError] = useState<{ message: string; used: number; limit: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+  const { user } = useAuth();
+  const shouldFetch = Boolean(filters.q.trim());
+  const canSubmitSearch = Boolean(q.trim());
 
   useEffect(() => {
-    const query = params.get('q');
-    if (!query) return;
+    setQ(filters.q);
+    setSource(filters.source);
+    setCategory(filters.category ?? '');
+    setDateFrom(filters.date_from ?? '');
+    setDateTo(filters.date_to ?? '');
+    setMinDuration(filters.min_duration?.toString() ?? '');
+    setMaxDuration(filters.max_duration?.toString() ?? '');
+    setSortBy(filters.sort_by ?? 'relevance');
+  }, [filters.q, filters.source, filters.category, filters.date_from, filters.date_to, filters.min_duration, filters.max_duration, filters.sort_by]);
+
+  useEffect(() => {
+    const query = filters.q.trim();
+    if (!shouldFetch) {
+      setGrouped(null);
+      setFlatHits([]);
+      setMode(null);
+      setLoading(false);
+      setError(null);
+      setQuotaError(null);
+      return;
+    }
+
+    const activeFilters: ArchiveSearchFilters = {
+      source: filters.source,
+      category: filters.category,
+      date_from: filters.date_from,
+      date_to: filters.date_to,
+      min_duration: filters.min_duration,
+      max_duration: filters.max_duration,
+      sort_by: filters.sort_by && filters.sort_by !== 'relevance' ? filters.sort_by : undefined,
+      video_id: filters.video_id,
+      limit: filters.limit,
+      offset: filters.offset,
+    };
+
     setLoading(true);
+    setError(null);
     setQuotaError(null);
-    track({ type: 'search', payload: { q: query, source } });
+    track({ type: 'search', payload: { q: query, ...activeFilters } });
+
     api
-      .search(query, { source })
-      .then((res: { hits: SearchHit[] }) => setHits(res.hits))
-      .catch(async (err: unknown) => {
-        const e = err as { response?: { status?: number; json: () => Promise<{ limit?: number; used?: number; message?: string }> } };
-        if (e?.response?.status === 402) {
-          const data = await e.response.json().catch(() => null);
-          if (data?.limit != null)
+      .searchGrouped(query, activeFilters)
+      .then((response) => {
+        setGrouped(response);
+        setFlatHits([]);
+        setMode('grouped');
+      })
+      .catch(async (groupedError: unknown) => {
+        const err = groupedError as {
+          response?: { status?: number; json: () => Promise<{ limit?: number; used?: number; message?: string }> };
+        };
+        if (err?.response?.status === 402 || err?.response?.status === 429) {
+          const data = await err.response.json().catch(() => null);
+          if (data?.limit != null) {
             setQuotaError({
               message: data.message || 'Upgrade required',
               used: data.used || 0,
               limit: data.limit || 0,
             });
-        } else {
-          console.error(e);
+            setLoading(false);
+            return;
+          }
         }
+
+        return api
+          .search(query, activeFilters)
+          .then((response) => {
+            setGrouped(null);
+            setFlatHits(response.hits ?? []);
+            setMode('flat');
+          })
+          .catch(async (flatError: unknown) => {
+            const flat = flatError as {
+              response?: { status?: number; json: () => Promise<{ limit?: number; used?: number; message?: string }> };
+            };
+            if (flat?.response?.status === 402 || flat?.response?.status === 429) {
+              const data = await flat.response.json().catch(() => null);
+              if (data?.limit != null) {
+                setQuotaError({
+                  message: data.message || 'Upgrade required',
+                  used: data.used || 0,
+                  limit: data.limit || 0,
+                });
+                return;
+              }
+            }
+            console.error(flatError);
+            setError('Search failed.');
+          });
       })
       .finally(() => setLoading(false));
-  }, [params, source]);
+  }, [filters.category, filters.date_from, filters.date_to, filters.limit, filters.max_duration, filters.min_duration, filters.offset, filters.q, filters.sort_by, filters.source, filters.video_id, shouldFetch]);
 
-  useEffect(() => {
-    api
-      .listRecentVideos(12)
-      .then(setRecentVideos)
-      .catch((err: unknown) => console.error('Failed to load recent transcripts', err));
-  }, []);
-
-  // Keyboard shortcut: / to focus search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = document.activeElement;
-      const isEditableElement = 
-        target?.tagName === 'INPUT' || 
-        target?.tagName === 'TEXTAREA' || 
-        (target as HTMLElement)?.isContentEditable;
-      
-      if (e.key === '/' && !isEditableElement) {
-        e.preventDefault();
-        document.getElementById('search-input')?.focus();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const next = new URLSearchParams(params);
-    if (q) next.set('q', q);
-    else next.delete('q');
-    next.set('source', source);
-    setParams(next);
+  function submitFilters(event: React.FormEvent) {
+    event.preventDefault();
+    setParams(serializeFilters({ q, source, category: category || undefined, date_from: dateFrom || undefined, date_to: dateTo || undefined, min_duration: minDuration ? Number(minDuration) : undefined, max_duration: maxDuration ? Number(maxDuration) : undefined, sort_by: sortBy, video_id: filters.video_id, limit: filters.limit, offset: filters.offset }));
   }
 
-  function switchSource(nextSource: 'best' | 'native' | 'youtube') {
-    setSource(nextSource);
-    const next = new URLSearchParams(params);
-    next.set('source', nextSource);
-    if (q) next.set('q', q);
-    setParams(next);
-  }
-
-  function clearSearch() {
+  function resetFilters() {
     setQ('');
-    const next = new URLSearchParams(params);
-    next.delete('q');
-    setParams(next);
+    setSource(undefined);
+    setCategory('');
+    setDateFrom('');
+    setDateTo('');
+    setMinDuration('');
+    setMaxDuration('');
+    setSortBy('relevance');
+    setParams(new URLSearchParams());
+  }
+
+  const groupedGroups = grouped?.groups ?? [];
+  const totalMoments = grouped?.total_moments ?? flatHits.length;
+  const totalVideos = grouped?.total_videos ?? groupHitsByVideo(flatHits).length;
+  const fallbackGroups = useMemo(() => groupHitsByVideo(flatHits), [flatHits]);
+
+  async function saveMoment(videoId: string, moment: SearchHit, title: string) {
+    const key = `${videoId}:${moment.start_ms}:${moment.end_ms}`;
+    const text = plainTextFromSnippet(moment.snippet);
+    try {
+      if (user) {
+        await apiAddFavorite({ video_id: videoId, start_ms: moment.start_ms, end_ms: moment.end_ms, text });
+      } else {
+        favorites.toggle({ videoId, segIndex: moment.id, startMs: moment.start_ms, endMs: moment.end_ms, text });
+      }
+      setSavedKeys((current) => new Set([...current, key]));
+      track({ type: 'favorite_add', payload: { videoId, start_ms: moment.start_ms, title } });
+    } catch (err) {
+      console.error('Failed to save moment', err);
+      setError('Could not save this moment. Sign in again or try later.');
+    }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="mb-8">
-        <h1 className="page-title mb-2">Search Transcripts</h1>
-        <p className="text-muted">
-          Search through millions of YouTube video transcripts
-          <span className="ml-2 text-sm text-subtle">
-            (Press <kbd className="rounded border border-border bg-surface-muted px-1.5 py-0.5 font-mono text-xs">/ </kbd> to focus search)
-          </span>
-        </p>
-      </div>
-
-      <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <input
-            id="search-input"
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search transcripts…"
-            className="form-control pr-10"
-            aria-label="Search transcripts"
-            autoComplete="off"
-          />
-          {q && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              className="icon-button absolute right-2 top-1/2 -translate-y-1/2"
-              aria-label="Clear search"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-        <div className="flex flex-wrap rounded-xl border border-border bg-surface p-1" aria-label="Select transcript source">
-          <button
-            type="button"
-            className={source === 'best' ? 'btn-primary' : 'btn-ghost'}
-            onClick={() => switchSource('best')}
-          >
-            Best available
-          </button>
-          <button
-            type="button"
-            className={source === 'native' ? 'btn-primary' : 'btn-ghost'}
-            onClick={() => switchSource('native')}
-          >
-            Whisper transcript
-          </button>
-          <button
-            type="button"
-            className={source === 'youtube' ? 'btn-primary' : 'btn-ghost'}
-            onClick={() => switchSource('youtube')}
-          >
-            YouTube captions
-          </button>
-        </div>
-        <button 
-          className="btn" 
-          disabled={!q || loading}
-          aria-label={loading ? 'Searching...' : 'Search'}
-        >
-          {loading ? (
-            <>
-              <span className="inline-block animate-spin mr-2" aria-hidden="true">⟳</span>
-              Searching…
-            </>
-          ) : (
-            'Search'
-          )}
-        </button>
-      </form>
-
-      {!q && (
-        <div className="space-y-6">
-          <div className="text-center py-8">
-            <svg className="mx-auto mb-4 h-16 w-16 text-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p className="text-lg text-muted">Enter a query to search.</p>
+    <div className="space-y-6 lg:space-y-8">
+      <section className="surface-card overflow-hidden space-y-6">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(183,255,60,0.10),transparent_22%),radial-gradient(circle_at_20%_15%,rgba(192,132,252,0.08),transparent_18%)]" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-4xl space-y-4">
+            <div className="archive-eyebrow">Search deck</div>
+            <div>
+              <h1 className="page-title">Search the creator archive.</h1>
+              <p className="mt-3 max-w-2xl text-muted">
+                Find where a topic was mentioned, when it was discussed, and which episode it came from — with timestamped results and dossier-style metadata.
+              </p>
+            </div>
           </div>
 
-          {recentVideos.length > 0 && (
-            <section aria-labelledby="recent-transcripts-heading" className="space-y-3">
-              <h2 id="recent-transcripts-heading" className="section-title">Recent transcripts</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {recentVideos.map((video) => (
-                  <Link
-                    key={video.id}
-                    to={`/v/${video.id}`}
-                    className="surface-card-compact block cursor-pointer hover:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
-                  >
-                    <div className="font-medium line-clamp-2">{video.title || `Video ${video.id.slice(0, 8)}…`}</div>
-                    <div className="mt-2 text-sm text-muted">
-                      {video.duration_seconds ? `${Math.floor(video.duration_seconds / 60)}:${String(video.duration_seconds % 60).padStart(2, '0')}` : 'Transcript ready'}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
-
-      {q && loading && (
-        <div className="text-center py-12" role="status" aria-live="polite">
-          <div className="inline-block animate-spin text-4xl mb-4" aria-hidden="true">⟳</div>
-          <p className="text-lg text-muted">Searching…</p>
-        </div>
-      )}
-
-      {q && !loading && (
-        <div className="space-y-6">
-          {quotaError && (
-            <div className="alert-warning" role="alert">
-              <div className="mb-2 font-medium">Daily search limit reached</div>
-              <div className="text-sm">
-                You used {quotaError.used}/{quotaError.limit} searches today. Upgrade to Pro for
-                unlimited search and exports.
-              </div>
-              <Link to="/pricing" className="action-link mt-2 inline-block">
-                See pricing
+          {filters.q && (
+            <div className="flex flex-wrap gap-3">
+              <Link to={`/topics/${encodeURIComponent(filters.q)}`} className="btn-secondary">
+                Open topic page
+              </Link>
+              <Link to={`/saved?${buildCurrentFilters(q, source, dateFrom, dateTo, category, minDuration, maxDuration, sortBy, filters).toString()}`} className="btn-secondary">
+                Save this search
               </Link>
             </div>
           )}
-          
-          {grouped.length === 0 && !quotaError && (
-            <div className="text-center py-12">
-              <svg className="mx-auto mb-4 h-16 w-16 text-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-lg text-muted">No results found for "{q}"</p>
-              <p className="mt-2 text-sm text-subtle">Try different keywords or check your spelling</p>
-            </div>
-          )}
+        </div>
 
-          {grouped.map(([videoId, group]) => (
-            <article key={videoId} className="surface-card">
-              <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <Link to={`/v/${videoId}`} className="font-semibold text-lg hover:underline focus:underline">
-                  Video {videoId.slice(0, 8)}…
-                </Link>
-                <span className="text-sm text-muted">{group.length} {group.length === 1 ? 'match' : 'matches'}</span>
-              </div>
-              <ul className="space-y-3" role="list">
-                {group.slice(0, 5).map((h) => (
-                  <li key={h.id} className="rounded-md border border-border bg-surface-muted p-3 sm:p-4">
-                    <div className="mb-2 text-sm text-muted">
-                      <time dateTime={msToTimestamp(h.start_ms)}>
-                        {msToTimestamp(h.start_ms)}–{msToTimestamp(h.end_ms)}
-                      </time>
-                      {' • '}
-                      <span>{sourceLabel(h.source ?? source)}</span>
-                    </div>
-                    <div
-                      className="prose prose-sm dark:prose-invert max-w-none"
-                      dangerouslySetInnerHTML={{ __html: h.snippet }}
-                    />
-                    <div className="mt-3 flex flex-wrap gap-3 text-sm">
-                      <Link
-                        to={`/v/${videoId}?t=${Math.floor(h.start_ms / 1000)}#seg-${h.id}`}
-                        className="action-link"
-                        onClick={() =>
-                          track({
-                            type: 'result_click',
-                            payload: { videoId, start_ms: h.start_ms, id: h.id, source: h.source ?? source },
-                          })
-                        }
-                      >
-                        Open at timestamp
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const deep = `${location.origin}/v/${videoId}?t=${Math.floor(h.start_ms / 1000)}#seg-${h.id}`;
-                          navigator.clipboard?.writeText(deep);
-                        }}
-                        className="nav-link"
-                        aria-label="Copy link to this segment"
-                        title="Copy link"
-                      >
-                        Copy link
-                      </button>
-                    </div>
-                  </li>
-                ))}
-                {group.length > 5 && (
-                  <li>
-                    <Link
-                      to={`/v/${videoId}?q=${encodeURIComponent(q)}`}
-                      className="action-link"
-                    >
-                      Show {group.length - 5} more {group.length - 5 === 1 ? 'hit' : 'hits'} in this video
+        <form onSubmit={submitFilters} className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_repeat(6,minmax(0,1fr))_auto]">
+            <div className="lg:col-span-1">
+              <label className="sr-only" htmlFor="search-query">
+                Search query
+              </label>
+              <input
+                id="search-query"
+                type="search"
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                placeholder="Search the archive..."
+                className="form-control min-h-[64px] rounded-[1.5rem] px-5 text-lg tracking-[-0.02em]"
+              />
+            </div>
+
+            <div>
+              <label className="sr-only" htmlFor="search-source">
+                Source
+              </label>
+              <select id="search-source" className="form-control min-h-[64px] rounded-[1.5rem]" value={source ?? ''} onChange={(event) => setSource((event.target.value || undefined) as ArchiveSearchFilters['source'])}>
+                <option value="">Best available</option>
+                <option value="native">Whisper transcript</option>
+                <option value="youtube">YouTube captions</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="sr-only" htmlFor="search-category">
+                Video type
+              </label>
+              <input id="search-category" type="text" className="form-control min-h-[64px] rounded-[1.5rem]" value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Video type" />
+            </div>
+
+            <div>
+              <label className="sr-only" htmlFor="search-date-from">
+                From date
+              </label>
+              <input id="search-date-from" type="date" className="form-control min-h-[64px] rounded-[1.5rem]" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            </div>
+
+            <div>
+              <label className="sr-only" htmlFor="search-date-to">
+                To date
+              </label>
+              <input id="search-date-to" type="date" className="form-control min-h-[64px] rounded-[1.5rem]" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            </div>
+
+            <div>
+              <label className="sr-only" htmlFor="search-min-duration">
+                Minimum duration
+              </label>
+              <input id="search-min-duration" type="number" min="0" step="1" inputMode="numeric" placeholder="Min seconds" className="form-control min-h-[64px] rounded-[1.5rem]" value={minDuration} onChange={(event) => setMinDuration(event.target.value)} />
+            </div>
+
+            <div>
+              <label className="sr-only" htmlFor="search-max-duration">
+                Maximum duration
+              </label>
+              <input id="search-max-duration" type="number" min="0" step="1" inputMode="numeric" placeholder="Max seconds" className="form-control min-h-[64px] rounded-[1.5rem]" value={maxDuration} onChange={(event) => setMaxDuration(event.target.value)} />
+            </div>
+
+            <div>
+              <label className="sr-only" htmlFor="search-sort">
+                Sort
+              </label>
+              <select id="search-sort" className="form-control min-h-[64px] rounded-[1.5rem]" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                <option value="relevance">Best match</option>
+                <option value="date_desc">Most recent</option>
+                <option value="date_asc">Oldest</option>
+                <option value="duration_desc">Longest</option>
+                <option value="duration_asc">Shortest</option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              <button type="submit" className="btn min-h-[64px] px-7" disabled={!canSubmitSearch || loading}>
+                Search
+              </button>
+              <button type="button" className="btn-secondary min-h-[64px] px-6" onClick={resetFilters}>
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-sm text-muted">
+            <span className="source-pill">grouped by episode</span>
+            <span className="source-pill">timestamp pills</span>
+            <span className="match-pill">highlighted snippets</span>
+          </div>
+        </form>
+      </section>
+
+      {filters.q && (
+        <section className="archive-panel flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="archive-eyebrow">Topic map</div>
+            <p className="mt-2 text-muted">
+              {loading ? 'Updating counts…' : `${formatNumber(totalMoments)} moments across ${formatNumber(totalVideos)} episodes`}
+            </p>
+          </div>
+          <Link to={`/topics/${encodeURIComponent(filters.q)}`} className="action-link">
+            Open mention map
+          </Link>
+        </section>
+      )}
+
+      {quotaError && (
+        <div className="alert-warning" role="alert">
+          <div className="font-medium">Daily search limit reached</div>
+          <div className="mt-1 text-sm">
+            You used {quotaError.used}/{quotaError.limit} searches today. {quotaError.message}
+          </div>
+          <Link to="/pricing" className="action-link mt-2 inline-block">
+            See pricing
+          </Link>
+        </div>
+      )}
+
+      {error && <div className="alert-warning" role="alert">{error}</div>}
+
+      {loading && filters.q && (
+        <div className="archive-panel p-8 text-center text-muted" role="status" aria-live="polite">
+          Searching the archive…
+        </div>
+      )}
+
+      {!shouldFetch && (
+        <div className="surface-card text-center text-muted">
+          Search the archive to reveal grouped episodes and timestamped moments.
+        </div>
+      )}
+
+      {shouldFetch && !loading && !quotaError && mode === 'grouped' && groupedGroups.length > 0 && (
+        <div className="space-y-4">
+          {groupedGroups.map((group) => {
+            const title = group.video.title || `Episode ${group.video.id.slice(0, 8)}…`;
+            return (
+              <article key={group.video.id} className="surface-card space-y-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="archive-eyebrow">Episode dossier</div>
+                    <Link to={`/v/${group.video.id}`} className="block text-2xl font-semibold tracking-[-0.03em] text-ink hover:text-accent">
+                      {title}
                     </Link>
-                  </li>
-                )}
-              </ul>
-            </article>
-          ))}
+                    <div className="flex flex-wrap gap-2 text-sm text-muted">
+                      <span className="source-pill">{group.video.channel_name || 'Unknown channel'}</span>
+                      <span className="timestamp-pill">{formatDate(group.video.uploaded_at ?? group.video.created_at ?? null)}</span>
+                      <span className="source-pill">{formatDuration(group.video.duration_seconds)}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="match-pill">
+                      {group.moments.length} {group.moments.length === 1 ? 'moment' : 'moments'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  {group.moments[0] && filters.q && (
+                    <Link to={buildPlayMatchesLink(group.video.id, group.moments[0] as SearchHit, filters.q)} className="btn-secondary">
+                      Play all matches
+                    </Link>
+                  )}
+                </div>
+                <SearchMomentsList videoId={group.video.id} moments={group.moments as SearchHit[]} fallbackTitle={title} defaultSource={source} query={filters.q} savedKeys={savedKeys} onSaveMoment={saveMoment} />
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {shouldFetch && !loading && !quotaError && mode === 'flat' && fallbackGroups.length > 0 && (
+        <div className="space-y-4">
+          {fallbackGroups.map(([videoId, hits]) => {
+            const title = `Episode ${videoId.slice(0, 8)}…`;
+            return (
+              <article key={videoId} className="surface-card space-y-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="archive-eyebrow">Episode dossier</div>
+                    <Link to={`/v/${videoId}`} className="block text-2xl font-semibold tracking-[-0.03em] text-ink hover:text-accent">
+                      {title}
+                    </Link>
+                    <p className="text-sm text-muted">Flat search fallback</p>
+                  </div>
+                  <div className="match-pill">{hits.length} matches</div>
+                </div>
+                <SearchMomentsList videoId={videoId} moments={hits} fallbackTitle={title} defaultSource={source} query={filters.q} savedKeys={savedKeys} onSaveMoment={saveMoment} />
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {shouldFetch && !loading && !quotaError && mode === 'grouped' && groupedGroups.length === 0 && (
+        <div className="archive-panel text-center text-muted">
+          No matches found for “{filters.q}”. Try fewer filters or a broader date range.
+        </div>
+      )}
+
+      {shouldFetch && !loading && !quotaError && mode === 'flat' && fallbackGroups.length === 0 && (
+        <div className="archive-panel text-center text-muted">
+          No matches found for “{filters.q}”.
         </div>
       )}
     </div>

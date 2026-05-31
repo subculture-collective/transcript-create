@@ -1,9 +1,37 @@
 import ky from 'ky';
-import type { PaginatedVideos, SearchResponse, StreamLibraryFilters, TranscriptResponse, VideoInfo } from '../types/api';
+import type {
+  ArchiveSearchFilters,
+  ArchiveSummary,
+  GroupedSearchResponse,
+  MentionMapResponse,
+  PaginatedVideos,
+  SavedSearch,
+  SavedSearchFilters,
+  SearchResponse,
+  StreamLibraryFilters,
+  TimelineBucket,
+  TimelineResponse,
+  TranscriptResponse,
+  VideoInfo,
+} from '../types/api';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const http = ky.create({ prefixUrl: API_BASE, timeout: 15000 });
+
+function appendSearchFilters(params: URLSearchParams, opts?: ArchiveSearchFilters) {
+  if (!opts) return;
+  if (opts.source) params.set('source', opts.source);
+  if (opts.category) params.set('category', opts.category);
+  if (opts.video_id) params.set('video_id', opts.video_id);
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  if (opts.offset != null) params.set('offset', String(opts.offset));
+  if (opts.date_from) params.set('date_from', opts.date_from);
+  if (opts.date_to) params.set('date_to', opts.date_to);
+  if (opts.min_duration != null) params.set('min_duration', String(opts.min_duration));
+  if (opts.max_duration != null) params.set('max_duration', String(opts.max_duration));
+  if (opts.sort_by) params.set('sort_by', opts.sort_by);
+}
 
 function normalizeVideosResponse(response: PaginatedVideos | VideoInfo[]): PaginatedVideos {
   if (Array.isArray(response)) {
@@ -31,17 +59,38 @@ function normalizeVideosResponse(response: PaginatedVideos | VideoInfo[]): Pagin
   };
 }
 
+function normalizeTimelineResponse(
+  response:
+    | TimelineResponse
+    | TimelineBucket[]
+    | { buckets?: TimelineBucket[]; items?: TimelineBucket[] }
+) {
+  if (Array.isArray(response)) return response;
+  return response.buckets ?? response.items ?? [];
+}
+
 export const api = {
-  async search(
-    q: string,
-    opts?: { source?: 'best' | 'native' | 'youtube'; video_id?: string; limit?: number; offset?: number }
-  ) {
+  async search(q: string, opts?: ArchiveSearchFilters) {
     const params = new URLSearchParams({ q });
-    if (opts?.source) params.set('source', opts.source);
-    if (opts?.video_id) params.set('video_id', opts.video_id);
-    if (opts?.limit) params.set('limit', String(opts.limit));
-    if (opts?.offset) params.set('offset', String(opts.offset));
+    appendSearchFilters(params, opts);
     return http.get('search', { searchParams: params }).json<SearchResponse>();
+  },
+  async searchGrouped(q: string, opts?: ArchiveSearchFilters) {
+    const params = new URLSearchParams({ q });
+    appendSearchFilters(params, opts);
+    return http.get('search/grouped', { searchParams: params }).json<GroupedSearchResponse>();
+  },
+  async getMentionMap(q: string, opts?: ArchiveSearchFilters) {
+    const params = new URLSearchParams({ q });
+    appendSearchFilters(params, opts);
+    return http.get('search/mention-map', { searchParams: params }).json<MentionMapResponse>();
+  },
+  async getArchiveSummary() {
+    return http.get('archive/summary').json<ArchiveSummary>();
+  },
+  async getTimeline() {
+    const response = await http.get('archive/timeline').json<TimelineResponse | TimelineBucket[]>();
+    return normalizeTimelineResponse(response);
   },
   async getTranscript(videoId: string) {
     return http
@@ -67,6 +116,7 @@ export const api = {
     if (filters.date_field) searchParams.date_field = filters.date_field;
     if (filters.date_from) searchParams.date_from = filters.date_from;
     if (filters.date_to) searchParams.date_to = filters.date_to;
+    if (filters.category) searchParams.category = filters.category;
     const response = await http.get('videos', { searchParams }).json<PaginatedVideos | VideoInfo[]>();
     return normalizeVideosResponse(response);
   },
@@ -96,4 +146,16 @@ export async function apiAddFavorite(payload: {
 
 export async function apiDeleteFavorite(id: string) {
   return http.delete(`users/me/favorites/${id}`).json<{ ok: boolean }>();
+}
+
+export async function apiListSavedSearches() {
+  return http.get('users/me/saved-searches').json<{ items: SavedSearch[] }>();
+}
+
+export async function apiCreateSavedSearch(payload: { query: string; filters?: SavedSearchFilters }) {
+  return http.post('users/me/saved-searches', { json: payload }).json<SavedSearch>();
+}
+
+export async function apiDeleteSavedSearch(id: string) {
+  return http.delete(`users/me/saved-searches/${id}`).json<{ ok: boolean }>();
 }

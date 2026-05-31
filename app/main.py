@@ -60,6 +60,8 @@ Admin endpoints require additional authorization.
         {"name": "Billing", "description": "Stripe subscription and payment management"},
         {"name": "Admin", "description": "Administrative endpoints for event analytics"},
         {"name": "Favorites", "description": "User favorite transcript segments"},
+        {"name": "Archive", "description": "Creator archive summary and timeline"},
+        {"name": "Saved Searches", "description": "Authenticated saved search management"},
         {"name": "Events", "description": "Client-side event tracking"},
         {"name": "Health", "description": "Service health check"},
         {"name": "Vocabularies", "description": "Custom vocabulary management for improved accuracy"},
@@ -311,11 +313,13 @@ from .routes.analytics import router as analytics_router  # noqa: E402
 from .routes.api_keys import router as api_keys_router  # noqa: E402
 from .routes.auth import router as auth_router  # noqa: E402
 from .routes.billing import router as billing_router  # noqa: E402
+from .routes.archive import router as archive_router  # noqa: E402
 from .routes.events import router as events_router  # noqa: E402
 from .routes.exports import router as exports_router  # noqa: E402
 from .routes.favorites import router as favorites_router  # noqa: E402
 from .routes.health import router as health_router  # noqa: E402
 from .routes.jobs import router as jobs_router  # noqa: E402
+from .routes.saved_searches import router as saved_searches_router  # noqa: E402
 from .routes.search import router as search_router  # noqa: E402
 from .routes.videos import router as videos_router  # noqa: E402
 from .routes.vocabularies import router as vocabularies_router  # noqa: E402
@@ -325,9 +329,11 @@ app.include_router(exports_router)
 app.include_router(auth_router)
 app.include_router(api_keys_router)
 app.include_router(billing_router)
+app.include_router(archive_router)
 app.include_router(jobs_router)
 app.include_router(videos_router)
 app.include_router(favorites_router)
+app.include_router(saved_searches_router)
 app.include_router(events_router)
 app.include_router(admin_router)
 app.include_router(analytics_router)

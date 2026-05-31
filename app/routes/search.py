@@ -15,6 +15,8 @@ from ..db import get_db
 from ..exceptions import ExternalServiceError, QuotaExceededError, ValidationError
 from ..schemas import (
     ErrorResponse,
+    GroupedSearchResponse,
+    MentionMap,
     SearchAnalytics,
     SearchHistoryResponse,
     SearchHit,
@@ -120,6 +122,7 @@ def search(
     channel: str | None = Query(None, description="Filter by channel name"),
     language: str | None = Query(None, description="Filter by language code (e.g., 'en', 'es')"),
     has_speaker_labels: bool | None = Query(None, description="Filter videos with speaker diarization"),
+    category: str | None = Query(None, description="Filter by video category/type"),
     sort_by: str = Query(
         "relevance", description="Sort results by: relevance, date_asc, date_desc, duration_asc, duration_desc"
     ),
@@ -167,7 +170,10 @@ def search(
                 {"u": str(user["id"]), "t": _get_session_token(request), "p": {"q": q, "source": source}},
             )
             db.commit()
-    if settings.SEARCH_BACKEND == "opensearch":
+    requires_relational_filters = any(
+        [date_from, date_to, min_duration is not None, max_duration is not None, channel, category, language, has_speaker_labels is not None]
+    ) or sort_by != "relevance"
+    if settings.SEARCH_BACKEND == "opensearch" and not requires_relational_filters:
         effective_source = "native" if source == "best" else source
         index = settings.OPENSEARCH_INDEX_NATIVE if effective_source == "native" else settings.OPENSEARCH_INDEX_YOUTUBE
         query: Dict[str, Any] = {
@@ -188,6 +194,38 @@ def search(
         if video_id:
             bool_query: Dict[str, Any] = query["query"]["bool"]  # type: ignore[assignment]
             bool_query.setdefault("filter", []).append({"term": {"video_id": str(video_id)}})
+        bool_query = query["query"]["bool"]  # type: ignore[assignment]
+        opensearch_filters = bool_query.setdefault("filter", [])
+        if category:
+            opensearch_filters.append({"term": {"category.keyword": category}})
+        if channel:
+            opensearch_filters.append({"match_phrase": {"channel_name": channel}})
+        if language:
+            opensearch_filters.append({"term": {"language.keyword": language}})
+        if date_from or date_to:
+            uploaded_range: Dict[str, Any] = {}
+            if date_from:
+                uploaded_range["gte"] = date_from
+            if date_to:
+                uploaded_range["lte"] = date_to
+            opensearch_filters.append({"range": {"uploaded_at": uploaded_range}})
+        if min_duration is not None or max_duration is not None:
+            duration_range: Dict[str, Any] = {}
+            if min_duration is not None:
+                duration_range["gte"] = min_duration
+            if max_duration is not None:
+                duration_range["lte"] = max_duration
+            opensearch_filters.append({"range": {"duration_seconds": duration_range}})
+        if has_speaker_labels is not None:
+            opensearch_filters.append({"term": {"has_speaker_labels": has_speaker_labels}})
+        if sort_by == "date_desc":
+            query["sort"] = [{"uploaded_at": {"order": "desc", "missing": "_last"}}, "_score"]
+        elif sort_by == "date_asc":
+            query["sort"] = [{"uploaded_at": {"order": "asc", "missing": "_last"}}, "_score"]
+        elif sort_by == "duration_desc":
+            query["sort"] = [{"duration_seconds": {"order": "desc", "missing": "_last"}}, "_score"]
+        elif sort_by == "duration_asc":
+            query["sort"] = [{"duration_seconds": {"order": "asc", "missing": "_last"}}, "_score"]
         try:
             r = requests.post(f"{settings.OPENSEARCH_URL}/{index}/_search", json=query, timeout=10)
             r.raise_for_status()
@@ -239,6 +277,7 @@ def search(
                     "min_duration": min_duration,
                     "max_duration": max_duration,
                     "channel": channel,
+                    "category": category,
                     "language": language,
                     "has_speaker_labels": has_speaker_labels,
                     "sort_by": sort_by,
@@ -260,6 +299,8 @@ def search(
         filters["max_duration"] = max_duration
     if channel:
         filters["channel"] = channel
+    if category:
+        filters["category"] = category
     if language:
         filters["language"] = language
     if has_speaker_labels is not None:
@@ -819,3 +860,187 @@ def export_search_results(
             )
 
         return PlainTextResponse(content=header + body, media_type="text/csv")
+
+
+def _build_search_filters(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    min_duration: int | None = None,
+    max_duration: int | None = None,
+    channel: str | None = None,
+    language: str | None = None,
+    has_speaker_labels: bool | None = None,
+    category: str | None = None,
+):
+    filters: Dict[str, Any] = {}
+    if date_from:
+        filters["date_from"] = date_from
+    if date_to:
+        filters["date_to"] = date_to
+    if min_duration is not None:
+        filters["min_duration"] = min_duration
+    if max_duration is not None:
+        filters["max_duration"] = max_duration
+    if channel:
+        filters["channel"] = channel
+    if language:
+        filters["language"] = language
+    if has_speaker_labels is not None:
+        filters["has_speaker_labels"] = has_speaker_labels
+    if category:
+        filters["category"] = category
+    return filters
+
+
+def _check_and_record_search_request(request: Request, db, q: str, source: str):
+    """Apply the same quota and event accounting used by the flat search endpoint."""
+    user = _get_user_from_session(db, _get_session_token(request))
+    _update_search_suggestion(db, q)
+
+    if user and not _is_admin(user):
+        plan = (user.get("plan") or "free").lower()
+        if plan == "free":
+            used = db.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM events
+                    WHERE user_id=:u AND type='search_api'
+                      AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+                    """
+                ),
+                {"u": str(user["id"])},
+            ).scalar_one()
+            if used >= settings.FREE_DAILY_SEARCH_LIMIT:
+                raise QuotaExceededError(
+                    resource="searches",
+                    limit=settings.FREE_DAILY_SEARCH_LIMIT,
+                    used=used,
+                    plan=plan,
+                )
+            db.execute(
+                _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'search_api',:p)"),
+                {"u": str(user["id"]), "t": _get_session_token(request), "p": {"q": q, "source": source}},
+            )
+            db.commit()
+
+    return user
+
+
+@router.get(
+    "/search/grouped",
+    response_model=GroupedSearchResponse,
+    summary="Search transcripts grouped by episode",
+    description="Search transcripts and group timestamped matches by video.",
+)
+def search_grouped(
+    request: Request,
+    q: str = Query(..., min_length=1, max_length=500, description="Search query text"),
+    source: str = Query("best", description="Search source: 'best', 'native', or 'youtube'"),
+    video_id: uuid.UUID | None = Query(None, description="Filter results to specific video"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of results to return"),
+    offset: int = Query(0, ge=0, description="Number of results to skip for pagination"),
+    date_from: str | None = Query(None, description="Filter videos uploaded after this date (ISO format)"),
+    date_to: str | None = Query(None, description="Filter videos uploaded before this date (ISO format)"),
+    min_duration: int | None = Query(None, ge=0, description="Minimum video duration in seconds"),
+    max_duration: int | None = Query(None, ge=0, description="Maximum video duration in seconds"),
+    channel: str | None = Query(None, description="Filter by channel name"),
+    language: str | None = Query(None, description="Filter by language code (e.g., 'en', 'es')"),
+    has_speaker_labels: bool | None = Query(None, description="Filter videos with speaker diarization"),
+    category: str | None = Query(None, description="Filter by video category/type"),
+    sort_by: str = Query(
+        "relevance", description="Sort results by: relevance, date_asc, date_desc, duration_asc, duration_desc"
+    ),
+    db=Depends(get_db),
+):
+    if not q or not q.strip():
+        raise ValidationError("Search query cannot be empty", field="q")
+    if source not in ("best", "native", "youtube"):
+        raise ValidationError("Invalid source. Must be 'best', 'native', or 'youtube'", field="source")
+    if limit < 1 or limit > 200:
+        raise ValidationError("Limit must be between 1 and 200", field="limit")
+    if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
+        raise ValidationError("Invalid sort_by value", field="sort_by")
+
+    filters = _build_search_filters(date_from, date_to, min_duration, max_duration, channel, language, has_speaker_labels, category)
+    user = _check_and_record_search_request(request, db, q, source)
+    result = crud.get_grouped_search(
+        db,
+        q=q,
+        source=source,
+        video_id=str(video_id) if video_id else None,
+        limit=limit,
+        offset=offset,
+        sort_by=sort_by,
+        filters=filters,
+    )
+    if user:
+        _save_search_history(
+            db,
+            user["id"],
+            q,
+            {"source": source, "video_id": str(video_id) if video_id else None, **filters, "sort_by": sort_by},
+            result.total_moments,
+            result.query_time_ms or 0,
+        )
+    return result
+
+
+@router.get(
+    "/search/mention-map",
+    response_model=MentionMap,
+    summary="Build a citation-backed mention map",
+    description="Search transcripts and return the first, latest, and top episode mentions for a query.",
+)
+def search_mention_map(
+    request: Request,
+    q: str = Query(..., min_length=1, max_length=500, description="Search query text"),
+    source: str = Query("best", description="Search source: 'best', 'native', or 'youtube'"),
+    video_id: uuid.UUID | None = Query(None, description="Filter results to specific video"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of results to consider"),
+    offset: int = Query(0, ge=0, description="Number of results to skip for pagination"),
+    date_from: str | None = Query(None, description="Filter videos uploaded after this date (ISO format)"),
+    date_to: str | None = Query(None, description="Filter videos uploaded before this date (ISO format)"),
+    min_duration: int | None = Query(None, ge=0, description="Minimum video duration in seconds"),
+    max_duration: int | None = Query(None, ge=0, description="Maximum video duration in seconds"),
+    channel: str | None = Query(None, description="Filter by channel name"),
+    language: str | None = Query(None, description="Filter by language code (e.g., 'en', 'es')"),
+    has_speaker_labels: bool | None = Query(None, description="Filter videos with speaker diarization"),
+    category: str | None = Query(None, description="Filter by video category/type"),
+    sort_by: str = Query(
+        "relevance", description="Sort results by: relevance, date_asc, date_desc, duration_asc, duration_desc"
+    ),
+    top_limit: int = Query(5, ge=1, le=20, description="Number of top episodes to include"),
+    db=Depends(get_db),
+):
+    if not q or not q.strip():
+        raise ValidationError("Search query cannot be empty", field="q")
+    if source not in ("best", "native", "youtube"):
+        raise ValidationError("Invalid source. Must be 'best', 'native', or 'youtube'", field="source")
+    if limit < 1 or limit > 200:
+        raise ValidationError("Limit must be between 1 and 200", field="limit")
+    if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
+        raise ValidationError("Invalid sort_by value", field="sort_by")
+
+    filters = _build_search_filters(date_from, date_to, min_duration, max_duration, channel, language, has_speaker_labels, category)
+    user = _check_and_record_search_request(request, db, q, source)
+    result = crud.get_mention_map(
+        db,
+        q=q,
+        source=source,
+        video_id=str(video_id) if video_id else None,
+        limit=limit,
+        offset=offset,
+        sort_by=sort_by,
+        filters=filters,
+        top_limit=top_limit,
+    )
+    if user:
+        _save_search_history(
+            db,
+            user["id"],
+            q,
+            {"source": source, "video_id": str(video_id) if video_id else None, **filters, "sort_by": sort_by},
+            result.total_moments,
+            result.query_time_ms or 0,
+        )
+    return result

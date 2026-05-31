@@ -55,7 +55,7 @@ describe('ExportMenu', () => {
     expect(mockOnRequireUpgrade).not.toHaveBeenCalled()
     expect(services.track).toHaveBeenCalledWith({
       type: 'export_click',
-      payload: { videoId: mockVideoId, format: 'srt', source: 'native' },
+      payload: { videoId: mockVideoId, format: 'srt', source: 'best' },
     })
   })
 
@@ -74,7 +74,7 @@ describe('ExportMenu', () => {
     expect(mockOnRequireUpgrade).not.toHaveBeenCalled()
     expect(services.track).toHaveBeenCalledWith({
       type: 'export_click',
-      payload: { videoId: mockVideoId, format: 'srt', source: 'native' },
+      payload: { videoId: mockVideoId, format: 'srt', source: 'best' },
     })
   })
 
@@ -149,7 +149,7 @@ describe('ExportMenu', () => {
     await user.click(screen.getAllByText('SRT')[0])
     expect(services.track).toHaveBeenCalledWith({
       type: 'export_click',
-      payload: { videoId: mockVideoId, format: 'srt', source: 'native' },
+      payload: { videoId: mockVideoId, format: 'srt', source: 'best' },
     })
 
     // Test YouTube VTT
@@ -163,7 +163,7 @@ describe('ExportMenu', () => {
     await user.click(screen.getByText('PDF'))
     expect(services.track).toHaveBeenCalledWith({
       type: 'export_click',
-      payload: { videoId: mockVideoId, format: 'pdf', source: 'native' },
+      payload: { videoId: mockVideoId, format: 'pdf', source: 'whisper' },
     })
   })
 

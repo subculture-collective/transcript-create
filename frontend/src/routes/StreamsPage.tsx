@@ -18,6 +18,7 @@ type FilterState = {
   dateField: DateField;
   dateFrom: string;
   dateTo: string;
+  category: string;
 };
 
 function formatDuration(seconds?: number | null) {
@@ -58,6 +59,7 @@ function parseFilters(params: URLSearchParams): FilterState {
     dateField,
     dateFrom: params.get('date_from') ?? '',
     dateTo: params.get('date_to') ?? '',
+    category: params.get('category') ?? '',
   };
 }
 
@@ -98,6 +100,7 @@ export default function StreamsPage() {
   const [dateField, setDateField] = useState<DateField>(filters.dateField);
   const [dateFrom, setDateFrom] = useState(filters.dateFrom);
   const [dateTo, setDateTo] = useState(filters.dateTo);
+  const [category, setCategory] = useState(filters.category);
   const [items, setItems] = useState<VideoInfo[]>([]);
   const [pageInfo, setPageInfo] = useState<PageInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -109,7 +112,8 @@ export default function StreamsPage() {
     setDateField(filters.dateField);
     setDateFrom(filters.dateFrom);
     setDateTo(filters.dateTo);
-  }, [filters.q, filters.completedOnly, filters.dateField, filters.dateFrom, filters.dateTo]);
+    setCategory(filters.category);
+  }, [filters.q, filters.completedOnly, filters.dateField, filters.dateFrom, filters.dateTo, filters.category]);
 
   useEffect(() => {
     setLoading(true);
@@ -124,6 +128,7 @@ export default function StreamsPage() {
         date_field: filters.dateField,
         date_from: filters.dateFrom || undefined,
         date_to: filters.dateTo || undefined,
+        category: filters.category || undefined,
       })
       .then((response) => {
         setItems(response.items);
@@ -136,7 +141,7 @@ export default function StreamsPage() {
         setPageInfo(null);
       })
       .finally(() => setLoading(false));
-  }, [filters.completedOnly, filters.dateField, filters.dateFrom, filters.dateTo, filters.q, params]);
+  }, [filters.completedOnly, filters.dateField, filters.dateFrom, filters.dateTo, filters.category, filters.q, params]);
 
   const offset = Math.max(0, Number(params.get('offset') ?? '0') || 0);
   const totalCount = pageInfo?.total_count ?? items.length;
@@ -153,6 +158,7 @@ export default function StreamsPage() {
       dateField: next.dateField ?? dateField,
       dateFrom: next.dateFrom ?? dateFrom,
       dateTo: next.dateTo ?? dateTo,
+      category: next.category ?? category,
     };
 
     if (nextFilters.q.trim()) nextParams.set('q', nextFilters.q.trim());
@@ -160,6 +166,7 @@ export default function StreamsPage() {
     if (nextFilters.dateField) nextParams.set('date_field', nextFilters.dateField);
     if (nextFilters.dateFrom) nextParams.set('date_from', nextFilters.dateFrom);
     if (nextFilters.dateTo) nextParams.set('date_to', nextFilters.dateTo);
+    if (nextFilters.category.trim()) nextParams.set('category', nextFilters.category.trim());
 
     const nextOffset = next.offset ?? 0;
     if (nextOffset > 0) nextParams.set('offset', String(nextOffset));
@@ -179,6 +186,7 @@ export default function StreamsPage() {
     setDateField('uploaded_at');
     setDateFrom('');
     setDateTo('');
+    setCategory('');
     setParams(nextParams);
   }
 
@@ -189,9 +197,9 @@ export default function StreamsPage() {
           <div className="max-w-3xl space-y-3">
             <div>
               <p className="mb-1 text-sm font-medium uppercase tracking-[0.24em] text-subtle">
-                Stream library
+                Episodes library
               </p>
-              <h1 className="page-title">Browse recorded streams</h1>
+              <h1 className="page-title">Browse the archive</h1>
             </div>
             <p className="max-w-2xl text-muted">
               Search the full archive, narrow by date range, and scan transcript readiness at a glance.
@@ -220,7 +228,7 @@ export default function StreamsPage() {
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))_auto]">
+        <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(5,minmax(0,1fr))_auto]">
           <div className="lg:col-span-1">
             <label className="sr-only" htmlFor="stream-q">
               Search streams
@@ -252,6 +260,21 @@ export default function StreamsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="sr-only" htmlFor="stream-category">
+              Video type
+            </label>
+            <input
+              id="stream-category"
+              type="text"
+              className="form-control"
+              aria-label="Video type"
+              placeholder="Video type"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+            />
           </div>
 
           <div>
@@ -413,6 +436,7 @@ export default function StreamsPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-wide text-subtle">
                       <span>{video.youtube_id.slice(0, 8)}</span>
+                      {video.category && <span>{titleCase(video.category)}</span>}
                       <Link to={`/v/${video.id}`} className="action-link group-hover:underline">
                         Open stream
                       </Link>

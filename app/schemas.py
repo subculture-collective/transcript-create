@@ -164,6 +164,10 @@ class SearchHit(BaseModel):
     end_ms: int = Field(..., description="End time in milliseconds", ge=0)
     snippet: str = Field(..., description="Text snippet with search term highlighted")
     source: Literal["whisper", "youtube", "merged"] = Field("whisper", description="Transcript source containing this hit")
+    video_title: Optional[str] = Field(None, description="Video title for progressive archive UIs")
+    channel_name: Optional[str] = Field(None, description="Channel name for progressive archive UIs")
+    uploaded_at: Optional[datetime] = Field(None, description="Video upload time")
+    duration_seconds: Optional[int] = Field(None, description="Video duration in seconds")
 
     model_config = {
         "json_schema_extra": {
@@ -184,6 +188,82 @@ class SearchResponse(BaseModel):
     total: Optional[int] = Field(None, description="Total number of matching results (only with OpenSearch backend)")
     hits: List[SearchHit] = Field(..., description="List of search results")
     query_time_ms: Optional[int] = Field(None, description="Time taken to execute the query in milliseconds")
+
+
+class ArchivePopularSearch(BaseModel):
+    term: str = Field(..., description="Popular search term")
+    frequency: int = Field(..., description="Search frequency")
+
+
+class ArchiveSummary(BaseModel):
+    creator_name: str = Field("Creator Archive", description="Archive display name")
+    video_count: int = Field(0, description="Count of archived videos with transcript coverage")
+    total_duration_seconds: int = Field(0, description="Total duration across archived videos")
+    transcript_word_count: int = Field(0, description="Estimated transcript word count")
+    updated_at: Optional[datetime] = Field(None, description="Most recent archive update timestamp")
+    recent_videos: List["VideoInfo"] = Field(default_factory=list, description="Most recent archived videos")
+    popular_searches: List[ArchivePopularSearch] = Field(default_factory=list, description="Popular archive searches")
+
+
+class SearchMoment(SearchHit):
+    """A timestamped search result used in grouped archive views."""
+
+
+class EpisodeSearchGroup(BaseModel):
+    video: "VideoInfo" = Field(..., description="Video metadata for the group")
+    moments: List[SearchMoment] = Field(default_factory=list, description="Moments matched in this video")
+
+
+class GroupedSearchResponse(BaseModel):
+    total_moments: int = Field(..., description="Total matched moments in the response window")
+    total_videos: int = Field(..., description="Number of videos with at least one moment")
+    groups: List[EpisodeSearchGroup] = Field(default_factory=list, description="Search groups by video")
+    query_time_ms: Optional[int] = Field(None, description="Time taken to execute the query in milliseconds")
+
+
+class MentionMap(BaseModel):
+    query: str = Field(..., description="Original search query")
+    total_moments: int = Field(..., description="Total matched moments in the response window")
+    total_videos: int = Field(..., description="Number of videos with at least one mention")
+    first_mentioned_year: Optional[int] = Field(None, description="Year of the earliest dated mention")
+    most_discussed_period: Optional[str] = Field(None, description="Period with the most matched moments, usually a year")
+    most_discussed_count: int = Field(0, description="Number of matched moments in the most discussed period")
+    recent_mentions_90d: int = Field(0, description="Matched moments from the last 90 days")
+    related_topics: List[str] = Field(default_factory=list, description="Citation-derived co-occurring terms from matched snippets")
+    top_episodes_count: int = Field(0, description="Number of top episodes included in this mention map")
+    first_mention: Optional[SearchMoment] = Field(None, description="Earliest matching mention")
+    latest_mention: Optional[SearchMoment] = Field(None, description="Latest matching mention")
+    top_episodes: List[EpisodeSearchGroup] = Field(default_factory=list, description="Top matching episodes")
+    query_time_ms: Optional[int] = Field(None, description="Time taken to execute the query in milliseconds")
+
+
+class TimelineBucket(BaseModel):
+    period: str = Field(..., description="Bucket period label, e.g. 2026-05")
+    label: str = Field(..., description="Human-readable bucket label")
+    video_count: int = Field(..., description="Number of videos in the bucket")
+    total_duration_seconds: int = Field(..., description="Total duration for videos in the bucket")
+    videos: List["VideoInfo"] = Field(default_factory=list, description="Videos in chronological order")
+
+
+class ArchiveTimelineResponse(BaseModel):
+    buckets: List[TimelineBucket] = Field(default_factory=list, description="Chronological archive buckets")
+    query_time_ms: Optional[int] = Field(None, description="Time taken to build the timeline")
+
+
+class SavedSearchCreate(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500, description="Saved search query")
+    filters: Dict[str, Any] = Field(default_factory=dict, description="Serialized search filters")
+
+
+class SavedSearch(BaseModel):
+    id: uuid.UUID = Field(..., description="Saved search identifier")
+    query: str = Field(..., description="Saved search query")
+    filters: Dict[str, Any] = Field(default_factory=dict, description="Serialized search filters")
+    created_at: datetime = Field(..., description="When the search was saved")
+
+
+class SavedSearchesResponse(BaseModel):
+    items: List[SavedSearch] = Field(default_factory=list, description="Saved searches")
 
 
 class SearchSuggestion(BaseModel):

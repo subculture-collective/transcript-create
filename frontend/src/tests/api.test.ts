@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { api, http } from '../services/api'
+import { api, http, apiListSavedSearches } from '../services/api'
 
 // Mock ky
 vi.mock('ky', () => ({
@@ -44,6 +44,7 @@ describe('api service', () => {
 
       await api.search('test', {
         source: 'youtube',
+        category: 'news',
         video_id: 'abc123',
         limit: 10,
         offset: 5,
@@ -53,6 +54,7 @@ describe('api service', () => {
       const params = call[1].searchParams as URLSearchParams
       expect(params.get('q')).toBe('test')
       expect(params.get('source')).toBe('youtube')
+      expect(params.get('category')).toBe('news')
       expect(params.get('video_id')).toBe('abc123')
       expect(params.get('limit')).toBe('10')
       expect(params.get('offset')).toBe('5')
@@ -77,6 +79,67 @@ describe('api service', () => {
 
       const result = await api.search('test')
       expect(result).toEqual(mockResponse)
+    })
+  })
+
+  describe('searchGrouped', () => {
+    it('calls the grouped search endpoint', async () => {
+      const mockResponse = { total_moments: 0, total_videos: 0, groups: [] }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      await api.searchGrouped('rent', { date_from: '2026-05-01', source: 'native', category: 'interview' })
+
+      const params = getMock.mock.calls[0][1].searchParams as URLSearchParams
+      expect(params.get('q')).toBe('rent')
+      expect(params.get('source')).toBe('native')
+      expect(params.get('date_from')).toBe('2026-05-01')
+      expect(params.get('category')).toBe('interview')
+    })
+  })
+
+  describe('getMentionMap', () => {
+    it('calls the mention map endpoint and returns mini-report fields', async () => {
+      const mockResponse = {
+        query: 'ai',
+        total_moments: 83,
+        total_videos: 5,
+        first_mentioned_year: 2021,
+        most_discussed_period: '2024',
+        most_discussed_count: 30,
+        recent_mentions_90d: 6,
+        related_topics: ['copyright', 'openai'],
+        top_episodes_count: 5,
+        top_episodes: [],
+      }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await api.getMentionMap('ai', { category: 'interview' })
+
+      expect(result).toEqual(mockResponse)
+      expect(getMock).toHaveBeenCalledWith('search/mention-map', { searchParams: expect.any(URLSearchParams) })
+      const params = getMock.mock.calls[0][1].searchParams as URLSearchParams
+      expect(params.get('q')).toBe('ai')
+      expect(params.get('category')).toBe('interview')
+    })
+  })
+
+  describe('saved searches', () => {
+    it('lists saved searches', async () => {
+      const mockResponse = { items: [] }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await apiListSavedSearches()
+      expect(result).toEqual(mockResponse)
+      expect(getMock).toHaveBeenCalledWith('users/me/saved-searches')
     })
   })
 
@@ -222,6 +285,7 @@ describe('api service', () => {
         offset: 48,
         completed_only: true,
         q: 'hasan',
+        category: 'interview',
         date_field: 'uploaded_at',
         date_from: '2026-05-01',
         date_to: '2026-05-31',
@@ -234,6 +298,7 @@ describe('api service', () => {
           offset: '48',
           completed_only: 'true',
           q: 'hasan',
+          category: 'interview',
           date_field: 'uploaded_at',
           date_from: '2026-05-01',
           date_to: '2026-05-31',

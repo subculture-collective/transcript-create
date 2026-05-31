@@ -343,6 +343,7 @@ def list_videos(
     date_from: str | None = Query(None, description="Inclusive YYYY-MM-DD date lower bound"),
     date_to: str | None = Query(None, description="Inclusive YYYY-MM-DD date upper bound"),
     completed_only: bool = Query(False, description="Only include completed videos that have transcript segments"),
+    category: str | None = Query(None, description="Filter by video category/type"),
     db=Depends(get_db),
 ):
     """List all videos with pagination."""
@@ -355,6 +356,7 @@ def list_videos(
         date_from=date_from,
         date_to=date_to,
         completed_only=completed_only,
+        category=category,
     )
     total_count = crud.count_videos(
         db,
@@ -363,6 +365,7 @@ def list_videos(
         date_from=date_from,
         date_to=date_to,
         completed_only=completed_only,
+        category=category,
     )
     items = [VideoInfo(**dict(r)) for r in rows]
     return PaginatedVideos(

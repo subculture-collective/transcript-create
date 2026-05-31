@@ -1,6 +1,15 @@
+import { useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { useAuth, useTheme } from '../services';
-import { useState } from 'react';
+
+const navItems = [
+  { to: '/', label: 'Home' },
+  { to: '/search', label: 'Search' },
+  { to: '/episodes', label: 'Episodes' },
+  { to: '/timeline', label: 'Timeline' },
+  { to: '/saved', label: 'Saved' },
+  { to: '/pricing', label: 'Pricing' },
+];
 
 export default function AppLayout() {
   const { user, loading, login, loginTwitch, logout } = useAuth();
@@ -9,97 +18,98 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-canvas text-ink transition-colors">
-      {/* Skip to main content link for keyboard navigation */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:min-h-[44px] focus:bg-accent focus:px-4 focus:py-2 focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:min-h-[44px] focus:bg-accent focus:px-4 focus:py-2 focus:text-[#101014]"
       >
         Skip to main content
       </a>
 
-      <header className="border-b border-border bg-surface" role="banner">
-        <div className="mx-auto flex max-w-7xl items-center justify-between p-4">
-          <Link to="/" className="font-semibold tracking-tight text-lg" aria-label="Home - Transcript Search">
-            Transcript Search
-          </Link>
+      <header className="sticky top-0 z-40 border-b border-border/80 bg-canvas/85 backdrop-blur-2xl" role="banner">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-6">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="group flex items-center gap-3" aria-label="Home - Broadcast Archive Noir">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface-muted text-sm font-semibold tracking-[0.32em] text-accent shadow-[0_0_0_1px_rgba(183,255,60,0.08)]">
+                A/
+              </span>
+              <span className="leading-none">
+                <span className="block text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-subtle">Broadcast archive</span>
+                <span className="block text-lg font-semibold tracking-[-0.04em] text-ink group-hover:text-accent">Transcript Create</span>
+              </span>
+            </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-4" aria-label="Main navigation">
-            <Link to="/" className="nav-link">
-              Search
-            </Link>
-            <Link to="/streams" className="nav-link">
-              Streams
-            </Link>
-            <Link to="/favorites" className="nav-link">
-              Favorites
-            </Link>
-            <Link to="/pricing" className="nav-link">
-              Pricing
-            </Link>
-            
-            {/* Theme Toggle */}
+            <div className="hidden xl:block">
+              <div className="archive-eyebrow">Analog archive noir / live search interface</div>
+            </div>
+          </div>
+
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
+            {navItems.map((item) => (
+              <Link key={item.to} to={item.to} className="nav-link">
+                {item.label}
+              </Link>
+            ))}
             <button
+              type="button"
               onClick={toggleTheme}
-              className="icon-button"
+              className="icon-button ml-2"
               aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
               title={theme === 'light' ? 'Dark mode' : 'Light mode'}
             >
               {theme === 'light' ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                 </svg>
               ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               )}
             </button>
 
-            {loading ? (
-              <span className="text-subtle" aria-live="polite" aria-label="Loading user information">…</span>
-            ) : user ? (
-              <div className="flex items-center gap-3">
-                {user.avatar_url && (
-                  <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full" />
-                )}
-                <span className="hidden text-muted lg:inline">{user.name || user.email}</span>
-                {user.plan === 'pro' && (
-                  <>
-                    <span className="badge-success" aria-label="Pro plan member">
-                      Pro
-                    </span>
+            <div className="ml-2 flex items-center gap-3 border-l border-border pl-4">
+              {loading ? (
+                <span className="text-subtle" aria-live="polite">Loading…</span>
+              ) : user ? (
+                <>
+                  <div className="hidden items-center gap-2 lg:flex">
+                    {user.avatar_url && (
+                      <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full border border-border" />
+                    )}
+                    <span className="max-w-[10rem] truncate text-sm text-muted">{user.name || user.email}</span>
+                    {user.plan === 'pro' && <span className="badge-success">Pro</span>}
+                  </div>
+                  {user.plan === 'pro' && (
                     <a href="/api/billing/portal" className="nav-link">
-                      Manage billing
+                      Billing
                     </a>
-                  </>
-                )}
-                <button onClick={logout} className="nav-link" aria-label="Logout">
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <button onClick={login} className="nav-link" aria-label="Login with Google">
-                  Login with Google
-                </button>
-                <span className="text-subtle" aria-hidden="true">|</span>
-                <button onClick={loginTwitch} className="nav-link" aria-label="Login with Twitch">
-                  Login with Twitch
-                </button>
-              </div>
-            )}
+                  )}
+                  <button type="button" onClick={logout} className="nav-link">
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={login} className="nav-link">
+                    Google
+                  </button>
+                  <button type="button" onClick={loginTwitch} className="nav-link">
+                    Twitch
+                  </button>
+                </>
+              )}
+            </div>
           </nav>
 
-          {/* Mobile Menu Button */}
           <button
-            className="icon-button md:hidden"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            type="button"
+            className="icon-button lg:hidden"
+            onClick={() => setMobileMenuOpen((current) => !current)}
             aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               {mobileMenuOpen ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               ) : (
@@ -109,61 +119,32 @@ export default function AppLayout() {
           </button>
         </div>
 
-        {/* Mobile Navigation Menu */}
-        <nav 
-          id="mobile-menu" 
-          className={`md:hidden border-t border-border bg-surface overflow-hidden transition-all duration-300 ease-in-out motion-reduce:transition-none ${
-            mobileMenuOpen ? 'max-h-screen overflow-y-auto opacity-100' : 'max-h-0 opacity-0'
-          }`}
+        <nav
+          id="mobile-menu"
+          className={`border-t border-border/80 bg-canvas/95 px-4 backdrop-blur-2xl transition-all duration-300 ease-out lg:hidden ${mobileMenuOpen ? 'max-h-[36rem] opacity-100' : 'max-h-0 overflow-hidden opacity-0'}`}
           aria-label="Mobile navigation"
           aria-hidden={!mobileMenuOpen}
         >
-          <div className="px-4 py-3 space-y-3">
-              <Link 
-                to="/" 
-                className="nav-link block py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Search
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 py-4">
+            <div className="archive-eyebrow mb-2 self-start">Navigation deck</div>
+            {navItems.map((item) => (
+              <Link key={item.to} to={item.to} className="nav-link block" onClick={() => setMobileMenuOpen(false)}>
+                {item.label}
               </Link>
-              <Link 
-                to="/streams" 
-                className="nav-link block py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Streams
-              </Link>
-              <Link 
-                to="/favorites" 
-                className="nav-link block py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Favorites
-              </Link>
-              <Link 
-                to="/pricing" 
-                className="nav-link block py-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Pricing
-              </Link>
-              
-              {/* Mobile Theme Toggle */}
-              <button
-                onClick={toggleTheme}
-                className="nav-link flex items-center gap-2 py-2"
-                aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-              >
+            ))}
+
+            <div className="mt-3 border-t border-border pt-3">
+              <button type="button" onClick={toggleTheme} className="nav-link flex w-full items-center gap-2 text-left">
                 {theme === 'light' ? (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                     </svg>
                     Dark mode
                   </>
                 ) : (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
                     Light mode
@@ -175,56 +156,64 @@ export default function AppLayout() {
                 <span className="block py-2 text-subtle" aria-live="polite">Loading…</span>
               ) : user ? (
                 <>
-                  <div className="flex items-center gap-2 py-2">
-                    {user.avatar_url && (
-                      <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full" />
-                    )}
+                  <div className="flex items-center gap-3 py-2">
+                    {user.avatar_url && <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full border border-border" />}
                     <span className="text-muted">{user.name || user.email}</span>
-                    {user.plan === 'pro' && (
-                      <span className="badge-success">
-                        Pro
-                      </span>
-                    )}
+                    {user.plan === 'pro' && <span className="badge-success">Pro</span>}
                   </div>
                   {user.plan === 'pro' && (
-                    <a href="/api/billing/portal" className="nav-link block py-2">
-                      Manage billing
+                    <a href="/api/billing/portal" className="nav-link block" onClick={() => setMobileMenuOpen(false)}>
+                      Billing
                     </a>
                   )}
-                  <button 
-                    onClick={() => { logout(); setMobileMenuOpen(false); }} 
-                    className="nav-link block w-full py-2 text-left"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="nav-link block w-full text-left"
                   >
                     Logout
                   </button>
                 </>
               ) : (
                 <>
-                  <button 
-                    onClick={() => { login(); setMobileMenuOpen(false); }} 
-                    className="nav-link block w-full py-2 text-left"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      login();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="nav-link block w-full text-left"
                   >
-                    Login with Google
+                    Google
                   </button>
-                  <button 
-                    onClick={() => { loginTwitch(); setMobileMenuOpen(false); }} 
-                    className="nav-link block w-full py-2 text-left"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loginTwitch();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="nav-link block w-full text-left"
                   >
-                    Login with Twitch
+                    Twitch
                   </button>
                 </>
               )}
             </div>
-          </nav>
-        </header>
+          </div>
+        </nav>
+      </header>
 
-      <main id="main-content" className="mx-auto max-w-7xl p-4" role="main">
+      <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-6" role="main">
         <Outlet />
       </main>
 
-      <footer className="mt-12 border-t border-border bg-surface" role="contentinfo">
-        <div className="mx-auto max-w-7xl px-4 py-6 text-center text-sm text-muted">
-          <p>&copy; {new Date().getFullYear()} Transcript Search. All rights reserved.</p>
+      <footer className="border-t border-border/80 bg-canvas/80 backdrop-blur-xl" role="contentinfo">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between lg:px-6">
+          <p>&copy; {new Date().getFullYear()} Transcript Create. All rights reserved.</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-subtle">Broadcast archive noir</p>
         </div>
       </footer>
     </div>

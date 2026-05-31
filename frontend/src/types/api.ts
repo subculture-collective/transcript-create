@@ -9,6 +9,92 @@ export interface SearchHit {
   source?: 'whisper' | 'youtube' | 'merged';
 }
 
+export interface SearchMoment {
+  id: number;
+  video_id: UUID;
+  start_ms: number;
+  end_ms: number;
+  snippet: string;
+  source?: 'whisper' | 'youtube' | 'merged';
+}
+
+export interface EpisodeSearchGroup {
+  video: VideoInfo;
+  moments: SearchMoment[];
+}
+
+export interface GroupedSearchResponse {
+  total_moments: number;
+  total_videos: number;
+  groups: EpisodeSearchGroup[];
+  query_time_ms?: number | null;
+}
+
+export interface MentionMapResponse {
+  query: string;
+  total_moments: number;
+  total_videos: number;
+  first_mentioned_year?: number | null;
+  most_discussed_period?: string | null;
+  most_discussed_count?: number;
+  recent_mentions_90d?: number;
+  related_topics?: string[];
+  top_episodes_count?: number;
+  first_mention?: (SearchMoment & { video?: VideoInfo | null }) | null;
+  latest_mention?: (SearchMoment & { video?: VideoInfo | null }) | null;
+  top_episodes: EpisodeSearchGroup[];
+  query_time_ms?: number | null;
+}
+
+export interface ArchivePopularSearch {
+  term: string;
+  frequency: number;
+}
+
+export interface ArchiveSummary {
+  creator_name: string;
+  video_count: number;
+  total_duration_seconds: number;
+  transcript_word_count: number;
+  updated_at?: string | null;
+  recent_videos: VideoInfo[];
+  popular_searches: ArchivePopularSearch[];
+}
+
+export interface TimelineBucket {
+  period: string;
+  label: string;
+  video_count: number;
+  total_duration_seconds: number;
+  videos: VideoInfo[];
+}
+
+export interface TimelineResponse {
+  buckets?: TimelineBucket[];
+  items?: TimelineBucket[];
+  query_time_ms?: number | null;
+}
+
+export interface SavedSearchFilters {
+  source?: 'best' | 'native' | 'youtube';
+  category?: string;
+  date_from?: string;
+  date_to?: string;
+  min_duration?: number;
+  max_duration?: number;
+  sort_by?: string;
+  video_id?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SavedSearch {
+  id: UUID;
+  query: string;
+  filters: SavedSearchFilters;
+  created_at?: string | null;
+}
+
 export interface SearchResponse {
   total?: number;
   hits: SearchHit[];
@@ -85,4 +171,18 @@ export interface StreamLibraryFilters {
   date_field?: 'uploaded_at' | 'created_at' | 'updated_at';
   date_from?: string;
   date_to?: string;
+  category?: string;
+}
+
+export interface ArchiveSearchFilters {
+  source?: 'best' | 'native' | 'youtube';
+  category?: string;
+  video_id?: string;
+  limit?: number;
+  offset?: number;
+  date_from?: string;
+  date_to?: string;
+  min_duration?: number;
+  max_duration?: number;
+  sort_by?: string;
 }

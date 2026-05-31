@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AppLayout from './routes/AppLayout';
+import HomePage from './routes/HomePage';
 import SearchPage from './routes/SearchPage';
 import StreamsPage from './routes/StreamsPage';
 import VideoPage from './routes/VideoPage';
@@ -16,18 +17,32 @@ import AdminUsers from './routes/admin/AdminUsers';
 import { AuthProvider, ThemeProvider } from './services';
 import PricingPage from './routes/PricingPage';
 import UpgradePage from './routes/UpgradePage';
+import TopicPage from './routes/TopicPage';
+import TimelinePage from './routes/TimelinePage';
 
 const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
     children: [
-      { index: true, element: <SearchPage /> },
+      { index: true, element: <HomePage /> },
+      { path: 'search', element: <SearchPage /> },
+      { path: 'episodes', element: <StreamsPage /> },
       { path: 'streams', element: <StreamsPage /> },
+      { path: 'timeline', element: <TimelinePage /> },
+      { path: 'topics/:query', element: <TopicPage /> },
       { path: 'v/:videoId', element: <VideoPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'pricing', element: <PricingPage /> },
       { path: 'upgrade', element: <UpgradePage /> },
+      {
+        path: 'saved',
+        element: (
+          <Protected>
+            <FavoritesPage />
+          </Protected>
+        ),
+      },
       {
         path: 'favorites',
         element: (

@@ -42,7 +42,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // Update meta theme-color
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', theme === 'dark' ? '#0c0a09' : '#1c1917');
+      metaThemeColor.setAttribute('content', theme === 'dark' ? '#101014' : '#f1f1f4');
     }
   }, [theme]);
 

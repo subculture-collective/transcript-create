@@ -6,8 +6,8 @@ describe('entitlement policy', () => {
     expect(canExportFormat({ plan: null, format: 'txt' })).toBe(true);
   });
 
-  it('requires pro for pdf export', () => {
-    expect(canExportFormat({ plan: 'free', format: 'pdf' })).toBe(false);
+  it('allows pdf export for all users', () => {
+    expect(canExportFormat({ plan: 'free', format: 'pdf' })).toBe(true);
     expect(canExportFormat({ plan: 'pro', format: 'pdf' })).toBe(true);
   });
 });

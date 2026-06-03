@@ -10,15 +10,11 @@ import {
 } from '../services';
 import type { Segment, TranscriptResponse, VideoInfo, SearchHit } from '../types/api';
 // favorites, useAuth imported from services barrel
-import { YouTubePlayer, UpgradeModal, ExportMenu } from '../components';
+import { YouTubePlayer, ExportMenu } from '../components';
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer';
 // track imported from services barrel
 import { buildTimestampLink, formatDate, formatDuration, formatTimestamp, sourceLabel } from '../features/archive/format';
-
-function secondsToYouTubeTs(s: number) {
-  // Converts seconds to YouTube timestamp format
-  return Math.max(0, Math.floor(s));
-}
+import { buildTranscriptTurns, normalizeTranscriptText } from '../features/videoTranscript/transcript';
 
 function msToHms(ms: number) {
   const total = Math.floor(ms / 1000);
@@ -32,84 +28,14 @@ function msToHms(ms: number) {
   return `${hh}:${mm}:${ss}`;
 }
 
-type TranscriptTurn = {
-  key: string;
-  speaker: string | null;
-  segments: Array<{ segment: Segment; id: number; match?: SearchHit }>;
-};
-
-function speakerName(seg: Segment) {
-  return seg.speaker_label?.trim() || null;
-}
-
-function normalizeTranscriptText(text: string) {
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([,.!?;:])/g, '$1')
-    .trim();
+function secondsToYouTubeTs(s: number) {
+  return Math.max(0, Math.floor(s));
 }
 
 function copyText(text: string) {
   void navigator.clipboard?.writeText(text);
 }
 
-function shouldStartNewUnlabeledParagraph(
-  previous: { segment: Segment; id: number; match?: SearchHit } | undefined,
-  current: Segment,
-  currentText: string
-) {
-  if (!previous) return true;
-
-  const previousText = normalizeTranscriptText(previous.segment.text);
-  const silenceGapMs = current.start_ms - previous.segment.end_ms;
-  const previousEndsSentence = /[.!?]["')\]]?$/.test(previousText);
-  const currentLooksLikeNewThought = /^[A-Z0-9"'“‘]/.test(currentText);
-  const previousWordCount = previousText.split(/\s+/).filter(Boolean).length;
-
-  return (
-    silenceGapMs >= 1200 ||
-    (previousEndsSentence && currentLooksLikeNewThought && previousWordCount >= 8)
-  );
-}
-
-function buildTranscriptTurns(segments: Segment[], hits: SearchHit[] | null): TranscriptTurn[] {
-  return segments.reduce<TranscriptTurn[]>((turns, segment, idx) => {
-    const id = idx + 1;
-    const speaker = speakerName(segment);
-    const match = hits?.find((h) => h.start_ms >= segment.start_ms && h.start_ms < segment.end_ms);
-    const last = turns.at(-1);
-    const currentText = normalizeTranscriptText(segment.text);
-
-    if (!currentText) return turns;
-
-    if (!speaker) {
-      const previous = last?.segments.at(-1);
-      if (last && last.speaker === null && !shouldStartNewUnlabeledParagraph(previous, segment, currentText)) {
-        last.segments.push({ segment, id, match });
-        return turns;
-      }
-
-      turns.push({
-        key: `paragraph-${id}`,
-        speaker: null,
-        segments: [{ segment, id, match }],
-      });
-      return turns;
-    }
-
-    if (last?.speaker === speaker) {
-      last.segments.push({ segment, id, match });
-      return turns;
-    }
-
-    turns.push({
-      key: `${speaker}-${id}`,
-      speaker,
-      segments: [{ segment, id, match }],
-    });
-    return turns;
-  }, []);
-}
 
 export default function VideoPage() {
   const { videoId } = useParams();
@@ -125,7 +51,6 @@ export default function VideoPage() {
   const [activeBlockIndex, setActiveBlockIndex] = useState<number | null>(null);
   const [isPlayingMatches, setIsPlayingMatches] = useState(false);
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
-  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const startSeconds = useMemo(() => {
     const tStr = params.get('t');
@@ -320,13 +245,13 @@ export default function VideoPage() {
     () => buildTranscriptTurns(transcript?.segments ?? [], hits),
     [transcript?.segments, hits]
   );
-  const episodeTitle = video?.title ?? 'Loading episode...';
+  const episodeTitle = video?.title ?? 'Loading VOD...';
   return (
     <div className="space-y-6">
       <header className="surface-card space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-1 text-sm font-medium uppercase tracking-wide text-subtle">Episode transcript</p>
+            <p className="mb-1 text-sm font-medium uppercase tracking-wide text-subtle">VOD transcript</p>
             <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
               {episodeTitle}
             </h1>
@@ -339,15 +264,10 @@ export default function VideoPage() {
           </div>
           {video && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <ExportMenu
-                videoId={video.id}
-                isPro={user?.plan === 'pro'}
-                onRequireUpgrade={() => setShowUpgrade(true)}
-              />
+              <ExportMenu videoId={video.id} />
             </div>
           )}
         </div>
-        <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} />
         <form
           className="grid gap-3 sm:grid-cols-[1fr_auto]"
           onSubmit={(e) => {
@@ -362,7 +282,7 @@ export default function VideoPage() {
           }}
         >
           <label htmlFor="transcript-search" className="sr-only">
-            Search inside this episode
+            Search inside this VOD
           </label>
           <input
             id="transcript-search"
@@ -378,19 +298,19 @@ export default function VideoPage() {
                 setParams(next);
               }
             }}
-            placeholder="Search inside this episode..."
+            placeholder="Search inside this VOD..."
             className="form-control"
-            aria-label="Search inside this episode"
+            aria-label="Search inside this VOD"
           />
           <button className="btn-primary" type="submit">
-            Search episode
+            Search VOD
           </button>
         </form>
 
         {video && (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
             <div className="rounded-lg border border-border bg-surface-muted p-4">
-              <div className="text-xs uppercase tracking-[0.24em] text-subtle">Episode details</div>
+              <div className="text-xs uppercase tracking-[0.24em] text-subtle">VOD details</div>
               <dl className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-subtle">Channel</dt>
@@ -451,7 +371,7 @@ export default function VideoPage() {
 
         <section className="lg:col-span-2">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="section-title">Episode transcript</h2>
+            <h2 className="section-title">VOD transcript</h2>
           {matchIndices.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-muted" role="group" aria-label="Search navigation">
               <button

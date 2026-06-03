@@ -1,13 +1,16 @@
-from app import crud
+from typing import Any
+
+from app.search.segment_repository import SearchRepository
 from app.search.types import SearchRequest, SearchResult
 
 
 class PostgresSearchBackend:
-    def __init__(self, db):
+    def __init__(self, db, repository: Any | None = None):
         self.db = db
+        self.repository = repository or SearchRepository()
 
     def search(self, request: SearchRequest) -> list[SearchResult]:
-        rows = crud.search_segments_advanced(
+        rows = self.repository.search_native(
             self.db,
             q=request.q,
             video_id=request.video_id,

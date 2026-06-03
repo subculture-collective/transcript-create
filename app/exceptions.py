@@ -80,31 +80,6 @@ class InvalidURLError(AppError):
         )
 
 
-class QuotaExceededError(AppError):
-    """Raised when a user exceeds their quota."""
-
-    def __init__(
-        self,
-        resource: str,
-        limit: int,
-        used: int,
-        plan: str = "free",
-        details: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(
-            error_code="quota_exceeded",
-            message=f"Daily {resource} limit reached. Upgrade to Pro for unlimited {resource}.",
-            status_code=402,
-            details=details
-            or {
-                "resource": resource,
-                "limit": limit,
-                "used": used,
-                "plan": plan,
-            },
-        )
-
-
 class TranscriptNotReadyError(AppError):
     """Raised when a transcript is requested but not ready."""
 

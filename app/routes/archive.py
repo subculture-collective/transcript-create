@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from .. import crud
+from ..archive.repository import archive_repository
 from ..db import get_db
 from ..schemas import ArchiveSummary, ArchiveTimelineResponse
 
@@ -11,14 +12,14 @@ router = APIRouter(prefix="", tags=["Archive"])
     "/archive/summary",
     response_model=ArchiveSummary,
     summary="Get archive summary",
-    description="Summary statistics for the creator archive based on real video and transcript data.",
+    description="Summary statistics for HasanAra based on real VOD and transcript data.",
 )
 def archive_summary(
     recent_limit: int = Query(6, ge=0, le=20, description="Number of recent videos to include"),
     popular_limit: int = Query(8, ge=0, le=20, description="Number of popular searches to include"),
     db=Depends(get_db),
 ):
-    return crud.get_archive_summary(db, recent_limit=recent_limit, popular_limit=popular_limit)
+    return archive_repository.get_summary(db, recent_limit=recent_limit, popular_limit=popular_limit)
 
 
 @router.get(

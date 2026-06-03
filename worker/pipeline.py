@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import shlex
-import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,15 +14,12 @@ from app.settings import settings
 from app.transcripts.blocks import build_transcript_blocks
 from app.transcripts.types import TranscriptSegment
 from worker.audio import chunk_audio, download_audio, ensure_wav_16k
+from worker.caption_ingest import ingest_captions_for_unprocessed_videos
 from worker.diarize import diarize_and_align
+from worker.native_pipeline import NativePipelineDependencies, process_video as process_native_video
 from worker.state_model import ACTIVE_VIDEO_STATES, OPEN_CAPTION_INGEST_STATES, TERMINAL_VIDEO_STATES, sql_string_list
 from worker.whisper_runner import transcribe_chunk
-from worker.repositories import VideoRepository
-from worker.youtube_captions import (
-    YouTubeCaptionFetchError,
-    YouTubeCaptionRateLimitError,
-    fetch_youtube_auto_captions,
-)
+from worker.youtube.service import get_youtube_service
 
 WORKDIR = Path("/data")  # mount volume externally
 
@@ -172,67 +167,9 @@ def reconcile_terminal_jobs(conn) -> None:
         logger.info("Reconciled failed jobs", extra={"count": len(failed)})
 
 
-def _yt_dlp_metadata_commands(url: str, *, flat_playlist: bool = False) -> list[tuple[str, list[str]]]:
-    """Build simple yt-dlp metadata commands using the configured client fallback order."""
-    from worker.ytdlp_client_utils import get_client_extractor_args
-
-    clients = [c.strip() for c in settings.YTDLP_CLIENT_ORDER.split(",") if c.strip()]
-    disabled = {c.strip() for c in settings.YTDLP_CLIENTS_DISABLED.split(",") if c.strip()}
-    commands: list[tuple[str, list[str]]] = []
-
-    for client in clients:
-        if client in disabled:
-            continue
-        extractor_args = get_client_extractor_args(client)
-        if extractor_args is None:
-            logger.warning("Unknown YTDLP client in metadata strategy; skipping", extra={"client": client})
-            continue
-        cmd = ["yt-dlp"]
-        if flat_playlist:
-            cmd.append("--flat-playlist")
-        cmd.append("-J")
-        cmd.extend(extractor_args)
-        if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
-            cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
-        if settings.YTDLP_EXTRA_ARGS:
-            cmd.extend(shlex.split(settings.YTDLP_EXTRA_ARGS))
-        cmd.append(url)
-        commands.append((client, cmd))
-
-    if not commands:
-        cmd = ["yt-dlp"]
-        if flat_playlist:
-            cmd.append("--flat-playlist")
-        cmd.extend(["-J", url])
-        commands.append(("default", cmd))
-
-    return commands
-
-
 def _fetch_ytdlp_metadata(url: str, *, flat_playlist: bool = False) -> dict[str, Any]:
-    """Fetch yt-dlp JSON metadata using configured client fallback commands."""
-    last_error: subprocess.CalledProcessError | None = None
-    for client, cmd in _yt_dlp_metadata_commands(url, flat_playlist=flat_playlist):
-        try:
-            logger.info("Fetching yt-dlp metadata", extra={"client": client, "flat_playlist": flat_playlist})
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=settings.YTDLP_REQUEST_TIMEOUT,
-            )
-            return json.loads(result.stdout)
-        except subprocess.CalledProcessError as e:
-            last_error = e
-            logger.warning(
-                "yt-dlp metadata strategy failed",
-                extra={"client": client, "stderr_snippet": (e.stderr or "")[:200]},
-            )
-
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError("Failed to fetch yt-dlp metadata")
+    """Compatibility wrapper around the YouTube Adapter metadata seam."""
+    return get_youtube_service().fetch_metadata(url, flat_playlist=flat_playlist)
 
 
 def normalize_channel_url(url: str) -> str:
@@ -531,329 +468,18 @@ def expand_single_if_needed(conn):
 
 
 def process_video(engine, video_id):
-    from worker.metrics import (
-        chunk_count,
-        diarization_duration_seconds,
-        download_duration_seconds,
-        transcode_duration_seconds,
-        transcription_duration_seconds,
-        whisper_chunk_transcription_seconds,
+    deps = NativePipelineDependencies(
+        settings=settings,
+        logger=logger,
+        download_audio=download_audio,
+        ensure_wav_16k=ensure_wav_16k,
+        chunk_audio=chunk_audio,
+        transcribe_chunk=transcribe_chunk,
+        diarize_and_align=diarize_and_align,
+        replace_transcript_blocks=crud.replace_transcript_blocks,
+        refresh_job_state=refresh_job_state,
     )
-
-    t0 = time.time()
-    logger.info("Video processing started")
-    with engine.begin() as conn:
-        v = (
-            conn.execute(
-                text("SELECT v.*, j.id AS job_id FROM videos v JOIN jobs j ON j.id=v.job_id WHERE v.id=:i"),
-                {"i": video_id},
-            )
-            .mappings()
-            .first()
-        )
-    youtube_id = v["youtube_id"]
-    if ("uploaded_at" in v and v.get("uploaded_at") is None) or ("channel_name" in v and not v.get("channel_name")):
-        try:
-            metadata = _fetch_ytdlp_metadata(f"https://www.youtube.com/watch?v={youtube_id}")
-            uploaded_at = _metadata_uploaded_at(metadata)
-            channel_name = _metadata_channel_name(metadata)
-            title = metadata.get("title") or v.get("title")
-            duration = metadata.get("duration") or v.get("duration_seconds")
-            with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        """
-                        UPDATE videos
-                        SET uploaded_at = COALESCE(uploaded_at, :uploaded_at),
-                            channel_name = COALESCE(NULLIF(channel_name, ''), :channel_name),
-                            title = COALESCE(NULLIF(title, ''), :title),
-                            duration_seconds = COALESCE(duration_seconds, :duration),
-                            updated_at = now()
-                        WHERE id = :id
-                        """
-                    ),
-                    {
-                        "id": video_id,
-                        "uploaded_at": uploaded_at,
-                        "channel_name": channel_name,
-                        "title": title,
-                        "duration": duration,
-                    },
-                )
-            logger.info(
-                "Video source metadata enriched",
-                extra={
-                    "video_id": str(video_id),
-                    "youtube_id": youtube_id,
-                    "uploaded_at": uploaded_at.isoformat() if uploaded_at else None,
-                    "channel_name": channel_name,
-                },
-            )
-        except Exception as e:
-            logger.warning(
-                "Unable to enrich video source metadata before processing",
-                extra={"video_id": str(video_id), "youtube_id": youtube_id, "error": str(e)[:200]},
-            )
-    dest_dir = WORKDIR / str(video_id)
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.info("Downloading audio", extra={"youtube_id": youtube_id, "stage": "downloading"})
-    download_start = time.time()
-    raw_path = download_audio(f"https://www.youtube.com/watch?v={youtube_id}", dest_dir)
-    download_duration = time.time() - download_start
-    download_duration_seconds.observe(download_duration)
-    logger.info("Download completed", extra={"duration_seconds": round(download_duration, 2)})
-
-    with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE videos SET raw_path=:p, state='transcoding', updated_at=now() WHERE id=:i"),
-            {"p": str(raw_path), "i": video_id},
-        )
-
-    logger.info("Converting to wav 16k", extra={"stage": "transcoding"})
-    transcode_start = time.time()
-    wav_path = ensure_wav_16k(raw_path)
-    transcode_duration = time.time() - transcode_start
-    transcode_duration_seconds.observe(transcode_duration)
-    logger.info("Transcode completed", extra={"duration_seconds": round(transcode_duration, 2)})
-
-    with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE videos SET wav_path=:p, state='transcribing', updated_at=now() WHERE id=:i"),
-            {"p": str(wav_path), "i": video_id},
-        )
-
-    logger.info("Chunking audio", extra={"max_chunk_seconds": settings.CHUNK_SECONDS, "stage": "transcribing"})
-    chunks = chunk_audio(wav_path, settings.CHUNK_SECONDS)
-    logger.info("Audio chunks created", extra={"chunk_count": len(chunks)})
-    chunk_count.observe(len(chunks))
-
-    # Extract quality settings from job metadata if available
-    with engine.begin() as conn:
-        job_meta = conn.execute(
-            text("SELECT meta FROM jobs WHERE id=:j"),
-            {"j": v["job_id"]},
-        ).scalar()
-
-    if job_meta and isinstance(job_meta, str):
-        job_meta = json.loads(job_meta)
-    quality_settings = job_meta.get("quality", {}) if job_meta else {}
-    language = quality_settings.get("language") or getattr(settings, "WHISPER_LANGUAGE", None) or None
-    beam_size = quality_settings.get("beam_size") or getattr(settings, "WHISPER_BEAM_SIZE", 5)
-    temp_from_settings = getattr(settings, "WHISPER_TEMPERATURE", 0.0)
-    temperature = (
-        quality_settings.get("temperature") if quality_settings.get("temperature") is not None else temp_from_settings
-    )
-    word_timestamps = quality_settings.get("word_timestamps", getattr(settings, "WHISPER_WORD_TIMESTAMPS", True))
-    vad_filter = quality_settings.get("vad_filter", getattr(settings, "WHISPER_VAD_FILTER", False))
-
-    all_segments = []
-    detected_language = None
-    language_probability = None
-    transcription_start = time.time()
-
-    for c in chunks:
-        ct0 = time.time()
-        logger.info("Transcribing chunk", extra={"chunk_file": c.path.name, "offset_seconds": c.offset})
-        segs, lang_info = transcribe_chunk(
-            c.path,
-            language=language,
-            beam_size=beam_size,
-            temperature=temperature,
-            word_timestamps=word_timestamps,
-            vad_filter=vad_filter,
-        )
-
-        # Capture language info from first chunk
-        if detected_language is None and lang_info:
-            detected_language = lang_info.get("language")
-            language_probability = lang_info.get("language_probability")
-            logger.info(
-                "Language detected",
-                extra={
-                    "language": detected_language,
-                    "probability": language_probability,
-                },
-            )
-
-        for s in segs:
-            s["start"] += c.offset
-            s["end"] += c.offset
-            # Adjust word timestamps if present
-            if "words" in s:
-                for w in s["words"]:
-                    w["start"] += c.offset
-                    w["end"] += c.offset
-        all_segments.extend(segs)
-        chunk_duration = time.time() - ct0
-        whisper_chunk_transcription_seconds.labels(model=settings.WHISPER_MODEL).observe(chunk_duration)
-        logger.info(
-            "Chunk transcription complete",
-            extra={
-                "chunk_file": c.path.name,
-                "segment_count": len(segs),
-                "duration_seconds": round(chunk_duration, 2),
-            },
-        )
-
-    total_transcription_duration = time.time() - transcription_start
-    transcription_duration_seconds.labels(model=settings.WHISPER_MODEL).observe(total_transcription_duration)
-    logger.info("All chunks transcribed", extra={"duration_seconds": round(total_transcription_duration, 2)})
-
-    diar_segments = all_segments
-    if settings.ENABLE_DIARIZATION and settings.DIARIZATION_INLINE:
-        logger.info("Inline diarization phase starting", extra={"segment_count": len(all_segments)})
-        diarization_start = time.time()
-        diar_segments = diarize_and_align(wav_path, all_segments)
-        diarization_duration = time.time() - diarization_start
-        if diarization_duration > 1.0:
-            diarization_duration_seconds.observe(diarization_duration)
-            logger.info("Inline diarization completed", extra={"duration_seconds": round(diarization_duration, 2)})
-    elif settings.ENABLE_DIARIZATION:
-        logger.info("Diarization queued for separate worker", extra={"segment_count": len(all_segments)})
-
-    # Apply custom vocabulary corrections if enabled
-    if getattr(settings, "ENABLE_CUSTOM_VOCABULARY", True):
-        try:
-            from worker.vocabulary import apply_vocabulary_corrections
-
-            with engine.begin() as conn:
-                # Ensure job_meta is a dict before accessing .get()
-                if job_meta and isinstance(job_meta, str):
-                    try:
-                        job_meta = json.loads(job_meta)
-                    except Exception as e:
-                        logger.warning("Failed to parse job_meta as JSON", extra={"error": str(e)})
-                        job_meta = None
-                user_id = job_meta.get("user_id") if job_meta else None
-                diar_segments = apply_vocabulary_corrections(conn, diar_segments, user_id)
-                logger.info("Applied custom vocabulary corrections")
-        except Exception as e:
-            logger.warning("Failed to apply vocabulary corrections", extra={"error": str(e)})
-
-    with engine.begin() as conn:
-        full_text = " ".join(s["text"] for s in diar_segments)
-        logger.info("Inserting transcript", extra={"text_length": len(full_text)})
-        # Clean existing transcript/segments for idempotent reprocessing
-        try:
-            conn.execute(text("DELETE FROM segments WHERE video_id = :v"), {"v": video_id})
-            conn.execute(text("DELETE FROM transcripts WHERE video_id = :v"), {"v": video_id})
-            logger.info("Cleared existing transcript/segments for reprocessing")
-        except Exception as e:
-            logger.warning("Failed to clear existing rows (continuing)", extra={"error": str(e)})
-        conn.execute(
-            text(
-                """
-            INSERT INTO transcripts (video_id, full_text, language, model, detected_language, language_probability)
-            VALUES (:v,:t,:lang,:m,:dlang,:lprob)
-        """
-            ),
-            {
-                "v": video_id,
-                "t": full_text,
-                "lang": detected_language or "en",
-                "m": settings.WHISPER_MODEL,
-                "dlang": detected_language,
-                "lprob": language_probability,
-            },
-        )
-        logger.info("Inserting segments", extra={"segment_count": len(diar_segments)})
-        for s in diar_segments:
-            # Serialize word timestamps if present
-            word_ts_json = None
-            if "words" in s and s["words"]:
-                word_ts_json = json.dumps(s["words"])
-
-            conn.execute(
-                text(
-                    """
-                INSERT INTO segments (
-                    video_id,start_ms,end_ms,text,speaker_label,confidence,
-                    avg_logprob,temperature,token_count,word_timestamps
-                )
-                VALUES (:v,:s,:e,:txt,:spk,:conf,:lp,:temp,:tc,:wts)
-            """
-                ),
-                {
-                    "v": video_id,
-                    "s": int(s["start"] * 1000),
-                    "e": int(s["end"] * 1000),
-                    "txt": s["text"],
-                    "spk": s.get("speaker"),
-                    "conf": s.get("confidence"),
-                    "lp": s.get("avg_logprob"),
-                    "temp": s.get("temperature"),
-                    "tc": s.get("token_count"),
-                    "wts": word_ts_json,
-                },
-            )
-        blocks = build_transcript_blocks(
-            [
-                TranscriptSegment(
-                    start_ms=int(s["start"] * 1000),
-                    end_ms=int(s["end"] * 1000),
-                    text=s["text"],
-                    speaker_label=s.get("speaker"),
-                )
-                for s in diar_segments
-            ]
-        )
-        crud.replace_transcript_blocks(conn, video_id, blocks)
-        logger.info("Marking video as completed")
-        diarization_state = "completed" if settings.ENABLE_DIARIZATION and settings.DIARIZATION_INLINE else (
-            "pending" if settings.ENABLE_DIARIZATION else "skipped"
-        )
-        conn.execute(
-            text(
-                """
-                UPDATE videos
-                SET state='completed', error=NULL, diarization_state=:ds, updated_at=now()
-                WHERE id=:i
-                """
-            ),
-            {"i": video_id, "ds": diarization_state},
-        )
-        refresh_job_state(conn, v["job_id"])
-
-    # Cleanup large intermediates if configured
-    if settings.CLEANUP_AFTER_PROCESS:
-        try:
-            removed = []
-            preserve_wav_for_diarization = (
-                settings.ENABLE_DIARIZATION
-                and not settings.DIARIZATION_INLINE
-                and diarization_state == "pending"
-            )
-            # Delete chunk files
-            if settings.CLEANUP_DELETE_CHUNKS:
-                for p in dest_dir.glob("chunk_*.wav"):
-                    p.unlink(missing_ok=True)
-                    removed.append(p.name)
-            # Delete wav
-            if settings.CLEANUP_DELETE_WAV and not preserve_wav_for_diarization and wav_path.exists():
-                wav_path.unlink(missing_ok=True)
-                removed.append(Path(wav_path).name)
-            # Delete raw
-            if settings.CLEANUP_DELETE_RAW and raw_path.exists():
-                raw_path.unlink(missing_ok=True)
-                removed.append(Path(raw_path).name)
-            # Remove dir if empty
-            if settings.CLEANUP_DELETE_DIR_IF_EMPTY:
-                try:
-                    next(dest_dir.iterdir())
-                except StopIteration:
-                    dest_dir.rmdir()
-                    removed.append(f"dir:{dest_dir.name}")
-            logger.info("Cleanup completed", extra={"removed_files": ", ".join(removed) if removed else "none"})
-        except Exception as e:
-            logger.warning("Cleanup encountered an error", extra={"error": str(e)})
-
-    processing_time = time.time() - t0
-    logger.info(
-        "Video processing completed successfully",
-        extra={"total_duration_seconds": round(processing_time, 2)},
-    )
-    return len(diar_segments)
+    return process_native_video(engine, video_id, workdir=WORKDIR, deps=deps)
 
 
 def capture_youtube_captions_for_unprocessed(
@@ -864,104 +490,19 @@ def capture_youtube_captions_for_unprocessed(
     active_only: bool = False,
     terminal_failures: bool = False,
 ) -> int:
-    """Select a few videos lacking youtube_transcripts and attempt to fetch/persist captions.
+    result = ingest_captions_for_unprocessed_videos(
+        conn,
+        limit=limit,
+        staged_only=staged_only,
+        active_only=active_only,
+        terminal_failures=terminal_failures,
+        youtube_service=get_youtube_service(),
+    )
+    if result.rate_limited:
+        from worker.youtube_resilience import YouTubeRateLimitError
 
-    Run inside the worker loop before audio processing to make captions available early.
-    """
-    rows = conn.execute(
-        text(
-            """
-        SELECT v.id, v.youtube_id
-        FROM videos v
-        JOIN jobs j ON j.id = v.job_id
-        WHERE NOT EXISTS (
-            SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id
-        )
-          AND (:active_only IS FALSE OR v.caption_ingest_state = 'pending')
-          AND (:active_only IS FALSE OR v.state IN ('pending','downloading','transcoding','transcribing'))
-          AND (:active_only IS FALSE OR j.state NOT IN ('failed','completed'))
-          AND (:staged_only IS FALSE OR j.meta->>'staged' = 'true')
-        ORDER BY v.idx ASC NULLS LAST, v.created_at DESC
-        FOR UPDATE SKIP LOCKED
-        LIMIT :lim
-        """
-        ),
-        {"lim": limit, "staged_only": staged_only, "active_only": active_only},
-    ).all()
-    from worker.youtube_resilience import ErrorClass, YouTubeRateLimitError, classify_error
-
-    video_repo = VideoRepository(conn)
-    processed = 0
-    for vid, yid in rows:
-        try:
-            video_repo.mark_caption_running(str(vid))
-            logger.info("Fetching YouTube captions for video %s (yid=%s)", vid, yid)
-            res = fetch_youtube_auto_captions(yid)
-            if not res:
-                logger.info("No auto captions for %s", yid)
-                video_repo.mark_caption_unavailable(str(vid))
-                continue
-            track, segs = res
-            yt_full_text = " ".join(s.text for s in segs)
-            # delete + insert for idempotency
-            conn.execute(
-                text(
-                    """
-                    DELETE FROM youtube_segments
-                    WHERE youtube_transcript_id IN (
-                        SELECT id FROM youtube_transcripts WHERE video_id=:v
-                    )
-                    """
-                ),
-                {"v": str(vid)},
-            )
-            conn.execute(text("DELETE FROM youtube_transcripts WHERE video_id=:v"), {"v": str(vid)})
-            row = conn.execute(
-                text(
-                    """
-                INSERT INTO youtube_transcripts (video_id, language, kind, source_url, full_text)
-                VALUES (:v,:lang,:kind,:url,:full)
-                RETURNING id
-            """
-                ),
-                {"v": str(vid), "lang": track.language, "kind": track.kind, "url": track.url, "full": yt_full_text},
-            ).first()
-            yt_tr_id = row[0]
-            for s in segs:
-                conn.execute(
-                    text(
-                        """
-                    INSERT INTO youtube_segments (youtube_transcript_id, start_ms, end_ms, text)
-                    VALUES (:t, :s, :e, :txt)
-                """
-                    ),
-                    {"t": yt_tr_id, "s": int(s.start * 1000), "e": int(s.end * 1000), "txt": s.text},
-                )
-            logger.info("Persisted %d YouTube caption segments for %s", len(segs), yid)
-            video_repo.mark_caption_completed(str(vid))
-            processed += 1
-        except YouTubeCaptionRateLimitError as e:
-            logger.warning("YouTube rate limit hit during caption download; leaving video pending and pausing batch")
-            video_repo.mark_caption_pending_with_error(str(vid), str(e))
-            raise YouTubeRateLimitError(str(e)) from e
-        except YouTubeCaptionFetchError as e:
-            logger.warning("YouTube captions fetch/parse failed for %s: %s", yid, e)
-            if terminal_failures:
-                video_repo.mark_caption_failed(str(vid), str(e))
-            else:
-                video_repo.mark_caption_pending_with_error(str(vid), str(e))
-        except Exception as e:
-            error_class = classify_error(getattr(e, "returncode", 0), getattr(e, "stderr", "") or str(e), e)
-            if error_class == ErrorClass.THROTTLE:
-                logger.warning("YouTube rate limit hit during caption ingest; leaving video pending and pausing batch")
-                video_repo.mark_caption_pending_with_error(str(vid), str(e))
-                raise YouTubeRateLimitError(str(e)) from e
-            logger.warning("YouTube captions fetch failed for %s: %s", yid, e)
-            if terminal_failures:
-                video_repo.mark_caption_failed(str(vid), str(e))
-            else:
-                video_repo.mark_caption_pending_with_error(str(vid), str(e))
-    return processed
+        raise YouTubeRateLimitError("YouTube rate-limited caption ingest; pause caption ingest before retrying.")
+    return result.completed
 
 
 def promote_staged_batches_if_ready(conn) -> int:

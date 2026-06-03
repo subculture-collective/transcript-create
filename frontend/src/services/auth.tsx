@@ -7,8 +7,6 @@ type User = {
   name?: string | null;
   avatar_url?: string | null;
   plan?: string | null;
-  searches_used_today?: number | null;
-  search_limit?: number | null;
 };
 
 type AuthState = {

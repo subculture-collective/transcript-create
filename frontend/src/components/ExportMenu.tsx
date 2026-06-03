@@ -1,21 +1,13 @@
 import { track } from '../services';
-import { canExportFormat, type ExportFormat, type Plan } from '../features/entitlements/policy';
 
 type Props = {
   videoId: string;
   youtubeId?: string;
   isPro?: boolean;
-  onRequireUpgrade: () => void;
 };
 
-export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) {
-  function guard(e: React.MouseEvent, payload: Record<string, unknown>, format: ExportFormat) {
-    const plan: Plan = isPro ? 'pro' : 'free';
-    if (!canExportFormat({ plan, format })) {
-      e.preventDefault();
-      onRequireUpgrade();
-      return;
-    }
+export default function ExportMenu({ videoId }: Props) {
+  function guard(payload: Record<string, unknown>) {
     track({ type: 'export_click', payload });
   }
   return (
@@ -28,7 +20,7 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
         <div className="flex flex-wrap gap-2">
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={(e) => guard(e, { videoId, format: 'srt', source: 'best' }, 'srt')}
+            onClick={() => guard({ videoId, format: 'srt', source: 'best' })}
             href={`/api/videos/${videoId}/transcript.srt`}
             download={`video-${videoId}.srt`}
           >
@@ -36,7 +28,7 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
           </a>
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={(e) => guard(e, { videoId, format: 'vtt', source: 'best' }, 'vtt')}
+            onClick={() => guard({ videoId, format: 'vtt', source: 'best' })}
             href={`/api/videos/${videoId}/transcript.vtt`}
             download={`video-${videoId}.vtt`}
           >
@@ -44,7 +36,7 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
           </a>
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={(e) => guard(e, { videoId, format: 'json', source: 'best' }, 'json')}
+            onClick={() => guard({ videoId, format: 'json', source: 'best' })}
             href={`/api/videos/${videoId}/transcript.json`}
             download={`video-${videoId}.json`}
           >
@@ -52,7 +44,7 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
           </a>
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={(e) => guard(e, { videoId, format: 'pdf', source: 'whisper' }, 'pdf')}
+            onClick={() => guard({ videoId, format: 'pdf', source: 'whisper' })}
             href={`/api/videos/${videoId}/transcript.pdf`}
             download={`video-${videoId}.pdf`}
           >
@@ -64,7 +56,7 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
         <div className="flex flex-wrap gap-2">
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={(e) => guard(e, { videoId, format: 'srt', source: 'youtube' }, 'srt')}
+            onClick={() => guard({ videoId, format: 'srt', source: 'youtube' })}
             href={`/api/videos/${videoId}/youtube-transcript.srt`}
             download={`video-${videoId}.youtube.srt`}
           >
@@ -72,7 +64,7 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
           </a>
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={(e) => guard(e, { videoId, format: 'vtt', source: 'youtube' }, 'vtt')}
+            onClick={() => guard({ videoId, format: 'vtt', source: 'youtube' })}
             href={`/api/videos/${videoId}/youtube-transcript.vtt`}
             download={`video-${videoId}.youtube.vtt`}
           >
@@ -80,7 +72,7 @@ export default function ExportMenu({ videoId, isPro, onRequireUpgrade }: Props) 
           </a>
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={(e) => guard(e, { videoId, format: 'json', source: 'youtube' }, 'json')}
+            onClick={() => guard({ videoId, format: 'json', source: 'youtube' })}
             href={`/api/videos/${videoId}/youtube-transcript.json`}
             download={`video-${videoId}.youtube.json`}
           >

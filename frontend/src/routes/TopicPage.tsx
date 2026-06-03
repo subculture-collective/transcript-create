@@ -90,7 +90,7 @@ export default function TopicPage() {
           <div className="text-xs uppercase tracking-[0.24em] text-subtle">Topic</div>
           <h1 className="page-title mt-2">Topic: {topic}</h1>
           <p className="mt-2 max-w-2xl text-muted">
-            Citation-backed mention map for a real search term. This page only shows moments that were actually found in the archive.
+            Citation-backed mention map for a real search term. This page only shows moments that were actually found in HasanAbi VODs.
           </p>
         </div>
 
@@ -124,7 +124,7 @@ export default function TopicPage() {
             </div>
           </div>
           <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Top episodes</div>
+            <div className="text-xs uppercase tracking-wide text-subtle">Top VODs</div>
             <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : formatNumber(mentionMap?.top_episodes_count ?? topEpisodes.length)}</div>
           </div>
           <div className="rounded-xl border border-border bg-surface-muted p-4">
@@ -132,7 +132,7 @@ export default function TopicPage() {
             <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : formatNumber(mentionMap?.total_moments)}</div>
           </div>
           <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Episodes</div>
+            <div className="text-xs uppercase tracking-wide text-subtle">VODs</div>
             <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : formatNumber(mentionMap?.total_videos)}</div>
           </div>
         </div>
@@ -158,7 +158,7 @@ export default function TopicPage() {
         </div>
 
         <div className="surface-card space-y-4">
-          <h2 className="section-title">Top episodes</h2>
+          <h2 className="section-title">Top VODs</h2>
           <div className="space-y-3">
             {topEpisodes.length > 0 ? (
               topEpisodes.map((entry) => (
@@ -166,7 +166,7 @@ export default function TopicPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <Link to={`/v/${entry.video.id}`} className="font-semibold text-ink hover:text-accent">
-                        {entry.video.title || 'Untitled episode'}
+                        {entry.video.title || 'Untitled VOD'}
                       </Link>
                       <div className="mt-1 text-sm text-muted">
                         {entry.video.channel_name || 'Unknown channel'} · {formatDate(entry.video.uploaded_at ?? null)}
@@ -195,7 +195,7 @@ export default function TopicPage() {
                 </div>
               ))
             ) : (
-              <EmptyState label="Top episodes" />
+              <EmptyState label="Top VODs" />
             )}
           </div>
         </div>
@@ -215,7 +215,7 @@ export default function TopicPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <Link to={`/v/${group.video.id}`} className="font-semibold text-ink hover:text-accent">
-                      {group.video.title || 'Untitled episode'}
+                      {group.video.title || 'Untitled VOD'}
                     </Link>
                     <div className="mt-1 text-sm text-muted">{group.video.channel_name || 'Unknown channel'}</div>
                   </div>
@@ -231,7 +231,7 @@ export default function TopicPage() {
                       <div className="prose prose-sm mt-2 max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: moment.snippet }} />
                       <div className="mt-3 flex flex-wrap gap-3 text-sm">
                         <Link className="action-link" to={mentionLink(group.video.id, moment as SearchHit)}>Open cited moment</Link>
-                        <button type="button" className="nav-link" onClick={() => copyText(quoteText(group.video.id, moment as SearchHit, group.video.title || 'Untitled episode'))}>Copy quote</button>
+                        <button type="button" className="nav-link" onClick={() => copyText(quoteText(group.video.id, moment as SearchHit, group.video.title || 'Untitled VOD'))}>Copy quote</button>
                         <button
                           type="button"
                           className="nav-link"

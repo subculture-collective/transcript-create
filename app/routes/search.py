@@ -1,18 +1,14 @@
-import time
 import uuid
-from typing import Any, Dict
+from typing import Any
 
-import requests
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import text
 from sqlalchemy import text as _text
 
 from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..common.session import is_admin as _is_admin
-from .. import crud
 from ..db import get_db
-from ..exceptions import ExternalServiceError, QuotaExceededError, ValidationError
+from ..exceptions import ExternalServiceError, ValidationError
 from ..schemas import (
     ErrorResponse,
     GroupedSearchResponse,
@@ -23,12 +19,13 @@ from ..schemas import (
     SearchResponse,
     SearchSuggestionsResponse,
 )
-from ..settings import settings
-from ..search.repositories import PostgresSearchBackend
-from ..search.service import SearchService
-from ..search.types import SearchRequest
+from ..search.analytics import get_popular_searches as _get_popular_searches
+from ..search.analytics import get_search_analytics as _get_search_analytics
+from ..search.analytics import get_search_suggestions as _get_search_suggestions
+from ..search.orchestrator import SearchOrchestrator
 
 router = APIRouter(prefix="", tags=["Search"])
+_search_orchestrator = SearchOrchestrator()
 
 
 @router.get(
@@ -46,10 +43,9 @@ router = APIRouter(prefix="", tags=["Search"])
     - `native`: Search Whisper-generated transcripts
     - `youtube`: Search YouTube's native closed captions
 
-    **Rate Limits:**
-    - Free plan: Limited daily searches (see /auth/me for your quota)
-    - Pro plan: Unlimited searches
-    - Unauthenticated: Not allowed
+    **Access:**
+    - Account plans are unrestricted
+    - Unauthenticated search is allowed
 
     **Search Backend:**
     - `postgres`: Basic full-text search with tsquery
@@ -83,24 +79,6 @@ router = APIRouter(prefix="", tags=["Search"])
             "description": "Authentication required",
             "model": ErrorResponse,
         },
-        429: {
-            "description": "Rate limit exceeded for free plan",
-            "model": ErrorResponse,
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "quota_exceeded",
-                        "message": "Daily search limit of 100 reached. Upgrade to Pro for unlimited searches.",
-                        "details": {
-                            "resource": "searches",
-                            "limit": 100,
-                            "used": 100,
-                            "plan": "free",
-                        },
-                    }
-                }
-            },
-        },
         503: {
             "description": "Search backend unavailable",
             "model": ErrorResponse,
@@ -129,8 +107,6 @@ def search(
     db=Depends(get_db),
 ):
     """Search across transcripts with full-text search and advanced filters."""
-    start_time = time.time()
-
     if not q or not q.strip():
         raise ValidationError("Search query cannot be empty", field="q")
     if source not in ("best", "native", "youtube"):
@@ -139,314 +115,24 @@ def search(
         raise ValidationError("Limit must be between 1 and 200", field="limit")
     if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
         raise ValidationError("Invalid sort_by value", field="sort_by")
-
-    user = _get_user_from_session(db, _get_session_token(request))
-
-    # Track search suggestion
-    _update_search_suggestion(db, q)
-
-    if user and not _is_admin(user):
-        plan = (user.get("plan") or "free").lower()
-        if plan == "free":
-            used = db.execute(
-                text(
-                    """
-                SELECT COUNT(*) FROM events
-                WHERE user_id=:u AND type='search_api'
-                  AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
-            """
-                ),
-                {"u": str(user["id"])},
-            ).scalar_one()
-            if used >= settings.FREE_DAILY_SEARCH_LIMIT:
-                raise QuotaExceededError(
-                    resource="searches",
-                    limit=settings.FREE_DAILY_SEARCH_LIMIT,
-                    used=used,
-                    plan=plan,
-                )
-            db.execute(
-                _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'search_api',:p)"),
-                {"u": str(user["id"]), "t": _get_session_token(request), "p": {"q": q, "source": source}},
-            )
-            db.commit()
-    requires_relational_filters = any(
-        [date_from, date_to, min_duration is not None, max_duration is not None, channel, category, language, has_speaker_labels is not None]
-    ) or sort_by != "relevance"
-    if settings.SEARCH_BACKEND == "opensearch" and not requires_relational_filters:
-        effective_source = "native" if source == "best" else source
-        index = settings.OPENSEARCH_INDEX_NATIVE if effective_source == "native" else settings.OPENSEARCH_INDEX_YOUTUBE
-        query: Dict[str, Any] = {
-            "from": offset,
-            "size": limit,
-            "query": {
-                "bool": {
-                    "should": [
-                        {"multi_match": {"query": q, "type": "phrase", "fields": ["text^3", "text.shingle^4"]}},
-                        {"multi_match": {"query": q, "fields": ["text^2", "text.ngram^0.5", "text.edge^1.5"]}},
-                        {"prefix": {"text.edge": {"value": q.lower(), "boost": 1.2}}},
-                    ],
-                    "minimum_should_match": 1,
-                }
-            },
-            "highlight": {"fields": {"text": {"number_of_fragments": 3, "fragment_size": 180}}},
-        }
-        if video_id:
-            bool_query: Dict[str, Any] = query["query"]["bool"]  # type: ignore[assignment]
-            bool_query.setdefault("filter", []).append({"term": {"video_id": str(video_id)}})
-        bool_query = query["query"]["bool"]  # type: ignore[assignment]
-        opensearch_filters = bool_query.setdefault("filter", [])
-        if category:
-            opensearch_filters.append({"term": {"category.keyword": category}})
-        if channel:
-            opensearch_filters.append({"match_phrase": {"channel_name": channel}})
-        if language:
-            opensearch_filters.append({"term": {"language.keyword": language}})
-        if date_from or date_to:
-            uploaded_range: Dict[str, Any] = {}
-            if date_from:
-                uploaded_range["gte"] = date_from
-            if date_to:
-                uploaded_range["lte"] = date_to
-            opensearch_filters.append({"range": {"uploaded_at": uploaded_range}})
-        if min_duration is not None or max_duration is not None:
-            duration_range: Dict[str, Any] = {}
-            if min_duration is not None:
-                duration_range["gte"] = min_duration
-            if max_duration is not None:
-                duration_range["lte"] = max_duration
-            opensearch_filters.append({"range": {"duration_seconds": duration_range}})
-        if has_speaker_labels is not None:
-            opensearch_filters.append({"term": {"has_speaker_labels": has_speaker_labels}})
-        if sort_by == "date_desc":
-            query["sort"] = [{"uploaded_at": {"order": "desc", "missing": "_last"}}, "_score"]
-        elif sort_by == "date_asc":
-            query["sort"] = [{"uploaded_at": {"order": "asc", "missing": "_last"}}, "_score"]
-        elif sort_by == "duration_desc":
-            query["sort"] = [{"duration_seconds": {"order": "desc", "missing": "_last"}}, "_score"]
-        elif sort_by == "duration_asc":
-            query["sort"] = [{"duration_seconds": {"order": "asc", "missing": "_last"}}, "_score"]
-        try:
-            r = requests.post(f"{settings.OPENSEARCH_URL}/{index}/_search", json=query, timeout=10)
-            r.raise_for_status()
-            data = r.json()
-        except requests.exceptions.Timeout:
-            raise ExternalServiceError("OpenSearch", "Request timeout")
-        except requests.exceptions.HTTPError as e:
-            # Provide detailed error message for HTTP errors
-            status_code = e.response.status_code if e.response is not None else "Unknown"
-            content = e.response.text if e.response is not None else ""
-            raise ExternalServiceError("OpenSearch", f"HTTP error {status_code}: {content or str(e)}")
-        except requests.exceptions.RequestException as e:
-            raise ExternalServiceError("OpenSearch", f"Connection failed: {str(e)}")
-        except Exception as e:
-            raise ExternalServiceError("OpenSearch", str(e))
-
-        hits = []
-        for h in data.get("hits", {}).get("hits", []):
-            src = h.get("_source", {})
-            hl = h.get("highlight", {}).get("text", [src.get("text", "")])
-            hits.append(
-                SearchHit(
-                    id=int(src.get("id")),
-                    video_id=uuid.UUID(src.get("video_id")),
-                    start_ms=int(src.get("start_ms", 0)),
-                    end_ms=int(src.get("end_ms", 0)),
-                    snippet=hl[0],
-                    source="whisper" if effective_source == "native" else "youtube",
-                )
-            )
-        total = (
-            data.get("hits", {}).get("total", {}).get("value")
-            if isinstance(data.get("hits", {}).get("total"), dict)
-            else None
-        )
-        query_time_ms = int((time.time() - start_time) * 1000)
-
-        # Save search history
-        if user:
-            _save_search_history(
-                db,
-                user["id"],
-                q,
-                {
-                    "source": source,
-                    "video_id": str(video_id) if video_id else None,
-                    "date_from": date_from,
-                    "date_to": date_to,
-                    "min_duration": min_duration,
-                    "max_duration": max_duration,
-                    "channel": channel,
-                    "category": category,
-                    "language": language,
-                    "has_speaker_labels": has_speaker_labels,
-                    "sort_by": sort_by,
-                },
-                total or len(hits),
-                query_time_ms,
-            )
-
-        return SearchResponse(total=total, hits=hits, query_time_ms=query_time_ms)
-    # Build filter parameters
-    filters = {}
-    if date_from:
-        filters["date_from"] = date_from
-    if date_to:
-        filters["date_to"] = date_to
-    if min_duration is not None:
-        filters["min_duration"] = min_duration
-    if max_duration is not None:
-        filters["max_duration"] = max_duration
-    if channel:
-        filters["channel"] = channel
-    if category:
-        filters["category"] = category
-    if language:
-        filters["language"] = language
-    if has_speaker_labels is not None:
-        filters["has_speaker_labels"] = has_speaker_labels
-
-    if source == "best":
-        rows = crud.search_best_segments_advanced(
-            db,
-            q=q,
-            video_id=str(video_id) if video_id else None,
-            limit=limit,
-            offset=offset,
-            sort_by=sort_by,
-            filters=filters,
-        )
-        hits = [
-            SearchHit(
-                id=r["id"],
-                video_id=r["video_id"],
-                start_ms=r["start_ms"],
-                end_ms=r["end_ms"],
-                snippet=r["snippet"] or "",
-                source=r["source"],
-            )
-            for r in rows
-        ]
-    elif source == "native":
-        service = SearchService(backend=PostgresSearchBackend(db))
-        native_results = service.search(
-            SearchRequest(
-                q=q,
-                source=source,
-                video_id=str(video_id) if video_id else None,
-                limit=limit,
-                offset=offset,
-                sort_by=sort_by,
-                filters=filters,
-            )
-        )
-        hits = [
-            SearchHit(
-                id=r.id,
-                video_id=uuid.UUID(r.video_id),
-                start_ms=r.start_ms,
-                end_ms=r.end_ms,
-                snippet=r.snippet,
-                source="whisper",
-            )
-            for r in native_results
-        ]
-    else:
-        rows = crud.search_youtube_segments_advanced(
-            db,
-            q=q,
-            video_id=str(video_id) if video_id else None,
-            limit=limit,
-            offset=offset,
-            sort_by=sort_by,
-            filters=filters,
-        )
-        hits = [
-            SearchHit(
-                id=r["id"],
-                video_id=r["video_id"],
-                start_ms=r["start_ms"],
-                end_ms=r["end_ms"],
-                snippet=r["snippet"] or "",
-                source="youtube",
-            )
-            for r in rows
-        ]
-
-    query_time_ms = int((time.time() - start_time) * 1000)
-
-    # Save search history
-    if user:
-        _save_search_history(
-            db,
-            user["id"],
-            q,
-            {
-                "source": source,
-                "video_id": str(video_id) if video_id else None,
-                **filters,
-                "sort_by": sort_by,
-            },
-            len(hits),
-            query_time_ms,
-        )
-
-    return SearchResponse(hits=hits, query_time_ms=query_time_ms)
-
-
-def _update_search_suggestion(db, term: str):
-    """Update search suggestions table with the search term."""
-    try:
-        term_lower = term.strip().lower()
-        if not term_lower or len(term_lower) < 2:
-            return
-
-        # Upsert: increment frequency if exists, insert if not
-        db.execute(
-            _text(
-                """
-                INSERT INTO search_suggestions (term, frequency, last_used)
-                VALUES (:term, 1, now())
-                ON CONFLICT ((LOWER(term)))
-                DO UPDATE SET
-                    frequency = search_suggestions.frequency + 1,
-                    last_used = now()
-            """
-            ),
-            {"term": term_lower},
-        )
-        db.commit()
-    except Exception:
-        # Don't fail the search if suggestion tracking fails
-        db.rollback()
-
-
-def _save_search_history(db, user_id: str, query: str, filters: dict, result_count: int, query_time_ms: int):
-    """Save search to user history."""
-    try:
-        import json
-
-        db.execute(
-            _text(
-                """
-                INSERT INTO user_searches (user_id, query, filters, result_count, query_time_ms)
-                VALUES (:user_id, :query, :filters, :result_count, :query_time_ms)
-            """
-            ),
-            {
-                "user_id": user_id,
-                "query": query,
-                "filters": json.dumps(filters),
-                "result_count": result_count,
-                "query_time_ms": query_time_ms,
-            },
-        )
-        db.commit()
-    except Exception:
-        # Don't fail the search if history saving fails
-        db.rollback()
-
-
+    return _search_orchestrator.search(
+        db,
+        request,
+        q=q,
+        source=source,
+        video_id=video_id,
+        limit=limit,
+        offset=offset,
+        date_from=date_from,
+        date_to=date_to,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        channel=channel,
+        language=language,
+        has_speaker_labels=has_speaker_labels,
+        category=category,
+        sort_by=sort_by,
+    )
 @router.get(
     "/search/suggestions",
     response_model=SearchSuggestionsResponse,
@@ -465,30 +151,7 @@ def get_search_suggestions(
     db=Depends(get_db),
 ):
     """Get search suggestions for autocomplete."""
-    term_lower = q.strip().lower()
-
-    rows = (
-        db.execute(
-            _text(
-                """
-            SELECT term, frequency
-            FROM search_suggestions
-            WHERE LOWER(term) LIKE :pattern
-            ORDER BY frequency DESC, last_used DESC
-            LIMIT :limit
-        """
-            ),
-            {"pattern": f"{term_lower}%", "limit": limit},
-        )
-        .mappings()
-        .all()
-    )
-
-    from ..schemas import SearchSuggestion
-
-    suggestions = [SearchSuggestion(term=r["term"], frequency=r["frequency"]) for r in rows]
-
-    return SearchSuggestionsResponse(suggestions=suggestions)
+    return _get_search_suggestions(db, q, limit)
 
 
 @router.get(
@@ -556,27 +219,7 @@ def get_popular_searches(
     db=Depends(get_db),
 ):
     """Get popular search terms."""
-    rows = (
-        db.execute(
-            _text(
-                """
-            SELECT term, frequency
-            FROM search_suggestions
-            ORDER BY frequency DESC, last_used DESC
-            LIMIT :limit
-        """
-            ),
-            {"limit": limit},
-        )
-        .mappings()
-        .all()
-    )
-
-    from ..schemas import SearchSuggestion
-
-    suggestions = [SearchSuggestion(term=r["term"], frequency=r["frequency"]) for r in rows]
-
-    return SearchSuggestionsResponse(suggestions=suggestions)
+    return _get_popular_searches(db, limit)
 
 
 @router.get(
@@ -601,105 +244,7 @@ def get_search_analytics(
     db=Depends(get_db),
 ):
     """Get search analytics (admin only)."""
-    user = _get_user_from_session(db, _get_session_token(request))
-    if not _is_admin(user):
-        from ..exceptions import AuthorizationError
-
-        raise AuthorizationError("Admin access required")
-
-    # Popular terms
-    popular_terms = (
-        db.execute(
-            _text(
-                """
-            SELECT term, frequency, last_used
-            FROM search_suggestions
-            ORDER BY frequency DESC
-            LIMIT 20
-        """
-            )
-        )
-        .mappings()
-        .all()
-    )
-
-    # Zero-result searches
-    zero_results = (
-        db.execute(
-            _text(
-                """
-            SELECT query, COUNT(*) as count
-            FROM user_searches
-            WHERE result_count = 0
-              AND created_at >= now() - INTERVAL ':days days'
-            GROUP BY query
-            ORDER BY count DESC
-            LIMIT 20
-        """
-            ),
-            {"days": days},
-        )
-        .mappings()
-        .all()
-    )
-
-    # Search volume over time
-    search_volume = (
-        db.execute(
-            _text(
-                """
-            SELECT DATE(created_at) as date, COUNT(*) as count
-            FROM user_searches
-            WHERE created_at >= now() - INTERVAL ':days days'
-            GROUP BY DATE(created_at)
-            ORDER BY date DESC
-        """
-            ),
-            {"days": days},
-        )
-        .mappings()
-        .all()
-    )
-
-    # Average results per query
-    # Note: AVG() returns NULL when there are no rows, which is preserved as None
-    # This distinguishes between "no data" (None) and "average of 0 results" (0.0)
-    avg_results = db.execute(
-        _text(
-            """
-            SELECT AVG(result_count) as avg_results
-            -- Note: ::float cast removed; cast to float is now done in Python (see line 594) to preserve NULL as None
-            FROM user_searches
-            WHERE created_at >= now() - INTERVAL ':days days'
-              AND result_count IS NOT NULL
-        """
-        ),
-        {"days": days},
-    ).scalar_one_or_none()
-    # Convert to float only if not None
-    if avg_results is not None:
-        avg_results = float(avg_results)
-
-    # Total searches
-    total = db.execute(
-        _text(
-            """
-            SELECT COUNT(*) FROM user_searches
-            WHERE created_at >= now() - INTERVAL ':days days'
-        """
-        ),
-        {"days": days},
-    ).scalar_one()
-
-    return SearchAnalytics(
-        popular_terms=[
-            {"term": r["term"], "frequency": r["frequency"], "last_used": str(r["last_used"])} for r in popular_terms
-        ],
-        zero_result_searches=[{"query": r["query"], "count": r["count"]} for r in zero_results],
-        search_volume=[{"date": str(r["date"]), "count": r["count"]} for r in search_volume],
-        avg_results_per_query=avg_results,
-        total_searches=total,
-    )
+    return _get_search_analytics(request, db, days)
 
 
 @router.get(
@@ -747,72 +292,22 @@ def export_search_results(
     if format not in ("csv", "json"):
         raise ValidationError("Invalid format. Must be 'csv' or 'json'", field="format")
 
-    _get_user_from_session(db, _get_session_token(request))
-
-    # Build filter parameters
-    filters = {}
-    if date_from:
-        filters["date_from"] = date_from
-    if date_to:
-        filters["date_to"] = date_to
-    if min_duration is not None:
-        filters["min_duration"] = min_duration
-    if max_duration is not None:
-        filters["max_duration"] = max_duration
-    if channel:
-        filters["channel"] = channel
-    if language:
-        filters["language"] = language
-    if has_speaker_labels is not None:
-        filters["has_speaker_labels"] = has_speaker_labels
-
-    from .. import crud
-
-    if source == "best":
-        rows = crud.search_best_segments_advanced(
-            db,
-            q=q,
-            video_id=str(video_id) if video_id else None,
-            limit=limit,
-            offset=0,
-            sort_by=sort_by,
-            filters=filters,
-        )
-    elif source == "native":
-        rows = crud.search_segments_advanced(
-            db,
-            q=q,
-            video_id=str(video_id) if video_id else None,
-            limit=limit,
-            offset=0,
-            sort_by=sort_by,
-            filters=filters,
-        )
-    else:
-        rows = crud.search_youtube_segments_advanced(
-            db,
-            q=q,
-            video_id=str(video_id) if video_id else None,
-            limit=limit,
-            offset=0,
-            sort_by=sort_by,
-            filters=filters,
-        )
-
-    # Get video details for each result
-    video_details = {}
-    for r in rows:
-        vid = str(r["video_id"])
-        if vid not in video_details:
-            video_row = (
-                db.execute(
-                    _text("SELECT youtube_id, title, duration_seconds FROM videos WHERE id = :vid"), {"vid": vid}
-                )
-                .mappings()
-                .first()
-            )
-            if video_row:
-                video_details[vid] = video_row
+    rows, video_details = _search_orchestrator.prepare_export_rows(
+        db,
+        q=q,
+        format=format,
+        source=source,
+        video_id=video_id,
+        limit=limit,
+        date_from=date_from,
+        date_to=date_to,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        channel=channel,
+        language=language,
+        has_speaker_labels=has_speaker_labels,
+        sort_by=sort_by,
+    )
 
     if format == "json":
         from fastapi.responses import JSONResponse
@@ -862,70 +357,6 @@ def export_search_results(
         return PlainTextResponse(content=header + body, media_type="text/csv")
 
 
-def _build_search_filters(
-    date_from: str | None = None,
-    date_to: str | None = None,
-    min_duration: int | None = None,
-    max_duration: int | None = None,
-    channel: str | None = None,
-    language: str | None = None,
-    has_speaker_labels: bool | None = None,
-    category: str | None = None,
-):
-    filters: Dict[str, Any] = {}
-    if date_from:
-        filters["date_from"] = date_from
-    if date_to:
-        filters["date_to"] = date_to
-    if min_duration is not None:
-        filters["min_duration"] = min_duration
-    if max_duration is not None:
-        filters["max_duration"] = max_duration
-    if channel:
-        filters["channel"] = channel
-    if language:
-        filters["language"] = language
-    if has_speaker_labels is not None:
-        filters["has_speaker_labels"] = has_speaker_labels
-    if category:
-        filters["category"] = category
-    return filters
-
-
-def _check_and_record_search_request(request: Request, db, q: str, source: str):
-    """Apply the same quota and event accounting used by the flat search endpoint."""
-    user = _get_user_from_session(db, _get_session_token(request))
-    _update_search_suggestion(db, q)
-
-    if user and not _is_admin(user):
-        plan = (user.get("plan") or "free").lower()
-        if plan == "free":
-            used = db.execute(
-                text(
-                    """
-                    SELECT COUNT(*) FROM events
-                    WHERE user_id=:u AND type='search_api'
-                      AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
-                    """
-                ),
-                {"u": str(user["id"])},
-            ).scalar_one()
-            if used >= settings.FREE_DAILY_SEARCH_LIMIT:
-                raise QuotaExceededError(
-                    resource="searches",
-                    limit=settings.FREE_DAILY_SEARCH_LIMIT,
-                    used=used,
-                    plan=plan,
-                )
-            db.execute(
-                _text("INSERT INTO events (user_id, session_token, type, payload) VALUES (:u,:t,'search_api',:p)"),
-                {"u": str(user["id"]), "t": _get_session_token(request), "p": {"q": q, "source": source}},
-            )
-            db.commit()
-
-    return user
-
-
 @router.get(
     "/search/grouped",
     response_model=GroupedSearchResponse,
@@ -961,28 +392,24 @@ def search_grouped(
     if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
         raise ValidationError("Invalid sort_by value", field="sort_by")
 
-    filters = _build_search_filters(date_from, date_to, min_duration, max_duration, channel, language, has_speaker_labels, category)
-    user = _check_and_record_search_request(request, db, q, source)
-    result = crud.get_grouped_search(
+    return _search_orchestrator.grouped_search(
         db,
+        request,
         q=q,
         source=source,
-        video_id=str(video_id) if video_id else None,
+        video_id=video_id,
         limit=limit,
         offset=offset,
+        date_from=date_from,
+        date_to=date_to,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        channel=channel,
+        language=language,
+        has_speaker_labels=has_speaker_labels,
+        category=category,
         sort_by=sort_by,
-        filters=filters,
     )
-    if user:
-        _save_search_history(
-            db,
-            user["id"],
-            q,
-            {"source": source, "video_id": str(video_id) if video_id else None, **filters, "sort_by": sort_by},
-            result.total_moments,
-            result.query_time_ms or 0,
-        )
-    return result
 
 
 @router.get(
@@ -1021,26 +448,22 @@ def search_mention_map(
     if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
         raise ValidationError("Invalid sort_by value", field="sort_by")
 
-    filters = _build_search_filters(date_from, date_to, min_duration, max_duration, channel, language, has_speaker_labels, category)
-    user = _check_and_record_search_request(request, db, q, source)
-    result = crud.get_mention_map(
+    return _search_orchestrator.mention_map(
         db,
+        request,
         q=q,
         source=source,
-        video_id=str(video_id) if video_id else None,
+        video_id=video_id,
         limit=limit,
         offset=offset,
+        date_from=date_from,
+        date_to=date_to,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        channel=channel,
+        language=language,
+        has_speaker_labels=has_speaker_labels,
+        category=category,
         sort_by=sort_by,
-        filters=filters,
         top_limit=top_limit,
     )
-    if user:
-        _save_search_history(
-            db,
-            user["id"],
-            q,
-            {"source": source, "video_id": str(video_id) if video_id else None, **filters, "sort_by": sort_by},
-            result.total_moments,
-            result.query_time_ms or 0,
-        )
-    return result

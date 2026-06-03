@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide provides step-by-step instructions for setting up reliable YouTube video ingestion in Transcript Create. YouTube requires specific configurations including JavaScript runtimes, cookies, and PO tokens to successfully download videos.
+This guide provides step-by-step instructions for setting up reliable YouTube video ingestion in HasanAra. The HasanAra archive focuses on HasanAbi VOD channels (`@HasanAbiVODs3`, `@HasanAbiVODsBackup`, and `@HasanAbiVODs`). YouTube requires specific configurations including JavaScript runtimes, cookies, and PO tokens to successfully download videos.
 
 ## Prerequisites
 

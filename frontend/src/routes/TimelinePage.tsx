@@ -40,7 +40,7 @@ export default function TimelinePage() {
         <div className="text-xs uppercase tracking-[0.24em] text-subtle">Timeline</div>
         <h1 className="page-title">Archive chronology</h1>
         <p className="max-w-2xl text-muted">
-          Browse episodes by month and jump into the search results for any span of time.
+          Browse HasanAbi VODs by month and jump into the search results for any span of time.
         </p>
       </section>
 
@@ -56,12 +56,12 @@ export default function TimelinePage() {
             <section key={bucket.period} className="surface-card space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="section-title">{bucket.label}</h2>
-                <div className="text-sm text-muted">{formatNumber(bucket.video_count)} episodes · {formatDuration(bucket.total_duration_seconds)}</div>
+                <div className="text-sm text-muted">{formatNumber(bucket.video_count)} VODs · {formatDuration(bucket.total_duration_seconds)}</div>
               </div>
 
               <article className="rounded-2xl border border-border bg-surface-muted p-4">
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                  <p className="text-sm text-muted">{bucket.video_count} episodes in this archive period.</p>
+                  <p className="text-sm text-muted">{bucket.video_count} VODs in this archive period.</p>
                   {range && (
                         <Link
                           to={`/episodes?date_from=${range.date_from}&date_to=${range.date_to}`}
@@ -79,7 +79,7 @@ export default function TimelinePage() {
                             to={`/v/${video.id}`}
                             className="rounded-xl border border-border bg-surface p-4 transition-colors hover:border-accent hover:bg-surface"
                           >
-                            <div className="line-clamp-2 font-medium text-ink">{video.title || 'Untitled episode'}</div>
+                            <div className="line-clamp-2 font-medium text-ink">{video.title || 'Untitled VOD'}</div>
                             <div className="mt-2 text-sm text-muted">{video.channel_name || 'Unknown channel'}</div>
                             <div className="mt-3 flex flex-wrap gap-3 text-xs text-subtle">
                               <span>{formatDate(video.uploaded_at ?? null)}</span>

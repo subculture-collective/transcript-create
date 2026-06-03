@@ -3,10 +3,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from io import BytesIO
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -17,8 +15,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from sqlalchemy import text
 
 from .. import crud
-from ..billing.policy import can_export_format
-from ..common.session import get_session_token, get_user_from_session, is_admin
+from ..common.session import get_session_token, get_user_from_session
 from ..db import get_db
 from ..exceptions import NotFoundError, TranscriptNotReadyError, VideoNotFoundError
 from ..settings import settings
@@ -71,63 +68,15 @@ def _block_to_payload(block):
     return payload
 
 
-def _export_allowed_or_402(
+def _require_export_auth(
     db,
     request: Request,
     user,
-    redirect_to: Optional[str] = None,
     require_auth: bool = False,
-    export_format: Optional[str] = None,
 ):
-    """
-    Check if export is allowed based on user plan and daily limits.
-
-    Args:
-        require_auth: If True, unauthenticated users get 401 error.
-                     If False (default), unauthenticated users can export.
-
-    Note: YouTube caption exports use require_auth=True because they rely on
-    YouTube's API which requires attribution. Native Whisper transcripts use
-    require_auth=False to allow anonymous access, with rate limiting enforced
-    via daily export quotas for authenticated free users.
-    """
-    # Paid export formats require entitlement before quota/auth checks.
-    effective_plan = "admin" if user and is_admin(user) else (user.get("plan") if user else None)
-    if export_format and not can_export_format(effective_plan, export_format):
-        accept = (request.headers.get("accept") or "").lower()
-        if "text/html" in accept and redirect_to:
-            return RedirectResponse(url=redirect_to, status_code=307)
-        return JSONResponse(
-            {"error": "upgrade_required", "message": "Upgrade to Pro to export this format."},
-            status_code=402,
-        )
-    if user and (is_admin(user) or (user.get("plan") or "free").lower() == settings.PRO_PLAN_NAME.lower()):
-        return None
-    # For free users, enforce soft daily export limit
-    uid = str(user["id"]) if user else None
-    if uid:
-        used = db.execute(
-            text(
-                """
-            SELECT COUNT(*) FROM events
-            WHERE user_id=:u AND type='export'
-              AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
-        """
-            ),
-            {"u": uid},
-        ).scalar_one()
-        if used >= settings.FREE_DAILY_EXPORT_LIMIT:
-            accept = (request.headers.get("accept") or "").lower()
-            if "text/html" in accept and redirect_to:
-                return RedirectResponse(url=redirect_to, status_code=307)
-            return JSONResponse(
-                {"error": "upgrade_required", "message": "Daily export limit reached. Upgrade to Pro."},
-                status_code=402,
-            )
-    else:
-        # If auth is required for this export, enforce login
-        if require_auth:
-            return JSONResponse({"error": "auth_required", "message": "Login required to export."}, status_code=401)
+    """Allow export access; only enforce login where explicitly required."""
+    if require_auth and not user:
+        return JSONResponse({"error": "auth_required", "message": "Login required to export."}, status_code=401)
     return None
 
 
@@ -183,7 +132,6 @@ def _load_best_export_source(db, video_id: uuid.UUID):
     Download YouTube's native closed captions in SubRip (SRT) subtitle format.
 
     **Authentication Required:** Yes
-    **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
         200: {
@@ -191,7 +139,6 @@ def _load_best_export_source(db, video_id: uuid.UUID):
             "content": {"text/plain": {"example": "1\n00:00:01,000 --> 00:00:03,500\nHello world\n\n"}},
         },
         401: {"description": "Authentication required"},
-        402: {"description": "Daily export limit reached (free plan)"},
         503: {"description": "YouTube transcript not available"},
     },
 )
@@ -201,13 +148,11 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
     if not yt:
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
+    gate = _require_export_auth(
         db,
         request,
         user,
-        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
         require_auth=True,
-        export_format="srt",
     )
     if gate is not None:
         return gate
@@ -232,12 +177,10 @@ def get_youtube_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends
     Download YouTube's native closed captions in WebVTT subtitle format.
 
     **Authentication Required:** Yes
-    **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
         200: {"description": "VTT file download"},
         401: {"description": "Authentication required"},
-        402: {"description": "Daily export limit reached (free plan)"},
         503: {"description": "YouTube transcript not available"},
     },
 )
@@ -247,13 +190,11 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
     if not yt:
         raise TranscriptNotReadyError(str(video_id), "no_youtube_transcript")
     user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
+    gate = _require_export_auth(
         db,
         request,
         user,
-        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
         require_auth=True,
-        export_format="vtt",
     )
     if gate is not None:
         return gate
@@ -278,12 +219,10 @@ def get_youtube_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends
     Download Whisper-generated transcript in SubRip (SRT) subtitle format.
 
     **Authentication Required:** Yes
-    **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
         200: {"description": "SRT file download"},
         401: {"description": "Authentication required"},
-        402: {"description": "Daily export limit reached (free plan)"},
         503: {"description": "Transcript not ready"},
     },
 )
@@ -291,13 +230,11 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
     """Export best available transcript as SRT subtitle file."""
     source, _v, segs, blocks = _load_best_export_source(db, video_id)
     user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
+    gate = _require_export_auth(
         db,
         request,
         user,
-        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
         require_auth=source == "youtube",
-        export_format="srt",
     )
     if gate is not None:
         return gate
@@ -325,12 +262,10 @@ def get_native_transcript_srt(video_id: uuid.UUID, request: Request, db=Depends(
     Download Whisper-generated transcript in WebVTT subtitle format.
 
     **Authentication Required:** Yes
-    **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
         200: {"description": "VTT file download"},
         401: {"description": "Authentication required"},
-        402: {"description": "Daily export limit reached (free plan)"},
         503: {"description": "Transcript not ready"},
     },
 )
@@ -338,13 +273,11 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
     """Export best available transcript as WebVTT subtitle file."""
     source, _v, segs, blocks = _load_best_export_source(db, video_id)
     user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
+    gate = _require_export_auth(
         db,
         request,
         user,
-        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
         require_auth=source == "youtube",
-        export_format="vtt",
     )
     if gate is not None:
         return gate
@@ -372,7 +305,6 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
     Download Whisper-generated transcript in JSON format with full segment data.
 
     **Authentication Required:** Yes
-    **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
         200: {
@@ -391,7 +323,6 @@ def get_native_transcript_vtt(video_id: uuid.UUID, request: Request, db=Depends(
             },
         },
         401: {"description": "Authentication required"},
-        402: {"description": "Daily export limit reached (free plan)"},
         503: {"description": "Transcript not ready"},
     },
 )
@@ -399,13 +330,11 @@ def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends
     """Export best available transcript as JSON."""
     source, _v, segs, blocks = _load_best_export_source(db, video_id)
     user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
+    gate = _require_export_auth(
         db,
         request,
         user,
-        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
         require_auth=source == "youtube",
-        export_format="json",
     )
     if gate is not None:
         return gate
@@ -450,25 +379,21 @@ def get_native_transcript_json(video_id: uuid.UUID, request: Request, db=Depends
     Download YouTube's native closed captions in JSON format.
 
     **Authentication Required:** Yes
-    **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
         200: {"description": "JSON file download"},
         401: {"description": "Authentication required"},
-        402: {"description": "Daily export limit reached (free plan)"},
         503: {"description": "YouTube transcript not available"},
     },
 )
 def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depends(get_db)):
     """Export YouTube captions as JSON."""
     user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
+    gate = _require_export_auth(
         db,
         request,
         user,
-        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
         require_auth=True,
-        export_format="json",
     )
     if gate is not None:
         return gate
@@ -503,12 +428,10 @@ def get_youtube_transcript_json(video_id: uuid.UUID, request: Request, db=Depend
     - Formatted for easy reading and printing
 
     **Authentication Required:** Yes
-    **Rate Limits:** Free plan limited to daily export quota
     """,
     responses={
         200: {"description": "PDF file download", "content": {"application/pdf": {}}},
         401: {"description": "Authentication required"},
-        402: {"description": "Daily export limit reached (free plan)"},
         503: {"description": "Transcript not ready"},
     },
 )
@@ -531,12 +454,10 @@ def get_native_transcript_pdf(video_id: uuid.UUID, request: Request, db=Depends(
         )
 
     user = get_user_from_session(db, get_session_token(request))
-    gate = _export_allowed_or_402(
+    gate = _require_export_auth(
         db,
         request,
         user,
-        redirect_to=f"{settings.FRONTEND_ORIGIN}/upgrade?redirect=/v/{video_id}",
-        export_format="pdf",
     )
     if gate is not None:
         return gate

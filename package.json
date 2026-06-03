@@ -1,7 +1,7 @@
 {
   "name": "transcript-create",
   "version": "0.1.0",
-  "description": "Create searchable, exportable transcripts from YouTube videos or channels",
+  "description": "Search HasanAbi Twitch broadcast VOD transcripts pulled from YouTube",
   "private": true,
   "scripts": {
     "commit": "cz",

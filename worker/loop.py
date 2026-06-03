@@ -10,7 +10,8 @@ from app.logging_config import configure_logging, get_logger, video_id_ctx
 from app.settings import settings
 from app.ytdlp_validation import validate_js_runtime_or_exit
 from worker.metrics import setup_worker_info, try_collect_gpu_metrics
-from worker.pipeline import capture_youtube_captions_for_unprocessed, expand_channel_if_needed
+from worker.caption_ingest import ingest_available_captions
+from worker.pipeline import expand_channel_if_needed
 from worker.video_pipeline import ProcessVideoCommand, default_video_processing_pipeline
 from worker.state_model import (
     IN_PROGRESS_VIDEO_STATES,
@@ -130,10 +131,11 @@ def heartbeat_updater():
 def pending_video_claim_sql() -> str:
     """SQL for claiming native transcription work.
 
-    Staged batches are released only after each expected staged job has expanded
-    at least one video and all caption ingest work in the batch is terminal.
+    Staged batches run in rolling captions-first mode: each individual video is
+    eligible for native Whisper as soon as its caption ingest state is terminal.
     Caption failures are terminal by design here: after the staged caption pass
-    has exhausted a video, native Whisper may proceed as the fallback.
+    has exhausted a video, native Whisper may proceed as the fallback while the
+    rest of the batch continues caption ingestion.
     """
     return f"""
                 SELECT v.id
@@ -142,30 +144,7 @@ def pending_video_claim_sql() -> str:
                 WHERE v.state = :pending_state
                   AND (
                     j.meta->>'staged' IS DISTINCT FROM 'true'
-                    OR (
-                      v.caption_ingest_state IN ({TERMINAL_CAPTION_INGEST_STATES_SQL})
-                      AND (
-                        SELECT COUNT(DISTINCT j2.id)
-                        FROM jobs j2
-                        WHERE j2.meta->>'staged' = 'true'
-                          AND j2.state <> 'pending'
-                          AND EXISTS (SELECT 1 FROM videos v3 WHERE v3.job_id = j2.id)
-                          AND COALESCE(j2.meta->>'batch_id', j2.id::text) = COALESCE(j.meta->>'batch_id', j.id::text)
-                      ) >= (
-                        SELECT COALESCE(MAX((j3.meta->>'batch_expected_jobs')::int), 1)
-                        FROM jobs j3
-                        WHERE j3.meta->>'staged' = 'true'
-                          AND COALESCE(j3.meta->>'batch_id', j3.id::text) = COALESCE(j.meta->>'batch_id', j.id::text)
-                      )
-                      AND NOT EXISTS (
-                        SELECT 1
-                        FROM videos v2
-                        JOIN jobs j2 ON j2.id = v2.job_id
-                        WHERE j2.meta->>'staged' = 'true'
-                          AND COALESCE(j2.meta->>'batch_id', j2.id::text) = COALESCE(j.meta->>'batch_id', j.id::text)
-                          AND v2.caption_ingest_state IN ({OPEN_CAPTION_INGEST_STATES_SQL})
-                      )
-                    )
+                    OR v.caption_ingest_state IN ({TERMINAL_CAPTION_INGEST_STATES_SQL})
                   )
                 ORDER BY
                   CASE
@@ -245,33 +224,27 @@ def run():
                 global youtube_caption_cooldown_until
                 now = time.time()
                 if now >= youtube_caption_cooldown_until:
-                    capture_youtube_captions_for_unprocessed(
-                        conn,
-                        limit=10,
-                        staged_only=True,
-                        active_only=True,
-                        terminal_failures=True,
-                    )
-                    from worker.pipeline import promote_staged_batches_if_ready
+                    ingest_result = ingest_available_captions(conn, limit=10)
+                    if ingest_result.rate_limited:
+                        youtube_caption_cooldown_until = time.time() + (ingest_result.cooldown_seconds or 0)
+                        logger.warning(
+                            "YouTube caption ingest rate-limited; entering cooldown",
+                            extra={
+                                "cooldown_seconds": ingest_result.cooldown_seconds,
+                                "cooldown_until": youtube_caption_cooldown_until,
+                            },
+                        )
+                    else:
+                        from worker.pipeline import promote_staged_batches_if_ready
 
-                    promote_staged_batches_if_ready(conn)
+                        promote_staged_batches_if_ready(conn)
                 else:
                     logger.info(
                         "Skipping YouTube caption ingest during cooldown",
                         extra={"cooldown_remaining_seconds": round(youtube_caption_cooldown_until - now)},
                     )
             except Exception as e:
-                from worker.youtube_resilience import ErrorClass, classify_error
-
-                error_class = classify_error(getattr(e, "returncode", 0), getattr(e, "stderr", "") or str(e), e)
-                if error_class == ErrorClass.THROTTLE:
-                    youtube_caption_cooldown_until = time.time() + settings.YTDLP_RATE_LIMIT_COOLDOWN_SECONDS
-                    logger.warning(
-                        "YouTube caption ingest rate-limited; entering cooldown",
-                        extra={"cooldown_seconds": settings.YTDLP_RATE_LIMIT_COOLDOWN_SECONDS, "error": str(e)[:200]},
-                    )
-                else:
-                    logger.warning("YouTube captions capture step failed", extra={"error": str(e)})
+                logger.warning("YouTube captions capture step failed", extra={"error": str(e)})
 
             # Rescue stuck videos: if a video has been in a non-terminal state for too long, mark it pending again
             try:

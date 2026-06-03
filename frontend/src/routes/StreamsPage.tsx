@@ -1,94 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services';
-import type { PageInfo, StreamLibraryFilters, VideoInfo } from '../types/api';
-
-const DEFAULT_LIMIT = 24;
-const DATE_FIELD_OPTIONS = [
-  { value: 'uploaded_at', label: 'Uploaded date' },
-  { value: 'created_at', label: 'Created date' },
-  { value: 'updated_at', label: 'Updated date' },
-] as const;
-
-type DateField = NonNullable<StreamLibraryFilters['date_field']>;
-
-type FilterState = {
-  q: string;
-  completedOnly: boolean;
-  dateField: DateField;
-  dateFrom: string;
-  dateTo: string;
-  category: string;
-};
-
-function formatDuration(seconds?: number | null) {
-  if (seconds == null || Number.isNaN(seconds)) return '—';
-  const total = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const remainingSeconds = total % 60;
-  return hours > 0
-    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
-    : `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
-}
-
-function titleCase(value: string) {
-  return value
-    .split(/[_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function parseFilters(params: URLSearchParams): FilterState {
-  const dateFieldParam = params.get('date_field');
-  const dateField = DATE_FIELD_OPTIONS.some((option) => option.value === dateFieldParam)
-    ? (dateFieldParam as DateField)
-    : 'uploaded_at';
-
-  return {
-    q: params.get('q') ?? '',
-    completedOnly: params.get('completed_only') === 'true',
-    dateField,
-    dateFrom: params.get('date_from') ?? '',
-    dateTo: params.get('date_to') ?? '',
-    category: params.get('category') ?? '',
-  };
-}
-
-function statusBadge(video: VideoInfo) {
-  const states = [video.state, video.caption_ingest_state, video.diarization_state]
-    .filter(Boolean)
-    .map((value) => String(value).toLowerCase());
-
-  if (states.some((value) => /error|failed|cancel/.test(value))) {
-    return { label: 'Needs attention', className: 'rounded-full bg-danger-soft px-2 py-1 font-medium text-danger' };
-  }
-
-  if (states.some((value) => /ready|complete|done|finished/.test(value))) {
-    return { label: 'Ready', className: 'badge-success' };
-  }
-
-  if (states.some((value) => /process|queue|pending|transcrib|ingest|sync/.test(value))) {
-    return { label: 'Processing', className: 'badge-warning' };
-  }
-
-  return {
-    label: titleCase(video.state ?? 'Unknown'),
-    className: 'rounded-full bg-surface-muted px-2 py-1 font-medium text-muted',
-  };
-}
-
-function dateFieldLabel(field: DateField) {
-  return DATE_FIELD_OPTIONS.find((option) => option.value === field)?.label ?? titleCase(field);
-}
+import type { PageInfo, VideoInfo } from '../types/api';
+import { DEFAULT_LIMIT, DATE_FIELD_OPTIONS, dateFieldLabel, formatDate, formatDuration, parseFilters, statusBadge, titleCase, type DateField, type FilterState } from '../features/streams/library';
 
 export default function StreamsPage() {
   const [params, setParams] = useSearchParams();
@@ -136,7 +50,7 @@ export default function StreamsPage() {
       })
       .catch((err: unknown) => {
         console.error('Failed to load stream library', err);
-        setError('Failed to load streams.');
+        setError('Failed to load VODs.');
         setItems([]);
         setPageInfo(null);
       })
@@ -197,12 +111,12 @@ export default function StreamsPage() {
           <div className="max-w-3xl space-y-3">
             <div>
               <p className="mb-1 text-sm font-medium uppercase tracking-[0.24em] text-subtle">
-                Episodes library
+                VOD library
               </p>
-              <h1 className="page-title">Browse the archive</h1>
+              <h1 className="page-title">Browse HasanAbi VODs</h1>
             </div>
             <p className="max-w-2xl text-muted">
-              Search the full archive, narrow by date range, and scan transcript readiness at a glance.
+              Search the HasanAbi archive, narrow by date range, and scan transcript readiness at a glance.
             </p>
           </div>
 
@@ -231,14 +145,14 @@ export default function StreamsPage() {
         <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(5,minmax(0,1fr))_auto]">
           <div className="lg:col-span-1">
             <label className="sr-only" htmlFor="stream-q">
-              Search streams
+              Search VODs
             </label>
             <input
               id="stream-q"
               type="search"
               placeholder="Search titles, channels, or notes…"
               className="form-control"
-              aria-label="Search streams"
+              aria-label="Search VODs"
               value={q}
               onChange={(event) => setQ(event.target.value)}
             />
@@ -264,14 +178,14 @@ export default function StreamsPage() {
 
           <div>
             <label className="sr-only" htmlFor="stream-category">
-              Video type
+              VOD type
             </label>
             <input
               id="stream-category"
               type="text"
               className="form-control"
-              aria-label="Video type"
-              placeholder="Video type"
+              aria-label="VOD type"
+              placeholder="VOD type"
               value={category}
               onChange={(event) => setCategory(event.target.value)}
             />
@@ -328,7 +242,7 @@ export default function StreamsPage() {
 
       <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
         <div>
-          {loading ? 'Loading streams…' : error ? error : `${startItem}-${endItem} of ${totalCount} streams`}
+          {loading ? 'Loading VODs…' : error ? error : `${startItem}-${endItem} of ${totalCount} VODs`}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -438,7 +352,7 @@ export default function StreamsPage() {
                       <span>{video.youtube_id.slice(0, 8)}</span>
                       {video.category && <span>{titleCase(video.category)}</span>}
                       <Link to={`/v/${video.id}`} className="action-link group-hover:underline">
-                        Open stream
+                        Open VOD
                       </Link>
                       {video.has_whisper_transcript && (
                         <Link
@@ -465,7 +379,7 @@ export default function StreamsPage() {
         </section>
       ) : (
         <div className="surface-card text-center">
-          <p className="text-lg font-medium text-ink">No streams match these filters.</p>
+          <p className="text-lg font-medium text-ink">No VODs match these filters.</p>
           <p className="mt-2 text-muted">Try broadening the date range or clearing completed-only.</p>
         </div>
       )}

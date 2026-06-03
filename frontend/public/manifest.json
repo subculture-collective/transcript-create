@@ -1,7 +1,7 @@
 {
-  "name": "Transcript Search",
-  "short_name": "Transcript",
-  "description": "Search and explore YouTube video transcripts",
+  "name": "HasanAra",
+  "short_name": "HasanAra",
+  "description": "Search HasanAbi Twitch broadcast VOD transcripts pulled from YouTube",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

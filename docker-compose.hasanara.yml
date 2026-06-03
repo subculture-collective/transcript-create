@@ -1,0 +1,79 @@
+networks:
+    management:
+        name: management
+        external: true
+
+services:
+    redis:
+        container_name: hasanara-redis
+        ports: !override []
+
+    db:
+        container_name: hasanara-db
+        ports: !override []
+
+    migrations:
+        container_name: hasanara-migrations
+
+    api:
+        container_name: hasanara-api
+        devices: !override []
+        group_add: !override []
+        networks:
+            - default
+            - management
+        ports: !override []
+        environment:
+            FRONTEND_ORIGIN: https://hasanara.subcult.tv
+            CORS_ALLOW_ORIGINS: https://hasanara.subcult.tv
+
+    worker:
+        container_name: hasanara-worker
+        devices: !override []
+        group_add: !override []
+        healthcheck:
+            disable: true
+        ports: !override []
+
+    summary-refresher:
+        image: transcript-create:gtx1080
+        container_name: hasanara-summary-refresher
+        env_file: .env
+        environment:
+            DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
+            ARCHIVE_SUMMARY_REFRESH_SECONDS: ${ARCHIVE_SUMMARY_REFRESH_SECONDS:-900}
+            OTEL_SDK_DISABLED: 'true'
+            PYTHONPATH: /app
+        depends_on:
+            db:
+                condition: service_healthy
+            migrations:
+                condition: service_completed_successfully
+        command:
+            - sh
+            - -c
+            - |
+                while true; do
+                  python3 /app/scripts/refresh_archive_summary_stats.py || true
+                  sleep "$${ARCHIVE_SUMMARY_REFRESH_SECONDS:-900}"
+                done
+        restart: unless-stopped
+        healthcheck:
+            disable: true
+        ports: !override []
+
+    diarization-worker:
+        devices: !override []
+        group_add: !override []
+        healthcheck:
+            disable: true
+
+    frontend:
+        build:
+            context: .
+            dockerfile: frontend/Dockerfile
+        image: hasanara-frontend:latest
+        container_name: hasanara-web
+        networks:
+            - management
+        restart: unless-stopped

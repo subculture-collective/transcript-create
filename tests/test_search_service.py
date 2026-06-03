@@ -6,10 +6,15 @@ from app.search.types import SearchRequest, SearchResult
 class FakeSearchBackend:
     def __init__(self):
         self.requests = []
+        self.repository = self
 
     def search(self, request: SearchRequest):
         self.requests.append(request)
         return [SearchResult(id=1, video_id="v1", start_ms=1000, end_ms=2000, snippet="hello", rank=0.9)]
+
+    def search_native(self, db, **kwargs):
+        self.requests.append((db, kwargs))
+        return [{"id": 1, "video_id": "v1", "start_ms": 1000, "end_ms": 2000, "snippet": "hello", "rank": 0.9}]
 
 
 def test_search_service_delegates_to_backend():
@@ -30,15 +35,15 @@ def test_search_service_blank_query_returns_empty():
 def test_postgres_backend_maps_rows(monkeypatch):
     captured = {}
 
-    def fake_search_segments_advanced(db, **kwargs):
-        captured["db"] = db
-        captured["kwargs"] = kwargs
-        return [
-            {"id": 7, "video_id": "v2", "start_ms": 10, "end_ms": 20, "snippet": "snip", "rank": 1.5}
-        ]
+    class FakeRepository:
+        def search_native(self, db, **kwargs):
+            captured["db"] = db
+            captured["kwargs"] = kwargs
+            return [
+                {"id": 7, "video_id": "v2", "start_ms": 10, "end_ms": 20, "snippet": "snip", "rank": 1.5}
+            ]
 
-    monkeypatch.setattr("app.search.repositories.crud.search_segments_advanced", fake_search_segments_advanced)
-    backend = PostgresSearchBackend(db=object())
+    backend = PostgresSearchBackend(db=object(), repository=FakeRepository())
     results = backend.search(
         SearchRequest(
             q="hello",

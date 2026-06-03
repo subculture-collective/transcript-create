@@ -1,3 +1,5 @@
+"""Compatibility adapter for the worker video-processing entrypoint."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,9 +33,9 @@ class _DefaultVideoProcessingPipeline:
         self._engine = engine
 
     def process_video(self, command: ProcessVideoCommand) -> ProcessVideoResult:
-        from worker.pipeline import process_video
+        from worker.pipeline import process_video as process_video_compat
 
-        segment_count = process_video(self._engine, command.video_id)
+        segment_count = process_video_compat(self._engine, command.video_id)
         return ProcessVideoResult(video_id=command.video_id, segment_count=segment_count)
 
 

@@ -33,7 +33,6 @@ YouTube video transcription service API with searchable and exportable transcrip
 * **Full-Text Search** - Search across transcripts using PostgreSQL or OpenSearch
 * **Export Formats** - Download transcripts in SRT, VTT, JSON, and PDF formats
 * **Authentication** - OAuth 2.0 via Google and Twitch
-* **Billing** - Stripe integration for Pro subscriptions
 * **Admin Tools** - Event analytics and user management
 
 ## Authentication
@@ -57,7 +56,6 @@ Admin endpoints require additional authorization.
         {"name": "Search", "description": "Full-text search across transcripts"},
         {"name": "Exports", "description": "Export transcripts in various formats"},
         {"name": "Auth", "description": "OAuth authentication and session management"},
-        {"name": "Billing", "description": "Stripe subscription and payment management"},
         {"name": "Admin", "description": "Administrative endpoints for event analytics"},
         {"name": "Favorites", "description": "User favorite transcript segments"},
         {"name": "Archive", "description": "Creator archive summary and timeline"},
@@ -312,7 +310,6 @@ from .routes.admin import router as admin_router  # noqa: E402
 from .routes.analytics import router as analytics_router  # noqa: E402
 from .routes.api_keys import router as api_keys_router  # noqa: E402
 from .routes.auth import router as auth_router  # noqa: E402
-from .routes.billing import router as billing_router  # noqa: E402
 from .routes.archive import router as archive_router  # noqa: E402
 from .routes.events import router as events_router  # noqa: E402
 from .routes.exports import router as exports_router  # noqa: E402
@@ -328,7 +325,6 @@ app.include_router(health_router)
 app.include_router(exports_router)
 app.include_router(auth_router)
 app.include_router(api_keys_router)
-app.include_router(billing_router)
 app.include_router(archive_router)
 app.include_router(jobs_router)
 app.include_router(videos_router)

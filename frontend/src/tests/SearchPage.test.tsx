@@ -54,7 +54,7 @@ describe('SearchPage', () => {
           video: {
             id: 'video-1',
             youtube_id: 'abc123',
-            title: 'Episode one',
+            title: 'VOD one',
             channel_name: 'Channel Alpha',
             duration_seconds: 1200,
             uploaded_at: '2026-05-10T00:00:00Z',

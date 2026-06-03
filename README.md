@@ -1,6 +1,6 @@
 <img src="public/icon.png" alt="Logo" width="64" height="64" align="right" />
 
-# Transcript Create
+# HasanAra
 
 [![Backend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/backend-ci.yml)
 [![Frontend CI](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/subculture-collective/transcript-create/actions/workflows/frontend-ci.yml)
@@ -12,11 +12,19 @@
 [![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Create searchable, exportable transcripts from YouTube videos or channels. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
+HasanAra is a searchable, exportable archive for HasanAbi Twitch broadcast VOD transcripts pulled from YouTube. The stack includes a FastAPI backend, PostgreSQL queue/store, a GPU-accelerated Whisper worker (ROCm or CUDA), optional pyannote diarization, and a Vite React frontend with search, deep links, and export tools.
+
+HasanAra is credited to [Subcult](https://subcult.tv). You can support Subcult on [Patreon](https://www.patreon.com/cw/subcult).
+
+The archive is focused on VODs from these YouTube channels:
+
+- <https://www.youtube.com/@HasanAbiVODs3>
+- <https://www.youtube.com/@HasanAbiVODsBackup>
+- <https://www.youtube.com/@HasanAbiVODs>
 
 ## 🚀 API Client SDKs
 
-Integrate Transcript Create into your applications with our official client libraries:
+Integrate HasanAra/transcript-create into your applications with the existing client libraries:
 
 - **[Python SDK](clients/python)** - Async client with full type hints
 
@@ -78,7 +86,7 @@ All checks must pass before merging to `main`. Typical PR checks complete in < 3
 
 ## Highlights
 
-- Ingest a single video or entire channel with yt-dlp
+- Ingest a single VOD or entire channel with yt-dlp
 - Transcribe with Whisper large-v3 (GPU preferred) and optional speaker diarization
 - Long-audio chunking with automatic time-offset merging
 - YouTube auto-captions ingestion to compare vs native transcripts

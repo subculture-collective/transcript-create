@@ -115,8 +115,4 @@ def can_start_native_transcription(
 ) -> bool:
     if not staged:
         return True
-    if own_caption_state.value not in TERMINAL_CAPTION_INGEST_STATES:
-        return False
-    if batch_job_count < expected_batch_jobs:
-        return False
-    return not batch_has_open_caption_work
+    return own_caption_state.value in TERMINAL_CAPTION_INGEST_STATES

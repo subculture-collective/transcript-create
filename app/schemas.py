@@ -195,8 +195,15 @@ class ArchivePopularSearch(BaseModel):
     frequency: int = Field(..., description="Search frequency")
 
 
+class ArchiveSummaryStats(BaseModel):
+    video_count: int = Field(0, description="Count of archived videos with transcript coverage")
+    total_duration_seconds: int = Field(0, description="Total duration across archived videos")
+    transcript_word_count: int = Field(0, description="Estimated transcript word count")
+    archive_updated_at: Optional[datetime] = Field(None, description="Most recent archive update timestamp")
+
+
 class ArchiveSummary(BaseModel):
-    creator_name: str = Field("Creator Archive", description="Archive display name")
+    creator_name: str = Field("HasanAra", description="Archive display name")
     video_count: int = Field(0, description="Count of archived videos with transcript coverage")
     total_duration_seconds: int = Field(0, description="Total duration across archived videos")
     transcript_word_count: int = Field(0, description="Estimated transcript word count")

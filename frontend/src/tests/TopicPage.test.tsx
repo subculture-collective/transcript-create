@@ -66,7 +66,7 @@ describe('TopicPage', () => {
           video: {
             id: 'video-1',
             youtube_id: 'abc123',
-            title: 'Episode one',
+            title: 'VOD one',
             channel_name: 'Channel Alpha',
             duration_seconds: 3600,
             uploaded_at: '2026-05-10T00:00:00Z',
@@ -94,7 +94,7 @@ describe('TopicPage', () => {
           video: {
             id: 'video-2',
             youtube_id: 'def456',
-            title: 'Episode two',
+            title: 'VOD two',
             channel_name: 'Channel Beta',
             duration_seconds: 1800,
             uploaded_at: '2026-05-12T00:00:00Z',
@@ -127,12 +127,12 @@ describe('TopicPage', () => {
     expect(screen.getByText('Most discussed').parentElement).toHaveTextContent('3 moments')
     expect(screen.getByText('Recent mentions').parentElement).toHaveTextContent('6')
     expect(screen.getByText('Related topics').parentElement).toHaveTextContent('copyright')
-    expect(screen.getAllByText('Top episodes')[0].parentElement).toHaveTextContent('5')
+    expect(screen.getAllByText('Top VODs')[0].parentElement).toHaveTextContent('5')
     expect(screen.getByText('Total moments').parentElement).toHaveTextContent('4')
-    expect(screen.getByText('Episodes').parentElement).toHaveTextContent('2')
+    expect(screen.getByText('VODs').parentElement).toHaveTextContent('2')
     expect(screen.getByText('First mention')).toBeInTheDocument()
     expect(screen.getByText('Latest mention')).toBeInTheDocument()
-    expect(screen.getAllByText('Top episodes').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Top VODs').length).toBeGreaterThan(0)
     expect(screen.getAllByRole('link', { name: 'Play all matches' })).toHaveLength(2)
     fireEvent.click(screen.getAllByRole('button', { name: 'Copy quote' })[0])
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(

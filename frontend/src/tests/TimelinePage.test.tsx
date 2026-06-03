@@ -10,7 +10,7 @@ describe('TimelinePage', () => {
     vi.clearAllMocks()
   })
 
-  it('links browse this period to the matching episodes date range', async () => {
+  it('links browse this period to the matching VODs date range', async () => {
     vi.spyOn(api, 'getTimeline').mockResolvedValue([
       {
         period: '2026-05',
@@ -21,7 +21,7 @@ describe('TimelinePage', () => {
           {
             id: 'video-1',
             youtube_id: 'abc123',
-            title: 'Episode one',
+            title: 'VOD one',
             channel_name: 'Channel Alpha',
             duration_seconds: 1800,
           },

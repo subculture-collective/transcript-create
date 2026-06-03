@@ -19,7 +19,7 @@ describe('HomePage', () => {
       return { json: vi.fn().mockResolvedValue({}) } as never;
     }) as never);
     vi.spyOn(api, 'getArchiveSummary').mockResolvedValue({
-      creator_name: 'Creator Archive',
+      creator_name: 'HasanAra',
       video_count: 12,
       total_duration_seconds: 7260,
       transcript_word_count: 4200,
@@ -28,7 +28,7 @@ describe('HomePage', () => {
         {
           id: 'video-1',
           youtube_id: 'abc123xyz89',
-          title: 'Newest episode',
+          title: 'Newest VOD',
           channel_name: 'Channel Alpha',
           duration_seconds: 1800,
           uploaded_at: '2026-05-30T10:00:00Z',
@@ -42,17 +42,17 @@ describe('HomePage', () => {
     renderWithProviders(<HomePage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Search the complete archive')).toBeInTheDocument();
+      expect(screen.getByText('Search the HasanAbi broadcast archive.')).toBeInTheDocument();
     });
 
-    expect(screen.getByPlaceholderText('Search anything they’ve ever talked about...')).toBeInTheDocument();
-    expect(screen.getByText('Episodes')).toBeInTheDocument();
-    expect(screen.getByText('Newest episode')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search any topic, line, guest, or phrase…')).toBeInTheDocument();
+    expect(screen.getByText('VODs')).toBeInTheDocument();
+    expect(screen.getByText('Newest VOD')).toBeInTheDocument();
     expect(screen.getByText('rent')).toBeInTheDocument();
 
-    const input = screen.getByPlaceholderText('Search anything they’ve ever talked about...');
-    await user.type(input, 'pricing');
+    const input = screen.getByPlaceholderText('Search any topic, line, guest, or phrase…');
+    await user.type(input, 'archive');
     await user.click(screen.getByRole('button', { name: 'Search archive' }));
-    expect(input).toHaveValue('pricing');
+    expect(input).toHaveValue('archive');
   });
 });

@@ -5,10 +5,9 @@ import { useAuth, useTheme } from '../services';
 const navItems = [
   { to: '/', label: 'Home' },
   { to: '/search', label: 'Search' },
-  { to: '/episodes', label: 'Episodes' },
+  { to: '/episodes', label: 'VODs' },
   { to: '/timeline', label: 'Timeline' },
   { to: '/saved', label: 'Saved' },
-  { to: '/pricing', label: 'Pricing' },
 ];
 
 export default function AppLayout() {
@@ -28,18 +27,18 @@ export default function AppLayout() {
       <header className="sticky top-0 z-40 border-b border-border/80 bg-canvas/85 backdrop-blur-2xl" role="banner">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
-            <Link to="/" className="group flex items-center gap-3" aria-label="Home - Broadcast Archive Noir">
+            <Link to="/" className="group flex items-center gap-3" aria-label="Home - HasanAra">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-muted text-xs font-semibold tracking-[0.28em] text-accent shadow-[0_0_0_1px_rgba(183,255,60,0.08)]">
-                A/
+                HA
               </span>
               <span className="leading-none">
-                <span className="block text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-subtle">Broadcast archive</span>
-                <span className="block text-lg font-semibold tracking-[-0.04em] text-ink group-hover:text-accent">Transcript Create</span>
+                <span className="block text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-subtle">HasanAbi VOD archive</span>
+                <span className="block text-lg font-semibold tracking-[-0.04em] text-ink group-hover:text-accent">HasanAra</span>
               </span>
             </Link>
 
             <div className="hidden xl:block">
-              <div className="archive-eyebrow">Analog archive noir / live search interface</div>
+              <div className="archive-eyebrow">HasanAbi broadcast search / pulled from YouTube</div>
             </div>
           </div>
 
@@ -77,13 +76,7 @@ export default function AppLayout() {
                       <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full border border-border" />
                     )}
                     <span className="max-w-[10rem] truncate text-sm text-muted">{user.name || user.email}</span>
-                    {user.plan === 'pro' && <span className="badge-success">Pro</span>}
                   </div>
-                  {user.plan === 'pro' && (
-                    <a href="/api/billing/portal" className="nav-link">
-                      Billing
-                    </a>
-                  )}
                   <button type="button" onClick={logout} className="nav-link">
                     Logout
                   </button>
@@ -159,13 +152,7 @@ export default function AppLayout() {
                   <div className="flex items-center gap-3 py-2">
                     {user.avatar_url && <img src={user.avatar_url} alt={`${user.name || user.email} avatar`} className="h-8 w-8 rounded-full border border-border" />}
                     <span className="text-muted">{user.name || user.email}</span>
-                    {user.plan === 'pro' && <span className="badge-success">Pro</span>}
                   </div>
-                  {user.plan === 'pro' && (
-                    <a href="/api/billing/portal" className="nav-link block" onClick={() => setMobileMenuOpen(false)}>
-                      Billing
-                    </a>
-                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -212,8 +199,8 @@ export default function AppLayout() {
 
       <footer className="border-t border-border/80 bg-canvas/80 backdrop-blur-xl" role="contentinfo">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between lg:px-6">
-          <p>&copy; {new Date().getFullYear()} Transcript Create. All rights reserved.</p>
-          <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-subtle">Broadcast archive noir</p>
+          <p>&copy; {new Date().getFullYear()} HasanAra. A <a href="https://subcult.tv" className="action-link">Subcult</a> project.</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-subtle"><a href="https://www.patreon.com/cw/subcult" className="action-link">Support Subcult on Patreon</a></p>
         </div>
       </footer>
     </div>

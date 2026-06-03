@@ -21,3 +21,10 @@ class SearchResult:
     end_ms: int
     snippet: str
     rank: float | None = None
+
+
+@dataclass(frozen=True)
+class SearchRequestContext:
+    user_id: str | None
+    session_token: str | None
+    is_admin: bool

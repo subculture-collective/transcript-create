@@ -192,7 +192,7 @@ export default function FavoritesPage() {
                       </select>
                     </label>
                     <label className="block text-sm text-muted">
-                      Video type
+                      VOD type
                       <input className="form-control mt-1" type="text" value={filters.category ?? ''} onChange={(event) => setFilters((current) => ({ ...current, category: event.target.value || undefined }))} placeholder="Podcast, interview, short…" />
                     </label>
                     <label className="block text-sm text-muted">

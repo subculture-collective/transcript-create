@@ -116,19 +116,9 @@ class Settings(BaseSettings):
     OAUTH_TWITCH_REDIRECT_URI: str = "http://localhost:8000/auth/callback/twitch"
     # Comma-separated admin emails for admin dashboard access
     ADMIN_EMAILS: str = ""
-    # Monetization / quotas
-    FREE_DAILY_SEARCH_LIMIT: int = 5
     PRO_PLAN_NAME: str = "pro"
-    FREE_DAILY_EXPORT_LIMIT: int = 2
     # PDF export font: path to a .ttf file inside the container/host; falls back to system serif
     PDF_FONT_PATH: str = ""
-    # Stripe billing
-    STRIPE_API_KEY: str = ""
-    STRIPE_PRICE_PRO_MONTHLY: str = ""
-    STRIPE_PRICE_PRO_YEARLY: str = ""
-    STRIPE_WEBHOOK_SECRET: str = ""
-    STRIPE_SUCCESS_URL: str = "{origin}/pricing?success=1"
-    STRIPE_CANCEL_URL: str = "{origin}/pricing?canceled=1"
 
     # Logging configuration
     LOG_LEVEL: str = "INFO"

@@ -10,7 +10,6 @@ vi.mock('../services', () => ({
 
 describe('ExportMenu', () => {
   const mockVideoId = 'test-video-id'
-  const mockOnRequireUpgrade = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -18,7 +17,7 @@ describe('ExportMenu', () => {
 
   it('renders export button', () => {
     render(
-      <ExportMenu videoId={mockVideoId} isPro={true} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={true} />
     )
 
     expect(screen.getByText('Export')).toBeInTheDocument()
@@ -27,7 +26,7 @@ describe('ExportMenu', () => {
   it('shows export formats when opened', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={true} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={true} />
     )
 
     const exportButton = screen.getByText('Export')
@@ -43,7 +42,7 @@ describe('ExportMenu', () => {
   it('allows download when user is Pro', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={true} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={true} />
     )
 
     const exportButton = screen.getByText('Export')
@@ -52,7 +51,6 @@ describe('ExportMenu', () => {
     const srtLinks = screen.getAllByText('SRT')
     await user.click(srtLinks[0])
 
-    expect(mockOnRequireUpgrade).not.toHaveBeenCalled()
     expect(services.track).toHaveBeenCalledWith({
       type: 'export_click',
       payload: { videoId: mockVideoId, format: 'srt', source: 'best' },
@@ -62,7 +60,7 @@ describe('ExportMenu', () => {
   it('allows non-PDF download when user is not Pro', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={false} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={false} />
     )
 
     const exportButton = screen.getByText('Export')
@@ -71,17 +69,16 @@ describe('ExportMenu', () => {
     const srtLinks = screen.getAllByText('SRT')
     await user.click(srtLinks[0])
 
-    expect(mockOnRequireUpgrade).not.toHaveBeenCalled()
     expect(services.track).toHaveBeenCalledWith({
       type: 'export_click',
       payload: { videoId: mockVideoId, format: 'srt', source: 'best' },
     })
   })
 
-  it('blocks PDF download and shows upgrade modal when user is not Pro', async () => {
+  it('allows PDF download when user is not Pro', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={false} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={false} />
     )
 
     const exportButton = screen.getByText('Export')
@@ -89,14 +86,16 @@ describe('ExportMenu', () => {
 
     await user.click(screen.getByText('PDF'))
 
-    expect(mockOnRequireUpgrade).toHaveBeenCalled()
-    expect(services.track).not.toHaveBeenCalled()
+    expect(services.track).toHaveBeenCalledWith({
+      type: 'export_click',
+      payload: { videoId: mockVideoId, format: 'pdf', source: 'whisper' },
+    })
   })
 
   it('has correct download links for native transcripts', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={true} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={true} />
     )
 
     const exportButton = screen.getByText('Export')
@@ -119,7 +118,7 @@ describe('ExportMenu', () => {
   it('has correct download links for YouTube transcripts', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={true} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={true} />
     )
 
     const exportButton = screen.getByText('Export')
@@ -139,7 +138,7 @@ describe('ExportMenu', () => {
   it('tracks different export formats correctly', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={true} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={true} />
     )
 
     const exportButton = screen.getByText('Export')
@@ -170,7 +169,7 @@ describe('ExportMenu', () => {
   it('shows per-section export info', async () => {
     const user = userEvent.setup()
     render(
-      <ExportMenu videoId={mockVideoId} isPro={true} onRequireUpgrade={mockOnRequireUpgrade} />
+      <ExportMenu videoId={mockVideoId} isPro={true} />
     )
 
     const exportButton = screen.getByText('Export')

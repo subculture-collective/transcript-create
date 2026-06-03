@@ -52,9 +52,7 @@ def _new_oauth():
     "/auth/me",
     summary="Get current user",
     description="""
-    Get the currently authenticated user's profile and subscription information.
-
-    Returns user details including plan type, daily search usage, and limits.
+    Get the currently authenticated user's profile and account metadata.
     Returns `{"user": null}` if not authenticated.
     """,
     responses={
@@ -70,9 +68,7 @@ def _new_oauth():
                                     "email": "user@example.com",
                                     "name": "John Doe",
                                     "avatar_url": "https://example.com/avatar.jpg",
-                                    "plan": "free",
-                                    "searches_used_today": 5,
-                                    "search_limit": 100,
+                                    "plan": "free"
                                 }
                             }
                         },
@@ -95,21 +91,6 @@ def auth_me(request: Request, db=Depends(get_db)):
     if not user:
         return {"user": None}
     plan = user.get("plan") or "free"
-    limit = settings.FREE_DAILY_SEARCH_LIMIT if plan == "free" else None
-    # Count searches today used in main previously via events table
-    used = None
-    if plan == "free":
-        used = db.execute(
-            text(
-                """
-            SELECT COUNT(*) FROM events
-            WHERE user_id = :u
-              AND type = 'search'
-              AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
-        """
-            ),
-            {"u": str(user["id"])},
-        ).scalar_one()
     return {
         "user": {
             "id": user["id"],
@@ -117,8 +98,6 @@ def auth_me(request: Request, db=Depends(get_db)):
             "name": user.get("name"),
             "avatar_url": user.get("avatar_url"),
             "plan": plan,
-            "searches_used_today": used,
-            "search_limit": limit,
         }
     }
 

@@ -27,6 +27,7 @@ export function track(e: EventPayload) {
 }
 
 function scheduleFlush() {
+  if (typeof window === 'undefined') return;
   if (timer) return;
   timer = window.setTimeout(flush, 3000);
 }
@@ -42,8 +43,10 @@ async function flush() {
   }
 }
 
-window.addEventListener('beforeunload', () => {
-  if (queue.length) {
-    navigator.sendBeacon?.('/api/events/batch', JSON.stringify({ events: queue }));
-  }
-});
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (queue.length) {
+      navigator.sendBeacon?.('/api/events/batch', JSON.stringify({ events: queue }));
+    }
+  });
+}

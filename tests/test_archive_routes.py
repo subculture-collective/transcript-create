@@ -51,6 +51,24 @@ class TestArchiveRoutes:
             {"vid": str(video_id), "text": "archive searchable words here"},
         )
         db_session.execute(
+            text(
+                """
+                INSERT INTO archive_summary_stats (
+                    id, video_count, total_duration_seconds, transcript_word_count, archive_updated_at, calculated_at
+                ) VALUES (
+                    'default', 1, 360, 4, :updated_at, :updated_at
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    video_count = EXCLUDED.video_count,
+                    total_duration_seconds = EXCLUDED.total_duration_seconds,
+                    transcript_word_count = EXCLUDED.transcript_word_count,
+                    archive_updated_at = EXCLUDED.archive_updated_at,
+                    calculated_at = EXCLUDED.calculated_at
+                """
+            ),
+            {"updated_at": datetime(2026, 5, 1, tzinfo=timezone.utc)},
+        )
+        db_session.execute(
             text("INSERT INTO search_suggestions (term, frequency) VALUES (:term, :frequency)"),
             {"term": "archive query", "frequency": 11},
         )
@@ -59,9 +77,9 @@ class TestArchiveRoutes:
         response = client.get("/archive/summary?recent_limit=5&popular_limit=5")
         assert response.status_code == 200
         data = response.json()
-        assert data["video_count"] >= 1
-        assert data["total_duration_seconds"] >= 360
-        assert data["transcript_word_count"] >= 4
+        assert data["video_count"] == 1
+        assert data["total_duration_seconds"] == 360
+        assert data["transcript_word_count"] == 4
         assert data["recent_videos"]
         assert data["popular_searches"][0]["term"] == "archive query"
 

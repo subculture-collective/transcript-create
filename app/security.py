@@ -38,7 +38,7 @@ def get_user_role(user: Optional[dict]) -> str:
     if is_admin(user):
         return ROLE_ADMIN
 
-    # Pro plan check
+    # Account plan check
     plan = user.get("plan", "free")
     if plan == "pro":
         return ROLE_PRO

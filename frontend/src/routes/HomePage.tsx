@@ -37,18 +37,18 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(183,255,60,0.12),transparent_22%),radial-gradient(circle_at_20%_15%,rgba(192,132,252,0.10),transparent_18%)]" />
         <div className="relative grid h-full gap-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(19rem,0.8fr)] lg:items-center">
           <div className="space-y-6">
-            <div className="archive-eyebrow">Broadcast archive noir</div>
+            <div className="archive-eyebrow">HasanAbi VOD archive</div>
 
             <div className="space-y-4">
-              <h1 className="page-title max-w-4xl">Search the archive like a dossier, not a dashboard.</h1>
+              <h1 className="page-title max-w-4xl">Search the HasanAbi broadcast archive.</h1>
               <p className="max-w-2xl text-lg leading-8 text-muted">
-                Trace topics, timestamped quotes, and episode fragments across the full archive with a search interface that feels like a broadcast control room.
+                Trace topics, timestamped quotes, debates, guests, and recurring stream moments across HasanAbi VODs pulled from YouTube.
               </p>
             </div>
 
             <form onSubmit={onSubmit} className="space-y-3">
               <label className="sr-only" htmlFor="home-search">
-                Search the archive
+                Search the HasanAbi archive
               </label>
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
                 <input
@@ -65,14 +65,14 @@ export default function HomePage() {
 
               <div className="flex flex-wrap gap-2 text-sm text-muted">
                 <span className="source-pill">timestamped results</span>
-                <span className="source-pill">episode dossiers</span>
+                <span className="source-pill">VOD dossiers</span>
                 <span className="match-pill">highlighted matches</span>
               </div>
             </form>
 
             <div className="flex flex-wrap gap-3 text-sm">
               <Link to="/episodes" className="nav-link">
-                Browse episodes
+                Browse VODs
               </Link>
               <Link to="/timeline" className="nav-link">
                 Timeline
@@ -85,7 +85,7 @@ export default function HomePage() {
 
           <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-2">
             <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4">
-              <div className="meta-label">Episodes</div>
+              <div className="meta-label">VODs</div>
               <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">
                 {loading ? '—' : summary ? formatNumber(summary.video_count) : '—'}
               </div>
@@ -115,7 +115,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="archive-eyebrow mb-2">Latest signal</div>
-              <h2 className="section-title">Recent episodes</h2>
+              <h2 className="section-title">Recent VODs</h2>
             </div>
             <Link to="/episodes" className="action-link text-sm">
               View all
@@ -130,7 +130,7 @@ export default function HomePage() {
                   to={`/v/${video.id}`}
                   className="surface-card-compact block border-border/80 transition-all hover:-translate-y-0.5 hover:border-accent/70 hover:shadow-[0_18px_35px_rgba(0,0,0,0.25)]"
                 >
-                  <div className="line-clamp-2 font-semibold tracking-[-0.03em] text-ink">{video.title || 'Untitled episode'}</div>
+                  <div className="line-clamp-2 font-semibold tracking-[-0.03em] text-ink">{video.title || 'Untitled VOD'}</div>
                   <div className="mt-2 text-sm text-muted">{video.channel_name || 'Unknown channel'}</div>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs">
                     <span className="timestamp-pill">{formatDuration(video.duration_seconds)}</span>
@@ -142,7 +142,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted">
-              Recent episodes will appear here once the archive summary endpoint is available.
+              Recent VODs will appear here once the archive summary endpoint is available.
             </div>
           )}
         </div>
@@ -173,7 +173,7 @@ export default function HomePage() {
               to={buildTimestampLink(recentVideos[0].id, 0)}
               className="block rounded-lg border border-border bg-surface-muted p-4 text-sm text-muted transition-colors hover:border-accent/70 hover:text-ink"
             >
-              Open the newest episode in the player.
+              Open the newest VOD in the player.
             </Link>
           )}
         </aside>

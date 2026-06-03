@@ -1,6 +1,8 @@
 # Architecture Overview
 
-This document describes the system architecture, component responsibilities, and data flow of Transcript Create.
+This document describes the system architecture, component responsibilities, and data flow of HasanAra.
+
+For HasanAra domain terms, see [CONTEXT.md](../../CONTEXT.md). For architecture decisions, see [docs/adr/](../adr/).
 
 ## Table of Contents
 
@@ -13,7 +15,7 @@ This document describes the system architecture, component responsibilities, and
 
 ## High-Level Architecture
 
-Transcript Create follows a microservices-inspired architecture with clear separation of concerns:
+HasanAra follows a modular architecture with clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -30,8 +32,8 @@ Transcript Create follows a microservices-inspired architecture with clear separ
 │  │ Auth Routes  │ Job Routes  │  Video    │   Search     │     │
 │  │              │             │  Routes   │   Routes     │     │
 │  ├──────────────┼─────────────┼───────────┼──────────────┤     │
-│  │ Billing      │ Admin       │ Favorites │   Export     │     │
-│  │ Routes       │ Routes      │  Routes   │   Routes     │     │
+│  │ Admin        │ Favorites   │ Export    │   Events     │     │
+│  │ Routes       │ Routes      │ Routes    │   Routes     │     │
 │  └──────────────┴─────────────┴───────────┴──────────────┘     │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
@@ -69,14 +71,13 @@ Transcript Create follows a microservices-inspired architecture with clear separ
 
 **Location**: `frontend/`
 
-**Purpose**: User interface for interacting with the transcription service
+**Purpose**: User interface for interacting with the HasanAra archive
 
 **Key Features**:
 - Search interface with filtering and highlighting
 - Video transcript viewer with timestamp deep links
 - Export menu (SRT, VTT, JSON, PDF)
 - Authentication (OAuth login)
-- Billing/upgrade flow with Stripe
 - Admin dashboard (for authorized users)
 
 **Tech Stack**:
@@ -100,7 +101,6 @@ Transcript Create follows a microservices-inspired architecture with clear separ
 - Video metadata and transcript retrieval
 - Search orchestration (PostgreSQL FTS or OpenSearch)
 - Export generation (SRT, VTT, JSON, PDF)
-- Billing integration (Stripe webhooks)
 - Admin operations and analytics
 
 **Key Modules**:
@@ -110,7 +110,6 @@ Transcript Create follows a microservices-inspired architecture with clear separ
   - `videos.py`: Video metadata and transcript access
   - `search.py`: Full-text search across transcripts
   - `exports.py`: Export format generation
-  - `billing.py`: Stripe Checkout and Customer Portal
   - `admin.py`: Admin-only analytics and user management
   - `favorites.py`: User favorites management
   - `events.py`: Event logging for analytics
@@ -318,9 +317,7 @@ pending → downloading → transcoding → transcribing → completed
 1. User clicks export button
    └─> GET /videos/{id}/transcript.srt
 
-2. API checks quotas
-   └─> Query user plan and daily export count
-   └─> Return 402 if quota exceeded
+2. API validates export request and selects the requested format
 
 3. Generate export format
    └─> Fetch segments from database
@@ -501,6 +498,10 @@ users (1) ─────< (N) sessions
 - OAuth tokens stored server-side (more secure)
 
 **Trade-off**: Requires database lookup per request (mitigated by connection pooling)
+
+### Decision Records
+
+Architecture decisions that affect HasanAra vocabulary or flow belong in `docs/adr/`.
 
 ## Next Steps
 

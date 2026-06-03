@@ -16,7 +16,7 @@ function save(items: FavoriteItem[]) {
   try {
     localStorage.setItem(KEY, JSON.stringify(items));
   } catch {
-    // Suppress localStorage errors (e.g., quota exceeded)
+    // Suppress localStorage errors (e.g., storage full)
   }
 }
 

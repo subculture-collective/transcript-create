@@ -688,8 +688,8 @@ class TestTranscriptBlockCrud:
 class TestCaptureYouTubeCaptions:
     """Tests for capture_youtube_captions_for_unprocessed function."""
 
-    @patch("worker.pipeline.fetch_youtube_auto_captions")
-    def test_capture_youtube_captions_success(self, mock_fetch, mock_conn):
+    @patch("worker.pipeline.get_youtube_service")
+    def test_capture_youtube_captions_success(self, mock_get_service, mock_conn):
         """Test successful YouTube caption capture."""
         video_id = uuid.uuid4()
         youtube_id = "test123"
@@ -697,44 +697,50 @@ class TestCaptureYouTubeCaptions:
         # Mock video query
         mock_conn.execute.return_value.all.return_value = [(video_id, youtube_id)]
 
-        mock_fetch.return_value = (
+        mock_service = Mock()
+        mock_service.fetch_auto_captions.return_value = (
             Mock(language="en", kind="auto", url="http://example.com/captions.json3"),
             [Mock(start=0.0, end=5.0, text="Test caption")],
         )
+        mock_get_service.return_value = mock_service
         mock_conn.execute.return_value.first.return_value = (1,)
         count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
 
         assert count == 1
 
-    @patch("worker.pipeline.fetch_youtube_auto_captions")
-    def test_capture_youtube_captions_no_captions(self, mock_fetch, mock_conn):
+    @patch("worker.pipeline.get_youtube_service")
+    def test_capture_youtube_captions_no_captions(self, mock_get_service, mock_conn):
         """Test when no captions are available."""
         video_id = uuid.uuid4()
         youtube_id = "test123"
 
         mock_conn.execute.return_value.all.return_value = [(video_id, youtube_id)]
-        mock_fetch.return_value = None
+        mock_service = Mock()
+        mock_service.fetch_auto_captions.return_value = None
+        mock_get_service.return_value = mock_service
 
         count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
 
         assert count == 0
 
-    @patch("worker.pipeline.fetch_youtube_auto_captions")
-    def test_capture_youtube_captions_fetch_error(self, mock_fetch, mock_conn):
+    @patch("worker.pipeline.get_youtube_service")
+    def test_capture_youtube_captions_fetch_error(self, mock_get_service, mock_conn):
         """Test handling of caption fetch errors."""
         video_id = uuid.uuid4()
         youtube_id = "test123"
 
         mock_conn.execute.return_value.all.return_value = [(video_id, youtube_id)]
-        mock_fetch.side_effect = Exception("Fetch failed")
+        mock_service = Mock()
+        mock_service.fetch_auto_captions.side_effect = Exception("Fetch failed")
+        mock_get_service.return_value = mock_service
 
         # Should not raise, just log warning
         count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
 
         assert count == 0
 
-    @patch("worker.pipeline.fetch_youtube_auto_captions")
-    def test_capture_youtube_captions_multiple_videos(self, mock_fetch, mock_conn):
+    @patch("worker.pipeline.get_youtube_service")
+    def test_capture_youtube_captions_multiple_videos(self, mock_get_service, mock_conn):
         """Test processing multiple videos."""
         videos = [
             (uuid.uuid4(), "video1"),
@@ -743,15 +749,17 @@ class TestCaptureYouTubeCaptions:
 
         mock_conn.execute.return_value.all.return_value = videos
 
-        mock_fetch.return_value = (
+        mock_service = Mock()
+        mock_service.fetch_auto_captions.return_value = (
             Mock(language="en", kind="auto", url="http://example.com/captions.json3"),
             [Mock(start=0.0, end=5.0, text="Test")],
         )
+        mock_get_service.return_value = mock_service
         mock_conn.execute.return_value.first.return_value = (1,)
         count = pipeline.capture_youtube_captions_for_unprocessed(mock_conn, limit=5)
 
         assert count == 2
-        assert mock_fetch.call_count == 2
+        assert mock_service.fetch_auto_captions.call_count == 2
 
     def test_capture_youtube_captions_no_pending(self, mock_conn):
         """Test when no videos need caption processing."""

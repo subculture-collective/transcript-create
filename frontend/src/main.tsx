@@ -15,8 +15,6 @@ import AdminDashboard from './routes/admin/AdminDashboard';
 import AdminEvents from './routes/admin/AdminEvents';
 import AdminUsers from './routes/admin/AdminUsers';
 import { AuthProvider, ThemeProvider } from './services';
-import PricingPage from './routes/PricingPage';
-import UpgradePage from './routes/UpgradePage';
 import TopicPage from './routes/TopicPage';
 import TimelinePage from './routes/TimelinePage';
 
@@ -33,8 +31,6 @@ const router = createBrowserRouter([
       { path: 'topics/:query', element: <TopicPage /> },
       { path: 'v/:videoId', element: <VideoPage /> },
       { path: 'login', element: <LoginPage /> },
-      { path: 'pricing', element: <PricingPage /> },
-      { path: 'upgrade', element: <UpgradePage /> },
       {
         path: 'saved',
         element: (

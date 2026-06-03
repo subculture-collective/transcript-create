@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import shlex
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -371,6 +374,86 @@ def _pick_auto_caption(data: dict) -> Optional[YTCaptionTrack]:
     return YTCaptionTrack(url=u, language=lang, kind="auto", ext=e)
 
 
+def _download_caption_with_ytdlp(url: str, youtube_id: str, track: YTCaptionTrack) -> Optional[bytes]:
+    """Fallback caption download using yt-dlp's subtitle writer."""
+    language = track.language or "en"
+    ext = track.ext or "json3"
+    with tempfile.TemporaryDirectory(prefix="yt-caption-") as tmpdir:
+        outtmpl = str(Path(tmpdir) / "%(id)s.%(ext)s")
+        cmd = [
+            "yt-dlp",
+            "--skip-download",
+            "--write-auto-subs",
+            "--remote-components",
+            "ejs:github",
+            "--sub-langs",
+            language,
+            "--sub-format",
+            ext,
+            "-o",
+            outtmpl,
+        ]
+        if settings.YTDLP_COOKIES_PATH and Path(settings.YTDLP_COOKIES_PATH).exists():
+            cmd.extend(["--cookies", settings.YTDLP_COOKIES_PATH])
+        if settings.YTDLP_EXTRA_ARGS:
+            cmd.extend(shlex.split(settings.YTDLP_EXTRA_ARGS))
+        cmd.append(url)
+
+        start_time = time.time()
+        logger.info(
+            "Falling back to yt-dlp caption download",
+            extra={
+                "operation": "captions",
+                "youtube_id": youtube_id,
+                "language": language,
+                "ext": ext,
+                "command": redact_tokens_from_command(cmd),
+            },
+        )
+        proc = subprocess.run(cmd, capture_output=True, text=False, timeout=settings.YTDLP_REQUEST_TIMEOUT)
+        duration = time.time() - start_time
+        if proc.returncode != 0:
+            stderr = proc.stderr.decode("utf-8", errors="replace")[:500]
+            logger.warning(
+                "yt-dlp caption fallback failed",
+                extra={
+                    "operation": "captions",
+                    "youtube_id": youtube_id,
+                    "exit_code": proc.returncode,
+                    "duration_seconds": round(duration, 2),
+                    "stderr": stderr,
+                },
+            )
+            ytdlp_operation_duration_seconds.labels(operation="captions", client="yt-dlp").observe(duration)
+            ytdlp_operation_attempts_total.labels(operation="captions", client="yt-dlp", result="failure").inc()
+            return None
+
+        candidates = sorted(Path(tmpdir).glob(f"*.{language}.{ext}")) or sorted(Path(tmpdir).glob(f"*.{ext}"))
+        if not candidates:
+            logger.warning(
+                "yt-dlp caption fallback produced no caption file",
+                extra={"operation": "captions", "youtube_id": youtube_id, "duration_seconds": round(duration, 2)},
+            )
+            ytdlp_operation_duration_seconds.labels(operation="captions", client="yt-dlp").observe(duration)
+            ytdlp_operation_attempts_total.labels(operation="captions", client="yt-dlp", result="failure").inc()
+            return None
+
+        payload = candidates[0].read_bytes()
+        logger.info(
+            "yt-dlp caption fallback succeeded",
+            extra={
+                "operation": "captions",
+                "youtube_id": youtube_id,
+                "language": language,
+                "ext": ext,
+                "duration_seconds": round(duration, 2),
+                "size_bytes": len(payload),
+            },
+        )
+        ytdlp_operation_duration_seconds.labels(operation="captions", client="yt-dlp").observe(duration)
+        return payload
+
+
 def _parse_vtt_to_segments(vtt_bytes: bytes) -> List[YTSegment]:
     def parse_ts(ts: str) -> float:
         # HH:MM:SS.mmm or MM:SS.mmm
@@ -433,7 +516,7 @@ def _parse_vtt_to_segments(vtt_bytes: bytes) -> List[YTSegment]:
     return segs
 
 
-def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrack, List[YTSegment]]]:
+def _fetch_youtube_auto_captions_impl(youtube_id: str) -> Optional[tuple[YTCaptionTrack, List[YTSegment]]]:
     """Fetch auto captions (json3) for a given YouTube video id and parse to segments.
 
     Returns (track, segments) or None if unavailable.
@@ -509,9 +592,14 @@ def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrac
             error_text = f"{error_text} {getattr(e, 'reason', '')}".strip()
 
         if classify_youtube_error(error_text).kind == YouTubeErrorKind.THROTTLE:
-            raise YouTubeCaptionRateLimitError(f"Caption download rate-limited: {e}") from e
+            fallback_payload = _download_caption_with_ytdlp(url, youtube_id, track)
+            if fallback_payload is None:
+                raise YouTubeCaptionRateLimitError(f"Caption download rate-limited: {e}") from e
+            payload = fallback_payload
+            ytdlp_operation_attempts_total.labels(operation="captions", client="yt-dlp", result="success").inc()
+        else:
+            raise YouTubeCaptionFetchError(f"Caption download failed: {e}") from e
 
-        raise YouTubeCaptionFetchError(f"Caption download failed: {e}") from e
     segments: List[YTSegment] = []
     if track.ext == "json3":
         try:
@@ -548,3 +636,7 @@ def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrac
         logging.info("Unsupported caption ext: %s", track.ext)
         raise YouTubeCaptionFetchError(f"Unsupported caption ext: {track.ext}")
     return track, segments
+
+
+def fetch_youtube_auto_captions(youtube_id: str) -> Optional[tuple[YTCaptionTrack, List[YTSegment]]]:
+    return _fetch_youtube_auto_captions_impl(youtube_id)

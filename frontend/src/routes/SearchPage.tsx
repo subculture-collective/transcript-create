@@ -6,90 +6,17 @@ import type {
   GroupedSearchResponse,
   SearchHit,
 } from '../types/api';
-import { buildTimestampLink, formatDate, formatDuration, formatNumber, formatTimestamp, sourceLabel } from '../features/archive/format';
+import { buildTimestampLink, formatDate, formatDuration, formatNumber } from '../features/archive/format';
 import { buildCurrentFilters, readFilters, serializeFilters } from '../features/search/filters';
 import { buildPlayMatchesLink, buildQuoteText, plainTextFromSnippet } from '../features/search/moments';
 import { groupHitsByVideo } from '../features/searchTranscript/matches';
+
+import { SearchMomentsList } from '../components/archive';
 
 type SearchMode = 'grouped' | 'flat' | null;
 
 function copyText(text: string) {
   void navigator.clipboard?.writeText(text);
-}
-
-function SearchMomentsList({
-  videoId,
-  moments,
-  fallbackTitle,
-  defaultSource,
-  query,
-  savedKeys,
-  onSaveMoment,
-}: {
-  videoId: string;
-  moments: SearchHit[];
-  fallbackTitle: string;
-  defaultSource?: ArchiveSearchFilters['source'];
-  query: string;
-  savedKeys: Set<string>;
-  onSaveMoment: (videoId: string, moment: SearchHit, title: string) => void;
-}) {
-  return (
-    <ul className="space-y-3">
-      {moments.map((moment) => (
-        <li key={moment.id} className="group rounded-lg border border-border bg-surface-muted/80 p-4 transition-all hover:border-border-strong hover:bg-surface-muted/95">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <time className="timestamp-pill">
-              {formatTimestamp(moment.start_ms)}–{formatTimestamp(moment.end_ms)}
-            </time>
-            <span className="source-pill">{sourceLabel(moment.source ?? defaultSource ?? 'best')}</span>
-            {query && <span className="match-pill">match</span>}
-          </div>
-          <div className="archive-snippet" dangerouslySetInnerHTML={{ __html: moment.snippet }} />
-          <div className="mt-4 flex flex-wrap gap-3 text-sm">
-            <Link
-              to={buildTimestampLink(videoId, moment.start_ms, moment.id)}
-              className="action-link"
-              onClick={() => track({ type: 'result_click', payload: { videoId, start_ms: moment.start_ms, id: moment.id } })}
-            >
-              Open at timestamp
-            </Link>
-            <button
-              type="button"
-              className="nav-link"
-              onClick={() => copyText(`${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.id)}`)}
-            >
-              Copy timestamp
-            </button>
-            <button
-              type="button"
-              className="nav-link"
-              onClick={() => copyText(buildQuoteText(videoId, moment, fallbackTitle))}
-            >
-              Copy quote
-            </button>
-            <button
-              type="button"
-              className="nav-link"
-              disabled={savedKeys.has(`${videoId}:${moment.start_ms}:${moment.end_ms}`)}
-              onClick={() => onSaveMoment(videoId, moment, fallbackTitle)}
-            >
-              {savedKeys.has(`${videoId}:${moment.start_ms}:${moment.end_ms}`) ? 'Saved moment' : 'Save moment'}
-            </button>
-            {query && (
-              <Link to={buildPlayMatchesLink(videoId, moment, query)} className="action-link">
-                Play from here
-              </Link>
-            )}
-            <Link to={`/v/${videoId}`} className="action-link">
-              Open VOD
-            </Link>
-          </div>
-          <p className="mt-3 text-xs text-subtle">{fallbackTitle}</p>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 export default function SearchPage() {
@@ -212,6 +139,14 @@ export default function SearchPage() {
       console.error('Failed to save moment', err);
       setError('Could not save this moment. Sign in again or try later.');
     }
+  }
+
+  function copyMomentTimestamp(videoId: string, moment: SearchHit) {
+    copyText(`${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.id)}`);
+  }
+
+  function copyMomentQuote(videoId: string, moment: SearchHit, title: string) {
+    copyText(buildQuoteText(videoId, moment, title));
   }
 
   return (
@@ -366,7 +301,18 @@ export default function SearchPage() {
                     </Link>
                   )}
                 </div>
-                <SearchMomentsList videoId={group.video.id} moments={group.moments as SearchHit[]} fallbackTitle={title} defaultSource={source} query={filters.q} savedKeys={savedKeys} onSaveMoment={saveMoment} />
+                <SearchMomentsList
+                  videoId={group.video.id}
+                  moments={group.moments as SearchHit[]}
+                  fallbackTitle={title}
+                  defaultSource={source}
+                  query={filters.q}
+                  savedKeys={savedKeys}
+                  onSaveMoment={saveMoment}
+                  onCopyTimestamp={copyMomentTimestamp}
+                  onCopyQuote={copyMomentQuote}
+                  onTrackResultClick={(resultVideoId, moment) => track({ type: 'result_click', payload: { videoId: resultVideoId, start_ms: moment.start_ms, id: moment.id } })}
+                />
               </article>
             );
           })}
@@ -389,7 +335,18 @@ export default function SearchPage() {
                   </div>
                   <div className="match-pill">{hits.length} matches</div>
                 </div>
-                <SearchMomentsList videoId={videoId} moments={hits} fallbackTitle={title} defaultSource={source} query={filters.q} savedKeys={savedKeys} onSaveMoment={saveMoment} />
+                <SearchMomentsList
+                  videoId={videoId}
+                  moments={hits}
+                  fallbackTitle={title}
+                  defaultSource={source}
+                  query={filters.q}
+                  savedKeys={savedKeys}
+                  onSaveMoment={saveMoment}
+                  onCopyTimestamp={copyMomentTimestamp}
+                  onCopyQuote={copyMomentQuote}
+                  onTrackResultClick={(resultVideoId, moment) => track({ type: 'result_click', payload: { videoId: resultVideoId, start_ms: moment.start_ms, id: moment.id } })}
+                />
               </article>
             );
           })}

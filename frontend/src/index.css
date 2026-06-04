@@ -202,27 +202,27 @@ body::after {
   }
 
   .badge-success {
-    @apply inline-flex items-center gap-1.5 rounded-md border border-success/20 bg-success-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-success;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-success/20 bg-success-soft px-2 pb-px pt-[5px] text-center text-[10px] font-semibold uppercase leading-none tracking-[0.16em] text-success;
   }
 
   .badge-warning {
-    @apply inline-flex items-center gap-1.5 rounded-md border border-warning/20 bg-warning-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-warning;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-warning/20 bg-warning-soft px-2 pb-px pt-[5px] text-center text-[10px] font-semibold uppercase leading-none tracking-[0.16em] text-warning;
   }
 
   .archive-eyebrow {
-    @apply inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-muted/85 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-subtle;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-surface-muted/85 px-2.5 pb-px pt-[5px] text-center text-[10px] font-semibold uppercase leading-none tracking-[0.24em] text-subtle;
   }
 
   .timestamp-pill {
-    @apply inline-flex items-center rounded-md border border-warning/20 bg-warning-soft px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.06em] text-warning;
+    @apply inline-flex items-center justify-center rounded-md border border-warning/20 bg-warning-soft px-2 pb-px pt-[5px] text-center font-mono text-[10px] font-semibold leading-none tracking-[0.06em] text-warning;
   }
 
   .source-pill {
-    @apply inline-flex items-center rounded-md border border-border bg-surface-muted px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted;
+    @apply inline-flex items-center justify-center rounded-md border border-border bg-surface-muted px-2 pb-px pt-[5px] text-center font-mono text-[10px] font-semibold uppercase leading-none tracking-[0.12em] text-muted;
   }
 
   .match-pill {
-    @apply inline-flex items-center rounded-md border border-cta/30 bg-cta/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-cta;
+    @apply inline-flex items-center justify-center rounded-md border border-cta/30 bg-cta/10 px-2 pb-px pt-[5px] text-center font-mono text-[10px] font-semibold uppercase leading-none tracking-[0.12em] text-cta;
   }
 
   .meta-label {

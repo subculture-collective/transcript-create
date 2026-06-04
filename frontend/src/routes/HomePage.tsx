@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services';
 import type { ArchiveSummary } from '../types/api';
 import { buildTimestampLink, formatDate, formatDuration, formatNumber } from '../features/archive/format';
+import { StatCard, VideoCard } from '../components/archive';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -84,28 +85,15 @@ export default function HomePage() {
           </div>
 
           <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4">
-              <div className="meta-label">VODs</div>
-              <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">
-                {loading ? '—' : summary ? formatNumber(summary.video_count) : '—'}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4">
-              <div className="meta-label">Duration</div>
-              <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">
-                {loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4">
-              <div className="meta-label">Transcript words</div>
-              <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">
-                {loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/80 bg-surface-muted/70 p-4 sm:col-span-2 lg:col-span-2">
-              <div className="meta-label">Updated</div>
-              <div className="meta-value text-sm">{loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}</div>
-            </div>
+            <StatCard label="VODs" value={loading ? '—' : summary ? formatNumber(summary.video_count) : '—'} />
+            <StatCard label="Duration" value={loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'} />
+            <StatCard label="Transcript words" value={loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'} />
+            <StatCard
+              label="Updated"
+              value={loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}
+              className="sm:col-span-2 lg:col-span-2"
+              valueClassName="meta-value text-sm"
+            />
           </div>
         </div>
       </section>
@@ -125,19 +113,7 @@ export default function HomePage() {
           {recentVideos.length > 0 ? (
             <div className="grid gap-3 md:grid-cols-2">
               {recentVideos.map((video) => (
-                <Link
-                  key={video.id}
-                  to={`/v/${video.id}`}
-                  className="surface-card-compact block border-border/80 transition-all hover:-translate-y-0.5 hover:border-accent/70 hover:shadow-[0_18px_35px_rgba(0,0,0,0.25)]"
-                >
-                  <div className="line-clamp-2 font-semibold tracking-[-0.03em] text-ink">{video.title || 'Untitled VOD'}</div>
-                  <div className="mt-2 text-sm text-muted">{video.channel_name || 'Unknown channel'}</div>
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                    <span className="timestamp-pill">{formatDuration(video.duration_seconds)}</span>
-                    <span className="source-pill">{formatDate(video.uploaded_at ?? null)}</span>
-                    <span className="match-pill">{video.has_whisper_transcript ? 'whisper ready' : 'pending transcript'}</span>
-                  </div>
-                </Link>
+                <VideoCard key={video.id} video={video} />
               ))}
             </div>
           ) : (

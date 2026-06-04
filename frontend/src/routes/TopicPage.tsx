@@ -117,7 +117,7 @@ export default function TopicPage() {
             <div className="text-xs uppercase tracking-wide text-subtle">Related topics</div>
             <div className="mt-2 flex flex-wrap gap-2 text-sm text-ink">
               {(mentionMap?.related_topics ?? []).length > 0 ? mentionMap!.related_topics!.map((term) => (
-                <Link key={term} to={`/topics/${encodeURIComponent(term)}`} className="rounded-full border border-border bg-surface px-2 py-1 hover:border-accent">
+                <Link key={term} to={`/topics/${encodeURIComponent(term)}`} className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-2 pb-[3px] pt-[7px] text-center leading-none hover:border-accent">
                   {term}
                 </Link>
               )) : <span className="text-muted">No co-occurring terms yet</span>}

@@ -485,8 +485,12 @@ def _get_video_metadata_map(db, video_ids: list, published_only: bool) -> dict[s
     return result
 
 
-def get_video_metadata_map(db, video_ids: list) -> dict[str, dict[str, list[dict]]]:
-    return _get_video_metadata_map(db, video_ids, published_only=True)
+def get_video_metadata_map(db, video_ids: list, published_only: bool = True) -> dict[str, dict[str, list[dict]]]:
+    return _get_video_metadata_map(db, video_ids, published_only=published_only)
+
+
+def get_video_metadata_admin_map(db, video_ids: list) -> dict[str, dict[str, list[dict]]]:
+    return _get_video_metadata_map(db, video_ids, published_only=False)
 
 
 def search_videos_for_admin(db, q: str | None = None, limit: int = 50) -> list[dict]:
@@ -509,7 +513,9 @@ def search_videos_for_admin(db, q: str | None = None, limit: int = 50) -> list[d
                 v.updated_at,
                 v.channel_name,
                 v.language,
-                v.category
+                v.category,
+                EXISTS (SELECT 1 FROM segments s WHERE s.video_id = v.id) AS has_whisper_transcript,
+                EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
             FROM videos v
             {where_sql}
             ORDER BY v.uploaded_at DESC NULLS LAST, v.created_at DESC

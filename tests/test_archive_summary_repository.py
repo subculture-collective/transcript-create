@@ -1,5 +1,6 @@
 """Tests for archive summary repository behavior."""
 
+import json
 import uuid
 from datetime import date, datetime, timezone
 
@@ -16,6 +17,7 @@ from app.archive.intelligence_repository import (
     autopublish_search_topics,
     seed_archive_topics,
     seed_named_periods,
+    refresh_named_period_stats,
     slugify_topic,
 )
 
@@ -261,6 +263,160 @@ def test_seed_named_periods_corrects_current_curated_windows(monkeypatch):
     assert by_slug["2024-august-21"]["kind"] == "anniversary"
     assert by_slug["2025-august-21"]["kind"] == "anniversary"
     assert by_slug["2026-august-21"]["kind"] == "anniversary"
+
+
+def test_refresh_named_period_stats_includes_metadata_in_public_payloads():
+    video_id = uuid.uuid4()
+    period_id = uuid.uuid4()
+    topic_id = uuid.uuid4()
+    person_slug = "guest-one"
+    tag_slug = "chadvice"
+
+    class _RefreshDb(_FakeDb):
+        def __init__(self):
+            super().__init__([])
+            self.inserted_periods = []
+
+        def execute(self, sql, params=None):
+            sql_text = str(sql)
+            self.calls.append((sql_text, params))
+            if "FROM archive_named_periods p" in sql_text and "ORDER BY p.sort_order DESC" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "id": period_id,
+                            "slug": "test-period",
+                            "label": "Test Period",
+                            "kind": "month",
+                            "date_from": date(2026, 5, 1),
+                            "date_to": date(2026, 5, 31),
+                            "description": None,
+                            "status": "published",
+                            "sort_order": 0,
+                        }
+                    ]
+                )
+            if "FROM archive_topics t" in sql_text and "LEFT JOIN archive_topic_aliases" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "id": topic_id,
+                            "slug": "ice",
+                            "label": "ICE",
+                            "description": None,
+                            "source": "hybrid",
+                            "status": "published",
+                            "is_editable": True,
+                            "aliases": [],
+                        }
+                    ]
+                )
+            if "FROM videos v" in sql_text and "v.uploaded_at >= :start_dt" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "video_id": video_id,
+                            "youtube_id": "meta1",
+                            "title": "Metadata VOD",
+                            "duration_seconds": 180,
+                            "state": "completed",
+                            "caption_ingest_state": "completed",
+                            "diarization_state": None,
+                            "uploaded_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                            "created_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                            "updated_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                            "channel_name": "HasanAbi",
+                            "language": "en",
+                            "category": None,
+                            "has_whisper_transcript": True,
+                            "has_youtube_transcript": False,
+                            "when_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                        }
+                    ]
+                )
+            if "FROM archive_topic_mentions m" in sql_text and "COALESCE(m.occurred_at, v.uploaded_at) >= :start_dt" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "topic_id": topic_id,
+                            "topic_slug": "ice",
+                            "topic_label": "ICE",
+                            "description": None,
+                            "source": "hybrid",
+                            "status": "published",
+                            "is_editable": True,
+                            "video_id": video_id,
+                            "youtube_id": "meta1",
+                            "title": "Metadata VOD",
+                            "duration_seconds": 180,
+                            "state": "completed",
+                            "caption_ingest_state": "completed",
+                            "diarization_state": None,
+                            "uploaded_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                            "created_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                            "updated_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                            "channel_name": "HasanAbi",
+                            "language": "en",
+                            "category": None,
+                            "segment_id": uuid.uuid4(),
+                            "start_ms": 1000,
+                            "end_ms": 3000,
+                            "snippet": "ICE said something about the border.",
+                            "score": 1.0,
+                            "when_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+                            "has_whisper_transcript": True,
+                            "has_youtube_transcript": False,
+                        }
+                    ]
+                )
+            if "FROM archive_video_people vp" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "video_id": video_id,
+                            "slug": person_slug,
+                            "display_name": "Guest One",
+                            "aliases": [],
+                            "description": None,
+                            "role": "guest",
+                            "confidence": "admin",
+                            "notes": None,
+                            "sort_order": 0,
+                        }
+                    ]
+                )
+            if "FROM archive_video_taggings vt" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "video_id": video_id,
+                            "slug": tag_slug,
+                            "label": "Chadvice",
+                            "kind": "category",
+                            "description": None,
+                            "confidence": "admin",
+                            "notes": None,
+                            "sort_order": 0,
+                        }
+                    ]
+                )
+            if "INSERT INTO archive_named_period_stats" in sql_text:
+                self.inserted_periods.append(params)
+                return _FakeResult()
+            return _FakeResult()
+
+    db = _RefreshDb()
+
+    result = refresh_named_period_stats(db, period_slug="test-period")
+
+    assert result["rows"] == 1
+    inserted = db.inserted_periods[0][0]
+    representative_videos = json.loads(inserted["representative_videos"])
+    evidence = json.loads(inserted["evidence"])
+    assert representative_videos[0]["people"][0]["slug"] == person_slug
+    assert representative_videos[0]["tags"][0]["slug"] == tag_slug
+    assert evidence[0]["video"]["people"][0]["slug"] == person_slug
+    assert evidence[0]["video"]["tags"][0]["slug"] == tag_slug
 
 
 def test_autopublish_search_topics_skips_existing_slugs():

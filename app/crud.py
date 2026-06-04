@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.cache import cache
 from app.archive.repository import archive_repository
+from app.archive.video_metadata_repository import get_video_metadata_map
 from app.logging_config import get_logger
 from app.search.segment_repository import SearchRepository
 from app.settings import settings
@@ -112,7 +113,7 @@ def list_segments(db, video_id):
 @_retry_on_transient_error
 @cache(prefix="video", ttl=settings.CACHE_VIDEO_TTL if settings.ENABLE_CACHING else 0)
 def get_video(db, video_id: uuid.UUID):
-    return (
+    row = (
         db.execute(
             text(
                 """
@@ -131,6 +132,14 @@ def get_video(db, video_id: uuid.UUID):
         .mappings()
         .first()
     )
+    if row is None:
+        return None
+    metadata_map = _safe_video_metadata_map(db, [video_id])
+    payload = dict(row)
+    metadata = metadata_map.get(str(video_id), {"people": [], "tags": []})
+    payload["people"] = metadata.get("people", [])
+    payload["tags"] = metadata.get("tags", [])
+    return payload
 
 
 @_retry_on_transient_error
@@ -177,7 +186,9 @@ def list_videos(
         ORDER BY v.uploaded_at DESC NULLS LAST, v.created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    return db.execute(text(sql), params).mappings().all()
+    rows = db.execute(text(sql), params).mappings().all()
+    metadata_map = _safe_video_metadata_map(db, [row["id"] for row in rows])
+    return _attach_video_metadata_rows(rows, metadata_map)
 
 
 @_retry_on_transient_error
@@ -217,6 +228,26 @@ def _video_info_rows_to_models(rows):
     return [VideoInfo(**dict(row)) for row in rows]
 
 
+def _attach_video_metadata_rows(rows, metadata_map: dict[str, dict[str, list[dict]]] | None = None):
+    metadata_map = metadata_map or {}
+    enriched = []
+    for row in rows:
+        payload = dict(row)
+        metadata = metadata_map.get(str(payload.get("id")), {"people": [], "tags": []})
+        payload["people"] = metadata.get("people", [])
+        payload["tags"] = metadata.get("tags", [])
+        enriched.append(payload)
+    return enriched
+
+
+def _safe_video_metadata_map(db, video_ids, published_only: bool = True):
+    try:
+        return get_video_metadata_map(db, video_ids, published_only=published_only)
+    except (OperationalError, ProgrammingError, AssertionError):
+        db.rollback()
+        return {str(video_id): {"people": [], "tags": []} for video_id in video_ids}
+
+
 @_retry_on_transient_error
 def get_videos_by_ids(db, video_ids):
     if not video_ids:
@@ -236,7 +267,8 @@ def get_videos_by_ids(db, video_ids):
         """
     ).bindparams(bindparam("video_ids", expanding=True))
     rows = db.execute(sql, {"video_ids": [str(video_id) for video_id in video_ids]}).mappings().all()
-    return _video_info_rows_to_models(rows)
+    metadata_map = _safe_video_metadata_map(db, [row["id"] for row in rows])
+    return _video_info_rows_to_models(_attach_video_metadata_rows(rows, metadata_map))
 
 
 def _archive_video_filter_sql() -> str:
@@ -281,10 +313,11 @@ def get_archive_timeline(db, limit: int = 100, granularity: str = "month"):
         .mappings()
         .all()
     )
+    metadata_map = _safe_video_metadata_map(db, [row["id"] for row in rows])
 
     buckets: dict[str, TimelineBucket] = {}
     for row in rows:
-        video = _video_info_rows_to_models([row])[0]
+        video = _video_info_rows_to_models([_attach_video_metadata_rows([row], metadata_map)[0]])[0]
         bucket_start = row["bucket_start"]
         if bucket_start is None:
             continue

@@ -9,6 +9,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .. import crud
 from ..archive.repository import archive_repository
+from ..archive.video_metadata_repository import get_video_metadata_map
 from .intelligence_repository import SEED_TOPICS, SeedTopic, alias_matches_text, get_durable_archive_intelligence, slugify_topic
 from .intelligence_repository import list_period_options
 from ..schemas import (
@@ -27,23 +28,42 @@ def _slugify(value: str) -> str:
     return slugify_topic(value)
 
 
+def _row_value(row, key: str):
+    if isinstance(row, dict):
+        return row.get(key)
+    try:
+        return row[key]
+    except Exception:
+        return getattr(row, key)
+
+
+def _safe_video_metadata_map(db, video_ids):
+    try:
+        return get_video_metadata_map(db, video_ids)
+    except (OperationalError, ProgrammingError, AssertionError):
+        db.rollback()
+        return {str(video_id): {"people": [], "tags": []} for video_id in video_ids}
+
+
 def _video_from_row(row) -> VideoInfo:
     return VideoInfo(
-        id=row.video_id,
-        youtube_id=row.youtube_id,
-        title=row.title,
-        duration_seconds=row.duration_seconds,
-        state=row.state,
-        caption_ingest_state=row.caption_ingest_state,
-        diarization_state=row.diarization_state,
-        uploaded_at=row.uploaded_at,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
-        channel_name=row.channel_name,
-        language=row.language,
-        category=row.category,
-        has_whisper_transcript=bool(row.has_whisper_transcript),
-        has_youtube_transcript=bool(row.has_youtube_transcript),
+        id=_row_value(row, "video_id"),
+        youtube_id=_row_value(row, "youtube_id"),
+        title=_row_value(row, "title"),
+        duration_seconds=_row_value(row, "duration_seconds"),
+        state=_row_value(row, "state"),
+        caption_ingest_state=_row_value(row, "caption_ingest_state"),
+        diarization_state=_row_value(row, "diarization_state"),
+        uploaded_at=_row_value(row, "uploaded_at"),
+        created_at=_row_value(row, "created_at"),
+        updated_at=_row_value(row, "updated_at"),
+        channel_name=_row_value(row, "channel_name"),
+        language=_row_value(row, "language"),
+        category=_row_value(row, "category"),
+        has_whisper_transcript=bool(_row_value(row, "has_whisper_transcript")),
+        has_youtube_transcript=bool(_row_value(row, "has_youtube_transcript")),
+        people=list(_row_value(row, "people") or []),
+        tags=list(_row_value(row, "tags") or []),
     )
 
 
@@ -122,9 +142,11 @@ def _recent_evidence_for_videos(db, videos: list[VideoInfo], limit: int = 24) ->
         .mappings()
         .all()
     )
+    metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in rows])
+
     return [
         ArchiveEvidenceMoment(
-            video=_video_from_row(row),
+            video=_video_from_row({**row, **metadata_map.get(str(row["video_id"]), {"people": [], "tags": []})}),
             start_ms=int(row["start_ms"]),
             end_ms=int(row["end_ms"]),
             snippet=row["snippet"],

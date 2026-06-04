@@ -331,6 +331,121 @@ class ArchiveNamedPeriodAdminListResponse(BaseModel):
     items: List[ArchiveNamedPeriodAdminResponse] = Field(default_factory=list, description="Named archive periods")
 
 
+class ArchivePerson(BaseModel):
+    slug: str = Field(..., description="Stable person slug")
+    display_name: str = Field(..., description="Display name")
+    aliases: List[str] = Field(default_factory=list, description="Known aliases")
+    description: Optional[str] = Field(None, description="Optional description")
+    role: Optional[str] = Field(None, description="Role on the video, if assigned")
+
+
+class ArchiveVideoTag(BaseModel):
+    slug: str = Field(..., description="Stable tag slug")
+    label: str = Field(..., description="Display label")
+    kind: str = Field("category", description="Tag kind")
+    description: Optional[str] = Field(None, description="Optional description")
+
+
+class ArchivePersonCreate(BaseModel):
+    display_name: str = Field(..., description="Display name")
+    slug: Optional[str] = Field(None, description="Optional stable person slug")
+    aliases: List[str] = Field(default_factory=list, description="Known aliases")
+    description: Optional[str] = Field(None, description="Optional description")
+    status: str = Field("published", description="Lifecycle status")
+    sort_order: Optional[int] = Field(None, description="Ordering weight")
+
+
+class ArchivePersonUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, description="Display name")
+    aliases: Optional[List[str]] = Field(None, description="Known aliases")
+    description: Optional[str] = Field(None, description="Optional description")
+    status: Optional[str] = Field(None, description="Lifecycle status")
+    sort_order: Optional[int] = Field(None, description="Ordering weight")
+
+
+class ArchivePersonAdmin(ArchivePerson):
+    id: uuid.UUID = Field(..., description="Person identifier")
+    status: str = Field("published", description="Lifecycle status")
+    sort_order: int = Field(0, description="Ordering weight")
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+
+
+class ArchivePersonAdminListResponse(BaseModel):
+    items: List[ArchivePersonAdmin] = Field(default_factory=list, description="Archive people")
+
+
+class ArchiveVideoTagCreate(BaseModel):
+    label: str = Field(..., description="Display label")
+    slug: Optional[str] = Field(None, description="Optional stable tag slug")
+    kind: str = Field("category", description="Tag kind")
+    description: Optional[str] = Field(None, description="Optional description")
+    status: str = Field("published", description="Lifecycle status")
+    sort_order: Optional[int] = Field(None, description="Ordering weight")
+
+
+class ArchiveVideoTagUpdate(BaseModel):
+    label: Optional[str] = Field(None, description="Display label")
+    kind: Optional[str] = Field(None, description="Tag kind")
+    description: Optional[str] = Field(None, description="Optional description")
+    status: Optional[str] = Field(None, description="Lifecycle status")
+    sort_order: Optional[int] = Field(None, description="Ordering weight")
+
+
+class ArchiveVideoTagAdmin(ArchiveVideoTag):
+    id: uuid.UUID = Field(..., description="Tag identifier")
+    status: str = Field("published", description="Lifecycle status")
+    sort_order: int = Field(0, description="Ordering weight")
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+
+
+class ArchiveVideoTagAdminListResponse(BaseModel):
+    items: List[ArchiveVideoTagAdmin] = Field(default_factory=list, description="Archive tags")
+
+
+class ArchiveVideoPersonAssignment(BaseModel):
+    slug: str = Field(..., description="Stable person slug")
+    role: Optional[str] = Field(None, description="Assigned role")
+    confidence: Optional[str] = Field(None, description="Assignment confidence")
+    notes: Optional[str] = Field(None, description="Assignment notes")
+
+
+class ArchiveVideoTagAssignment(BaseModel):
+    slug: str = Field(..., description="Stable tag slug")
+    confidence: Optional[str] = Field(None, description="Assignment confidence")
+    notes: Optional[str] = Field(None, description="Assignment notes")
+
+
+class ArchiveVideoMetadataUpdate(BaseModel):
+    people: List[ArchiveVideoPersonAssignment] = Field(default_factory=list, description="Assigned people")
+    tags: List[ArchiveVideoTagAssignment] = Field(default_factory=list, description="Assigned tags")
+
+
+class ArchiveVideoMetadataAdminVideo(BaseModel):
+    id: uuid.UUID = Field(..., description="Unique identifier for the video")
+    youtube_id: str = Field(..., description="YouTube video ID")
+    title: Optional[str] = Field(None, description="Video title")
+    duration_seconds: Optional[int] = Field(None, description="Video duration in seconds", ge=0)
+    state: Optional[str] = Field(None, description="Processing state")
+    caption_ingest_state: Optional[str] = Field(None, description="YouTube caption ingest state")
+    diarization_state: Optional[str] = Field(None, description="Diarization state")
+    uploaded_at: Optional[datetime] = Field(None, description="YouTube upload or stream publish time")
+    created_at: Optional[datetime] = Field(None, description="Local row creation time")
+    updated_at: Optional[datetime] = Field(None, description="Local row update time")
+    channel_name: Optional[str] = Field(None, description="YouTube channel name")
+    language: Optional[str] = Field(None, description="Detected or declared language")
+    category: Optional[str] = Field(None, description="Video category")
+    has_whisper_transcript: bool = Field(False, description="Whether Whisper transcript segments exist")
+    has_youtube_transcript: bool = Field(False, description="Whether YouTube captions exist")
+    people: List[ArchivePerson] = Field(default_factory=list, description="Assigned people")
+    tags: List[ArchiveVideoTag] = Field(default_factory=list, description="Assigned tags")
+
+
+class ArchiveVideoMetadataAdminListResponse(BaseModel):
+    items: List[ArchiveVideoMetadataAdminVideo] = Field(default_factory=list, description="Videos with assigned metadata")
+
+
 class ArchivePeriodOption(BaseModel):
     slug: str = Field(..., description="Stable period slug")
     label: str = Field(..., description="Public period label")
@@ -442,6 +557,8 @@ class VideoInfo(BaseModel):
     category: Optional[str] = Field(None, description="Video category")
     has_whisper_transcript: bool = Field(False, description="Whether Whisper transcript segments exist")
     has_youtube_transcript: bool = Field(False, description="Whether YouTube captions exist")
+    people: List[ArchivePerson] = Field(default_factory=list, description="Assigned people")
+    tags: List[ArchiveVideoTag] = Field(default_factory=list, description="Assigned tags")
 
     model_config = {
         "json_schema_extra": {

@@ -12,6 +12,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from app.archive.repository import ARCHIVE_VIDEO_FILTER_SQL, archive_repository
+from app.archive.video_metadata_repository import get_video_metadata_map
 from app.exceptions import ValidationError
 from app.schemas import (
     ArchiveEvidenceMoment,
@@ -240,6 +241,21 @@ def _safe_execute_many(db, sql: str, rows: Sequence[dict]):
     except (OperationalError, ProgrammingError):
         db.rollback()
         return None
+
+
+def _safe_video_metadata_map(db, video_ids: Sequence[object], published_only: bool = True):
+    try:
+        return get_video_metadata_map(db, list(video_ids), published_only=published_only)
+    except (OperationalError, ProgrammingError, AssertionError):
+        db.rollback()
+        return {str(video_id): {"people": [], "tags": []} for video_id in video_ids}
+
+
+def _attach_video_metadata(rows: Iterable[dict], metadata_map: dict[str, dict[str, list[dict]]]) -> None:
+    for row in rows:
+        metadata = metadata_map.get(str(row["video_id"]), {"people": [], "tags": []})
+        row["people"] = metadata.get("people", [])
+        row["tags"] = metadata.get("tags", [])
 
 
 def _in_clause(prefix: str, values: Sequence[object]) -> tuple[str, dict[str, object]]:
@@ -502,6 +518,8 @@ def _video_from_row(row) -> VideoInfo:
         category=row.get("category"),
         has_whisper_transcript=bool(row.get("has_whisper_transcript")),
         has_youtube_transcript=bool(row.get("has_youtube_transcript")),
+        people=list(row.get("people") or []),
+        tags=list(row.get("tags") or []),
     )
 
 
@@ -954,6 +972,8 @@ def _video_info_from_payload(payload: dict) -> VideoInfo:
         category=payload.get("category"),
         has_whisper_transcript=bool(payload.get("has_whisper_transcript")),
         has_youtube_transcript=bool(payload.get("has_youtube_transcript")),
+        people=list(payload.get("people") or []),
+        tags=list(payload.get("tags") or []),
     )
 
 
@@ -1129,6 +1149,9 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
             """,
             {"start_dt": start_dt, "end_dt": end_dt},
         )
+        metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in [*video_rows, *mention_rows]])
+        _attach_video_metadata(video_rows, metadata_map)
+        _attach_video_metadata(mention_rows, metadata_map)
 
         mention_rows_by_topic: dict[str, list[dict]] = defaultdict(list)
         topic_mentions_payload: list[dict] = []
@@ -1598,6 +1621,11 @@ def refresh_period_summaries(db, granularity: str = "month", limit: int = 120):
         ORDER BY v.uploaded_at DESC NULLS LAST
         """,
     )
+    video_metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in video_rows])
+    for row in video_rows:
+        metadata = video_metadata_map.get(str(row["video_id"]), {"people": [], "tags": []})
+        row["people"] = metadata.get("people", [])
+        row["tags"] = metadata.get("tags", [])
 
     mention_rows = _safe_mappings(
         db,
@@ -1634,6 +1662,11 @@ def refresh_period_summaries(db, granularity: str = "month", limit: int = 120):
         ORDER BY COALESCE(m.occurred_at, v.uploaded_at) DESC NULLS LAST, m.start_ms ASC
         """,
     )
+    mention_metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in mention_rows])
+    for row in mention_rows:
+        metadata = mention_metadata_map.get(str(row["video_id"]), {"people": [], "tags": []})
+        row["people"] = metadata.get("people", [])
+        row["tags"] = metadata.get("tags", [])
 
     mentions_by_period: dict[str, list[dict]] = defaultdict(list)
     mentions_by_period_topic: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -1931,6 +1964,8 @@ def get_durable_archive_intelligence(
         """,
         topic_params,
     )
+    mention_metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in mentions_rows])
+    _attach_video_metadata(mentions_rows, mention_metadata_map)
     if date_from is not None:
         lower = _coerce_datetime(date_from)
         mentions_rows = [row for row in mentions_rows if row.get("when_at") is not None and row["when_at"] >= lower]

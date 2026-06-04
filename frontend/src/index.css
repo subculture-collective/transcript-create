@@ -1,11 +1,11 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-display: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-body: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-sans: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
-  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', 'Menlo', 'Monaco', monospace;
+  --font-display: 'Alegreya Sans', 'Segoe UI', sans-serif;
+  --font-body: 'Alegreya Sans', 'Segoe UI', sans-serif;
+  --font-sans: 'Alegreya Sans', 'Segoe UI', sans-serif;
+  --font-serif: 'Atkinson Hyperlegible Next', 'Alegreya', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --font-mono: 'JetBrainsMono Nerd Font', 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Monaco', monospace;
   --color-canvas: #101014;
   --color-surface: #17171d;
   --color-surface-muted: #202029;

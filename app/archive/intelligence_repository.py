@@ -223,6 +223,17 @@ def _evidence_from_row(row, *, topic: str | None = None) -> ArchiveEvidenceMomen
     )
 
 
+def _public_topic_evidence_rows(rows: Iterable[dict], topic_label: str, limit: int) -> list[dict]:
+    """Return public citation rows that visibly contain the displayed topic.
+
+    Topic stats may use aliases for recall, but public citations should not look
+    unrelated. If the card says "Gaza", its cited snippets need to contain
+    "Gaza" rather than only an alias like "Israel".
+    """
+    matches = [row for row in rows if alias_matches_text(topic_label, row.get("snippet") or "")]
+    return matches[:limit]
+
+
 def _get_topics(db, topic_slug: str | None = None):
     params: dict[str, object] = {}
     where_parts = ["t.status = 'published'"]
@@ -644,7 +655,7 @@ def refresh_search_trends(db, granularity: str = "week"):
     return {"rows": len(insert_rows)}
 
 
-def refresh_period_summaries(db, granularity: str = "month", limit: int = 12):
+def refresh_period_summaries(db, granularity: str = "month", limit: int = 120):
     if granularity not in {"month", "week"}:
         granularity = "month"
 
@@ -739,7 +750,8 @@ def refresh_period_summaries(db, granularity: str = "month", limit: int = 12):
         videos = videos_by_period.get(period, [])
         mentions = mentions_by_period.get(period, [])
         evidence_payload = []
-        for row in mentions[:5]:
+        public_mentions = [row for row in mentions if alias_matches_text(row.get("topic_label") or "", row.get("snippet") or "")]
+        for row in public_mentions[:5]:
             evidence_payload.append(
                 {
                     "topic": row.get("topic_label"),
@@ -752,7 +764,7 @@ def refresh_period_summaries(db, granularity: str = "month", limit: int = 12):
                 }
             )
         snippets = [entry["snippet"] for entry in evidence_payload if entry.get("snippet")]
-        topic_names = list(dict.fromkeys(row.get("topic_label") for row in mentions if row.get("topic_label")))
+        topic_names = list(dict.fromkeys(row.get("topic_label") for row in public_mentions if row.get("topic_label")))
         summary_parts = [f"{_period_label(period, granularity)}: {len(videos)} videos."]
         if topic_names:
             summary_parts.append(f"Topics: {', '.join(topic_names[:3])}.")
@@ -792,7 +804,7 @@ def refresh_archive_intelligence(db, quick: bool = False):
         ("mentions", refresh_topic_mentions(db, segment_limit=1000 if quick else None)),
         ("topic_stats", refresh_topic_period_stats(db, granularity="month")),
         ("search_trends", refresh_search_trends(db, granularity="week")),
-        ("period_summaries", refresh_period_summaries(db, granularity="month", limit=12 if not quick else 6)),
+        ("period_summaries", refresh_period_summaries(db, granularity="month", limit=120 if not quick else 72)),
     ):
         for key, value in result.items():
             stats[f"{prefix}_{key}"] = value
@@ -956,7 +968,8 @@ def get_durable_archive_intelligence(
         topic_row = topic_rows_by_id.get(topic_id)
         if topic_row is None:
             continue
-        evidence = [_evidence_from_row(row, topic=topic_row["label"]) for row in mentions_by_topic.get(topic_id, [])[:2]]
+        evidence_rows = _public_topic_evidence_rows(mentions_by_topic.get(topic_id, []), topic_row["label"], 2)
+        evidence = [_evidence_from_row(row, topic=topic_row["label"]) for row in evidence_rows]
         snippets = [moment.snippet for moment in evidence]
         related_topics = []
         haystack = " ".join(snippets).lower()
@@ -1049,7 +1062,12 @@ def get_durable_archive_intelligence(
             topic_row = topic_rows_by_id.get(str(stat_row["topic_id"]))
             if topic_row is None:
                 continue
-            evidence = [_evidence_from_row(ev_row, topic=topic_row["label"]) for ev_row in mentions_by_period.get(period, []) if str(ev_row["topic_id"]) == str(stat_row["topic_id"])][:1]
+            evidence_rows = _public_topic_evidence_rows(
+                [ev_row for ev_row in mentions_by_period.get(period, []) if str(ev_row["topic_id"]) == str(stat_row["topic_id"])],
+                topic_row["label"],
+                1,
+            )
+            evidence = [_evidence_from_row(ev_row, topic=topic_row["label"]) for ev_row in evidence_rows]
             period_top_topics.append(
                 ArchiveTopicCard(
                     slug=topic_row["slug"],

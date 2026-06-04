@@ -44,7 +44,7 @@ def main(*, seed_topics: bool = False, auto_topics: bool = False, rebuild_mentio
             for key, value in refresh_search_trends(db, granularity="week").items():
                 stats[f"search_trends_{key}"] = value
         if refresh_summaries:
-            for key, value in refresh_period_summaries(db, granularity="month", limit=6 if quick else 12).items():
+            for key, value in refresh_period_summaries(db, granularity="month", limit=72 if quick else 120).items():
                 stats[f"period_summaries_{key}"] = value
     print(
         "archive intelligence backfill complete: "

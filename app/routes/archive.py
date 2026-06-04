@@ -46,7 +46,7 @@ def archive_timeline(
 )
 def archive_intelligence(
     topic_limit: int = Query(8, ge=1, le=20, description="Maximum number of topic cards to include"),
-    period_limit: int = Query(8, ge=1, le=20, description="Maximum number of periods to include"),
+    period_limit: int = Query(24, ge=1, le=120, description="Maximum number of periods to include"),
     granularity: str = Query("month", pattern="^(month|week)$", description="Period granularity for cached intelligence"),
     date_from: date | None = Query(None, description="Lower bound for cached intelligence periods"),
     date_to: date | None = Query(None, description="Upper bound for cached intelligence periods"),

@@ -103,23 +103,23 @@ describe('ExplorePage', () => {
 
     expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: '8' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '8 topics' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByLabelText('Date from')).toHaveValue('')
     expect(screen.getByLabelText('Date to')).toHaveValue('')
 
-    expect(screen.getByText('topics')).toBeInTheDocument()
+    expect(screen.getByText('1 topics')).toBeInTheDocument()
     expect(screen.getByText('ice protests')).toBeInTheDocument()
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/topics/ICE')).toBeTruthy()
-    expect(screen.getByText('Published')).toBeInTheDocument()
-    expect(screen.getByText('Editable')).toBeInTheDocument()
-    expect(screen.getByText('Hybrid')).toBeInTheDocument()
+    expect(screen.queryByText('Published')).not.toBeInTheDocument()
+    expect(screen.queryByText('Editable')).not.toBeInTheDocument()
+    expect(screen.queryByText('Hybrid')).not.toBeInTheDocument()
     expect(screen.getByText('May 2026')).toBeInTheDocument()
     expect(screen.getByAltText('Period video')).toHaveAttribute('src', expect.stringContaining('thumb123'))
     expect(screen.getByText('May 2026 contains 2 archived VODs and 1 highlighted topic.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Open cited moment/i })).toHaveAttribute('href', '/v/video-1?t=1171')
     expect(screen.getByText(/Topics are a hybrid of curated labels and automatic discovery/i)).toBeInTheDocument()
 
-    expect(getExploreIntelligence).toHaveBeenCalledWith({ granularity: 'month', topic_limit: 8, period_limit: 8 })
+    expect(getExploreIntelligence).toHaveBeenCalledWith({ granularity: 'month', topic_limit: 8, period_limit: 24 })
   })
 
   it('submits intelligence filters with params', async () => {
@@ -148,7 +148,7 @@ describe('ExplorePage', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Archive Intelligence' })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Week' }))
-    fireEvent.click(screen.getByRole('button', { name: '12' }))
+    fireEvent.click(screen.getByRole('button', { name: '12 topics' }))
     const from = screen.getByLabelText('Date from')
     const to = screen.getByLabelText('Date to')
     fireEvent.change(from, { target: { value: '2026-05-01' } })
@@ -159,7 +159,7 @@ describe('ExplorePage', () => {
       expect(getExploreIntelligence).toHaveBeenLastCalledWith({
         granularity: 'week',
         topic_limit: 12,
-        period_limit: 8,
+        period_limit: 24,
         date_from: '2026-05-01',
         date_to: '2026-05-31',
       })

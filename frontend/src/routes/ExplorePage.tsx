@@ -12,7 +12,7 @@ import { buildMonthRange, buildTimestampLink, formatDate, formatDuration, format
 const DEFAULT_QUERY: Required<Pick<ExploreIntelligenceQuery, 'granularity' | 'topic_limit' | 'period_limit'>> = {
   granularity: 'month',
   topic_limit: 8,
-  period_limit: 8,
+  period_limit: 24,
 };
 
 const SECTION_IDS = ['overview', 'trending', 'suggested', 'topics', 'timeline', 'method'] as const;
@@ -38,15 +38,6 @@ function periodBrowseHref(period: ArchivePeriodIntelligence) {
 
 function evidenceHref(moment: ArchiveEvidenceMoment) {
   return buildTimestampLink(moment.video.id, moment.start_ms);
-}
-
-function formatPillLabel(value?: string | null) {
-  if (!value) return '';
-  return value
-    .split(/[_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 export default function ExplorePage() {
@@ -137,7 +128,7 @@ export default function ExplorePage() {
   };
 
   const sectionsNav = (
-    <nav aria-label="Explore sections" className="rounded-2xl border border-border bg-surface/90 p-2 shadow-[0_12px_34px_rgba(0,0,0,0.18)] backdrop-blur-xl lg:sticky lg:top-24 lg:p-3">
+    <nav aria-label="Explore sections" className="flex h-full flex-col rounded-2xl border border-border bg-surface/90 p-2 shadow-[0_12px_34px_rgba(0,0,0,0.18)] backdrop-blur-xl lg:sticky lg:top-24 lg:p-3">
       <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
         {[
           ['overview', 'Overview'],
@@ -164,7 +155,7 @@ export default function ExplorePage() {
           );
         })}
       </div>
-      <div className="mt-3 hidden rounded-xl border border-border bg-surface-muted/70 p-3 text-xs text-muted lg:block">
+      <div className="mt-3 hidden flex-1 rounded-xl border border-border bg-surface-muted/70 p-3 text-xs text-muted lg:block">
         <div className="meta-label">Active view</div>
         <div className="mt-1 font-medium text-ink">{activeSection.replace(/^[a-z]/, (m) => m.toUpperCase())}</div>
         <div className="mt-2">{filterSummary}</div>
@@ -184,18 +175,13 @@ export default function ExplorePage() {
     <div className="space-y-6 lg:space-y-8">
       {error && <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning" role="alert">{error}</div>}
 
-      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-stretch">
         <div className="lg:order-1">{sectionsNav}</div>
 
         <div className="lg:order-2">
           <section id="overview" className="surface-card scroll-mt-24 space-y-5">
             <div className="flex flex-wrap items-center gap-2">
               <div className="archive-eyebrow">Explore</div>
-              {data.exploration_modes.map((mode) => (
-                <span key={mode} className="source-pill">
-                  {mode}
-                </span>
-              ))}
               {refreshing && <span className="source-pill border-accent/30 text-accent">Refreshing</span>}
             </div>
 
@@ -260,11 +246,11 @@ export default function ExplorePage() {
                         type="button"
                         onClick={() => setFilters((current) => ({ ...current, topic_limit: value }))}
                         aria-pressed={filters.topic_limit === value}
-                        className={`btn-ghost rounded-full border px-4 py-2 text-sm ${
+                        className={`btn-ghost min-w-24 rounded-xl border px-4 py-2 text-sm ${
                           filters.topic_limit === value ? 'border-accent/60 bg-accent/15 text-ink' : ''
                         }`}
                       >
-                        {value}
+                        {value} topics
                       </button>
                     ))}
                   </div>
@@ -346,7 +332,7 @@ export default function ExplorePage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="section-title">Topic atlas</h2>
-              <p className="text-sm text-muted">Hybrid topic cards with curation state, editability, and evidence.</p>
+              <p className="text-sm text-muted">Topic cards with momentum, aliases, and cited evidence.</p>
             </div>
             <div className="text-xs uppercase tracking-[0.22em] text-subtle">{formatNumber(data.topic_cards.length)} topics</div>
           </div>
@@ -361,11 +347,6 @@ export default function ExplorePage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-2">
                       <h3 className="text-lg font-semibold text-ink group-hover:text-accent">{topic.label}</h3>
-                      <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em]">
-                        <span className="source-pill">{formatPillLabel(topic.source) || 'Transcript'}</span>
-                        {topic.status && <span className="source-pill">{formatPillLabel(topic.status)}</span>}
-                        {topic.is_editable && <span className="source-pill text-accent">Editable</span>}
-                      </div>
                     </div>
                     <div className="text-right text-sm text-muted">
                       <div className="text-base font-semibold text-ink">{formatNumber(topic.trend_score)}</div>

@@ -8,7 +8,7 @@ import {
   useAuth,
   track,
 } from '../services';
-import type { Segment, TranscriptResponse, VideoInfo, SearchHit, TranscriptBlock } from '../types/api';
+import type { Segment, TranscriptResponse, VideoInfo, SearchHit } from '../types/api';
 // favorites, useAuth imported from services barrel
 import { ExportMenu } from '../components';
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer';
@@ -89,8 +89,46 @@ export default function VideoPage() {
     }
   }, [videoId, transcriptQuery, user]);
 
-  // Scroll to a hash if provided
+  // Scroll/select by explicit hash first. The `t=` URL param is whole-second
+  // precision, so using it first can select the previous paragraph for starts
+  // like 12.8s. Hashes preserve the exact segment/block identity.
   useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const segMatch = hash.match(/^#seg-(\d+)$/);
+      if (segMatch) {
+        const segId = Number(segMatch[1]);
+        const seg = transcript?.segments[segId - 1];
+        const block = transcript?.blocks?.find((candidate) => candidate.segment_ids.includes(segId - 1));
+        const el = document.getElementById(`seg-${segId}`) ?? (block ? document.getElementById(`block-${block.block_index}`) : null);
+        if (seg && el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setActiveSegId(segId);
+          setActiveBlockIndex(block?.block_index ?? null);
+          return;
+        }
+      }
+
+      const blockMatch = hash.match(/^#block-(\d+)$/);
+      if (blockMatch) {
+        const blockIndex = Number(blockMatch[1]);
+        const block = transcript?.blocks?.find((candidate) => candidate.block_index === blockIndex);
+        const el = document.getElementById(`block-${blockIndex}`);
+        if (block && el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setActiveSegId((block.segment_ids[0] ?? 0) + 1);
+          setActiveBlockIndex(block.block_index);
+          return;
+        }
+      }
+
+      const el = document.querySelector(hash);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+
     if (transcript && startSeconds > 0) {
       const startMs = startSeconds * 1000;
       const segIndex = transcript.segments.findIndex((seg) => startMs >= seg.start_ms && startMs < seg.end_ms);
@@ -103,15 +141,6 @@ export default function VideoPage() {
           setActiveBlockIndex(block?.block_index ?? null);
           return;
         }
-      }
-    }
-
-    const hash = window.location.hash;
-    if (hash) {
-      const el = document.querySelector(hash);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
       }
     }
   }, [startSeconds, transcript]);
@@ -135,12 +164,12 @@ export default function VideoPage() {
     history.replaceState(null, '', `#seg-${id}`);
   }
 
-  function onClickBlock(block: NonNullable<TranscriptResponse['blocks']>[number]) {
-    const firstSegId = (block.segment_ids[0] ?? 0) + 1;
-    setActiveBlockIndex(block.block_index);
-    setActiveSegId(firstSegId);
-    jumpTo(block.start_ms);
-    history.replaceState(null, '', `#block-${block.block_index}`);
+  function onClickFormattedSentence(segment: Segment, segIndex: number) {
+    setActiveSegId(segIndex);
+    const blockId = hasFormattedBlocks ? formattedBlocks.find((candidate) => candidate.segment_ids.includes(segIndex - 1))?.block_index : null;
+    setActiveBlockIndex(blockId ?? null);
+    jumpTo(segment.start_ms);
+    history.replaceState(null, '', `#seg-${segIndex}`);
   }
 
   const start = useMemo(() => secondsToYouTubeTs(startSeconds), [startSeconds]);
@@ -241,16 +270,6 @@ export default function VideoPage() {
     () => buildTranscriptTurns(transcript?.segments ?? [], hits),
     [transcript?.segments, hits]
   );
-  const isSavedBlock = useCallback(
-    (block: TranscriptBlock) => {
-      if (!videoId) return false;
-      return (
-        block.segment_ids.some((segIdx) => favorites.has({ videoId, segIndex: segIdx + 1 })) ||
-        serverFavs.some((favorite) => favorite.start_ms === block.start_ms && favorite.end_ms === block.end_ms)
-      );
-    },
-    [serverFavs, videoId]
-  );
   const isSavedSegment = useCallback(
     (segment: Segment, segIndex: number) => {
       if (!videoId) return false;
@@ -332,8 +351,8 @@ export default function VideoPage() {
               hits={hits}
               activeBlockIndex={activeBlockIndex}
               activeSegId={activeSegId}
-              isSavedBlock={isSavedBlock}
-              onClickBlock={onClickBlock}
+              isSavedSegment={isSavedSegment}
+              onClickSentence={onClickFormattedSentence}
               onSaveMoment={saveTranscriptMoment}
               onCopyQuote={copyTranscriptQuote}
             />

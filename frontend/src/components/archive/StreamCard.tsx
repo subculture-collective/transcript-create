@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { DateField } from '../../features/streams/library';
 import { formatDate, formatDuration } from '../../features/streams/library';
 import type { VideoInfo } from '../../types/api';
+import VideoMetadataChips from './VideoMetadataChips';
 
 type StreamCardProps = {
   video: VideoInfo;
@@ -11,6 +12,10 @@ type StreamCardProps = {
 export default function StreamCard({ video, dateField }: StreamCardProps) {
   const title = video.title || `Video ${video.youtube_id}`;
   const dateValue = video[dateField];
+  const metadata = [
+    ...(video.people ?? []).map((person) => ({ key: `person-${person.slug}`, label: person.display_name })),
+    ...(video.tags ?? []).map((tag) => ({ key: `tag-${tag.slug}`, label: tag.label })),
+  ];
 
   return (
     <Link to={`/v/${video.id}`} className="surface-card-compact group flex h-full flex-col overflow-hidden border border-border/80 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent hover:shadow-lg">
@@ -40,6 +45,12 @@ export default function StreamCard({ video, dateField }: StreamCardProps) {
             <div className="line-clamp-1">{video.channel_name || 'Unknown channel'}</div>
           </div>
         </div>
+
+        {metadata.length > 0 && (
+          <div className="text-xs">
+            <VideoMetadataChips label="VOD metadata" items={metadata} limit={3} />
+          </div>
+        )}
 
         <div className="mt-auto space-y-2 text-sm text-muted">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

@@ -33,6 +33,14 @@ describe('HomePage', () => {
           duration_seconds: 1800,
           uploaded_at: '2026-05-30T10:00:00Z',
           has_whisper_transcript: true,
+          people: [
+            { slug: 'guest-one', display_name: 'Guest One', aliases: [] },
+            { slug: 'guest-two', display_name: 'Guest Two', aliases: [] },
+          ],
+          tags: [
+            { slug: 'chadvice', label: 'Chadvice', kind: 'category' },
+            { slug: 'gaming', label: 'Gaming', kind: 'category' },
+          ],
         },
       ],
       popular_searches: [{ term: 'rent', frequency: 9 }],
@@ -48,6 +56,12 @@ describe('HomePage', () => {
     expect(screen.getByPlaceholderText('Search any topic, line, guest, or phrase…')).toBeInTheDocument();
     expect(screen.getByText('VODs')).toBeInTheDocument();
     expect(screen.getByText('Newest VOD')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'VOD metadata' })).toBeInTheDocument();
+    expect(screen.getByText('Guest One')).toBeInTheDocument();
+    expect(screen.getByText('Guest Two')).toBeInTheDocument();
+    expect(screen.getByText('Chadvice')).toBeInTheDocument();
+    expect(screen.getByText('+1')).toBeInTheDocument();
+    expect(screen.queryByText('Gaming')).not.toBeInTheDocument();
     expect(screen.getByText('rent')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue with Twitch' })).toBeInTheDocument();

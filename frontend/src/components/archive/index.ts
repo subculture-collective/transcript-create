@@ -5,5 +5,6 @@ export { default as StatCard } from './StatCard';
 export { default as StreamCard } from './StreamCard';
 export { default as StreamFiltersBar } from './StreamFiltersBar';
 export { default as VideoCard } from './VideoCard';
+export { default as VideoMetadataChips } from './VideoMetadataChips';
 export { default as TopicMentionCard } from './TopicMentionCard';
 export { default as TopicStatsGrid } from './TopicStatsGrid';

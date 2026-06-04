@@ -7,6 +7,7 @@ import type {
   ExploreIntelligenceResponse,
 } from '../types/api';
 import { buildMonthRange, buildTimestampLink, formatDate, formatDuration, formatNumber, formatTimestamp } from '../features/archive/format';
+import { VideoMetadataChips } from '../components/archive';
 
 type PeriodKind = 'latest' | 'week' | 'month' | 'event' | 'date';
 
@@ -635,6 +636,19 @@ export default function ExplorePage() {
                               <div className="p-3 text-xs text-muted">
                                 <div className="line-clamp-2 font-medium text-ink">{video.title || 'Untitled VOD'}</div>
                                 <div className="mt-1 line-clamp-1 text-subtle">{formatDate(video.uploaded_at ?? null)}</div>
+                                {(video.people?.length || video.tags?.length) ? (
+                                  <div className="mt-2">
+                                    <VideoMetadataChips
+                                      label="VOD metadata"
+                                      items={[
+                                        ...(video.people ?? []).map((person) => ({ key: `person-${person.slug}`, label: person.display_name })),
+                                        ...(video.tags ?? []).map((tag) => ({ key: `tag-${tag.slug}`, label: tag.label })),
+                                      ]}
+                                      limit={3}
+                                      className="flex flex-wrap gap-1"
+                                    />
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
                           ))}

@@ -43,6 +43,8 @@ describe('StreamsPage', () => {
           updated_at: '2026-05-11T12:00:00Z',
           has_whisper_transcript: true,
           has_youtube_transcript: false,
+          people: [{ slug: 'guest-one', display_name: 'Guest One', aliases: [] }],
+          tags: [{ slug: 'chadvice', label: 'Chadvice', kind: 'category' }],
         },
       ],
       page_info: {
@@ -102,6 +104,9 @@ describe('StreamsPage', () => {
     expect(renderedLinks[1]).toHaveAttribute('href', '/v/video-2');
     expect(screen.getByText('First stream')).toBeInTheDocument();
     expect(screen.getByText('Channel Alpha')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'VOD metadata' })).toBeInTheDocument();
+    expect(screen.getByText('Guest One')).toBeInTheDocument();
+    expect(screen.getByText('Chadvice')).toBeInTheDocument();
     expect(listMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ limit: 24, offset: 0, completed_only: false, date_field: 'uploaded_at' })
     );

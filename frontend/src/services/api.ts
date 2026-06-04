@@ -1,6 +1,7 @@
 import ky from 'ky';
 import type {
   ArchiveSearchFilters,
+  ArchivePeriodOptionsResponse,
   ArchiveSummary,
   ExploreIntelligenceQuery,
   ExploreIntelligenceResponse,
@@ -96,8 +97,9 @@ export const api = {
   },
   async getExploreIntelligence(opts?: ExploreIntelligenceQuery) {
     const params = new URLSearchParams();
-    if (opts?.granularity) params.set('granularity', opts.granularity);
+    if (opts?.period) params.set('period', opts.period);
     if (opts?.topic_limit != null) params.set('topic_limit', String(opts.topic_limit));
+    if (opts?.granularity) params.set('granularity', opts.granularity);
     if (opts?.period_limit != null) params.set('period_limit', String(opts.period_limit));
     if (opts?.date_from) params.set('date_from', opts.date_from);
     if (opts?.date_to) params.set('date_to', opts.date_to);
@@ -107,6 +109,17 @@ export const api = {
     }
 
     return http.get('archive/intelligence').json<ExploreIntelligenceResponse>();
+  },
+  async getExplorePeriods(opts?: { kind?: string; limit?: number }) {
+    const params = new URLSearchParams();
+    if (opts?.kind) params.set('kind', opts.kind);
+    if (opts?.limit != null) params.set('limit', String(opts.limit));
+
+    if (params.toString()) {
+      return http.get('archive/intelligence/periods', { searchParams: params }).json<ArchivePeriodOptionsResponse>();
+    }
+
+    return http.get('archive/intelligence/periods').json<ArchivePeriodOptionsResponse>();
   },
   async getTranscript(videoId: string) {
     return http

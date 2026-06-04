@@ -102,6 +102,23 @@ export interface ArchivePeriodIntelligence {
   evidence: ArchiveEvidenceMoment[];
 }
 
+export interface ArchivePeriodOption {
+  slug: string;
+  label: string;
+  kind: string;
+  date_from: string;
+  date_to: string;
+  description?: string | null;
+  video_count: number;
+  total_duration_seconds: number;
+}
+
+export interface ArchivePeriodOptionsResponse {
+  periods: ArchivePeriodOption[];
+  selected_period?: ArchivePeriodOption | null;
+  query_time_ms?: number | null;
+}
+
 export interface ExploreIntelligenceResponse {
   summary: ArchiveSummary;
   exploration_modes: string[];
@@ -109,12 +126,15 @@ export interface ExploreIntelligenceResponse {
   suggested_searches: ArchiveTrendingSearch[];
   topic_cards: ArchiveTopicCard[];
   periods: ArchivePeriodIntelligence[];
+  selected_period?: ArchivePeriodOption | null;
+  period_options: ArchivePeriodOption[];
   query_time_ms?: number | null;
 }
 
 export interface ExploreIntelligenceQuery {
-  granularity?: 'month' | 'week';
+  period?: string;
   topic_limit?: number;
+  granularity?: 'month' | 'week';
   period_limit?: number;
   date_from?: string;
   date_to?: string;

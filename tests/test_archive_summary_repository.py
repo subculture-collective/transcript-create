@@ -7,7 +7,15 @@ from sqlalchemy.exc import ProgrammingError
 
 from app import crud
 from app.archive.repository import ArchiveRepository, archive_repository
-from app.archive.intelligence_repository import SEED_TOPICS, alias_matches_text, autopublish_search_topics, seed_archive_topics, slugify_topic
+from app.archive.intelligence_repository import (
+    SEED_TOPICS,
+    _month_bounds,
+    _week_bounds,
+    alias_matches_text,
+    autopublish_search_topics,
+    seed_archive_topics,
+    slugify_topic,
+)
 
 
 class _FakeResult:
@@ -175,6 +183,16 @@ def test_alias_matches_text_uses_word_boundaries():
     assert alias_matches_text("ice", "ICE Delaney protest") is True
     assert alias_matches_text("new jersey", "rally in New   Jersey today") is True
     assert alias_matches_text("ice", "anti-Semite price") is False
+
+
+def test_named_period_bounds_helpers_cover_calendar_edges():
+    month_start, month_end = _month_bounds(datetime(2026, 6, 4, tzinfo=timezone.utc).date())
+    week_start, week_end = _week_bounds(datetime(2026, 6, 4, tzinfo=timezone.utc).date())
+
+    assert month_start.isoformat() == "2026-06-01"
+    assert month_end.isoformat() == "2026-06-30"
+    assert week_start.weekday() == 0
+    assert week_end.weekday() == 6
 
 
 def test_seed_archive_topics_uses_publishable_defaults():

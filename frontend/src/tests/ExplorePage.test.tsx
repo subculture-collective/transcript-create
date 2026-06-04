@@ -11,7 +11,40 @@ describe('ExplorePage', () => {
   })
 
   it('renders archive intelligence sections, controls, and evidence links', async () => {
-    const getExploreIntelligence = vi.spyOn(api, 'getExploreIntelligence').mockResolvedValue({
+    const weekOption = {
+      slug: '2026-w22',
+      label: 'Week 22, 2026',
+      kind: 'week',
+      date_from: '2026-05-25',
+      date_to: '2026-05-31',
+      description: 'A late-May week with fast-moving clips.',
+      video_count: 4,
+      total_duration_seconds: 8100,
+    }
+
+    const eventOption = {
+      slug: 'launch-day',
+      label: 'Launch Day',
+      kind: 'event',
+      date_from: '2026-05-14',
+      date_to: '2026-05-14',
+      description: 'A major event day in the archive.',
+      video_count: 2,
+      total_duration_seconds: 3600,
+    }
+
+    const monthOption = {
+      slug: '2026-05',
+      label: 'May 2026',
+      kind: 'month',
+      date_from: '2026-05-01',
+      date_to: '2026-05-31',
+      description: 'The main archive slice for the month.',
+      video_count: 12,
+      total_duration_seconds: 7200,
+    }
+
+    const baseResponse = {
       summary: {
         creator_name: 'HasAnAra',
         video_count: 12,
@@ -82,6 +115,20 @@ describe('ExplorePage', () => {
           ],
         },
       ],
+      selected_period: monthOption,
+      period_options: [monthOption, weekOption, eventOption],
+    }
+
+    const getExploreIntelligence = vi.spyOn(api, 'getExploreIntelligence').mockImplementation(async (opts) => {
+      if (opts?.period === weekOption.slug) {
+        return { ...baseResponse, selected_period: weekOption }
+      }
+
+      if (opts?.period === eventOption.slug) {
+        return { ...baseResponse, selected_period: eventOption }
+      }
+
+      return baseResponse
     })
 
     render(
@@ -101,11 +148,14 @@ describe('ExplorePage', () => {
     expect(screen.getByRole('link', { name: 'Timeline' })).toHaveAttribute('href', '#timeline')
     expect(screen.getByRole('link', { name: 'Method' })).toHaveAttribute('href', '#method')
 
-    expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Latest' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Weeks' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Months' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Dates' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: '8 topics' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText('Date from')).toHaveValue('')
-    expect(screen.getByLabelText('Date to')).toHaveValue('')
+    expect(screen.queryByLabelText('Date from')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Date to')).not.toBeInTheDocument()
 
     expect(screen.getByText('1 topics')).toBeInTheDocument()
     expect(screen.getByText('ice protests')).toBeInTheDocument()
@@ -113,17 +163,51 @@ describe('ExplorePage', () => {
     expect(screen.queryByText('Published')).not.toBeInTheDocument()
     expect(screen.queryByText('Editable')).not.toBeInTheDocument()
     expect(screen.queryByText('Hybrid')).not.toBeInTheDocument()
-    expect(screen.getByText('May 2026')).toBeInTheDocument()
+    expect(screen.getAllByText('May 2026 · 2026-05-01 → 2026-05-31 · 8 topics').length).toBeGreaterThan(0)
+    expect(screen.getByText('Predefined periods are materialized by a backfill/refresher pipeline, so Explore shows consistent slices instead of live date-window guesses.')).toBeInTheDocument()
     expect(screen.getByAltText('Period video')).toHaveAttribute('src', expect.stringContaining('thumb123'))
     expect(screen.getByText('May 2026 contains 2 archived VODs and 1 highlighted topic.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Open cited moment/i })).toHaveAttribute('href', '/v/video-1?t=1171')
-    expect(screen.getByText(/Topics are a hybrid of curated labels and automatic discovery/i)).toBeInTheDocument()
+    expect(screen.getByText(/Predefined periods are materialized by a backfill\/refresher pipeline/i)).toBeInTheDocument()
 
-    expect(getExploreIntelligence).toHaveBeenCalledWith({ granularity: 'month', topic_limit: 8, period_limit: 24 })
+    expect(getExploreIntelligence).toHaveBeenCalledWith({ topic_limit: 8 })
   })
 
-  it('submits intelligence filters with params', async () => {
-    const getExploreIntelligence = vi.spyOn(api, 'getExploreIntelligence').mockResolvedValue({
+  it('refetches selected predefined periods and topic counts with the current period', async () => {
+    const weekOption = {
+      slug: '2026-w22',
+      label: 'Week 22, 2026',
+      kind: 'week',
+      date_from: '2026-05-25',
+      date_to: '2026-05-31',
+      description: 'A late-May week with fast-moving clips.',
+      video_count: 4,
+      total_duration_seconds: 8100,
+    }
+
+    const eventOption = {
+      slug: 'launch-day',
+      label: 'Launch Day',
+      kind: 'event',
+      date_from: '2026-05-14',
+      date_to: '2026-05-14',
+      description: 'A major event day in the archive.',
+      video_count: 2,
+      total_duration_seconds: 3600,
+    }
+
+    const monthOption = {
+      slug: '2026-05',
+      label: 'May 2026',
+      kind: 'month',
+      date_from: '2026-05-01',
+      date_to: '2026-05-31',
+      description: 'The main archive slice for the month.',
+      video_count: 12,
+      total_duration_seconds: 7200,
+    }
+
+    const response = {
       summary: {
         creator_name: 'HasAnAra',
         video_count: 1,
@@ -137,6 +221,20 @@ describe('ExplorePage', () => {
       suggested_searches: [],
       topic_cards: [],
       periods: [],
+      selected_period: monthOption,
+      period_options: [monthOption, weekOption, eventOption],
+    }
+
+    const getExploreIntelligence = vi.spyOn(api, 'getExploreIntelligence').mockImplementation(async (opts) => {
+      if (opts?.period === weekOption.slug) {
+        return { ...response, selected_period: weekOption }
+      }
+
+      if (opts?.period === eventOption.slug) {
+        return { ...response, selected_period: eventOption }
+      }
+
+      return response
     })
 
     render(
@@ -147,22 +245,32 @@ describe('ExplorePage', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Archive Intelligence' })).toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: 'Week' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Weeks' }))
+    await waitFor(() => expect(screen.getByText('Week 22, 2026')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Week 22, 2026'))
+    await waitFor(() => {
+      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: '2026-w22', topic_limit: 8 })
+    })
+
     fireEvent.click(screen.getByRole('button', { name: '12 topics' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply' })).not.toBeDisabled())
-    const from = screen.getByLabelText('Date from')
-    const to = screen.getByLabelText('Date to')
-    fireEvent.change(from, { target: { value: '2026-05-01' } })
-    fireEvent.change(to, { target: { value: '2026-05-31' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => {
+      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: '2026-w22', topic_limit: 12 })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Events' }))
+    await waitFor(() => expect(screen.getByText('Launch Day')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Day'))
+
+    await waitFor(() => {
+      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: 'launch-day', topic_limit: 12 })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '16 topics' }))
 
     await waitFor(() => {
       expect(getExploreIntelligence).toHaveBeenLastCalledWith({
-        granularity: 'week',
-        topic_limit: 12,
-        period_limit: 24,
-        date_from: '2026-05-01',
-        date_to: '2026-05-31',
+        period: 'launch-day',
+        topic_limit: 16,
       })
     })
   })

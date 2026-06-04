@@ -5,6 +5,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timezone, timedelta
+import calendar
 from typing import Iterable, Sequence
 
 from sqlalchemy import bindparam, text
@@ -14,6 +15,9 @@ from app.archive.repository import ARCHIVE_VIDEO_FILTER_SQL, archive_repository
 from app.schemas import (
     ArchiveEvidenceMoment,
     ArchiveIntelligenceResponse,
+    ArchiveNamedPeriod,
+    ArchivePeriodOption,
+    ArchivePeriodOptionsResponse,
     ArchivePeriodIntelligence,
     ArchiveTopicCard,
     ArchiveTrendingSearch,
@@ -49,6 +53,41 @@ AUTO_TOPIC_STOP_TERMS = {
     "twitch",
     "youtube",
 }
+
+CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
+    {
+        "slug": "2024-election",
+        "label": "Election 2024",
+        "kind": "event",
+        "date_from": date(2024, 1, 1),
+        "date_to": date(2024, 11, 6),
+        "description": "2024 U.S. election cycle and election day coverage",
+    },
+    {
+        "slug": "october-7",
+        "label": "October 7",
+        "kind": "date",
+        "date_from": date(2023, 10, 7),
+        "date_to": date(2023, 10, 14),
+        "description": "October 7 attacks and immediate aftermath",
+    },
+    {
+        "slug": "september-11",
+        "label": "September 11",
+        "kind": "date",
+        "date_from": date(2026, 9, 11),
+        "date_to": date(2026, 9, 11),
+        "description": "September 11 reference period",
+    },
+    {
+        "slug": "august-21",
+        "label": "August 21",
+        "kind": "date",
+        "date_from": date(2026, 8, 21),
+        "date_to": date(2026, 8, 21),
+        "description": "August 21 reference period",
+    },
+)
 
 
 def slugify_topic(value: str) -> str:
@@ -176,6 +215,92 @@ def _period_label(period: str, granularity: str) -> str:
     if granularity == "week":
         return f"Week of {start.strftime('%Y-%m-%d')}"
     return start.strftime("%B %Y")
+
+
+def _as_date(value: date | datetime | None) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def _month_bounds(value: date) -> tuple[date, date]:
+    last_day = calendar.monthrange(value.year, value.month)[1]
+    return value.replace(day=1), value.replace(day=last_day)
+
+
+def _week_bounds(value: date) -> tuple[date, date]:
+    monday = value - timedelta(days=value.weekday())
+    return monday, monday + timedelta(days=6)
+
+
+def _named_period_option_row(row) -> ArchivePeriodOption:
+    return ArchivePeriodOption(
+        slug=row["slug"],
+        label=row["label"],
+        kind=row["kind"],
+        date_from=row["date_from"],
+        date_to=row["date_to"],
+        description=row.get("description"),
+        video_count=int(row.get("video_count") or 0),
+        total_duration_seconds=int(row.get("total_duration_seconds") or 0),
+    )
+
+
+def _named_period_model_row(row) -> ArchiveNamedPeriod:
+    return ArchiveNamedPeriod(
+        slug=row["slug"],
+        label=row["label"],
+        kind=row["kind"],
+        date_from=row["date_from"],
+        date_to=row["date_to"],
+        description=row.get("description"),
+        status=row.get("status") or "published",
+        sort_order=int(row.get("sort_order") or 0),
+        video_count=int(row.get("video_count") or 0),
+        total_duration_seconds=int(row.get("total_duration_seconds") or 0),
+        summary=row.get("summary") or "",
+    )
+
+
+def _named_period_evidence_rows(rows: Iterable[dict], topic_label: str, limit: int) -> list[dict]:
+    return _public_topic_evidence_rows(rows, topic_label, limit)
+
+
+def _rows_to_video_infos(rows: Iterable[dict], limit: int | None = None) -> list[VideoInfo]:
+    videos: list[VideoInfo] = []
+    seen: set[str] = set()
+    for row in rows:
+        video_id = str(row["video_id"])
+        if video_id in seen:
+            continue
+        seen.add(video_id)
+        videos.append(_video_from_row(row))
+        if limit is not None and len(videos) >= limit:
+            break
+    return videos
+
+
+def _video_row_to_public_payload(row) -> dict:
+    video = _video_from_row(row)
+    payload = video.model_dump(mode="json")
+    payload["video_id"] = payload.pop("id")
+    return payload
+
+
+def _evidence_row_to_public_payload(row, *, topic: str | None = None) -> dict:
+    return {
+        "video": _video_from_row(row).model_dump(mode="json"),
+        "start_ms": int(row["start_ms"] or 0),
+        "end_ms": int(row["end_ms"] or 0),
+        "snippet": row["snippet"],
+        "topic": topic,
+    }
+
+
+def _named_period_public_option(option: ArchivePeriodOption) -> ArchivePeriodOption:
+    return option
 
 
 def _within_period_range(period: str, granularity: str, date_from: date | datetime | None, date_to: date | datetime | None) -> bool:
@@ -307,6 +432,451 @@ def seed_archive_topics(db):
             )
         updated += 1
     return {"topics": inserted, "aliases": updated}
+
+
+def _shift_years(value: date, years: int) -> date:
+    try:
+        return value.replace(year=value.year - years)
+    except ValueError:
+        return value.replace(year=value.year - years, day=28)
+
+
+def _named_period_records_from_videos(db, years_back: int) -> list[dict[str, object]]:
+    cutoff = _shift_years(date.today(), years_back)
+    month_rows = _safe_mappings(
+        db,
+        """
+        SELECT DISTINCT date_trunc('month', v.uploaded_at)::date AS period_start
+        FROM videos v
+        WHERE (""" + ARCHIVE_VIDEO_FILTER_SQL + """)
+          AND v.uploaded_at IS NOT NULL
+          AND v.uploaded_at::date >= :cutoff
+        ORDER BY period_start DESC
+        """,
+        {"cutoff": cutoff},
+    )
+    week_rows = _safe_mappings(
+        db,
+        """
+        SELECT DISTINCT date_trunc('week', v.uploaded_at)::date AS period_start
+        FROM videos v
+        WHERE (""" + ARCHIVE_VIDEO_FILTER_SQL + """)
+          AND v.uploaded_at IS NOT NULL
+          AND v.uploaded_at::date >= :cutoff
+        ORDER BY period_start DESC
+        """,
+        {"cutoff": cutoff},
+    )
+
+    records: list[dict[str, object]] = []
+    for row in month_rows:
+        period_start = row.get("period_start")
+        if not isinstance(period_start, date):
+            continue
+        date_from, date_to = _month_bounds(period_start)
+        slug = date_from.strftime("%Y-%m")
+        records.append(
+            {
+                "slug": slug,
+                "label": date_from.strftime("%B %Y"),
+                "kind": "month",
+                "date_from": date_from,
+                "date_to": date_to,
+                "description": None,
+                "status": "published",
+                "sort_order": date_from.toordinal(),
+            }
+        )
+
+    for row in week_rows:
+        period_start = row.get("period_start")
+        if not isinstance(period_start, date):
+            continue
+        date_from, date_to = _week_bounds(period_start)
+        slug = date_from.strftime("%G-W%V")
+        records.append(
+            {
+                "slug": slug,
+                "label": f"Week of {date_from.strftime('%Y-%m-%d')}",
+                "kind": "week",
+                "date_from": date_from,
+                "date_to": date_to,
+                "description": None,
+                "status": "published",
+                "sort_order": date_from.toordinal(),
+            }
+        )
+
+    for record in CURATED_NAMED_PERIODS:
+        date_to = record["date_to"]
+        assert isinstance(date_to, date)
+        records.append({**record, "status": "published", "sort_order": date_to.toordinal()})
+    return records
+
+
+def seed_named_periods(db, years_back: int = 6):
+    records = _named_period_records_from_videos(db, years_back)
+    inserted = 0
+    for record in records:
+        result = _safe_execute(
+            db,
+            """
+            INSERT INTO archive_named_periods (
+                slug, label, kind, date_from, date_to, description, status, sort_order, created_at, updated_at
+            ) VALUES (
+                :slug, :label, :kind, :date_from, :date_to, :description, :status, :sort_order, now(), now()
+            )
+            ON CONFLICT (slug) DO UPDATE SET
+                label = EXCLUDED.label,
+                kind = EXCLUDED.kind,
+                date_from = EXCLUDED.date_from,
+                date_to = EXCLUDED.date_to,
+                description = EXCLUDED.description,
+                status = EXCLUDED.status,
+                sort_order = EXCLUDED.sort_order,
+                updated_at = now()
+            """,
+            record,
+        )
+        if result is not None:
+            inserted += 1
+    return {"periods": inserted}
+
+
+def list_period_options(db, kind: str | None = None, limit: int = 120) -> ArchivePeriodOptionsResponse:
+    params: dict[str, object] = {"limit": limit}
+    where_parts = ["p.status = 'published'"]
+    if kind:
+        where_parts.append("p.kind = :kind")
+        params["kind"] = kind
+    where_sql = "WHERE " + " AND ".join(where_parts)
+    rows = _safe_mappings(
+        db,
+        f"""
+        SELECT
+            p.slug,
+            p.label,
+            p.kind,
+            p.date_from,
+            p.date_to,
+            p.description,
+            p.status,
+            p.sort_order,
+            COALESCE(s.video_count, 0) AS video_count,
+            COALESCE(s.total_duration_seconds, 0) AS total_duration_seconds,
+            COALESCE(s.summary, '') AS summary
+        FROM archive_named_periods p
+        LEFT JOIN archive_named_period_stats s ON s.period_id = p.id
+        {where_sql}
+        ORDER BY (COALESCE(s.video_count, 0) > 0) DESC, p.sort_order DESC, p.date_from DESC, p.slug ASC
+        LIMIT :limit
+        """,
+        params,
+    )
+    periods = [_named_period_option_row(row) for row in rows]
+    return ArchivePeriodOptionsResponse(periods=periods, selected_period=periods[0] if periods else None)
+
+
+def _named_period_row_by_slug(db, period_slug: str):
+    return _safe_mappings(
+        db,
+        """
+        SELECT
+            p.id,
+            p.slug,
+            p.label,
+            p.kind,
+            p.date_from,
+            p.date_to,
+            p.description,
+            p.status,
+            p.sort_order,
+            COALESCE(s.video_count, 0) AS video_count,
+            COALESCE(s.total_duration_seconds, 0) AS total_duration_seconds,
+            COALESCE(s.top_topics, '[]'::jsonb) AS top_topics,
+            COALESCE(s.representative_videos, '[]'::jsonb) AS representative_videos,
+            COALESCE(s.evidence, '[]'::jsonb) AS evidence,
+            COALESCE(s.summary, '') AS summary,
+            s.calculated_at
+        FROM archive_named_periods p
+        LEFT JOIN archive_named_period_stats s ON s.period_id = p.id
+        WHERE p.slug = :period_slug AND p.status = 'published'
+        """,
+        {"period_slug": period_slug},
+    )
+
+
+def _video_info_from_payload(payload: dict) -> VideoInfo:
+    return VideoInfo(
+        id=payload.get("id") or payload.get("video_id"),
+        youtube_id=payload.get("youtube_id"),
+        title=payload.get("title"),
+        duration_seconds=payload.get("duration_seconds"),
+        state=payload.get("state"),
+        caption_ingest_state=payload.get("caption_ingest_state"),
+        diarization_state=payload.get("diarization_state"),
+        uploaded_at=payload.get("uploaded_at"),
+        created_at=payload.get("created_at"),
+        updated_at=payload.get("updated_at"),
+        channel_name=payload.get("channel_name"),
+        language=payload.get("language"),
+        category=payload.get("category"),
+        has_whisper_transcript=bool(payload.get("has_whisper_transcript")),
+        has_youtube_transcript=bool(payload.get("has_youtube_transcript")),
+    )
+
+
+def _evidence_from_payload(payload: dict) -> ArchiveEvidenceMoment:
+    video_payload = payload.get("video") or {}
+    return ArchiveEvidenceMoment(
+        video=_video_info_from_payload(video_payload),
+        start_ms=int(payload.get("start_ms") or 0),
+        end_ms=int(payload.get("end_ms") or 0),
+        snippet=payload.get("snippet") or "",
+        topic=payload.get("topic"),
+    )
+
+
+def _topic_card_from_payload(payload: dict) -> ArchiveTopicCard:
+    evidence = [_evidence_from_payload(item) for item in _as_list(payload.get("evidence"))]
+    return ArchiveTopicCard(
+        slug=payload.get("slug"),
+        label=payload.get("label"),
+        source=payload.get("source") or "hybrid",
+        status=payload.get("status") or "published",
+        is_editable=bool(payload.get("is_editable", True)),
+        aliases=list(payload.get("aliases") or []),
+        total_moments=int(payload.get("total_moments") or 0),
+        total_videos=int(payload.get("total_videos") or 0),
+        recent_mentions_90d=int(payload.get("recent_mentions_90d") or 0),
+        trend_score=float(payload.get("trend_score") or 0),
+        related_topics=list(payload.get("related_topics") or []),
+        evidence=evidence,
+    )
+
+
+def _period_intelligence_from_row(row, topic_limit: int | None = None) -> ArchivePeriodIntelligence:
+    top_topics_payload = _as_list(row.get("top_topics"))
+    top_topics = [_topic_card_from_payload(item) for item in top_topics_payload][: topic_limit or len(top_topics_payload)]
+    evidence = [_evidence_from_payload(item) for item in _as_list(row.get("evidence"))]
+    videos = [_video_info_from_payload(item) for item in _as_list(row.get("representative_videos"))]
+    return ArchivePeriodIntelligence(
+        period=row["slug"],
+        label=row["label"],
+        video_count=int(row.get("video_count") or 0),
+        total_duration_seconds=int(row.get("total_duration_seconds") or 0),
+        videos=videos,
+        top_topics=top_topics,
+        summary=row.get("summary") or "",
+        evidence=evidence,
+    )
+
+
+def _period_option_from_row(row) -> ArchivePeriodOption:
+    return ArchivePeriodOption(
+        slug=row["slug"],
+        label=row["label"],
+        kind=row["kind"],
+        date_from=row["date_from"],
+        date_to=row["date_to"],
+        description=row.get("description"),
+        video_count=int(row.get("video_count") or 0),
+        total_duration_seconds=int(row.get("total_duration_seconds") or 0),
+    )
+
+
+def refresh_named_period_stats(db, limit: int | None = None):
+    rows = _safe_mappings(
+        db,
+        """
+        SELECT
+            p.id,
+            p.slug,
+            p.label,
+            p.kind,
+            p.date_from,
+            p.date_to,
+            p.description,
+            p.status,
+            p.sort_order
+        FROM archive_named_periods p
+        WHERE p.status = 'published'
+        ORDER BY p.sort_order DESC, p.date_from DESC, p.slug ASC
+        """,
+    )
+    if limit is not None:
+        rows = rows[:limit]
+    if not rows:
+        return {"rows": 0}
+
+    topics = _get_topics(db)
+    topic_rows_by_id = {str(row["id"]): row for row in topics}
+    insert_rows: list[dict] = []
+
+    for row in rows:
+        start_dt = _coerce_datetime(row.get("date_from"))
+        end_dt = _coerce_datetime(row.get("date_to"), end=True)
+        if start_dt is None or end_dt is None:
+            continue
+
+        video_rows = _safe_mappings(
+            db,
+            f"""
+            SELECT
+                v.id AS video_id,
+                v.youtube_id,
+                v.title,
+                v.duration_seconds,
+                v.state,
+                v.caption_ingest_state,
+                v.diarization_state,
+                v.uploaded_at,
+                v.created_at,
+                v.updated_at,
+                v.channel_name,
+                v.language,
+                v.category,
+                EXISTS (SELECT 1 FROM segments s WHERE s.video_id = v.id) AS has_whisper_transcript,
+                EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript,
+                v.uploaded_at AS when_at
+            FROM videos v
+            WHERE ({ARCHIVE_VIDEO_FILTER_SQL})
+              AND v.uploaded_at IS NOT NULL
+              AND v.uploaded_at >= :start_dt
+              AND v.uploaded_at < :end_dt
+            ORDER BY v.uploaded_at DESC NULLS LAST, v.created_at DESC
+            """,
+            {"start_dt": start_dt, "end_dt": end_dt},
+        )
+
+        mention_rows = _safe_mappings(
+            db,
+            f"""
+            SELECT
+                m.topic_id,
+                t.slug AS topic_slug,
+                t.label AS topic_label,
+                t.description,
+                t.source,
+                t.status,
+                t.is_editable,
+                m.video_id,
+                v.youtube_id,
+                v.title,
+                v.duration_seconds,
+                v.state,
+                v.caption_ingest_state,
+                v.diarization_state,
+                v.uploaded_at,
+                v.created_at,
+                v.updated_at,
+                v.channel_name,
+                v.language,
+                v.category,
+                m.segment_id,
+                m.start_ms,
+                m.end_ms,
+                m.snippet,
+                m.score,
+                COALESCE(m.occurred_at, v.uploaded_at) AS when_at,
+                EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+                EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
+            FROM archive_topic_mentions m
+            JOIN archive_topics t ON t.id = m.topic_id
+            JOIN videos v ON v.id = m.video_id
+            WHERE t.status = 'published'
+              AND ({ARCHIVE_VIDEO_FILTER_SQL})
+              AND COALESCE(m.occurred_at, v.uploaded_at) >= :start_dt
+              AND COALESCE(m.occurred_at, v.uploaded_at) < :end_dt
+            ORDER BY COALESCE(m.occurred_at, v.uploaded_at) DESC NULLS LAST, m.start_ms ASC
+            """,
+            {"start_dt": start_dt, "end_dt": end_dt},
+        )
+
+        mention_rows_by_topic: dict[str, list[dict]] = defaultdict(list)
+        topic_mentions_payload: list[dict] = []
+        topic_aggregate: dict[str, dict] = defaultdict(lambda: {"mention_count": 0, "video_ids": set(), "trend_score": 0.0})
+
+        for mention_row in mention_rows:
+            topic_id = str(mention_row["topic_id"])
+            mention_rows_by_topic[topic_id].append(mention_row)
+            topic_aggregate[topic_id]["mention_count"] += 1
+            topic_aggregate[topic_id]["video_ids"].add(str(mention_row["video_id"]))
+            topic_aggregate[topic_id]["trend_score"] += float(mention_row.get("score") or 1)
+
+        for topic_id, agg in sorted(topic_aggregate.items(), key=lambda item: item[1]["trend_score"], reverse=True)[:8]:
+            topic_row = topic_rows_by_id.get(topic_id)
+            if topic_row is None:
+                continue
+            public_mentions = _named_period_evidence_rows(mention_rows_by_topic.get(topic_id, []), topic_row["label"], 6)
+            evidence_payload = [_evidence_row_to_public_payload(mention_row, topic=topic_row["label"]) for mention_row in public_mentions]
+            topic_mentions_payload.append(
+                {
+                    "slug": topic_row["slug"],
+                    "label": topic_row["label"],
+                    "source": topic_row.get("source") or "hybrid",
+                    "status": topic_row.get("status") or "published",
+                    "is_editable": bool(topic_row.get("is_editable", True)),
+                    "aliases": [alias_row.get("alias") for alias_row in _as_list(topic_row.get("aliases")) if (alias_row or {}).get("alias")],
+                    "total_moments": int(agg["mention_count"]),
+                    "total_videos": len(agg["video_ids"]),
+                    "recent_mentions_90d": int(agg["mention_count"]),
+                    "trend_score": float(agg["trend_score"]),
+                    "related_topics": [],
+                    "evidence": evidence_payload,
+                }
+            )
+
+        representative_videos = [_video_row_to_public_payload(video_row) for video_row in video_rows[:4]]
+        public_evidence_rows = [
+            mention_row
+            for mention_row in mention_rows
+            if alias_matches_text(str(mention_row.get("topic_label") or ""), str(mention_row.get("snippet") or ""))
+        ][:6]
+        evidence_payload = [
+            _evidence_row_to_public_payload(mention_row, topic=mention_row.get("topic_label"))
+            for mention_row in public_evidence_rows
+        ]
+        snippets = [str(item.get("snippet")) for item in evidence_payload if item.get("snippet")]
+        topic_labels = list(dict.fromkeys(str(item.get("label")) for item in topic_mentions_payload if item.get("label")))
+        summary_parts = [f"{row['label']}: {len(video_rows)} videos."]
+        if topic_labels:
+            summary_parts.append(f"Topics: {', '.join(topic_labels[:3])}.")
+        if snippets:
+            summary_parts.append("Evidence: " + " | ".join(snippets[:3]))
+
+        insert_rows.append(
+            {
+                "period_id": row["id"],
+                "video_count": len(video_rows),
+                "total_duration_seconds": int(sum(int(video_row.get("duration_seconds") or 0) for video_row in video_rows)),
+                "top_topics": json.dumps(topic_mentions_payload),
+                "representative_videos": json.dumps(representative_videos),
+                "evidence": json.dumps(evidence_payload),
+                "summary": " ".join(summary_parts),
+            }
+        )
+
+    _safe_execute_many(
+        db,
+        """
+        INSERT INTO archive_named_period_stats (
+            period_id, video_count, total_duration_seconds, top_topics, representative_videos, evidence, summary, calculated_at
+        ) VALUES (
+            :period_id, :video_count, :total_duration_seconds, CAST(:top_topics AS jsonb), CAST(:representative_videos AS jsonb), CAST(:evidence AS jsonb), :summary, now()
+        )
+        ON CONFLICT (period_id) DO UPDATE SET
+            video_count = EXCLUDED.video_count,
+            total_duration_seconds = EXCLUDED.total_duration_seconds,
+            top_topics = EXCLUDED.top_topics,
+            representative_videos = EXCLUDED.representative_videos,
+            evidence = EXCLUDED.evidence,
+            summary = EXCLUDED.summary,
+            calculated_at = now()
+        """,
+        insert_rows,
+    )
+    return {"rows": len(insert_rows)}
 
 
 def autopublish_search_topics(db, limit: int = 20):
@@ -799,11 +1369,13 @@ def refresh_archive_intelligence(db, quick: bool = False):
     stats = {}
     for prefix, result in (
         ("seed", seed_archive_topics(db)),
+        ("seed_periods", seed_named_periods(db)),
         ("hide_stop", hide_automatic_stop_topics(db)),
         ("auto", autopublish_search_topics(db, limit=20)),
         ("mentions", refresh_topic_mentions(db, segment_limit=1000 if quick else None)),
         ("topic_stats", refresh_topic_period_stats(db, granularity="month")),
         ("topic_stats_week", refresh_topic_period_stats(db, granularity="week")),
+        ("named_period_stats", refresh_named_period_stats(db, limit=120 if not quick else 72)),
         ("search_trends", refresh_search_trends(db, granularity="week")),
         ("period_summaries", refresh_period_summaries(db, granularity="month", limit=120 if not quick else 72)),
         ("period_summaries_week", refresh_period_summaries(db, granularity="week", limit=120 if not quick else 72)),
@@ -849,6 +1421,82 @@ def _topic_evidence_for_period(db, topic_id, period: str, granularity: str, limi
     return [_evidence_from_row(row, topic=None) for row in filtered[:limit]]
 
 
+def _latest_named_period_slug(db) -> str | None:
+    options = list_period_options(db, kind="month", limit=1).periods
+    if options:
+        return options[0].slug
+    options = list_period_options(db, limit=1).periods
+    return options[0].slug if options else None
+
+
+def get_named_period_intelligence(db, period_slug: str, topic_limit: int = 8) -> ArchiveIntelligenceResponse | None:
+    summary = archive_repository.get_summary(db, recent_limit=6, popular_limit=max(topic_limit, 8))
+    period_rows = _named_period_row_by_slug(db, period_slug)
+    if not period_rows:
+        return None
+    period_row = period_rows[0]
+    period_option = _period_option_from_row(period_row)
+    period_intelligence = _period_intelligence_from_row(period_row, topic_limit=topic_limit)
+
+    top_topic_cards = period_intelligence.top_topics[:topic_limit]
+    top_topic_labels = {topic.label.lower() for topic in top_topic_cards}
+    trending_searches = [
+        ArchiveTrendingSearch(term=topic.label, frequency=topic.total_moments, trend_score=topic.trend_score, source="hybrid")
+        for topic in top_topic_cards
+    ]
+    search_trends_rows = _safe_mappings(
+        db,
+        """
+        SELECT term, period, granularity, search_count, result_count, trend_score, source
+        FROM archive_search_trends
+        ORDER BY trend_score DESC, search_count DESC, term ASC
+        """,
+    )
+    search_trends = []
+    for row in search_trends_rows:
+        period_value = row.get("period")
+        if period_value is None:
+            continue
+        if isinstance(period_value, str):
+            period_start = _period_start(period_value, row.get("granularity") or "week")
+            if period_start is None:
+                continue
+            period_date = period_start.date()
+        else:
+            period_date = _as_date(period_value)
+            if period_date is None:
+                continue
+        if not (period_option.date_from <= period_date <= period_option.date_to):
+            continue
+        search_trends.append(
+            ArchiveTrendingSearch(
+                term=row["term"],
+                frequency=int(row.get("search_count") or 0),
+                trend_score=float(row.get("trend_score") or 0),
+                source=row.get("source") or "search",
+            )
+        )
+
+    for item in search_trends:
+        if item.term.lower() not in top_topic_labels:
+            trending_searches.append(item)
+    trending_searches = sorted(trending_searches, key=lambda item: item.trend_score, reverse=True)[: max(topic_limit, 8)]
+    suggested_searches = trending_searches[: max(topic_limit, len(SEED_TOPICS))]
+    period_options = list_period_options(db).periods
+
+    return ArchiveIntelligenceResponse(
+        summary=summary,
+        exploration_modes=["periods", "topics", "trending", "suggested"],
+        trending_searches=trending_searches,
+        suggested_searches=suggested_searches,
+        topic_cards=top_topic_cards,
+        periods=[period_intelligence],
+        selected_period=period_option,
+        period_options=period_options,
+        query_time_ms=None,
+    )
+
+
 def get_durable_archive_intelligence(
     db,
     *,
@@ -857,9 +1505,15 @@ def get_durable_archive_intelligence(
     granularity: str = "month",
     date_from: date | datetime | None = None,
     date_to: date | datetime | None = None,
+    period_slug: str | None = None,
 ) -> ArchiveIntelligenceResponse | None:
     if granularity not in {"month", "week"}:
         granularity = "month"
+    if _table_has_rows(db, "archive_named_periods") and _table_has_rows(db, "archive_named_period_stats"):
+        named_period_slug = period_slug or _latest_named_period_slug(db)
+        named = get_named_period_intelligence(db, named_period_slug, topic_limit=topic_limit) if named_period_slug else None
+        if named is not None:
+            return named
     if not (_table_has_rows(db, "archive_topics") and _table_has_rows(db, "archive_topic_mentions") and _table_has_rows(db, "archive_topic_period_stats") and _table_has_rows(db, "archive_period_summaries")):
         return None
 
@@ -1126,6 +1780,11 @@ def get_durable_archive_intelligence(
             )
         )
 
+    period_options = list_period_options(db).periods
+    selected_period = next((option for option in period_options if option.kind == "month"), None)
+    if selected_period is None and period_options:
+        selected_period = period_options[0]
+
     return ArchiveIntelligenceResponse(
         summary=summary,
         exploration_modes=["timeline", "topics", "trending", "suggested"],
@@ -1133,5 +1792,7 @@ def get_durable_archive_intelligence(
         suggested_searches=suggested_searches,
         topic_cards=topic_cards,
         periods=periods,
+        selected_period=selected_period,
+        period_options=period_options,
         query_time_ms=None,
     )

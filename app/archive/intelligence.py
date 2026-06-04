@@ -10,10 +10,12 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from .. import crud
 from ..archive.repository import archive_repository
 from .intelligence_repository import SEED_TOPICS, SeedTopic, alias_matches_text, get_durable_archive_intelligence, slugify_topic
+from .intelligence_repository import list_period_options
 from ..schemas import (
     ArchiveEvidenceMoment,
     ArchiveIntelligenceResponse,
     ArchivePeriodIntelligence,
+    ArchivePeriodOptionsResponse,
     ArchiveTimelineResponse,
     ArchiveTopicCard,
     ArchiveTrendingSearch,
@@ -287,6 +289,7 @@ def get_archive_intelligence(
     granularity: str = "month",
     date_from: date | None = None,
     date_to: date | None = None,
+    period: str | None = None,
 ) -> ArchiveIntelligenceResponse:
     start = time.perf_counter()
 
@@ -297,6 +300,7 @@ def get_archive_intelligence(
         granularity=granularity,
         date_from=date_from,
         date_to=date_to,
+        period_slug=period,
     )
     if cached is not None:
         return cached.model_copy(update={"query_time_ms": int((time.perf_counter() - start) * 1000)})
@@ -333,6 +337,11 @@ def get_archive_intelligence(
     suggested_searches = _suggested_searches(topic_cards, trending_searches, limit=max(topic_limit, len(SEED_TOPICS)))
     periods = _periods(timeline, topic_cards, evidence_pool, limit=period_limit)
 
+    period_options = list_period_options(db).periods
+    selected_period = next((option for option in period_options if option.kind == "month"), None)
+    if selected_period is None and period_options:
+        selected_period = period_options[0]
+
     return ArchiveIntelligenceResponse(
         summary=summary,
         exploration_modes=["timeline", "topics", "trending", "suggested"],
@@ -340,5 +349,11 @@ def get_archive_intelligence(
         suggested_searches=suggested_searches,
         topic_cards=topic_cards,
         periods=periods,
+        selected_period=selected_period,
+        period_options=period_options,
         query_time_ms=int((time.perf_counter() - start) * 1000),
     )
+
+
+def get_archive_period_options(db, kind: str | None = None, limit: int = 120) -> ArchivePeriodOptionsResponse:
+    return list_period_options(db, kind=kind, limit=limit)

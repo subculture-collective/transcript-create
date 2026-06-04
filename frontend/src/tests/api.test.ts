@@ -145,6 +145,8 @@ describe('api service', () => {
         suggested_searches: [],
         topic_cards: [],
         periods: [],
+        selected_period: null,
+        period_options: [],
       }
       const getMock = vi.fn().mockReturnValue({
         json: vi.fn().mockResolvedValue(mockResponse),
@@ -157,7 +159,7 @@ describe('api service', () => {
       expect(getMock).toHaveBeenCalledWith('archive/intelligence')
     })
 
-    it('passes through intelligence query params', async () => {
+    it('passes through intelligence query params including period', async () => {
       const mockResponse = {
         summary: {
           creator_name: 'HasAnAra',
@@ -172,6 +174,8 @@ describe('api service', () => {
         suggested_searches: [],
         topic_cards: [],
         periods: [],
+        selected_period: null,
+        period_options: [],
       }
       const getMock = vi.fn().mockReturnValue({
         json: vi.fn().mockResolvedValue(mockResponse),
@@ -179,8 +183,9 @@ describe('api service', () => {
       vi.spyOn(http, 'get').mockImplementation(getMock)
 
       await api.getExploreIntelligence({
-        granularity: 'week',
+        period: '2026-05',
         topic_limit: 12,
+        granularity: 'week',
         period_limit: 16,
         date_from: '2026-05-01',
         date_to: '2026-05-31',
@@ -191,11 +196,32 @@ describe('api service', () => {
         expect.objectContaining({ searchParams: expect.any(URLSearchParams) })
       )
       const params = getMock.mock.calls[0][1].searchParams as URLSearchParams
+      expect(params.get('period')).toBe('2026-05')
       expect(params.get('granularity')).toBe('week')
       expect(params.get('topic_limit')).toBe('12')
       expect(params.get('period_limit')).toBe('16')
       expect(params.get('date_from')).toBe('2026-05-01')
       expect(params.get('date_to')).toBe('2026-05-31')
+    })
+  })
+
+  describe('getExplorePeriods', () => {
+    it('calls the predefined periods endpoint', async () => {
+      const mockResponse = { items: [] }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await api.getExplorePeriods({ kind: 'week', limit: 16 })
+
+      expect(result).toEqual(mockResponse)
+      expect(getMock).toHaveBeenCalledWith('archive/intelligence/periods', {
+        searchParams: expect.any(URLSearchParams),
+      })
+      const params = getMock.mock.calls[0][1].searchParams as URLSearchParams
+      expect(params.get('kind')).toBe('week')
+      expect(params.get('limit')).toBe('16')
     })
   })
 

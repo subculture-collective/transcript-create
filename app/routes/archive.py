@@ -3,9 +3,9 @@ from datetime import date
 
 from .. import crud
 from ..archive.repository import archive_repository
+from ..archive.intelligence import get_archive_intelligence, get_archive_period_options
 from ..db import get_db
-from ..archive.intelligence import get_archive_intelligence
-from ..schemas import ArchiveIntelligenceResponse, ArchiveSummary, ArchiveTimelineResponse
+from ..schemas import ArchiveIntelligenceResponse, ArchivePeriodOptionsResponse, ArchiveSummary, ArchiveTimelineResponse
 
 router = APIRouter(prefix="", tags=["Archive"])
 
@@ -50,6 +50,7 @@ def archive_intelligence(
     granularity: str = Query("month", pattern="^(month|week)$", description="Period granularity for cached intelligence"),
     date_from: date | None = Query(None, description="Lower bound for cached intelligence periods"),
     date_to: date | None = Query(None, description="Upper bound for cached intelligence periods"),
+    period: str | None = Query(None, description="Predefined archive period slug"),
     db=Depends(get_db),
 ):
     return get_archive_intelligence(
@@ -59,4 +60,19 @@ def archive_intelligence(
         granularity=granularity,
         date_from=date_from,
         date_to=date_to,
+        period=period,
     )
+
+
+@router.get(
+    "/archive/intelligence/periods",
+    response_model=ArchivePeriodOptionsResponse,
+    summary="List archive intelligence periods",
+    description="Return predefined archive periods and cached counts for the archive intelligence UI.",
+)
+def archive_intelligence_periods(
+    kind: str | None = Query(None, description="Optional period kind filter"),
+    limit: int = Query(120, ge=1, le=500, description="Maximum number of periods to include"),
+    db=Depends(get_db),
+):
+    return get_archive_period_options(db, kind=kind, limit=limit)

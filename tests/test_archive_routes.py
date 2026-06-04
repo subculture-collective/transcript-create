@@ -9,6 +9,8 @@ from sqlalchemy import text
 
 from app.schemas import (
     ArchiveIntelligenceResponse,
+    ArchivePeriodOption,
+    ArchivePeriodOptionsResponse,
     ArchiveSummary,
     EpisodeSearchGroup,
     GroupedSearchResponse,
@@ -132,7 +134,7 @@ class TestArchiveRoutes:
             periods=[],
         )
 
-        response = client.get("/archive/intelligence?topic_limit=4&period_limit=3&granularity=week&date_from=2026-05-01&date_to=2026-05-31")
+        response = client.get("/archive/intelligence?topic_limit=4&period_limit=3&granularity=week&date_from=2026-05-01&date_to=2026-05-31&period=2026-05")
 
         assert response.status_code == 200
         mock_get_archive_intelligence.assert_called_once()
@@ -142,6 +144,34 @@ class TestArchiveRoutes:
         assert kwargs["granularity"] == "week"
         assert str(kwargs["date_from"]) == "2026-05-01"
         assert str(kwargs["date_to"]) == "2026-05-31"
+        assert kwargs["period"] == "2026-05"
+
+    @patch("app.routes.archive.get_archive_period_options")
+    def test_archive_intelligence_periods_route(self, mock_get_archive_period_options, client: TestClient):
+        mock_get_archive_period_options.return_value = ArchivePeriodOptionsResponse(
+            periods=[
+                ArchivePeriodOption(
+                    slug="2026-05",
+                    label="May 2026",
+                    kind="month",
+                    date_from=datetime(2026, 5, 1, tzinfo=timezone.utc).date(),
+                    date_to=datetime(2026, 5, 31, tzinfo=timezone.utc).date(),
+                    description=None,
+                    video_count=1,
+                    total_duration_seconds=360,
+                )
+            ]
+        )
+
+        response = client.get("/archive/intelligence/periods?kind=month&limit=5")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["periods"][0]["slug"] == "2026-05"
+        mock_get_archive_period_options.assert_called_once()
+        _, kwargs = mock_get_archive_period_options.call_args
+        assert kwargs["kind"] == "month"
+        assert kwargs["limit"] == 5
 
     def test_archive_timeline(self, client: TestClient, db_session):
         first_video = _create_completed_video(

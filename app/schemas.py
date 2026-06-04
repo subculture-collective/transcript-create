@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -287,6 +287,36 @@ class ArchiveTrendingSearch(BaseModel):
     source: str = Field("search", description="search, transcript, or hybrid")
 
 
+class ArchiveNamedPeriod(BaseModel):
+    slug: str = Field(..., description="Stable period slug")
+    label: str = Field(..., description="Public period label")
+    kind: str = Field(..., description="month, week, event, or date")
+    date_from: date = Field(..., description="Inclusive start date")
+    date_to: date = Field(..., description="Inclusive end date")
+    description: Optional[str] = Field(None, description="Optional period description")
+    status: str = Field("published", description="Period lifecycle status")
+    sort_order: int = Field(0, description="Ordering weight for UI presentation")
+    video_count: int = Field(0, description="Cached video count for the period")
+    total_duration_seconds: int = Field(0, description="Cached duration for the period")
+    summary: str = Field("", description="Cached period summary")
+
+
+class ArchivePeriodOption(BaseModel):
+    slug: str = Field(..., description="Stable period slug")
+    label: str = Field(..., description="Public period label")
+    kind: str = Field(..., description="month, week, event, or date")
+    date_from: date = Field(..., description="Inclusive start date")
+    date_to: date = Field(..., description="Inclusive end date")
+    description: Optional[str] = Field(None, description="Optional period description")
+    video_count: int = Field(0, description="Cached video count for the period")
+    total_duration_seconds: int = Field(0, description="Cached duration for the period")
+
+
+class ArchivePeriodOptionsResponse(BaseModel):
+    periods: List[ArchivePeriodOption] = Field(default_factory=list, description="Available predefined archive periods")
+    selected_period: Optional[ArchivePeriodOption] = Field(None, description="Currently selected period")
+
+
 class ArchivePeriodIntelligence(BaseModel):
     period: str = Field(..., description="Period identifier, e.g. 2026-05")
     label: str = Field(..., description="Human-readable period label")
@@ -305,6 +335,8 @@ class ArchiveIntelligenceResponse(BaseModel):
     suggested_searches: List[ArchiveTrendingSearch] = Field(default_factory=list, description="Suggested archive searches")
     topic_cards: List[ArchiveTopicCard] = Field(default_factory=list, description="Hybrid curated/automatic topic cards")
     periods: List[ArchivePeriodIntelligence] = Field(default_factory=list, description="Timeline periods enriched with topic/evidence data")
+    selected_period: Optional[ArchivePeriodOption] = Field(None, description="Currently selected predefined period")
+    period_options: List[ArchivePeriodOption] = Field(default_factory=list, description="Available predefined archive periods")
     query_time_ms: Optional[int] = Field(None, description="Time taken to compose archive intelligence")
 
 

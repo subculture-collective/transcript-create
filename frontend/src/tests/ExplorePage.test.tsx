@@ -149,6 +149,7 @@ describe('ExplorePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Week' }))
     fireEvent.click(screen.getByRole('button', { name: '12 topics' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply' })).not.toBeDisabled())
     const from = screen.getByLabelText('Date from')
     const to = screen.getByLabelText('Date to')
     fireEvent.change(from, { target: { value: '2026-05-01' } })

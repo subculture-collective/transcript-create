@@ -803,8 +803,10 @@ def refresh_archive_intelligence(db, quick: bool = False):
         ("auto", autopublish_search_topics(db, limit=20)),
         ("mentions", refresh_topic_mentions(db, segment_limit=1000 if quick else None)),
         ("topic_stats", refresh_topic_period_stats(db, granularity="month")),
+        ("topic_stats_week", refresh_topic_period_stats(db, granularity="week")),
         ("search_trends", refresh_search_trends(db, granularity="week")),
         ("period_summaries", refresh_period_summaries(db, granularity="month", limit=120 if not quick else 72)),
+        ("period_summaries_week", refresh_period_summaries(db, granularity="week", limit=120 if not quick else 72)),
     ):
         for key, value in result.items():
             stats[f"{prefix}_{key}"] = value

@@ -38,14 +38,16 @@ def main(*, seed_topics: bool = False, auto_topics: bool = False, rebuild_mentio
             for key, value in refresh_topic_mentions(db, segment_limit=1000 if quick else None).items():
                 stats[f"mentions_{key}"] = value
         if refresh_stats:
-            for key, value in refresh_topic_period_stats(db, granularity="month").items():
-                stats[f"topic_stats_{key}"] = value
+            for granularity in ("month", "week"):
+                for key, value in refresh_topic_period_stats(db, granularity=granularity).items():
+                    stats[f"topic_stats_{granularity}_{key}"] = value
         if refresh_search:
             for key, value in refresh_search_trends(db, granularity="week").items():
                 stats[f"search_trends_{key}"] = value
         if refresh_summaries:
-            for key, value in refresh_period_summaries(db, granularity="month", limit=72 if quick else 120).items():
-                stats[f"period_summaries_{key}"] = value
+            for granularity in ("month", "week"):
+                for key, value in refresh_period_summaries(db, granularity=granularity, limit=72 if quick else 120).items():
+                    stats[f"period_summaries_{granularity}_{key}"] = value
     print(
         "archive intelligence backfill complete: "
         + " ".join(f"{key}={value}" for key, value in sorted(stats.items()))

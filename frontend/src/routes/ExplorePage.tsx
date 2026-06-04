@@ -122,6 +122,17 @@ export default function ExplorePage() {
     });
   };
 
+  const updateAndApplyFilters = async (nextFilters: ExploreIntelligenceQuery) => {
+    setFilters(nextFilters);
+    await loadIntelligence({
+      granularity: nextFilters.granularity,
+      topic_limit: nextFilters.topic_limit,
+      period_limit: DEFAULT_QUERY.period_limit,
+      date_from: nextFilters.date_from,
+      date_to: nextFilters.date_to,
+    });
+  };
+
   const resetFilters = async () => {
     setFilters(DEFAULT_QUERY);
     await loadIntelligence(DEFAULT_QUERY);
@@ -225,7 +236,9 @@ export default function ExplorePage() {
                       <button
                         key={value}
                         type="button"
-                        onClick={() => setFilters((current) => ({ ...current, granularity: value }))}
+                        onClick={() => {
+                          void updateAndApplyFilters({ ...filters, granularity: value });
+                        }}
                         aria-pressed={filters.granularity === value}
                         className={`btn-ghost rounded-full border px-4 py-2 text-sm ${
                           filters.granularity === value ? 'border-accent/60 bg-accent/15 text-ink' : ''
@@ -238,13 +251,15 @@ export default function ExplorePage() {
                 </fieldset>
 
                 <fieldset className="space-y-2">
-                  <legend className="meta-label">Topic limit</legend>
+                  <legend className="meta-label">Topic cards shown</legend>
                   <div className="flex flex-wrap gap-2">
                     {[8, 12, 16].map((value) => (
                       <button
                         key={value}
                         type="button"
-                        onClick={() => setFilters((current) => ({ ...current, topic_limit: value }))}
+                        onClick={() => {
+                          void updateAndApplyFilters({ ...filters, topic_limit: value });
+                        }}
                         aria-pressed={filters.topic_limit === value}
                         className={`btn-ghost min-w-24 rounded-xl border px-4 py-2 text-sm ${
                           filters.topic_limit === value ? 'border-accent/60 bg-accent/15 text-ink' : ''
@@ -491,7 +506,9 @@ export default function ExplorePage() {
                 })}
               </div>
             ) : (
-              <div className="text-center text-muted">No timeline intelligence available yet.</div>
+              <div className="rounded-2xl border border-border bg-surface-muted p-5 text-center text-muted">
+                No {filters.granularity === 'week' ? 'weekly' : 'monthly'} timeline periods are available for this range yet. Try Reset or switch granularity.
+              </div>
             )}
           </div>
         </section>

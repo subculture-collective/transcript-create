@@ -1,11 +1,17 @@
-from fastapi import APIRouter, Depends, Query
+import json
 from datetime import date
+from typing import Any
 import uuid
 
+from fastapi import APIRouter, Depends, Query
+
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .. import crud
 from ..cache import invalidate_cache, invalidate_cache_pattern
+from ..archive.labeling.normalization import slugify_label
+from ..archive.labeling.pipeline import extract_labels_for_video
 from ..archive.repository import archive_repository
 from ..archive.intelligence import get_archive_intelligence, get_archive_period_options
 from ..archive.video_metadata_repository import (
@@ -29,9 +35,15 @@ from ..archive.intelligence_repository import (
     update_named_period,
 )
 from ..db import get_db
-from ..exceptions import NotFoundError
+from ..exceptions import NotFoundError, ValidationError
 from ..schemas import (
     ArchiveIntelligenceResponse,
+    ArchiveLabelAssignmentListResponse,
+    ArchiveLabelAssignmentResponse,
+    ArchiveLabelExtractionResponse,
+    ArchiveLabelListResponse,
+    ArchiveLabelReviewAction,
+    ArchiveLabelResponse,
     ArchivePersonAdmin,
     ArchivePersonAdminListResponse,
     ArchivePersonCreate,
@@ -70,6 +82,299 @@ def _admin_video_metadata_response(db, video_id: uuid.UUID) -> ArchiveVideoMetad
     payload["people"] = metadata.get("people", [])
     payload["tags"] = metadata.get("tags", [])
     return ArchiveVideoMetadataAdminVideo(**payload)
+
+
+def _fetch_all_rows(result: Any) -> list[dict[str, Any]]:
+    if hasattr(result, "mappings"):
+        return [dict(row) for row in result.mappings().all()]
+    if hasattr(result, "all"):
+        return [dict(row) for row in result.all()]
+    first = result.first() if hasattr(result, "first") else None
+    return [] if first is None else [dict(first)]
+
+
+def _fetch_first_row(result: Any) -> dict[str, Any] | None:
+    rows = _fetch_all_rows(result)
+    return rows[0] if rows else None
+
+
+def _user_id_value(user: Any) -> str | None:
+    if user is None:
+        return None
+    if isinstance(user, dict):
+        value = user.get("id")
+    elif hasattr(user, "get"):
+        value = user.get("id")
+    else:
+        value = getattr(user, "id", None)
+    return None if value is None else str(value)
+
+
+def _label_response_from_row(row: dict[str, Any]) -> ArchiveLabelResponse:
+    return ArchiveLabelResponse(**row)
+
+
+def _assignment_response_from_row(row: dict[str, Any]) -> ArchiveLabelAssignmentResponse:
+    label = {
+        "id": row["label_id"],
+        "slug": row["label_slug"],
+        "label": row["label_label"],
+        "kind": row["label_kind"],
+        "status": row["label_status"],
+        "source": row["label_source"],
+        "publish_tier": row["label_publish_tier"],
+        "confidence_score": float(row["label_confidence_score"]),
+        "description": row.get("label_description"),
+    }
+    return ArchiveLabelAssignmentResponse(
+        id=row["id"],
+        label=ArchiveLabelResponse(**label),
+        video_id=row["video_id"],
+        unit_type=row["unit_type"],
+        start_ms=row.get("start_ms"),
+        end_ms=row.get("end_ms"),
+        status=row["status"],
+        publish_tier=row["publish_tier"],
+        confidence_score=float(row["confidence_score"]),
+        evidence_count=int(row.get("evidence_count") or 0),
+        evidence=list(row.get("evidence") or []),
+    )
+
+
+def _load_label_row(db, label_id: uuid.UUID | str) -> dict[str, Any] | None:
+    return _fetch_first_row(
+        db.execute(
+            text(
+                """
+                SELECT id, slug, label, kind, status, source, publish_tier, confidence_score, description, canonical_id
+                FROM archive_labels
+                WHERE id = :label_id
+                """
+            ),
+            {"label_id": str(label_id)},
+        )
+    )
+
+
+def _load_assignment_row(db, assignment_id: uuid.UUID | str) -> dict[str, Any] | None:
+    return _fetch_first_row(
+        db.execute(
+            text(
+                """
+                SELECT
+                    a.id,
+                    a.video_id,
+                    a.unit_type,
+                    a.start_ms,
+                    a.end_ms,
+                    a.status,
+                    a.publish_tier,
+                    a.confidence_score,
+                    a.evidence_count,
+                    a.evidence,
+                    l.id AS label_id,
+                    l.slug AS label_slug,
+                    l.label AS label_label,
+                    l.kind AS label_kind,
+                    l.status AS label_status,
+                    l.source AS label_source,
+                    l.publish_tier AS label_publish_tier,
+                    l.confidence_score AS label_confidence_score,
+                    l.description AS label_description
+                FROM archive_label_assignments AS a
+                JOIN archive_labels AS l ON l.id = a.label_id
+                WHERE a.id = :assignment_id
+                """
+            ),
+            {"assignment_id": str(assignment_id)},
+        )
+    )
+
+
+def _insert_label_feedback(
+    db,
+    *,
+    label_id: uuid.UUID | str | None,
+    assignment_id: uuid.UUID | str | None,
+    action: str,
+    old_value: dict[str, Any],
+    new_value: dict[str, Any],
+    reason: str | None,
+    user: Any,
+) -> None:
+    db.execute(
+        text(
+            """
+            INSERT INTO archive_label_feedback (
+                label_id, assignment_id, action, old_value, new_value, reason, user_id, created_at
+            ) VALUES (
+                :label_id, :assignment_id, :action, CAST(:old_value AS jsonb), CAST(:new_value AS jsonb), :reason, :user_id, now()
+            )
+            """
+        ),
+        {
+            "label_id": None if label_id is None else str(label_id),
+            "assignment_id": None if assignment_id is None else str(assignment_id),
+            "action": action,
+            "old_value": json.dumps(old_value or {}),
+            "new_value": json.dumps(new_value or {}),
+            "reason": reason,
+            "user_id": _user_id_value(user),
+        },
+    )
+
+
+def _review_label_action(db, label_id: uuid.UUID, payload: ArchiveLabelReviewAction, user: Any) -> ArchiveLabelResponse:
+    label = _load_label_row(db, label_id)
+    if label is None:
+        raise NotFoundError(f"Label {label_id} not found", resource_type="archive_label")
+
+    action = payload.action
+    old_value = {
+        "id": str(label["id"]),
+        "slug": label["slug"],
+        "label": label["label"],
+        "status": label["status"],
+        "canonical_id": None if label.get("canonical_id") is None else str(label["canonical_id"]),
+    }
+
+    if action in {"approve", "publish"}:
+        new_status = "published"
+        db.execute(
+            text("UPDATE archive_labels SET status = :status, updated_at = now() WHERE id = :label_id"),
+            {"status": new_status, "label_id": str(label_id)},
+        )
+        new_value = {**old_value, "status": new_status}
+    elif action == "hide":
+        new_status = "hidden"
+        db.execute(
+            text("UPDATE archive_labels SET status = :status, updated_at = now() WHERE id = :label_id"),
+            {"status": new_status, "label_id": str(label_id)},
+        )
+        new_value = {**old_value, "status": new_status}
+    elif action == "reject":
+        new_status = "rejected"
+        db.execute(
+            text("UPDATE archive_labels SET status = :status, updated_at = now() WHERE id = :label_id"),
+            {"status": new_status, "label_id": str(label_id)},
+        )
+        new_value = {**old_value, "status": new_status}
+    elif action == "rename":
+        if not payload.label:
+            raise ValidationError("label is required for rename actions", field="label")
+        new_slug = slugify_label(payload.label)
+        slug_conflict = _fetch_first_row(
+            db.execute(
+                text("SELECT id FROM archive_labels WHERE slug = :slug AND id <> :label_id LIMIT 1"),
+                {"slug": new_slug, "label_id": str(label_id)},
+            )
+        )
+        if slug_conflict is not None:
+            raise ValidationError(f"Archive label slug '{new_slug}' already exists", field="label")
+        db.execute(
+            text("UPDATE archive_labels SET label = :label, slug = :slug, updated_at = now() WHERE id = :label_id"),
+            {"label": payload.label, "slug": new_slug, "label_id": str(label_id)},
+        )
+        new_value = {**old_value, "label": payload.label, "slug": new_slug}
+    elif action == "merge":
+        if payload.target_label_id is None:
+            raise ValidationError("target_label_id is required for merge actions", field="target_label_id")
+        if str(payload.target_label_id) == str(label_id):
+            raise ValidationError("target_label_id must be different from the source label", field="target_label_id")
+        target = _load_label_row(db, payload.target_label_id)
+        if target is None:
+            raise NotFoundError(f"Label {payload.target_label_id} not found", resource_type="archive_label")
+        db.execute(
+            text("UPDATE archive_labels SET status = 'merged', canonical_id = :target_label_id, updated_at = now() WHERE id = :label_id"),
+            {"target_label_id": str(payload.target_label_id), "label_id": str(label_id)},
+        )
+        new_value = {**old_value, "status": "merged", "canonical_id": str(payload.target_label_id)}
+    else:
+        raise ValidationError(f"Unsupported review action: {action}", field="action")
+
+    _insert_label_feedback(
+        db,
+        label_id=label_id,
+        assignment_id=None,
+        action=action,
+        old_value=old_value,
+        new_value=new_value,
+        reason=payload.reason,
+        user=user,
+    )
+
+    updated = _load_label_row(db, label_id)
+    if updated is None:
+        raise NotFoundError(f"Label {label_id} not found", resource_type="archive_label")
+    return _label_response_from_row(updated)
+
+
+def _review_assignment_action(db, assignment_id: uuid.UUID, payload: ArchiveLabelReviewAction, user: Any) -> ArchiveLabelAssignmentResponse:
+    assignment = _load_assignment_row(db, assignment_id)
+    if assignment is None:
+        raise NotFoundError(f"Assignment {assignment_id} not found", resource_type="archive_label_assignment")
+
+    action = payload.action
+    label_id = assignment["label_id"]
+    old_value = {
+        "id": str(assignment["id"]),
+        "status": assignment["status"],
+        "label_status": assignment["label_status"],
+        "label_id": str(label_id),
+    }
+
+    if action == "approve":
+        db.execute(
+            text("UPDATE archive_label_assignments SET status = 'admin_approved', updated_at = now() WHERE id = :assignment_id"),
+            {"assignment_id": str(assignment_id)},
+        )
+        db.execute(
+            text("UPDATE archive_labels SET status = 'published', updated_at = now() WHERE id = :label_id"),
+            {"label_id": str(label_id)},
+        )
+        new_value = {**old_value, "status": "admin_approved", "label_status": "published"}
+    elif action == "reject":
+        db.execute(
+            text("UPDATE archive_label_assignments SET status = 'rejected', updated_at = now() WHERE id = :assignment_id"),
+            {"assignment_id": str(assignment_id)},
+        )
+        new_value = {**old_value, "status": "rejected"}
+    elif action == "publish":
+        db.execute(
+            text("UPDATE archive_label_assignments SET status = 'auto_published', updated_at = now() WHERE id = :assignment_id"),
+            {"assignment_id": str(assignment_id)},
+        )
+        db.execute(
+            text("UPDATE archive_labels SET status = 'published', updated_at = now() WHERE id = :label_id"),
+            {"label_id": str(label_id)},
+        )
+        new_value = {**old_value, "status": "auto_published", "label_status": "published"}
+    elif action == "hide":
+        db.execute(
+            text("UPDATE archive_label_assignments SET status = 'shadow', updated_at = now() WHERE id = :assignment_id"),
+            {"assignment_id": str(assignment_id)},
+        )
+        new_value = {**old_value, "status": "shadow"}
+    elif action in {"rename", "merge"}:
+        raise ValidationError("Assignment review actions do not support rename or merge", field="action")
+    else:
+        raise ValidationError(f"Unsupported review action: {action}", field="action")
+
+    _insert_label_feedback(
+        db,
+        label_id=label_id,
+        assignment_id=assignment_id,
+        action=action,
+        old_value=old_value,
+        new_value=new_value,
+        reason=payload.reason,
+        user=user,
+    )
+
+    updated = _load_assignment_row(db, assignment_id)
+    if updated is None:
+        raise NotFoundError(f"Assignment {assignment_id} not found", resource_type="archive_label_assignment")
+    return _assignment_response_from_row(updated)
 
 
 @router.get(
@@ -401,3 +706,154 @@ def admin_seed_archive_metadata_tags(
     db.commit()
     invalidate_cache_pattern("video:*")
     return seeded
+
+
+@router.get(
+    "/admin/archive/labels",
+    response_model=ArchiveLabelListResponse,
+    summary="List archive labels (Admin)",
+    description="List extracted labels for review, moderation, and publication.",
+)
+def admin_list_archive_labels(
+    status: str | None = Query(None, description="Optional label status filter"),
+    kind: str | None = Query(None, description="Optional label kind filter"),
+    q: str | None = Query(None, description="Search slug, label, or description"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of labels to include"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
+):
+    clauses = []
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    if status:
+        clauses.append("status = :status")
+        params["status"] = status
+    if kind:
+        clauses.append("kind = :kind")
+        params["kind"] = kind
+    if q:
+        clauses.append("(slug ILIKE :q OR label ILIKE :q OR COALESCE(description, '') ILIKE :q)")
+        params["q"] = f"%{q}%"
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = _fetch_all_rows(
+        db.execute(
+            text(
+                f"""
+                SELECT id, slug, label, kind, status, source, publish_tier, confidence_score, description
+                FROM archive_labels
+                {where_sql}
+                ORDER BY updated_at DESC, confidence_score DESC
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            params,
+        )
+    )
+    return ArchiveLabelListResponse(items=[_label_response_from_row(row) for row in rows])
+
+
+@router.get(
+    "/admin/archive/labels/{label_id}/assignments",
+    response_model=ArchiveLabelAssignmentListResponse,
+    summary="List label assignments (Admin)",
+    description="List review assignments for a label.",
+)
+def admin_list_archive_label_assignments(
+    label_id: uuid.UUID,
+    status: str | None = Query(None, description="Optional assignment status filter"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of assignments to include"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
+):
+    clauses = ["a.label_id = :label_id"]
+    params: dict[str, Any] = {"label_id": str(label_id), "limit": limit, "offset": offset}
+    if status:
+        clauses.append("a.status = :status")
+        params["status"] = status
+    rows = _fetch_all_rows(
+        db.execute(
+            text(
+                f"""
+                SELECT
+                    a.id,
+                    a.video_id,
+                    a.unit_type,
+                    a.start_ms,
+                    a.end_ms,
+                    a.status,
+                    a.publish_tier,
+                    a.confidence_score,
+                    a.evidence_count,
+                    a.evidence,
+                    l.id AS label_id,
+                    l.slug AS label_slug,
+                    l.label AS label_label,
+                    l.kind AS label_kind,
+                    l.status AS label_status,
+                    l.source AS label_source,
+                    l.publish_tier AS label_publish_tier,
+                    l.confidence_score AS label_confidence_score,
+                    l.description AS label_description
+                FROM archive_label_assignments AS a
+                JOIN archive_labels AS l ON l.id = a.label_id
+                WHERE {' AND '.join(clauses)}
+                ORDER BY a.updated_at DESC, a.confidence_score DESC
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            params,
+        )
+    )
+    return ArchiveLabelAssignmentListResponse(items=[_assignment_response_from_row(row) for row in rows])
+
+
+@router.post(
+    "/admin/archive/labels/{label_id}/review",
+    response_model=ArchiveLabelResponse,
+    summary="Review archive label (Admin)",
+    description="Approve, reject, publish, hide, rename, or merge a label.",
+)
+def admin_review_archive_label(
+    label_id: uuid.UUID,
+    payload: ArchiveLabelReviewAction,
+    db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
+):
+    label = _review_label_action(db, label_id, payload, user)
+    db.commit()
+    return label
+
+
+@router.post(
+    "/admin/archive/label-assignments/{assignment_id}/review",
+    response_model=ArchiveLabelAssignmentResponse,
+    summary="Review archive label assignment (Admin)",
+    description="Approve, reject, publish, or hide a label assignment.",
+)
+def admin_review_archive_label_assignment(
+    assignment_id: uuid.UUID,
+    payload: ArchiveLabelReviewAction,
+    db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
+):
+    assignment = _review_assignment_action(db, assignment_id, payload, user)
+    db.commit()
+    return assignment
+
+
+@router.post(
+    "/admin/archive/labels/extract-video/{video_id}",
+    response_model=ArchiveLabelExtractionResponse,
+    summary="Extract labels for a video (Admin)",
+    description="Run the label extraction pipeline for a single video.",
+)
+def admin_extract_labels_for_video(
+    video_id: uuid.UUID,
+    extraction_tier: str = Query("cheap", description="Extraction tier to use"),
+    db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
+):
+    result = extract_labels_for_video(db, video_id=str(video_id), extraction_tier=extraction_tier)
+    db.commit()
+    return ArchiveLabelExtractionResponse(**result)

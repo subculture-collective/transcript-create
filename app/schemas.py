@@ -454,6 +454,58 @@ class ArchiveVideoMetadataAdminListResponse(BaseModel):
     items: List[ArchiveVideoMetadataAdminVideo] = Field(default_factory=list, description="Videos with assigned metadata")
 
 
+class ArchiveLabelResponse(BaseModel):
+    id: uuid.UUID = Field(..., description="Label identifier")
+    slug: str = Field(..., description="Stable label slug")
+    label: str = Field(..., description="Label text")
+    kind: str = Field(..., description="Label kind")
+    status: str = Field(..., description="Label lifecycle status")
+    source: str = Field(..., description="Label source")
+    publish_tier: str = Field(..., description="Publishing tier")
+    confidence_score: float = Field(..., description="Confidence score")
+    description: Optional[str] = Field(None, description="Optional label description")
+
+
+class ArchiveLabelListResponse(BaseModel):
+    items: List[ArchiveLabelResponse] = Field(default_factory=list, description="Labels")
+
+
+class ArchiveLabelAssignmentResponse(BaseModel):
+    id: uuid.UUID = Field(..., description="Assignment identifier")
+    label: ArchiveLabelResponse = Field(..., description="Assigned label")
+    video_id: str | uuid.UUID = Field(..., description="Video identifier")
+    unit_type: str = Field(..., description="Assignment unit type")
+    start_ms: Optional[int] = Field(None, description="Start timestamp in milliseconds")
+    end_ms: Optional[int] = Field(None, description="End timestamp in milliseconds")
+    status: str = Field(..., description="Assignment lifecycle status")
+    publish_tier: str = Field(..., description="Publishing tier")
+    confidence_score: float = Field(..., description="Confidence score")
+    evidence_count: int = Field(..., description="Number of evidence items")
+    evidence: List[Dict[str, Any]] = Field(default_factory=list, description="Evidence payloads")
+
+
+class ArchiveLabelAssignmentListResponse(BaseModel):
+    items: List[ArchiveLabelAssignmentResponse] = Field(default_factory=list, description="Label assignments")
+
+
+class ArchiveLabelReviewAction(BaseModel):
+    action: Literal["approve", "reject", "publish", "hide", "merge", "rename"] = Field(
+        ..., description="Review action to apply"
+    )
+    label: Optional[str] = Field(None, description="Replacement label text for rename actions")
+    target_label_id: Optional[uuid.UUID] = Field(None, description="Target label identifier for merges")
+    reason: Optional[str] = Field(None, description="Optional review reason")
+
+
+class ArchiveLabelExtractionResponse(BaseModel):
+    video_id: str | uuid.UUID = Field(..., description="Video identifier")
+    extraction_tier: str = Field(..., description="Extraction tier used")
+    run_id: Optional[str] = Field(None, description="Extraction run identifier")
+    windows: int = Field(..., description="Number of windows generated")
+    candidates: int = Field(..., description="Number of label candidates generated")
+    assignments: int = Field(..., description="Number of label assignments created")
+
+
 class ArchivePeriodOption(BaseModel):
     slug: str = Field(..., description="Stable period slug")
     label: str = Field(..., description="Public period label")

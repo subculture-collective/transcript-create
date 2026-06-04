@@ -79,6 +79,14 @@ function periodKindLabel(kind?: string | null) {
   return PERIOD_KIND_TABS.find((tab) => tab.kind === normalized)?.label ?? 'Latest';
 }
 
+function topicKindLabel(kind?: string | null) {
+  const value = (kind || 'topic').toLowerCase();
+  if (value.includes('series')) return 'Series';
+  if (value.includes('category')) return 'Category';
+  if (value.includes('person')) return 'Person';
+  return 'Topic';
+}
+
 function metadataChips(video: VideoInfo) {
   return [
     ...(video.people ?? []).map((person) => ({ key: `person-${person.slug}`, label: person.display_name })),
@@ -255,7 +263,7 @@ export default function ExplorePage() {
             <div className="space-y-2">
               <h1 className="page-title">Explore the HasanAbi VOD archive</h1>
               <p className="max-w-3xl text-muted">
-                Browse predefined archive periods, surface people and tags, and jump from a selected slice into cited moments.
+                Browse predefined archive periods, surface people, tags, and stream labels, then jump from a selected slice into cited moments.
               </p>
             </div>
           </div>
@@ -324,9 +332,9 @@ export default function ExplorePage() {
           </div>
 
           <div className="rounded-2xl border border-border bg-surface-muted/70 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.16)]">
-            <div className="meta-label">Topic discovery</div>
+            <div className="meta-label">Label discovery</div>
             <p className="mt-2 text-sm text-muted">
-              Topics are generated from available Whisper and YouTube transcripts, then the strongest cards are surfaced automatically.
+              Topics and stream labels are generated from available Whisper and YouTube transcripts, then the strongest cited cards are surfaced automatically.
             </p>
           </div>
         </div>
@@ -445,7 +453,7 @@ export default function ExplorePage() {
                     <div className="mt-1 font-semibold text-ink">{formatNumber(selectedPeriodVods)}</div>
                   </div>
                   <div className="rounded-xl border border-border bg-surface p-3 text-sm text-muted">
-                    <div className="text-subtle">Topic cards</div>
+                    <div className="text-subtle">Label cards</div>
                     <div className="mt-1 font-semibold text-ink">{formatNumber(data.topic_cards.length)}</div>
                   </div>
                 </div>
@@ -519,10 +527,10 @@ export default function ExplorePage() {
           <section id="topics" className="surface-card space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="section-title">Topic atlas</h2>
-                <p className="text-sm text-muted">Topic cards with momentum, aliases, and cited evidence.</p>
+                <h2 className="section-title">Detected topics and stream labels</h2>
+                <p className="text-sm text-muted">Topic, series, category, and person cards with momentum, aliases, and cited evidence.</p>
               </div>
-              <div className="text-xs uppercase tracking-[0.22em] text-subtle">{formatNumber(data.topic_cards.length)} topics</div>
+              <div className="text-xs uppercase tracking-[0.22em] text-subtle">{formatNumber(data.topic_cards.length)} labels</div>
             </div>
             {data.topic_cards.length > 0 ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -534,6 +542,7 @@ export default function ExplorePage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-2">
+                        <span className="source-pill">{topicKindLabel(topic.kind)}</span>
                         <h3 className="text-lg font-semibold text-ink group-hover:text-accent">{topic.label}</h3>
                       </div>
                       <div className="text-right text-sm text-muted">

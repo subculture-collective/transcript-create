@@ -1013,6 +1013,7 @@ def _topic_card_from_payload(payload: dict) -> ArchiveTopicCard:
     return ArchiveTopicCard(
         slug=payload.get("slug"),
         label=payload.get("label"),
+        kind=payload.get("kind"),
         source=payload.get("source") or "hybrid",
         status=payload.get("status") or "published",
         is_editable=bool(payload.get("is_editable", True)),
@@ -1024,6 +1025,126 @@ def _topic_card_from_payload(payload: dict) -> ArchiveTopicCard:
         related_topics=list(payload.get("related_topics") or []),
         evidence=evidence,
     )
+
+
+def _label_evidence_snippet(raw_evidence: object, label: str) -> str:
+    evidence_items = _as_list(raw_evidence)
+    for item in evidence_items:
+        if not isinstance(item, dict):
+            continue
+        for key in ("snippet", "text", "quote"):
+            value = item.get(key)
+            if value:
+                return str(value)
+    return f"{label} appears in this VOD segment."
+
+
+def _published_label_card_from_group(label_row: dict, rows: list[dict]) -> ArchiveTopicCard:
+    video_ids = {str(row["video_id"]) for row in rows if row.get("video_id") is not None}
+    evidence = [
+        _evidence_from_row({**row, "snippet": _label_evidence_snippet(row.get("evidence_payload"), label_row["label"])}, topic=label_row["label"])
+        for row in rows[:2]
+    ]
+    confidence_average = sum(float(row.get("assignment_confidence") or 0) for row in rows) / max(1, len(rows))
+    return ArchiveTopicCard(
+        slug=label_row["slug"],
+        label=label_row["label"],
+        kind=label_row.get("kind") or "topic",
+        source="label_assignments",
+        status="published",
+        is_editable=True,
+        aliases=[],
+        total_moments=len(rows),
+        total_videos=len(video_ids),
+        recent_mentions_90d=0,
+        trend_score=round((len(rows) * 2) + (len(video_ids) * 3) + confidence_average, 3),
+        related_topics=[],
+        evidence=evidence,
+    )
+
+
+def published_label_cards_for_period(
+    db,
+    date_from: date | datetime | None = None,
+    date_to: date | datetime | None = None,
+    limit: int = 12,
+) -> list[ArchiveTopicCard]:
+    params: dict[str, object] = {"limit": max(limit * 8, limit)}
+    where_parts = [
+        "l.status = 'published'",
+        "a.status IN ('auto_published', 'admin_approved')",
+        "a.publish_tier IN ('gold', 'silver')",
+    ]
+    lower = _coerce_datetime(date_from)
+    upper = _coerce_datetime(date_to, end=True)
+    if lower is not None:
+        where_parts.append("COALESCE(v.uploaded_at, v.created_at) >= :date_from")
+        params["date_from"] = lower
+    if upper is not None:
+        where_parts.append("COALESCE(v.uploaded_at, v.created_at) < :date_to")
+        params["date_to"] = upper
+
+    rows = _safe_mappings(
+        db,
+        f"""
+        SELECT
+            l.id AS label_id,
+            l.slug,
+            l.label,
+            l.kind,
+            a.id AS assignment_id,
+            a.video_id,
+            a.start_ms,
+            a.end_ms,
+            a.confidence_score AS assignment_confidence,
+            a.evidence AS evidence_payload,
+            v.youtube_id,
+            v.title,
+            v.duration_seconds,
+            v.state,
+            v.caption_ingest_state,
+            v.diarization_state,
+            v.uploaded_at,
+            v.created_at,
+            v.updated_at,
+            v.channel_name,
+            v.language,
+            v.category,
+            EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+            EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
+        FROM archive_label_assignments a
+        JOIN archive_labels l ON l.id = a.label_id
+        JOIN videos v ON v.id = a.video_id
+        WHERE {' AND '.join(where_parts)}
+        ORDER BY l.slug ASC, a.confidence_score DESC, a.evidence_count DESC, COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST
+        LIMIT :limit
+        """,
+        params,
+    )
+    if not rows:
+        return []
+
+    metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in rows])
+    _attach_video_metadata(rows, metadata_map)
+
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    label_rows: dict[str, dict] = {}
+    for row in rows:
+        slug = str(row["slug"])
+        grouped[slug].append(row)
+        label_rows.setdefault(slug, row)
+
+    cards = [_published_label_card_from_group(label_rows[slug], group_rows) for slug, group_rows in grouped.items()]
+    return sorted(cards, key=lambda card: (card.trend_score, card.total_videos, card.total_moments), reverse=True)[:limit]
+
+
+def merge_label_topic_cards(existing: list[ArchiveTopicCard], label_cards: list[ArchiveTopicCard], limit: int) -> list[ArchiveTopicCard]:
+    by_slug: dict[str, ArchiveTopicCard] = {card.slug: card for card in existing}
+    for card in label_cards:
+        current = by_slug.get(card.slug)
+        if current is None or (card.evidence and (not current.evidence or card.trend_score >= current.trend_score)):
+            by_slug[card.slug] = card
+    return sorted(by_slug.values(), key=lambda card: card.trend_score, reverse=True)[:limit]
 
 
 def _period_intelligence_from_row(row, topic_limit: int | None = None) -> ArchivePeriodIntelligence:
@@ -1899,6 +2020,10 @@ def get_named_period_intelligence(db, period_slug: str, topic_limit: int = 8) ->
     period_row = period_rows[0]
     period_option = _period_option_from_row(period_row)
     period_intelligence = _period_intelligence_from_row(period_row, topic_limit=topic_limit)
+    label_cards = published_label_cards_for_period(db, period_option.date_from, period_option.date_to, limit=topic_limit)
+    period_intelligence = period_intelligence.model_copy(
+        update={"top_topics": merge_label_topic_cards(period_intelligence.top_topics, label_cards, topic_limit)}
+    )
 
     top_topic_cards = period_intelligence.top_topics[:topic_limit]
     top_topic_labels = {topic.label.lower() for topic in top_topic_cards}
@@ -2115,7 +2240,10 @@ def get_durable_archive_intelligence(
             )
         )
 
-    topic_cards = sorted(topic_cards, key=lambda topic: topic.trend_score, reverse=True)[:topic_limit]
+    label_cards = published_label_cards_for_period(db, date_from, date_to, limit=topic_limit)
+    topic_cards = merge_label_topic_cards(
+        sorted(topic_cards, key=lambda topic: topic.trend_score, reverse=True), label_cards, topic_limit
+    )
 
     topic_search_trends = [
         ArchiveTrendingSearch(term=topic.label, frequency=topic.total_moments, trend_score=topic.trend_score, source="hybrid")
@@ -2177,6 +2305,10 @@ def get_durable_archive_intelligence(
     for row in period_rows[:period_limit]:
         period = row["period"]
         period_topic_stats = [s for s in stats_rows if s["period"] == period]
+        period_start = _period_start(period, granularity)
+        period_end = None
+        if period_start is not None:
+            period_end = period_start + (timedelta(days=7) if granularity == "week" else timedelta(days=calendar.monthrange(period_start.year, period_start.month)[1]))
         period_top_topics: list[ArchiveTopicCard] = []
         for stat_row in sorted(period_topic_stats, key=lambda item: float(item.get("trend_score") or 0), reverse=True)[:3]:
             topic_row = topic_rows_by_id.get(str(stat_row["topic_id"]))
@@ -2204,6 +2336,11 @@ def get_durable_archive_intelligence(
                     evidence=evidence,
                 )
             )
+        period_top_topics = merge_label_topic_cards(
+            period_top_topics,
+            published_label_cards_for_period(db, period_start, period_end, limit=3) if period_start is not None else [],
+            3,
+        )
         evidence_payload = _as_list(row.get("evidence"))
         period_evidence: list[ArchiveEvidenceMoment] = []
         for item in evidence_payload:

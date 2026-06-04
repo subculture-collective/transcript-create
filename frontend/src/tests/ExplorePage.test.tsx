@@ -62,6 +62,7 @@ describe('ExplorePage', () => {
         {
           slug: 'ice',
           label: 'ICE',
+          kind: 'topic',
           source: 'hybrid',
           status: 'published',
           is_editable: true,
@@ -78,6 +79,29 @@ describe('ExplorePage', () => {
               end_ms: 12000,
               snippet: 'ICE is a recurring topic.',
               topic: 'ice',
+            },
+          ],
+        },
+        {
+          slug: 'okbuddy',
+          label: 'Okbuddy',
+          kind: 'series',
+          source: 'label_assignments',
+          status: 'published',
+          is_editable: true,
+          aliases: [],
+          total_moments: 6,
+          total_videos: 2,
+          recent_mentions_90d: 0,
+          trend_score: 12,
+          related_topics: [],
+          evidence: [
+            {
+              video: { id: 'video-4', youtube_id: 'okb123', title: 'Okbuddy segment', uploaded_at: '2026-05-03T00:00:00Z' },
+              start_ms: 30000,
+              end_ms: 42000,
+              snippet: 'Okbuddy segment starts here.',
+              topic: 'Okbuddy',
             },
           ],
         },
@@ -102,6 +126,7 @@ describe('ExplorePage', () => {
             {
               slug: 'ice',
               label: 'ICE',
+              kind: 'topic',
               source: 'hybrid',
               aliases: [],
               total_moments: 10,
@@ -161,11 +186,15 @@ describe('ExplorePage', () => {
     expect(screen.getByRole('button', { name: 'Anniversaries' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Dates' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByText('Topic discovery')).toBeInTheDocument()
+    expect(screen.getByText('Label discovery')).toBeInTheDocument()
     expect(screen.getByLabelText('Selected period')).toBeInTheDocument()
 
-    expect(screen.getByText('1 topics')).toBeInTheDocument()
+    expect(screen.getByText('2 labels')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Detected topics and stream labels' })).toBeInTheDocument()
+    expect(screen.getByText('Topic')).toBeInTheDocument()
+    expect(screen.getByText('Series')).toBeInTheDocument()
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/topics/ICE')).toBeTruthy()
+    expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/topics/Okbuddy')).toBeTruthy()
     expect(screen.getAllByText(/May 2026.*best available topics/).length).toBeGreaterThan(0)
     expect(screen.getByText('May 2026 contains 12 archived VODs and 1 highlighted topic.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Guest One' })).toBeInTheDocument()

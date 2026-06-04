@@ -138,6 +138,36 @@ class TestArchiveRoutes:
             text("INSERT INTO search_suggestions (term, frequency) VALUES (:term, :frequency)"),
             {"term": "ice protests", "frequency": 7},
         )
+        label_id = uuid.uuid4()
+        assignment_id = uuid.uuid4()
+        db_session.execute(
+            text(
+                """
+                INSERT INTO archive_labels (id, slug, label, kind, status, source, publish_tier, confidence_score)
+                VALUES (:id, 'okbuddy', 'Okbuddy', 'series', 'published', 'automatic', 'gold', 0.91)
+                """
+            ),
+            {"id": str(label_id)},
+        )
+        db_session.execute(
+            text(
+                """
+                INSERT INTO archive_label_assignments (
+                    id, label_id, video_id, unit_type, start_ms, end_ms, status, publish_tier,
+                    confidence_score, evidence_count, evidence, source, assignment_key
+                ) VALUES (
+                    :id, :label_id, :video_id, 'window', 1000, 5000, 'auto_published', 'gold',
+                    0.89, 1, CAST(:evidence AS jsonb), 'alias', 'okbuddy-video-1'
+                )
+                """
+            ),
+            {
+                "id": str(assignment_id),
+                "label_id": str(label_id),
+                "video_id": str(video_id),
+                "evidence": '[{"snippet":"Okbuddy became a recurring stream label."}]',
+            },
+        )
         outside_video_id = _create_completed_video(
             db_session,
             youtube_id="outside1",
@@ -167,6 +197,11 @@ class TestArchiveRoutes:
         assert data["exploration_modes"] == ["timeline", "topics", "trending", "suggested"]
         assert data["trending_searches"][0]["term"] == "ice protests"
         assert data["topic_cards"]
+        okbuddy = next((card for card in data["topic_cards"] if card["slug"] == "okbuddy"), None)
+        assert okbuddy is not None
+        assert okbuddy["kind"] == "series"
+        assert okbuddy["source"] == "label_assignments"
+        assert okbuddy["evidence"][0]["snippet"] == "Okbuddy became a recurring stream label."
         assert data["periods"]
         assert data["periods"][0]["evidence"]
         assert data["periods"][0]["evidence"][0]["video"]["youtube_id"] == "explore1"

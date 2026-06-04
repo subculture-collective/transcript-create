@@ -72,6 +72,7 @@ export interface ArchiveEvidenceMoment {
 export interface ArchiveTopicCard {
   slug: string;
   label: string;
+  kind?: 'topic' | 'series' | 'category' | 'person' | string | null;
   source: 'curated' | 'automatic' | 'hybrid' | string;
   status?: 'published' | 'hidden' | 'candidate' | string;
   is_editable?: boolean;
@@ -209,6 +210,56 @@ export interface ArchiveVideoMetadataListResponse {
   items: ArchiveVideoMetadataItem[];
   total?: number | null;
   query_time_ms?: number | null;
+}
+
+export interface ArchiveLabelResponse {
+  id: UUID;
+  slug: string;
+  label: string;
+  kind: string;
+  status: string;
+  source: string;
+  publish_tier: string;
+  confidence_score: number;
+  description?: string | null;
+}
+
+export interface ArchiveLabelListResponse {
+  items: ArchiveLabelResponse[];
+}
+
+export interface ArchiveLabelAssignmentResponse {
+  id: UUID;
+  label: ArchiveLabelResponse;
+  video_id: UUID;
+  unit_type: string;
+  start_ms?: number | null;
+  end_ms?: number | null;
+  status: string;
+  publish_tier: string;
+  confidence_score: number;
+  evidence_count: number;
+  evidence: Array<Record<string, unknown>>;
+}
+
+export interface ArchiveLabelAssignmentListResponse {
+  items: ArchiveLabelAssignmentResponse[];
+}
+
+export interface ArchiveLabelReviewAction {
+  action: 'approve' | 'reject' | 'publish' | 'hide' | 'merge' | 'rename';
+  label?: string | null;
+  target_label_id?: UUID | null;
+  reason?: string | null;
+}
+
+export interface ArchiveLabelExtractionResponse {
+  video_id: UUID;
+  extraction_tier: string;
+  run_id?: string | null;
+  windows: number;
+  candidates: number;
+  assignments: number;
 }
 
 export interface ArchivePeriodOptionsResponse {

@@ -24,8 +24,8 @@ services:
             - management
         ports: !override []
         environment:
-            FRONTEND_ORIGIN: https://hasanara.subcult.tv
-            CORS_ALLOW_ORIGINS: https://hasanara.subcult.tv
+            FRONTEND_ORIGIN: https://hasanara.tv
+            CORS_ALLOW_ORIGINS: https://hasanara.tv
 
     worker:
         container_name: hasanara-worker

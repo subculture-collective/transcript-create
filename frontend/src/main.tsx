@@ -16,6 +16,7 @@ import AdminEvents from './routes/admin/AdminEvents';
 import AdminArchivePeriods from './routes/admin/AdminArchivePeriods';
 import AdminUsers from './routes/admin/AdminUsers';
 import AdminVideoMetadata from './routes/admin/AdminVideoMetadata';
+import AdminLabelIntelligence from './routes/admin/AdminLabelIntelligence';
 import { AuthProvider, ThemeProvider } from './services';
 import TopicPage from './routes/TopicPage';
 import TimelinePage from './routes/TimelinePage';
@@ -59,6 +60,7 @@ const router = createBrowserRouter([
           { path: 'events', element: <AdminEvents /> },
           { path: 'periods', element: <AdminArchivePeriods /> },
           { path: 'metadata', element: <AdminVideoMetadata /> },
+          { path: 'labels', element: <AdminLabelIntelligence /> },
           { path: 'users', element: <AdminUsers /> },
         ],
       },

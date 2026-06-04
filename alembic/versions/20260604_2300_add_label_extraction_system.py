@@ -210,14 +210,14 @@ def upgrade() -> None:
             min_evidence_count, min_distinct_videos, require_existing_canonical,
             auto_publish_enabled, config
         ) VALUES
-            ('topic', 'window', 'cheap', 0.92, 0.65, 2, 1, false, true, '{"extractors":["alias","keyphrase"]}'::jsonb),
-            ('topic', 'vod', 'cheap', 0.94, 0.70, 3, 1, false, true, '{"min_duration_share":0.05}'::jsonb),
-            ('person', 'window', 'cheap', 0.95, 0.75, 2, 1, true, true, '{"person_presence_requires_seed":true}'::jsonb),
-            ('series', 'vod', 'cheap', 0.90, 0.70, 2, 2, false, true, '{"series_requires_cross_video":true}'::jsonb),
-            ('category', 'vod', 'cheap', 0.88, 0.65, 2, 1, false, true, '{"allowed_auto_categories":["gaming","chadvice","okbuddy","guests"]}'::jsonb),
-            ('topic', 'window', 'balanced', 0.90, 0.62, 2, 1, false, true, '{"extractors":["alias","keyphrase","llm"]}'::jsonb),
-            ('topic', 'vod', 'balanced', 0.92, 0.68, 3, 1, false, true, '{"min_duration_share":0.04}'::jsonb),
-            ('topic', 'window', 'premium', 0.88, 0.60, 2, 1, false, true, '{"extractors":["alias","keyphrase","llm","embedding_cluster"]}'::jsonb)
+            ('topic', 'window', 'cheap', 0.92, 0.65, 2, 1, false, true, jsonb_build_object('extractors', jsonb_build_array('alias', 'keyphrase'))),
+            ('topic', 'vod', 'cheap', 0.94, 0.70, 3, 1, false, true, jsonb_build_object('min_duration_share', 0.05)),
+            ('person', 'window', 'cheap', 0.95, 0.75, 2, 1, true, true, jsonb_build_object('person_presence_requires_seed', true)),
+            ('series', 'vod', 'cheap', 0.90, 0.70, 2, 2, false, true, jsonb_build_object('series_requires_cross_video', true)),
+            ('category', 'vod', 'cheap', 0.88, 0.65, 2, 1, false, true, jsonb_build_object('allowed_auto_categories', jsonb_build_array('gaming', 'chadvice', 'okbuddy', 'guests'))),
+            ('topic', 'window', 'balanced', 0.90, 0.62, 2, 1, false, true, jsonb_build_object('extractors', jsonb_build_array('alias', 'keyphrase', 'llm'))),
+            ('topic', 'vod', 'balanced', 0.92, 0.68, 3, 1, false, true, jsonb_build_object('min_duration_share', 0.04)),
+            ('topic', 'window', 'premium', 0.88, 0.60, 2, 1, false, true, jsonb_build_object('extractors', jsonb_build_array('alias', 'keyphrase', 'llm', 'embedding_cluster')))
         ON CONFLICT (label_kind, unit_type, extraction_tier) DO NOTHING
         """
     )

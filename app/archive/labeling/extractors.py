@@ -8,8 +8,8 @@ from .normalization import is_junk_phrase, normalize_label, normalized_alias
 from .types import LabelCandidate
 
 
-def _ngrams(text: str, max_words: int = 3) -> list[str]:
-    words = [word for word in normalized_alias(text).split() if word]
+def _ngrams(text: str, max_words: int = 3, max_tokens: int = 400) -> list[str]:
+    words = [word for word in normalized_alias(text).split() if word][:max_tokens]
     phrases: list[str] = []
     seen: set[str] = set()
 

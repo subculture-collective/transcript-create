@@ -11,7 +11,7 @@ from .. import crud
 from ..archive.repository import archive_repository
 from .intelligence_facets import attach_archive_facets
 from ..archive.video_metadata_repository import get_video_metadata_map
-from .intelligence_repository import SEED_TOPICS, SeedTopic, alias_matches_text, get_durable_archive_intelligence, slugify_topic
+from .intelligence_repository import SEED_TOPICS, SeedTopic, alias_matches_text, get_durable_archive_intelligence, merge_label_topic_cards, published_label_cards_for_period, slugify_topic
 from .intelligence_repository import list_period_options
 from ..schemas import (
     ArchiveEvidenceMoment,
@@ -371,7 +371,11 @@ def get_archive_intelligence(
         topic_cards.extend(_automatic_topic_cards(trending_searches, existing_slugs, evidence_pool))
         topic_cards = topic_cards[:topic_limit]
 
-    topic_cards = sorted(topic_cards, key=lambda topic: topic.trend_score, reverse=True)[:topic_limit]
+    topic_cards = merge_label_topic_cards(
+        sorted(topic_cards, key=lambda topic: topic.trend_score, reverse=True),
+        published_label_cards_for_period(db, date_from, date_to, limit=topic_limit),
+        topic_limit,
+    )
 
     suggested_searches = _suggested_searches(topic_cards, trending_searches, limit=max(topic_limit, len(SEED_TOPICS)))
     periods = _periods(timeline, topic_cards, evidence_pool, limit=period_limit)

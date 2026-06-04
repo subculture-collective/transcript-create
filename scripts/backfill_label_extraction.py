@@ -25,13 +25,21 @@ def main(*, limit: int = 10, extraction_tier: str = "cheap") -> None:
                 """
                 SELECT v.id
                 FROM videos AS v
-                WHERE EXISTS (SELECT 1 FROM segments AS s WHERE s.video_id = v.id)
-                   OR EXISTS (SELECT 1 FROM youtube_transcripts AS yt WHERE yt.video_id = v.id)
-                ORDER BY COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST
+                WHERE (EXISTS (SELECT 1 FROM segments AS s WHERE s.video_id = v.id)
+                   OR EXISTS (SELECT 1 FROM youtube_transcripts AS yt WHERE yt.video_id = v.id))
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM archive_extraction_runs AS r
+                    WHERE r.video_id = v.id
+                      AND r.scope = 'video'
+                      AND r.extraction_tier = :extraction_tier
+                      AND r.status = 'completed'
+                  )
+                ORDER BY COALESCE(v.duration_seconds, 999999) ASC, COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST
                 LIMIT :limit
                 """
             ),
-            {"limit": limit},
+            {"limit": limit, "extraction_tier": extraction_tier},
         ).all()
 
         for row in rows:
@@ -41,6 +49,7 @@ def main(*, limit: int = 10, extraction_tier: str = "cheap") -> None:
             totals["windows"] += int(result.get("windows") or 0)
             totals["candidates"] += int(result.get("candidates") or 0)
             totals["assignments"] += int(result.get("assignments") or 0)
+            print("label extraction backfilled video: " + " ".join(f"{key}={value}" for key, value in sorted(result.items())), flush=True)
 
     print("label extraction backfill complete: " + " ".join(f"{key}={value}" for key, value in sorted(totals.items())))
 

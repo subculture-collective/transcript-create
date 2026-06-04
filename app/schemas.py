@@ -268,6 +268,7 @@ class ArchiveEvidenceMoment(BaseModel):
 class ArchiveTopicCard(BaseModel):
     slug: str = Field(..., description="Stable topic slug")
     label: str = Field(..., description="Public topic label")
+    kind: Optional[str] = Field(None, description="Label kind such as topic, series, category, or person")
     source: str = Field(..., description="curated, automatic, or hybrid")
     status: str = Field("published", description="Public lifecycle status for the topic")
     is_editable: bool = Field(True, description="Whether operators may edit this topic")

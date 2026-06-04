@@ -31,6 +31,9 @@ export default function AdminLayout() {
           <Link className="nav-link rounded-md px-3 py-2" to="/admin/metadata">
             Metadata
           </Link>
+          <Link className="nav-link rounded-md px-3 py-2" to="/admin/labels">
+            Labels
+          </Link>
         </nav>
         <Outlet />
       </div>

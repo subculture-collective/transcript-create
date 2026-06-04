@@ -9,6 +9,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .. import crud
 from ..archive.repository import archive_repository
+from .intelligence_facets import attach_archive_facets
 from ..archive.video_metadata_repository import get_video_metadata_map
 from .intelligence_repository import SEED_TOPICS, SeedTopic, alias_matches_text, get_durable_archive_intelligence, slugify_topic
 from .intelligence_repository import list_period_options
@@ -325,7 +326,7 @@ def get_archive_intelligence(
         period_slug=period,
     )
     if cached is not None:
-        return cached.model_copy(update={"query_time_ms": int((time.perf_counter() - start) * 1000)})
+        return attach_archive_facets(cached).model_copy(update={"query_time_ms": int((time.perf_counter() - start) * 1000)})
 
     summary = archive_repository.get_summary(db, recent_limit=6, popular_limit=max(topic_limit, 8))
     timeline = crud.get_archive_timeline(db, limit=max(period_limit, 1) * 25, granularity=granularity)
@@ -364,7 +365,7 @@ def get_archive_intelligence(
     if selected_period is None and period_options:
         selected_period = period_options[0]
 
-    return ArchiveIntelligenceResponse(
+    return attach_archive_facets(ArchiveIntelligenceResponse(
         summary=summary,
         exploration_modes=["timeline", "topics", "trending", "suggested"],
         trending_searches=trending_searches,
@@ -374,7 +375,7 @@ def get_archive_intelligence(
         selected_period=selected_period,
         period_options=period_options,
         query_time_ms=int((time.perf_counter() - start) * 1000),
-    )
+    ))
 
 
 def get_archive_period_options(db, kind: str | None = None, limit: int = 120) -> ArchivePeriodOptionsResponse:

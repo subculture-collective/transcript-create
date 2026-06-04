@@ -337,9 +337,18 @@ def test_video_metadata_assignment_round_trip_and_public_filtering():
 
     metadata = get_video_metadata_map(db, [video_id])
     assert metadata[str(video_id)]["people"] == [
-        {"slug": "guest-one", "display_name": "Guest One", "aliases": [], "description": None, "role": "guest"}
+        {
+            "slug": "guest-one",
+            "display_name": "Guest One",
+            "aliases": [],
+            "description": None,
+            "role": "guest",
+            "sort_order": 0,
+        }
     ]
-    assert metadata[str(video_id)]["tags"] == [{"slug": "chadvice", "label": "Chadvice", "kind": "category", "description": None}]
+    assert metadata[str(video_id)]["tags"] == [
+        {"slug": "chadvice", "label": "Chadvice", "kind": "category", "description": None, "sort_order": 0}
+    ]
 
     admin = search_videos_for_admin(db, q="Metadata")
     assert {person["slug"] for person in admin[0]["people"]} == {"guest-one", "hidden-guest"}

@@ -12,6 +12,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from app.archive.repository import ARCHIVE_VIDEO_FILTER_SQL, archive_repository
+from app.archive.intelligence_facets import attach_archive_facets
 from app.archive.video_metadata_repository import get_video_metadata_map
 from app.exceptions import ValidationError
 from app.schemas import (
@@ -1854,7 +1855,7 @@ def get_named_period_intelligence(db, period_slug: str, topic_limit: int = 8) ->
     suggested_searches = trending_searches[: max(topic_limit, len(SEED_TOPICS))]
     period_options = list_period_options(db).periods
 
-    return ArchiveIntelligenceResponse(
+    return attach_archive_facets(ArchiveIntelligenceResponse(
         summary=summary,
         exploration_modes=["periods", "topics", "trending", "suggested"],
         trending_searches=trending_searches,
@@ -1864,7 +1865,7 @@ def get_named_period_intelligence(db, period_slug: str, topic_limit: int = 8) ->
         selected_period=period_option,
         period_options=period_options,
         query_time_ms=None,
-    )
+    ))
 
 
 def get_durable_archive_intelligence(
@@ -2157,7 +2158,7 @@ def get_durable_archive_intelligence(
     if selected_period is None and period_options:
         selected_period = period_options[0]
 
-    return ArchiveIntelligenceResponse(
+    return attach_archive_facets(ArchiveIntelligenceResponse(
         summary=summary,
         exploration_modes=["timeline", "topics", "trending", "suggested"],
         trending_searches=trending_searches,
@@ -2167,4 +2168,4 @@ def get_durable_archive_intelligence(
         selected_period=selected_period,
         period_options=period_options,
         query_time_ms=None,
-    )
+    ))

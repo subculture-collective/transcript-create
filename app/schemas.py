@@ -337,6 +337,7 @@ class ArchivePerson(BaseModel):
     aliases: List[str] = Field(default_factory=list, description="Known aliases")
     description: Optional[str] = Field(None, description="Optional description")
     role: Optional[str] = Field(None, description="Role on the video, if assigned")
+    sort_order: int = Field(0, exclude=True, description="Internal ordering weight")
 
 
 class ArchiveVideoTag(BaseModel):
@@ -344,6 +345,7 @@ class ArchiveVideoTag(BaseModel):
     label: str = Field(..., description="Display label")
     kind: str = Field("category", description="Tag kind")
     description: Optional[str] = Field(None, description="Optional description")
+    sort_order: int = Field(0, exclude=True, description="Internal ordering weight")
 
 
 class ArchivePersonCreate(BaseModel):
@@ -480,6 +482,8 @@ class ArchiveIntelligenceResponse(BaseModel):
     suggested_searches: List[ArchiveTrendingSearch] = Field(default_factory=list, description="Suggested archive searches")
     topic_cards: List[ArchiveTopicCard] = Field(default_factory=list, description="Hybrid curated/automatic topic cards")
     periods: List[ArchivePeriodIntelligence] = Field(default_factory=list, description="Timeline periods enriched with topic/evidence data")
+    people: List[ArchivePerson] = Field(default_factory=list, description="Featured people facets for the selected scope")
+    tags: List[ArchiveVideoTag] = Field(default_factory=list, description="Featured tag facets for the selected scope")
     selected_period: Optional[ArchivePeriodOption] = Field(None, description="Currently selected predefined period")
     period_options: List[ArchivePeriodOption] = Field(default_factory=list, description="Available predefined archive periods")
     query_time_ms: Optional[int] = Field(None, description="Time taken to compose archive intelligence")

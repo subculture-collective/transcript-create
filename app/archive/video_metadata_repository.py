@@ -446,6 +446,7 @@ def _get_video_metadata_map(db, video_ids: list, published_only: bool) -> dict[s
                 "aliases": _string_list(row.get("aliases")),
                 "description": row.get("description"),
                 "role": row.get("role"),
+                "sort_order": int(row.get("sort_order") or 0),
             }
         )
 
@@ -479,6 +480,7 @@ def _get_video_metadata_map(db, video_ids: list, published_only: bool) -> dict[s
                 "label": row["label"],
                 "kind": row["kind"],
                 "description": row.get("description"),
+                "sort_order": int(row.get("sort_order") or 0),
             }
         )
 

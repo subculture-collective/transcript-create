@@ -138,6 +138,25 @@ class TestArchiveRoutes:
             text("INSERT INTO search_suggestions (term, frequency) VALUES (:term, :frequency)"),
             {"term": "ice protests", "frequency": 7},
         )
+        outside_video_id = _create_completed_video(
+            db_session,
+            youtube_id="outside1",
+            title="Outside VOD",
+            uploaded_at=datetime(2026, 6, 20, tzinfo=timezone.utc),
+            duration_seconds=1800,
+        )
+        db_session.execute(
+            text("INSERT INTO segments (video_id, start_ms, end_ms, text, speaker_label) VALUES (:vid, 1000, 5000, :text, NULL)"),
+            {"vid": str(outside_video_id), "text": "Outside archive coverage should stay out of the selected May period facets."},
+        )
+        outside_person = create_person(db_session, {"display_name": "Outside Guest", "slug": "outside-guest"})
+        outside_tag = create_tag(db_session, {"label": "Outside Tag", "slug": "outside-tag"})
+        set_video_metadata(
+            db_session,
+            outside_video_id,
+            people=[{"slug": outside_person["slug"], "role": "guest"}],
+            tags=[{"slug": outside_tag["slug"]}],
+        )
         db_session.commit()
 
         response = client.get("/archive/intelligence?topic_limit=4&period_limit=3&granularity=month&date_from=2026-05-01&date_to=2026-05-31")
@@ -157,6 +176,12 @@ class TestArchiveRoutes:
         assert data["periods"][0]["evidence"][0]["video"]["tags"] == [
             {"slug": "chadvice", "label": "Chadvice", "kind": "category", "description": None}
         ]
+        assert data["people"] == [
+            {"slug": "guest-one", "display_name": "Guest One", "aliases": [], "description": None, "role": "guest"}
+        ]
+        assert data["tags"] == [{"slug": "chadvice", "label": "Chadvice", "kind": "category", "description": None}]
+        assert {person["slug"] for person in data["people"]} == {"guest-one"}
+        assert {tag["slug"] for tag in data["tags"]} == {"chadvice"}
 
     @patch("app.routes.archive.invalidate_cache")
     def test_admin_set_archive_video_metadata_invalidates_video_cache(self, mock_invalidate_cache, db_session):
@@ -218,6 +243,8 @@ class TestArchiveRoutes:
         response = client.get("/archive/intelligence?topic_limit=4&period_limit=3&granularity=week&date_from=2026-05-01&date_to=2026-05-31&period=2026-05")
 
         assert response.status_code == 200
+        assert response.json()["people"] == []
+        assert response.json()["tags"] == []
         mock_get_archive_intelligence.assert_called_once()
         _, kwargs = mock_get_archive_intelligence.call_args
         assert kwargs["topic_limit"] == 4

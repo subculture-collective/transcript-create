@@ -35,18 +35,17 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 lg:space-y-8">
-      <section className="surface-card overflow-hidden">
-        <div className="grid gap-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(19rem,0.8fr)] lg:items-center">
-          <div className="space-y-6">
+      <section className="surface-card space-y-7 overflow-hidden">
+        <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
+          <div className="max-w-3xl space-y-4">
             <div className="archive-eyebrow">HasAnAra</div>
+            <h1 className="page-title max-w-4xl">Search the HasanAbi broadcast archive.</h1>
+            <p className="max-w-2xl text-lg leading-8 text-muted">
+              Trace topics, timestamped quotes, debates, guests, and recurring stream moments across HasanAbi VODs.
+            </p>
+          </div>
 
-            <div className="space-y-4">
-              <h1 className="page-title max-w-4xl">Search the HasanAbi broadcast archive.</h1>
-              <p className="max-w-2xl text-lg leading-8 text-muted">
-                Trace topics, timestamped quotes, debates, guests, and recurring stream moments across HasanAbi VODs.
-              </p>
-            </div>
-
+          <div className="w-full max-w-2xl space-y-4 lg:min-w-[28rem]">
             <form onSubmit={onSubmit} className="space-y-3">
               <label className="sr-only" htmlFor="home-search">
                 Search the HasanAbi archive
@@ -71,7 +70,7 @@ export default function HomePage() {
               </div>
             </form>
 
-            <div className="flex flex-wrap gap-3 text-sm">
+            <div className="flex flex-wrap justify-start gap-3 text-sm lg:justify-end">
               <Link to="/episodes" className="nav-link">
                 Browse VODs
               </Link>
@@ -80,21 +79,22 @@ export default function HomePage() {
               </Link>
             </div>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)] lg:items-stretch">
+          <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
               <StatCard label="VODs" value={loading ? '—' : summary ? formatNumber(summary.video_count) : '—'} />
               <StatCard label="Duration" value={loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'} />
               <StatCard label="Transcript words" value={loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'} />
               <StatCard
                 label="Updated"
                 value={loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}
-                className="sm:col-span-2 lg:col-span-2"
+                className="sm:col-span-1"
                 valueClassName="meta-value text-sm"
               />
-            </div>
+          </div>
 
-            <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+          <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
               <div className="archive-eyebrow mb-2">Get started</div>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-ink">Create an account to save searches and favorites.</h2>
               <p className="mt-2 text-sm leading-6 text-muted">
@@ -108,7 +108,6 @@ export default function HomePage() {
                   Continue with Twitch
                 </button>
               </div>
-            </div>
           </div>
         </div>
       </section>

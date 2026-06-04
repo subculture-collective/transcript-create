@@ -269,6 +269,8 @@ class ArchiveTopicCard(BaseModel):
     slug: str = Field(..., description="Stable topic slug")
     label: str = Field(..., description="Public topic label")
     source: str = Field(..., description="curated, automatic, or hybrid")
+    status: str = Field("published", description="Public lifecycle status for the topic")
+    is_editable: bool = Field(True, description="Whether operators may edit this topic")
     aliases: List[str] = Field(default_factory=list, description="Search aliases used for this topic")
     total_moments: int = Field(0, description="Matched transcript moments")
     total_videos: int = Field(0, description="VODs with at least one matched moment")

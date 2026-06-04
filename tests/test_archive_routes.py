@@ -7,7 +7,15 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.schemas import EpisodeSearchGroup, GroupedSearchResponse, MentionMap, SearchMoment, VideoInfo
+from app.schemas import (
+    ArchiveIntelligenceResponse,
+    ArchiveSummary,
+    EpisodeSearchGroup,
+    GroupedSearchResponse,
+    MentionMap,
+    SearchMoment,
+    VideoInfo,
+)
 
 
 def _create_completed_video(db_session, *, youtube_id: str, title: str, uploaded_at: datetime, duration_seconds: int = 120):
@@ -101,7 +109,7 @@ class TestArchiveRoutes:
         )
         db_session.commit()
 
-        response = client.get("/archive/intelligence?topic_limit=4&period_limit=3")
+        response = client.get("/archive/intelligence?topic_limit=4&period_limit=3&granularity=month&date_from=2026-05-01&date_to=2026-05-31")
 
         assert response.status_code == 200
         data = response.json()
@@ -112,6 +120,28 @@ class TestArchiveRoutes:
         assert data["periods"]
         assert data["periods"][0]["evidence"]
         assert data["periods"][0]["evidence"][0]["video"]["youtube_id"] == "explore1"
+
+    @patch("app.routes.archive.get_archive_intelligence")
+    def test_archive_intelligence_route_passes_query_params(self, mock_get_archive_intelligence, client: TestClient):
+        mock_get_archive_intelligence.return_value = ArchiveIntelligenceResponse(
+            summary=ArchiveSummary(),
+            exploration_modes=[],
+            trending_searches=[],
+            suggested_searches=[],
+            topic_cards=[],
+            periods=[],
+        )
+
+        response = client.get("/archive/intelligence?topic_limit=4&period_limit=3&granularity=week&date_from=2026-05-01&date_to=2026-05-31")
+
+        assert response.status_code == 200
+        mock_get_archive_intelligence.assert_called_once()
+        _, kwargs = mock_get_archive_intelligence.call_args
+        assert kwargs["topic_limit"] == 4
+        assert kwargs["period_limit"] == 3
+        assert kwargs["granularity"] == "week"
+        assert str(kwargs["date_from"]) == "2026-05-01"
+        assert str(kwargs["date_to"]) == "2026-05-31"
 
     def test_archive_timeline(self, client: TestClient, db_session):
         first_video = _create_completed_video(

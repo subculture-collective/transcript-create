@@ -2,6 +2,7 @@ import ky from 'ky';
 import type {
   ArchiveSearchFilters,
   ArchiveSummary,
+  ExploreIntelligenceQuery,
   ExploreIntelligenceResponse,
   GroupedSearchResponse,
   MentionMapResponse,
@@ -93,7 +94,18 @@ export const api = {
     const response = await http.get('archive/timeline').json<TimelineResponse | TimelineBucket[]>();
     return normalizeTimelineResponse(response);
   },
-  async getExploreIntelligence() {
+  async getExploreIntelligence(opts?: ExploreIntelligenceQuery) {
+    const params = new URLSearchParams();
+    if (opts?.granularity) params.set('granularity', opts.granularity);
+    if (opts?.topic_limit != null) params.set('topic_limit', String(opts.topic_limit));
+    if (opts?.period_limit != null) params.set('period_limit', String(opts.period_limit));
+    if (opts?.date_from) params.set('date_from', opts.date_from);
+    if (opts?.date_to) params.set('date_to', opts.date_to);
+
+    if (params.toString()) {
+      return http.get('archive/intelligence', { searchParams: params }).json<ExploreIntelligenceResponse>();
+    }
+
     return http.get('archive/intelligence').json<ExploreIntelligenceResponse>();
   },
   async getTranscript(videoId: string) {

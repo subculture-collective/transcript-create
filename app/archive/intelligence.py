@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import re
 import time
-from dataclasses import dataclass
+from datetime import date
 from typing import Iterable
 
 from sqlalchemy import text
@@ -10,6 +9,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .. import crud
 from ..archive.repository import archive_repository
+from .intelligence_repository import SEED_TOPICS, SeedTopic, alias_matches_text, get_durable_archive_intelligence, slugify_topic
 from ..schemas import (
     ArchiveEvidenceMoment,
     ArchiveIntelligenceResponse,
@@ -21,26 +21,8 @@ from ..schemas import (
 )
 
 
-@dataclass(frozen=True)
-class SeedTopic:
-    slug: str
-    label: str
-    aliases: tuple[str, ...]
-
-
-SEED_TOPICS: tuple[SeedTopic, ...] = (
-    SeedTopic("ice", "ICE", ("ice", "immigration", "deportation")),
-    SeedTopic("gaza", "Gaza", ("gaza", "palestine", "israel")),
-    SeedTopic("trump", "Trump", ("trump", "maga", "republicans")),
-    SeedTopic("dsa", "DSA", ("dsa", "zohran", "socialists")),
-    SeedTopic("epstein", "Epstein", ("epstein", "maxwell", "files")),
-    SeedTopic("new-jersey", "New Jersey", ("new jersey", "newark", "delaney")),
-)
-
-
 def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "topic"
+    return slugify_topic(value)
 
 
 def _video_from_row(row) -> VideoInfo:
@@ -155,7 +137,7 @@ def _matching_evidence(evidence_pool: list[ArchiveEvidenceMoment], aliases: Iter
     matches: list[ArchiveEvidenceMoment] = []
     for moment in evidence_pool:
         snippet = moment.snippet.lower()
-        if any(alias in snippet for alias in lowered_aliases):
+        if any(alias_matches_text(alias, snippet) for alias in lowered_aliases):
             matches.append(moment.model_copy(update={"topic": topic_label}))
         if len(matches) >= limit:
             break
@@ -168,7 +150,7 @@ def _related_topics(snippets: Iterable[str], current_slug: str) -> list[str]:
     for seed in SEED_TOPICS:
         if seed.slug == current_slug:
             continue
-        if any(alias in haystack for alias in seed.aliases):
+        if any(alias_matches_text(alias, haystack) for alias in seed.aliases):
             related.append(seed.label)
     return related[:3]
 
@@ -297,11 +279,30 @@ def _periods(
     return periods
 
 
-def get_archive_intelligence(db, *, topic_limit: int = 8, period_limit: int = 8) -> ArchiveIntelligenceResponse:
+def get_archive_intelligence(
+    db,
+    *,
+    topic_limit: int = 8,
+    period_limit: int = 8,
+    granularity: str = "month",
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> ArchiveIntelligenceResponse:
     start = time.perf_counter()
 
+    cached = get_durable_archive_intelligence(
+        db,
+        topic_limit=topic_limit,
+        period_limit=period_limit,
+        granularity=granularity,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if cached is not None:
+        return cached.model_copy(update={"query_time_ms": int((time.perf_counter() - start) * 1000)})
+
     summary = archive_repository.get_summary(db, recent_limit=6, popular_limit=max(topic_limit, 8))
-    timeline = crud.get_archive_timeline(db, limit=max(period_limit, 1) * 25, granularity="month")
+    timeline = crud.get_archive_timeline(db, limit=max(period_limit, 1) * 25, granularity=granularity)
     trending_searches = _search_suggestions(db, limit=max(topic_limit, 8))
     evidence_videos: list[VideoInfo] = []
     seen_video_ids: set[str] = set()

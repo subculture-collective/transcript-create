@@ -256,7 +256,7 @@ def get_archive_timeline(db, limit: int = 100, granularity: str = "month"):
     from app.schemas import ArchiveTimelineResponse, TimelineBucket
 
     archive_filter = _archive_video_filter_sql()
-    bucket_trunc = "year" if granularity == "year" else "month"
+    bucket_trunc = "year" if granularity == "year" else ("week" if granularity == "week" else "month")
 
     rows = (
         db.execute(
@@ -291,6 +291,9 @@ def get_archive_timeline(db, limit: int = 100, granularity: str = "month"):
         if bucket_trunc == "year":
             period = bucket_start.strftime("%Y")
             label = bucket_start.strftime("%Y")
+        elif bucket_trunc == "week":
+            period = bucket_start.strftime("%G-W%V")
+            label = f"Week of {bucket_start.strftime('%Y-%m-%d')}"
         else:
             period = bucket_start.strftime("%Y-%m")
             label = bucket_start.strftime("%B %Y")

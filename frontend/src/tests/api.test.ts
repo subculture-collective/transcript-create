@@ -156,6 +156,47 @@ describe('api service', () => {
       expect(result).toEqual(mockResponse)
       expect(getMock).toHaveBeenCalledWith('archive/intelligence')
     })
+
+    it('passes through intelligence query params', async () => {
+      const mockResponse = {
+        summary: {
+          creator_name: 'HasAnAra',
+          video_count: 1,
+          total_duration_seconds: 3600,
+          transcript_word_count: 200,
+          recent_videos: [],
+          popular_searches: [],
+        },
+        exploration_modes: [],
+        trending_searches: [],
+        suggested_searches: [],
+        topic_cards: [],
+        periods: [],
+      }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      await api.getExploreIntelligence({
+        granularity: 'week',
+        topic_limit: 12,
+        period_limit: 16,
+        date_from: '2026-05-01',
+        date_to: '2026-05-31',
+      })
+
+      expect(getMock).toHaveBeenCalledWith(
+        'archive/intelligence',
+        expect.objectContaining({ searchParams: expect.any(URLSearchParams) })
+      )
+      const params = getMock.mock.calls[0][1].searchParams as URLSearchParams
+      expect(params.get('granularity')).toBe('week')
+      expect(params.get('topic_limit')).toBe('12')
+      expect(params.get('period_limit')).toBe('16')
+      expect(params.get('date_from')).toBe('2026-05-01')
+      expect(params.get('date_to')).toBe('2026-05-31')
+    })
   })
 
   describe('saved searches', () => {

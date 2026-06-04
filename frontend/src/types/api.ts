@@ -73,6 +73,8 @@ export interface ArchiveTopicCard {
   slug: string;
   label: string;
   source: 'curated' | 'automatic' | 'hybrid' | string;
+  status?: 'published' | 'hidden' | 'candidate' | string;
+  is_editable?: boolean;
   aliases: string[];
   total_moments: number;
   total_videos: number;
@@ -108,6 +110,14 @@ export interface ExploreIntelligenceResponse {
   topic_cards: ArchiveTopicCard[];
   periods: ArchivePeriodIntelligence[];
   query_time_ms?: number | null;
+}
+
+export interface ExploreIntelligenceQuery {
+  granularity?: 'month' | 'week';
+  topic_limit?: number;
+  period_limit?: number;
+  date_from?: string;
+  date_to?: string;
 }
 
 export interface TimelineBucket {

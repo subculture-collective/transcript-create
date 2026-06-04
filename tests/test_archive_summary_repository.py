@@ -7,6 +7,7 @@ from sqlalchemy.exc import ProgrammingError
 
 from app import crud
 from app.archive.repository import ArchiveRepository, archive_repository
+from app.archive.intelligence_repository import SEED_TOPICS, alias_matches_text, autopublish_search_topics, seed_archive_topics, slugify_topic
 
 
 class _FakeResult:
@@ -163,3 +164,49 @@ def test_crud_wrapper_delegates_to_archive_repository(monkeypatch):
     monkeypatch.setattr(archive_repository, "get_summary", fake_get_summary)
 
     assert crud.get_archive_summary("db", recent_limit=3, popular_limit=4) is sentinel
+
+
+def test_slugify_topic_normalizes_labels():
+    assert slugify_topic("New Jersey!!!") == "new-jersey"
+    assert slugify_topic("   ") == "topic"
+
+
+def test_alias_matches_text_uses_word_boundaries():
+    assert alias_matches_text("ice", "ICE Delaney protest") is True
+    assert alias_matches_text("new jersey", "rally in New   Jersey today") is True
+    assert alias_matches_text("ice", "anti-Semite price") is False
+
+
+def test_seed_archive_topics_uses_publishable_defaults():
+    class _SeedDb(_FakeDb):
+        def execute(self, sql, params=None):
+            sql_text = str(sql)
+            self.calls.append((sql_text, params))
+            if "SELECT slug FROM archive_topics" in sql_text:
+                return _FakeResult(rows=[])
+            return _FakeResult()
+
+    db = _SeedDb([])
+    stats = seed_archive_topics(db)
+
+    assert stats["topics"] == len(SEED_TOPICS)
+    assert any("'hybrid'" in sql and "'published'" in sql for sql, _ in db.calls if "INSERT INTO archive_topics" in sql)
+    assert any("INSERT INTO archive_topic_aliases" in sql for sql, _ in db.calls)
+
+
+def test_autopublish_search_topics_skips_existing_slugs():
+    class _AutoDb(_FakeDb):
+        def execute(self, sql, params=None):
+            sql_text = str(sql)
+            self.calls.append((sql_text, params))
+            if "FROM search_suggestions" in sql_text:
+                return _FakeResult(rows=[{"term": "new topic", "frequency": 9}, {"term": "ICE", "frequency": 5}])
+            if "SELECT slug FROM archive_topics" in sql_text:
+                return _FakeResult(rows=[{"slug": "ice"}])
+            return _FakeResult()
+
+    db = _AutoDb([])
+    stats = autopublish_search_topics(db, limit=20)
+
+    assert stats["topics"] == 1
+    assert any("'automatic'" in sql and "new topic" in str(params) for sql, params in db.calls if "INSERT INTO archive_topics" in sql)

@@ -22,10 +22,29 @@ DEFAULT_TAG_SEEDS: tuple[dict[str, str], ...] = (
     {"slug": "interview", "label": "Interview"},
 )
 
+AUTO_TAG_SLUG_ALLOWLIST = {
+    "gaming",
+    "chadvice",
+    "okbuddy",
+    "guests",
+    "news",
+    "politics",
+    "react",
+    "debate",
+    "interview",
+    "irl",
+}
+AUTO_TAG_KINDS = {"category", "series", "game", "meme"}
+PERSON_PRESENT_MARKERS = ("joins us", "on stream", "guest", "interview", "talking to", "with ")
+
 
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
     return slug or "item"
+
+
+def _normalized_alias(value: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(value or "").lower())).strip()
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -72,6 +91,21 @@ def _in_clause(prefix: str, values: list[Any]) -> tuple[str, dict[str, Any]]:
     return ", ".join(placeholders), params
 
 
+def _evidence_text(evidence: Any) -> str:
+    parts: list[str] = []
+    for item in _as_list(evidence):
+        if isinstance(item, dict):
+            parts.append(str(item.get("snippet") or item.get("text") or item.get("quote") or ""))
+        else:
+            parts.append(str(item))
+    return " ".join(parts).lower()
+
+
+def _person_is_present(evidence: Any) -> bool:
+    text_value = _evidence_text(evidence)
+    return any(marker in text_value for marker in PERSON_PRESENT_MARKERS)
+
+
 def _extract_existing_row(db, sql: str, params: dict[str, Any]) -> dict[str, Any] | None:
     return db.execute(text(sql), params).mappings().first()
 
@@ -105,6 +139,273 @@ def seed_default_tags(db) -> dict[str, int]:
         )
         inserted += 1
     return {"tags": inserted}
+
+
+def seed_metadata_label_aliases(db) -> dict[str, int]:
+    seeded_labels = 0
+    seeded_aliases = 0
+
+    seed_default_tags(db)
+    tag_rows = db.execute(
+        text(
+            """
+            SELECT slug, label, kind, description
+            FROM archive_video_tags
+            WHERE status = 'published'
+              AND slug = ANY(:allowed_slugs)
+            ORDER BY slug
+            """
+        ),
+        {"allowed_slugs": sorted(AUTO_TAG_SLUG_ALLOWLIST)},
+    ).mappings().all()
+    person_rows = db.execute(
+        text(
+            """
+            SELECT slug, display_name AS label, aliases, description
+            FROM archive_people
+            WHERE status = 'published'
+            ORDER BY slug
+            """
+        )
+    ).mappings().all()
+
+    for row in tag_rows:
+        slug = slugify(str(row.get("slug") or row.get("label") or ""))
+        label = str(row.get("label") or slug).strip()
+        kind = str(row.get("kind") or "category")
+        if kind not in AUTO_TAG_KINDS:
+            kind = "category"
+        label_row = db.execute(
+            text(
+                """
+                INSERT INTO archive_labels (
+                    slug, label, kind, description, status, source, publish_tier, confidence_score, created_at, updated_at
+                ) VALUES (
+                    :slug, :label, :kind, :description, 'published', 'seed', 'gold', 1, now(), now()
+                )
+                ON CONFLICT (slug) DO UPDATE SET
+                    label = EXCLUDED.label,
+                    kind = EXCLUDED.kind,
+                    description = COALESCE(archive_labels.description, EXCLUDED.description),
+                    status = CASE WHEN archive_labels.status IN ('rejected', 'merged') THEN archive_labels.status ELSE 'published' END,
+                    publish_tier = 'gold',
+                    updated_at = now()
+                RETURNING id
+                """
+            ),
+            {"slug": slug, "label": label, "kind": kind, "description": row.get("description")},
+        ).mappings().first()
+        if label_row is None:
+            continue
+        seeded_labels += 1
+        for alias in dict.fromkeys([slug.replace("-", " "), label]):
+            normalized = _normalized_alias(alias)
+            if not normalized:
+                continue
+            db.execute(
+                text(
+                    """
+                    INSERT INTO archive_label_aliases (
+                        label_id, alias, normalized_alias, language, weight, source, status, is_ambiguous, created_at
+                    ) VALUES (
+                        :label_id, :alias, :normalized_alias, 'en', 1, 'seed', 'active', false, now()
+                    )
+                    ON CONFLICT (label_id, normalized_alias) DO NOTHING
+                    """
+                ),
+                {"label_id": label_row["id"], "alias": alias, "normalized_alias": normalized},
+            )
+            seeded_aliases += 1
+
+    for row in person_rows:
+        slug = slugify(str(row.get("slug") or row.get("label") or ""))
+        label = str(row.get("label") or slug).strip()
+        label_row = db.execute(
+            text(
+                """
+                INSERT INTO archive_labels (
+                    slug, label, kind, description, status, source, publish_tier, confidence_score, created_at, updated_at
+                ) VALUES (
+                    :slug, :label, 'person', :description, 'published', 'seed', 'gold', 1, now(), now()
+                )
+                ON CONFLICT (slug) DO UPDATE SET
+                    label = EXCLUDED.label,
+                    description = COALESCE(archive_labels.description, EXCLUDED.description),
+                    status = CASE WHEN archive_labels.status IN ('rejected', 'merged') THEN archive_labels.status ELSE 'published' END,
+                    publish_tier = 'gold',
+                    updated_at = now()
+                RETURNING id
+                """
+            ),
+            {"slug": slug, "label": label, "description": row.get("description")},
+        ).mappings().first()
+        if label_row is None:
+            continue
+        seeded_labels += 1
+        aliases = [slug.replace("-", " "), label, *_string_list(row.get("aliases"))]
+        for alias in dict.fromkeys(aliases):
+            normalized = _normalized_alias(alias)
+            if not normalized:
+                continue
+            db.execute(
+                text(
+                    """
+                    INSERT INTO archive_label_aliases (
+                        label_id, alias, normalized_alias, language, weight, source, status, is_ambiguous, created_at
+                    ) VALUES (
+                        :label_id, :alias, :normalized_alias, 'en', 1, 'seed', 'active', false, now()
+                    )
+                    ON CONFLICT (label_id, normalized_alias) DO NOTHING
+                    """
+                ),
+                {"label_id": label_row["id"], "alias": alias, "normalized_alias": normalized},
+            )
+            seeded_aliases += 1
+
+    return {"labels": seeded_labels, "aliases": seeded_aliases}
+
+
+def materialize_label_assignments_to_metadata(db, limit: int = 500) -> dict[str, int]:
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                a.id AS assignment_id,
+                a.video_id,
+                a.evidence,
+                l.id AS label_id,
+                l.slug,
+                l.label,
+                l.kind,
+                l.description
+            FROM archive_label_assignments a
+            JOIN archive_labels l ON l.id = a.label_id
+            JOIN videos v ON v.id = a.video_id
+            WHERE l.status = 'published'
+              AND a.status IN ('auto_published', 'admin_approved')
+              AND a.publish_tier IN ('gold', 'silver')
+              AND l.kind IN ('person', 'category', 'series', 'game', 'meme')
+            ORDER BY a.updated_at DESC NULLS LAST, a.created_at DESC NULLS LAST
+            LIMIT :limit
+            """
+        ),
+        {"limit": limit},
+    ).mappings().all()
+
+    people_count = 0
+    tag_count = 0
+    materialized_people: set[tuple[str, str]] = set()
+    materialized_tags: set[tuple[str, str]] = set()
+
+    for row in rows:
+        slug = slugify(str(row.get("slug") or row.get("label") or ""))
+        label = str(row.get("label") or slug).strip()
+        kind = str(row.get("kind") or "").lower()
+        video_id = str(row.get("video_id"))
+
+        if not slug or not label or not video_id:
+            continue
+
+        if kind == "person":
+            if not _person_is_present(row.get("evidence")):
+                continue
+            person_row = db.execute(
+                text(
+                    """
+                    INSERT INTO archive_people (
+                        slug, display_name, aliases, description, status, sort_order, created_at, updated_at
+                    ) VALUES (
+                        :slug, :display_name, CAST(:aliases AS JSONB), :description, 'published', 0, now(), now()
+                    )
+                    ON CONFLICT (slug) DO UPDATE SET
+                        display_name = EXCLUDED.display_name,
+                        description = COALESCE(archive_people.description, EXCLUDED.description),
+                        status = CASE WHEN archive_people.status = 'hidden' THEN archive_people.status ELSE 'published' END,
+                        updated_at = now()
+                    RETURNING id
+                    """
+                ),
+                {
+                    "slug": slug,
+                    "display_name": label,
+                    "aliases": json.dumps([label]),
+                    "description": row.get("description"),
+                },
+            ).mappings().first()
+            if person_row is None:
+                continue
+            db.execute(
+                text(
+                    """
+                    INSERT INTO archive_video_people (
+                        video_id, person_id, role, confidence, notes, created_at
+                    ) VALUES (
+                        :video_id, :person_id, :role, :confidence, :notes, now()
+                    )
+                    ON CONFLICT (video_id, person_id) DO NOTHING
+                    """
+                ),
+                {
+                    "video_id": video_id,
+                    "person_id": person_row["id"],
+                    "role": "guest",
+                    "confidence": "auto",
+                    "notes": f"Auto-materialized from label assignment {row.get('assignment_id')}",
+                },
+            )
+            key = (video_id, slug)
+            if key not in materialized_people:
+                people_count += 1
+                materialized_people.add(key)
+            continue
+
+        if kind in AUTO_TAG_KINDS and slug in AUTO_TAG_SLUG_ALLOWLIST:
+            tag_kind = "category" if kind == "series" else kind
+            tag_row = db.execute(
+                text(
+                    """
+                    INSERT INTO archive_video_tags (
+                        slug, label, kind, description, status, sort_order, created_at, updated_at
+                    ) VALUES (
+                        :slug, :label, :kind, :description, 'published', 0, now(), now()
+                    )
+                    ON CONFLICT (slug) DO UPDATE SET
+                        label = EXCLUDED.label,
+                        kind = EXCLUDED.kind,
+                        description = COALESCE(archive_video_tags.description, EXCLUDED.description),
+                        status = CASE WHEN archive_video_tags.status = 'hidden' THEN archive_video_tags.status ELSE 'published' END,
+                        updated_at = now()
+                    RETURNING id
+                    """
+                ),
+                {"slug": slug, "label": label, "kind": tag_kind, "description": row.get("description")},
+            ).mappings().first()
+            if tag_row is None:
+                continue
+            db.execute(
+                text(
+                    """
+                    INSERT INTO archive_video_taggings (
+                        video_id, tag_id, confidence, notes, created_at
+                    ) VALUES (
+                        :video_id, :tag_id, :confidence, :notes, now()
+                    )
+                    ON CONFLICT (video_id, tag_id) DO NOTHING
+                    """
+                ),
+                {
+                    "video_id": video_id,
+                    "tag_id": tag_row["id"],
+                    "confidence": "auto",
+                    "notes": f"Auto-materialized from label assignment {row.get('assignment_id')}",
+                },
+            )
+            key = (video_id, slug)
+            if key not in materialized_tags:
+                tag_count += 1
+                materialized_tags.add(key)
+
+    return {"people": people_count, "tags": tag_count, "assignments": len(rows)}
 
 
 def create_person(db, payload: dict) -> dict:

@@ -9,6 +9,7 @@ from app.archive.video_metadata_repository import (
     get_video_metadata_map,
     list_people_admin,
     list_tags_admin,
+    materialize_label_assignments_to_metadata,
     seed_default_tags,
     search_videos_for_admin,
     set_video_metadata,
@@ -43,6 +44,7 @@ class _FakeMetadataDb:
         self.video_people: list[dict] = []
         self.video_taggings: list[dict] = []
         self.videos: dict[str, dict] = {}
+        self.label_assignment_rows: list[dict] = []
 
     def rollback(self):
         self.rollback_count += 1
@@ -67,12 +69,16 @@ class _FakeMetadataDb:
         params = params or {}
         self.calls.append((sql, params))
 
+        if "FROM archive_label_assignments a" in sql and "JOIN archive_labels l" in sql:
+            return _FakeResult(rows=self.label_assignment_rows[: params.get("limit", len(self.label_assignment_rows))])
+
         if "INSERT INTO archive_people" in sql:
+            existing = self.people.get(params["slug"])
             row = {
-                "id": uuid.uuid4(),
+                "id": existing["id"] if existing else uuid.uuid4(),
                 "slug": params["slug"],
-                "display_name": params["display_name"],
-                "aliases": json.loads(params["aliases"]),
+                "display_name": params.get("display_name") or params.get("label"),
+                "aliases": json.loads(params.get("aliases", "[]")),
                 "description": params.get("description"),
                 "status": params.get("status", "published"),
                 "sort_order": params.get("sort_order", 0),
@@ -112,8 +118,9 @@ class _FakeMetadataDb:
             return _FakeResult(rows=rows[params["offset"] : params["offset"] + params["limit"]])
 
         if "INSERT INTO archive_video_tags" in sql:
+            existing = self.tags.get(params["slug"])
             row = {
-                "id": uuid.uuid4(),
+                "id": existing["id"] if existing else uuid.uuid4(),
                 "slug": params["slug"],
                 "label": params["label"],
                 "kind": params.get("kind", "category"),
@@ -381,3 +388,75 @@ def test_set_video_metadata_rejects_missing_video_even_without_metadata():
         raise AssertionError("Expected validation error for missing video")
 
     assert any("FOR UPDATE" in sql for sql, _ in db.calls)
+
+
+def test_materialize_label_assignments_creates_safe_tags_additively():
+    db = _FakeMetadataDb()
+    video_id = uuid.uuid4()
+    db.add_video(video_id=video_id, title="Gaming VOD")
+    db.label_assignment_rows = [
+        {
+            "assignment_id": uuid.uuid4(),
+            "label_id": uuid.uuid4(),
+            "video_id": video_id,
+            "slug": "gaming",
+            "label": "Gaming",
+            "kind": "category",
+            "description": None,
+            "evidence": [{"snippet": "gaming segment"}],
+        },
+        {
+            "assignment_id": uuid.uuid4(),
+            "label_id": uuid.uuid4(),
+            "video_id": video_id,
+            "slug": "random-drama",
+            "label": "Random Drama",
+            "kind": "category",
+            "description": None,
+            "evidence": [{"snippet": "not allowlisted"}],
+        },
+    ]
+
+    result = materialize_label_assignments_to_metadata(db)
+
+    assert result == {"people": 0, "tags": 1, "assignments": 2}
+    assert "gaming" in db.tags
+    assert len(db.video_taggings) == 1
+    assert db.video_taggings[0]["confidence"] == "auto"
+
+
+def test_materialize_label_assignments_requires_person_presence_evidence():
+    db = _FakeMetadataDb()
+    video_id = uuid.uuid4()
+    db.add_video(video_id=video_id, title="Guest VOD")
+    db.label_assignment_rows = [
+        {
+            "assignment_id": uuid.uuid4(),
+            "label_id": uuid.uuid4(),
+            "video_id": video_id,
+            "slug": "guest-one",
+            "label": "Guest One",
+            "kind": "person",
+            "description": None,
+            "evidence": [{"snippet": "Guest One joins us on stream."}],
+        },
+        {
+            "assignment_id": uuid.uuid4(),
+            "label_id": uuid.uuid4(),
+            "video_id": video_id,
+            "slug": "mentioned-person",
+            "label": "Mentioned Person",
+            "kind": "person",
+            "description": None,
+            "evidence": [{"snippet": "chat mentioned Mentioned Person."}],
+        },
+    ]
+
+    result = materialize_label_assignments_to_metadata(db)
+
+    assert result == {"people": 1, "tags": 0, "assignments": 2}
+    assert "guest-one" in db.people
+    assert "mentioned-person" not in db.people
+    assert len(db.video_people) == 1
+    assert db.video_people[0]["role"] == "guest"
+    assert db.video_people[0]["confidence"] == "auto"

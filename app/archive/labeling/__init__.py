@@ -25,6 +25,7 @@ from .windows import (
 from .extractors import extract_alias_candidates, extract_keyphrase_candidates
 from .normalization import is_junk_phrase, normalize_label, normalized_alias, slugify_label
 from .policy import classify_candidate
+from .pipeline import extract_labels_for_video
 from .repository import (
     ASSIGNMENT_SOURCES,
     assignment_key,
@@ -54,6 +55,7 @@ __all__ = [
     "classify_candidate",
     "create_extraction_run",
     "finish_extraction_run",
+    "extract_labels_for_video",
     "TranscriptWindow",
     "build_windows_from_segments",
     "extract_alias_candidates",

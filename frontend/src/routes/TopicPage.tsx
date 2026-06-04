@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, apiAddFavorite, favorites, track, useAuth } from '../services';
 import type { GroupedSearchResponse, MentionMapResponse, SearchHit } from '../types/api';
 import { buildTimestampLink, formatDate, formatDuration, formatNumber, formatTimestamp, sourceLabel } from '../features/archive/format';
+import { TopicMentionCard, TopicStatsGrid } from '../components/archive';
 
 function mentionLink(videoId: string, moment: SearchHit) {
   return buildTimestampLink(videoId, moment.start_ms, moment.id);
@@ -94,48 +95,7 @@ export default function TopicPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Query</div>
-            <div className="mt-1 text-2xl font-semibold text-ink">“{mentionMap?.query ?? topic}”</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">First mentioned</div>
-            <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : mentionMap?.first_mentioned_year ?? '—'}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Most discussed</div>
-            <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : mentionMap?.most_discussed_period ?? '—'}</div>
-            {!loading && mentionMap?.most_discussed_count ? <div className="mt-1 text-xs text-muted">{formatNumber(mentionMap.most_discussed_count)} moments</div> : null}
-          </div>
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Recent mentions</div>
-            <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : formatNumber(mentionMap?.recent_mentions_90d ?? 0)}</div>
-            <div className="mt-1 text-xs text-muted">last 90 days</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Related topics</div>
-            <div className="mt-2 flex flex-wrap gap-2 text-sm text-ink">
-              {(mentionMap?.related_topics ?? []).length > 0 ? mentionMap!.related_topics!.map((term) => (
-                <Link key={term} to={`/topics/${encodeURIComponent(term)}`} className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-2 pb-[3px] pt-[7px] text-center leading-none hover:border-accent">
-                  {term}
-                </Link>
-              )) : <span className="text-muted">No co-occurring terms yet</span>}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Top VODs</div>
-            <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : formatNumber(mentionMap?.top_episodes_count ?? topEpisodes.length)}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">Total moments</div>
-            <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : formatNumber(mentionMap?.total_moments)}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="text-xs uppercase tracking-wide text-subtle">VODs</div>
-            <div className="mt-1 text-2xl font-semibold text-ink">{loading ? '—' : formatNumber(mentionMap?.total_videos)}</div>
-          </div>
-        </div>
+        <TopicStatsGrid mentionMap={mentionMap} topic={topic} loading={loading} />
       </section>
 
       {error && <div className="alert-warning" role="alert">{error}</div>}
@@ -145,12 +105,12 @@ export default function TopicPage() {
           <h2 className="section-title">First and latest mentions</h2>
           <div className="space-y-3">
             {mentionMap?.first_mention ? (
-              <MentionCard label="First mention" moment={mentionMap.first_mention} />
+              <TopicMentionCard label="First mention" moment={mentionMap.first_mention} />
             ) : (
               <EmptyState label="First mention" />
             )}
             {mentionMap?.latest_mention ? (
-              <MentionCard label="Latest mention" moment={mentionMap.latest_mention} />
+              <TopicMentionCard label="Latest mention" moment={mentionMap.latest_mention} />
             ) : (
               <EmptyState label="Latest mention" />
             )}
@@ -257,19 +217,4 @@ export default function TopicPage() {
 
 function EmptyState({ label }: { label: string }) {
   return <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted">No {label.toLowerCase()} yet.</div>;
-}
-
-function MentionCard({ label, moment }: { label: string; moment: SearchHit & { video?: { id?: string } | null } }) {
-  const videoId = moment.video?.id ?? moment.video_id;
-  return (
-    <div className="rounded-xl border border-border bg-surface-muted p-4">
-      <div className="text-xs uppercase tracking-wide text-subtle">{label}</div>
-      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-        <span>{formatTimestamp(moment.start_ms)}</span>
-        <span>{sourceLabel(moment.source ?? 'best')}</span>
-        {videoId && <Link className="action-link" to={buildTimestampLink(videoId, moment.start_ms, moment.id)}>Open cited moment</Link>}
-      </div>
-      <div className="prose prose-sm mt-3 max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: moment.snippet }} />
-    </div>
-  );
 }

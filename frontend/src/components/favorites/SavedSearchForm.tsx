@@ -1,0 +1,65 @@
+import type { SavedSearchFilters } from '../../types/api';
+
+type SavedSearchFormProps = {
+  query: string;
+  filters: SavedSearchFilters;
+  saving: boolean;
+  onQueryChange: (value: string) => void;
+  onFiltersChange: (updater: (current: SavedSearchFilters) => SavedSearchFilters) => void;
+  onSave: () => void;
+};
+
+export default function SavedSearchForm({ query, filters, saving, onQueryChange, onFiltersChange, onSave }: SavedSearchFormProps) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-border bg-surface-muted p-4">
+      <div className="text-xs uppercase tracking-[0.24em] text-subtle">Save current search</div>
+      <label className="block text-sm text-muted">
+        Query
+        <input className="form-control mt-1" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Enter a search term" />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm text-muted">
+          Source
+          <select className="form-control mt-1" value={filters.source ?? ''} onChange={(event) => onFiltersChange((current) => ({ ...current, source: (event.target.value || undefined) as SavedSearchFilters['source'] }))}>
+            <option value="">Best available</option>
+            <option value="native">Whisper transcript</option>
+            <option value="youtube">YouTube captions</option>
+          </select>
+        </label>
+        <label className="block text-sm text-muted">
+          VOD type
+          <input className="form-control mt-1" type="text" value={filters.category ?? ''} onChange={(event) => onFiltersChange((current) => ({ ...current, category: event.target.value || undefined }))} placeholder="Podcast, interview, short…" />
+        </label>
+        <label className="block text-sm text-muted">
+          Sort
+          <select className="form-control mt-1" value={filters.sort_by ?? 'relevance'} onChange={(event) => onFiltersChange((current) => ({ ...current, sort_by: event.target.value || undefined }))}>
+            <option value="relevance">Best match</option>
+            <option value="date_desc">Most recent</option>
+            <option value="date_asc">Oldest</option>
+          </select>
+        </label>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm text-muted">
+          From date
+          <input className="form-control mt-1" type="date" value={filters.date_from ?? ''} onChange={(event) => onFiltersChange((current) => ({ ...current, date_from: event.target.value || undefined }))} />
+        </label>
+        <label className="block text-sm text-muted">
+          To date
+          <input className="form-control mt-1" type="date" value={filters.date_to ?? ''} onChange={(event) => onFiltersChange((current) => ({ ...current, date_to: event.target.value || undefined }))} />
+        </label>
+        <label className="block text-sm text-muted">
+          Min duration
+          <input className="form-control mt-1" type="number" min="0" value={filters.min_duration ?? ''} onChange={(event) => onFiltersChange((current) => ({ ...current, min_duration: event.target.value ? Number(event.target.value) : undefined }))} />
+        </label>
+        <label className="block text-sm text-muted">
+          Max duration
+          <input className="form-control mt-1" type="number" min="0" value={filters.max_duration ?? ''} onChange={(event) => onFiltersChange((current) => ({ ...current, max_duration: event.target.value ? Number(event.target.value) : undefined }))} />
+        </label>
+      </div>
+      <button type="button" className="btn w-full" onClick={onSave} disabled={saving || !query.trim()}>
+        {saving ? 'Saving…' : 'Save search'}
+      </button>
+    </div>
+  );
+}

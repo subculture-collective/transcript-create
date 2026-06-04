@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, apiAddFavorite, favorites, track, useAuth } from '../services';
 import type {
@@ -11,7 +12,7 @@ import { buildCurrentFilters, readFilters, serializeFilters } from '../features/
 import { buildPlayMatchesLink, buildQuoteText, plainTextFromSnippet } from '../features/search/moments';
 import { groupHitsByVideo } from '../features/searchTranscript/matches';
 
-import { SearchMomentsList } from '../components/archive';
+import { SearchFiltersPanel, SearchMomentsList } from '../components/archive';
 
 type SearchMode = 'grouped' | 'flat' | null;
 
@@ -102,7 +103,7 @@ export default function SearchPage() {
       .finally(() => setLoading(false));
   }, [filters.category, filters.date_from, filters.date_to, filters.limit, filters.max_duration, filters.min_duration, filters.offset, filters.q, filters.sort_by, filters.source, filters.video_id, shouldFetch]);
 
-  function submitFilters(event: React.FormEvent) {
+  function submitFilters(event: FormEvent) {
     event.preventDefault();
     setParams(serializeFilters({ q, source, category: category || undefined, date_from: dateFrom || undefined, date_to: dateTo || undefined, min_duration: minDuration ? Number(minDuration) : undefined, max_duration: maxDuration ? Number(maxDuration) : undefined, sort_by: sortBy, video_id: filters.video_id, limit: filters.limit, offset: filters.offset }));
   }
@@ -176,70 +177,28 @@ export default function SearchPage() {
           )}
         </div>
 
-        <form onSubmit={submitFilters} className="space-y-3">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_11rem_auto]">
-            <div>
-              <label className="sr-only" htmlFor="search-query">
-                Search query
-              </label>
-              <input
-                id="search-query"
-                type="search"
-                value={q}
-                onChange={(event) => setQ(event.target.value)}
-                placeholder="Search HasanAbi VODs..."
-                className="form-control min-h-[48px] px-4 text-base tracking-[-0.02em]"
-              />
-            </div>
-
-            <div>
-              <label className="sr-only" htmlFor="search-source">
-                Source
-              </label>
-              <select id="search-source" className="form-control min-h-[48px]" value={source ?? ''} onChange={(event) => setSource((event.target.value || undefined) as ArchiveSearchFilters['source'])}>
-                <option value="">Best available</option>
-                <option value="native">Whisper transcript</option>
-                <option value="youtube">YouTube captions</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="sr-only" htmlFor="search-sort">
-                Sort
-              </label>
-              <select id="search-sort" className="form-control min-h-[48px]" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                <option value="relevance">Best match</option>
-                <option value="date_desc">Most recent</option>
-                <option value="date_asc">Oldest</option>
-                <option value="duration_desc">Longest</option>
-                <option value="duration_asc">Shortest</option>
-              </select>
-            </div>
-
-            <div className="flex gap-2 lg:justify-end">
-              <button type="submit" className="btn min-h-[48px] px-5" disabled={!canSubmitSearch || loading}>
-                Search
-              </button>
-              <button type="button" className="btn-secondary min-h-[48px] px-4" onClick={resetFilters}>
-                Reset
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-            <input id="search-category" type="text" className="form-control" value={category} onChange={(event) => setCategory(event.target.value)} placeholder="VOD type" aria-label="VOD type" />
-            <input id="search-date-from" type="date" className="form-control" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} aria-label="From date" />
-            <input id="search-date-to" type="date" className="form-control" value={dateTo} onChange={(event) => setDateTo(event.target.value)} aria-label="To date" />
-            <input id="search-min-duration" type="number" min="0" step="1" inputMode="numeric" placeholder="Min seconds" className="form-control" value={minDuration} onChange={(event) => setMinDuration(event.target.value)} aria-label="Minimum duration" />
-            <input id="search-max-duration" type="number" min="0" step="1" inputMode="numeric" placeholder="Max seconds" className="form-control" value={maxDuration} onChange={(event) => setMaxDuration(event.target.value)} aria-label="Maximum duration" />
-          </div>
-
-          <div className="flex flex-wrap gap-1.5 text-sm text-muted">
-            <span className="source-pill">grouped by VOD</span>
-            <span className="source-pill">timestamp pills</span>
-            <span className="match-pill">highlighted snippets</span>
-          </div>
-        </form>
+        <SearchFiltersPanel
+          q={q}
+          source={source}
+          category={category}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          minDuration={minDuration}
+          maxDuration={maxDuration}
+          sortBy={sortBy}
+          loading={loading}
+          canSubmitSearch={canSubmitSearch}
+          onQChange={setQ}
+          onSourceChange={setSource}
+          onCategoryChange={setCategory}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          onMinDurationChange={setMinDuration}
+          onMaxDurationChange={setMaxDuration}
+          onSortByChange={setSortBy}
+          onSubmit={submitFilters}
+          onReset={resetFilters}
+        />
       </section>
 
       {filters.q && (

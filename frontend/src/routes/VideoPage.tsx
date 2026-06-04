@@ -8,25 +8,21 @@ import {
   useAuth,
   track,
 } from '../services';
-import type { Segment, TranscriptResponse, VideoInfo, SearchHit } from '../types/api';
+import type { Segment, TranscriptResponse, VideoInfo, SearchHit, TranscriptBlock } from '../types/api';
 // favorites, useAuth imported from services barrel
-import { YouTubePlayer, ExportMenu } from '../components';
+import { ExportMenu } from '../components';
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer';
 // track imported from services barrel
-import { buildTimestampLink, formatDate, formatDuration, formatTimestamp, sourceLabel } from '../features/archive/format';
+import { buildTimestampLink, formatTimestamp } from '../features/archive/format';
 import { buildTranscriptTurns, normalizeTranscriptText } from '../features/videoTranscript/transcript';
-
-function msToHms(ms: number) {
-  const total = Math.floor(ms / 1000);
-  const hh = Math.floor(total / 3600)
-    .toString()
-    .padStart(2, '0');
-  const mm = Math.floor((total % 3600) / 60)
-    .toString()
-    .padStart(2, '0');
-  const ss = (total % 60).toString().padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
-}
+import {
+  FormattedTranscriptDocument,
+  PlayerPanel,
+  PlainTranscriptTurns,
+  TranscriptSearchBar,
+  VideoDetailsPanel,
+  VideoHeader,
+} from '../components/video';
 
 function secondsToYouTubeTs(s: number) {
   return Math.max(0, Math.floor(s));
@@ -245,129 +241,50 @@ export default function VideoPage() {
     () => buildTranscriptTurns(transcript?.segments ?? [], hits),
     [transcript?.segments, hits]
   );
+  const isSavedBlock = useCallback(
+    (block: TranscriptBlock) => {
+      if (!videoId) return false;
+      return (
+        block.segment_ids.some((segIdx) => favorites.has({ videoId, segIndex: segIdx + 1 })) ||
+        serverFavs.some((favorite) => favorite.start_ms === block.start_ms && favorite.end_ms === block.end_ms)
+      );
+    },
+    [serverFavs, videoId]
+  );
+  const isSavedSegment = useCallback(
+    (segment: Segment, segIndex: number) => {
+      if (!videoId) return false;
+      return (
+        serverFavs.some((favorite) => favorite.start_ms === segment.start_ms && favorite.end_ms === segment.end_ms) ||
+        favorites.has({ videoId, segIndex })
+      );
+    },
+    [serverFavs, videoId]
+  );
   const episodeTitle = video?.title ?? 'Loading VOD...';
   return (
     <div className="space-y-6">
-      <header className="surface-card space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="mb-1 text-sm font-medium uppercase tracking-wide text-subtle">VOD transcript</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-              {episodeTitle}
-            </h1>
-            {transcript?.source_label && (
-              <p className="mt-2 text-sm text-muted">
-                Showing {transcript.source_label}
-                {transcript.source === 'youtube' ? ' because Whisper is not available yet.' : ''}
-              </p>
-            )}
-          </div>
-          {video && (
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <ExportMenu videoId={video.id} />
-            </div>
-          )}
-        </div>
-        <form
-          className="grid gap-3 sm:grid-cols-[1fr_auto]"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const form = e.currentTarget;
-            const data = new FormData(form);
-            const val = String(data.get('transcript-search') ?? '').trim();
+      <VideoHeader
+        title={episodeTitle}
+        transcriptSourceLabel={transcript?.source_label}
+        transcriptSource={transcript?.source ?? null}
+        actions={video ? <ExportMenu videoId={video.id} /> : null}
+      >
+        <TranscriptSearchBar
+          initialQuery={params.get('q') ?? ''}
+          onSearch={(value) => {
             const next = new URLSearchParams(params);
-            if (val) next.set('q', val);
+            if (value) next.set('q', value);
             else next.delete('q');
             setParams(next);
           }}
-        >
-          <label htmlFor="transcript-search" className="sr-only">
-            Search inside this VOD
-          </label>
-          <input
-            id="transcript-search"
-            name="transcript-search"
-            type="search"
-            defaultValue={params.get('q') ?? ''}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const val = (e.target as HTMLInputElement).value;
-                const next = new URLSearchParams(params);
-                if (val) next.set('q', val);
-                else next.delete('q');
-                setParams(next);
-              }
-            }}
-            placeholder="Search inside this VOD..."
-            className="form-control"
-            aria-label="Search inside this VOD"
-          />
-          <button className="btn-primary" type="submit">
-            Search VOD
-          </button>
-        </form>
+        />
 
-        {video && (
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
-            <div className="rounded-lg border border-border bg-surface-muted p-4">
-              <div className="text-xs uppercase tracking-[0.24em] text-subtle">VOD details</div>
-              <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-subtle">Channel</dt>
-                  <dd className="mt-1 font-medium text-ink">{video.channel_name || 'Unknown channel'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-subtle">Upload date</dt>
-                  <dd className="mt-1 font-medium text-ink">{formatDate(video.uploaded_at ?? null)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-subtle">Duration</dt>
-                  <dd className="mt-1 font-medium text-ink">{formatDuration(video.duration_seconds)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-subtle">Transcript source</dt>
-                  <dd className="mt-1 font-medium text-ink">{sourceLabel(transcript?.source ?? 'best')}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-subtle">Video ID</dt>
-                  <dd className="mt-1 font-mono text-sm text-ink">{video.id}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-subtle">YouTube ID</dt>
-                  <dd className="mt-1 font-mono text-sm text-ink">{video.youtube_id}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="rounded-lg border border-dashed border-border bg-surface p-4">
-              <div className="text-xs uppercase tracking-[0.24em] text-subtle">Future work</div>
-              <div className="mt-2 font-medium text-ink">Topic extraction coming later</div>
-              <p className="mt-2 text-sm text-muted">
-                This space stays intentionally disabled until citation-backed topic extraction exists.
-              </p>
-            </div>
-          </div>
-        )}
-      </header>
+        {video && <VideoDetailsPanel video={video} transcriptSource={transcript?.source ?? null} />}
+      </VideoHeader>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-        <aside className="lg:sticky lg:top-24 lg:col-span-1">
-          {video ? (
-            <YouTubePlayer
-              ref={playerRef}
-              videoId={video.youtube_id}
-              start={start}
-              title={video?.title ?? undefined}
-            />
-          ) : (
-            <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
-              <div className="flex h-full items-center justify-center text-subtle" role="status" aria-live="polite">
-                <span className="inline-block animate-spin text-3xl mr-3" aria-hidden="true">⟳</span>
-                Loading player…
-              </div>
-            </div>
-          )}
-        </aside>
+        <PlayerPanel video={video} start={start} playerRef={playerRef} />
 
         <section className="lg:col-span-2">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -409,113 +326,26 @@ export default function VideoPage() {
         )}
         {transcript &&
           (hasFormattedBlocks ? (
-            <article className="surface-card space-y-7" role="list" aria-label="Formatted transcript document">
-              {formattedBlocks.map((block) => {
-                const isFavorite = block.segment_ids.some((segIdx) => favorites.has({ videoId: videoId!, segIndex: segIdx + 1 }));
-                const isServerFavorite = serverFavs.some((favorite) => favorite.start_ms === block.start_ms && favorite.end_ms === block.end_ms);
-                const isHighlighted = block.segment_ids.some((segIdx) =>
-                  hits?.some((h) => h.start_ms >= transcript.segments[segIdx]?.start_ms && h.start_ms < transcript.segments[segIdx]?.end_ms)
-                );
-                const isActive = activeBlockIndex === block.block_index || block.segment_ids.some((segIdx) => activeSegId === segIdx + 1);
-                return (
-                  <section
-                    key={block.block_index}
-                    id={`block-${block.block_index}`}
-                    className={`rounded-xl px-1 py-1 transition-colors ${isActive ? 'bg-accent-soft/60 ring-1 ring-accent' : ''}`}
-                    role="listitem"
-                  >
-                    {block.speaker_label && (
-                      <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-subtle">
-                        {block.speaker_label}
-                      </div>
-                    )}
-                    <div className="space-y-3 text-lg leading-8 text-ink">
-                      <button
-                        type="button"
-                        onClick={() => onClickBlock(block)}
-                        className={`w-full cursor-pointer rounded-lg px-3 py-2 text-left font-serif text-[1.05rem] leading-8 transition-colors hover:bg-surface-muted focus:bg-surface-muted ${
-                          isHighlighted && !isActive ? 'bg-warning-soft ring-1 ring-warning' : ''
-                        } ${isFavorite || isServerFavorite ? 'decoration-warning underline decoration-2 underline-offset-4' : ''}`}
-                        aria-label={`Play ${block.speaker_label ?? 'paragraph'} from ${msToHms(block.start_ms)}`}
-                      >
-                        {block.text}
-                      </button>
-                      {isActive && (
-                        <div className="flex flex-wrap items-center gap-3 border-l-2 border-accent pl-3 text-sm">
-                          <span className="text-xs uppercase tracking-wide text-subtle">Selected {formatTimestamp(block.start_ms)}</span>
-                          <button type="button" className="nav-link" disabled={isFavorite || isServerFavorite} onClick={() => saveTranscriptMoment({ start_ms: block.start_ms, end_ms: block.end_ms, text: block.text, speaker_label: block.speaker_label }, (block.segment_ids[0] ?? 0) + 1, block.text)}>
-                            {isFavorite || isServerFavorite ? 'Saved moment' : 'Save moment'}
-                          </button>
-                          <button type="button" className="nav-link" onClick={() => copyTranscriptQuote({ start_ms: block.start_ms, end_ms: block.end_ms, text: block.text, speaker_label: block.speaker_label }, block.text, (block.segment_ids[0] ?? 0) + 1)}>
-                            Copy quote
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                );
-              })}
-            </article>
+            <FormattedTranscriptDocument
+              blocks={formattedBlocks}
+              transcriptSegments={transcript.segments}
+              hits={hits}
+              activeBlockIndex={activeBlockIndex}
+              activeSegId={activeSegId}
+              isSavedBlock={isSavedBlock}
+              onClickBlock={onClickBlock}
+              onSaveMoment={saveTranscriptMoment}
+              onCopyQuote={copyTranscriptQuote}
+            />
           ) : (
-            <div className="surface-card space-y-6" role="list" aria-label="Transcript paragraphs">
-              {transcriptTurns.map((turn) => {
-                const activeEntry = turn.segments.find(({ id }) => id === activeSegId);
-                return (
-                  <section
-                    key={turn.key}
-                    className={turn.speaker ? 'grid gap-3 sm:grid-cols-[8rem_1fr]' : 'block'}
-                    role="listitem"
-                  >
-                    {turn.speaker && <div className="font-semibold text-ink">{turn.speaker}:</div>}
-                    <div className="space-y-2 text-lg leading-8 text-ink">
-                      <p className="whitespace-normal font-serif text-[1.05rem]">
-                        {turn.segments.map(({ segment: seg, id, match }) => {
-                        const isServerFav = !!serverFavs.find(
-                          (f) => f.start_ms === seg.start_ms && f.end_ms === seg.end_ms
-                        );
-                        const isFavorite = isServerFav || favorites.has({ videoId: videoId!, segIndex: id });
-                        return (
-                          <button
-                            id={`seg-${id}`}
-                            key={id}
-                            type="button"
-                            onClick={() => onClickSegment(seg, id)}
-                            className={`mx-0.5 cursor-pointer rounded px-1 text-left leading-8 transition-colors hover:bg-surface-muted focus:bg-surface-muted ${
-                              activeSegId === id || match ? 'bg-accent-soft ring-1 ring-accent' : ''
-                            } ${isFavorite ? 'ring-1 ring-warning' : ''}`}
-                            aria-label={`Play ${turn.speaker ?? 'paragraph'} from ${msToHms(seg.start_ms)}`}
-                          >
-                            {normalizeTranscriptText(seg.text)}{' '}
-                          </button>
-                        );
-                      })}
-                    </p>
-                    {turn.segments.some(({ match }) => match) && (
-                      <div className="rounded bg-warning-soft p-2 text-xs text-ink" role="note">
-                        <div className="mb-1 font-medium">Search match in this turn</div>
-                        {turn.segments
-                          .filter(({ match }) => match)
-                          .map(({ match, id }) => (
-                            <div key={id} className="prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: match?.snippet ?? '' }} />
-                          ))}
-                      </div>
-                    )}
-                    {activeEntry && (
-                      <div className="flex flex-wrap items-center gap-3 border-l-2 border-accent pl-3 text-sm">
-                        <span className="text-xs uppercase tracking-wide text-subtle">Selected {formatTimestamp(activeEntry.segment.start_ms)}</span>
-                        <button type="button" className="nav-link" onClick={() => saveTranscriptMoment(activeEntry.segment, activeEntry.id, normalizeTranscriptText(activeEntry.segment.text))}>
-                          Save moment
-                        </button>
-                        <button type="button" className="nav-link" onClick={() => copyTranscriptQuote(activeEntry.segment, activeEntry.segment.text, activeEntry.id)}>
-                          Copy quote
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </section>
-                );
-              })}
-            </div>
+            <PlainTranscriptTurns
+              turns={transcriptTurns}
+              activeSegId={activeSegId}
+              isSavedSegment={isSavedSegment}
+              onClickSegment={onClickSegment}
+              onSaveMoment={saveTranscriptMoment}
+              onCopyQuote={copyTranscriptQuote}
+            />
           ))}
         </section>
       </div>

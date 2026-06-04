@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from .extractors import extract_alias_candidates, extract_keyphrase_candidates
+from .extractors import extract_alias_candidates, extract_keyphrase_candidates, extract_title_alias_candidates
 from .policy import classify_candidate
 from .repository import create_extraction_run, finish_extraction_run, insert_assignment, upsert_label_candidate
 from .repository import ASSIGNMENT_SOURCES
@@ -115,7 +115,7 @@ def _load_policy(db: Any, label_kind: str, unit_type: str, extraction_tier: str)
 def _candidate_existing_canonical(candidate: Any) -> bool:
     evidence = getattr(candidate, "evidence", ()) or ()
     for item in evidence:
-        if str(item.get("extractor") or "").lower() == "alias":
+        if str(item.get("extractor") or "").lower() in {"alias", "title"}:
             return True
     return False
 
@@ -124,6 +124,11 @@ def _coerce_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
+
+
+def _load_video_title(db: Any, video_id: str) -> str:
+    row = _fetch_first_dict(db.execute(text("SELECT title FROM videos WHERE id = :video_id"), {"video_id": video_id}))
+    return str(row.get("title") or "") if row else ""
 
 
 def extract_labels_for_video(db: Any, video_id: str, extraction_tier: str = "cheap") -> dict:
@@ -151,6 +156,8 @@ def extract_labels_for_video(db: Any, video_id: str, extraction_tier: str = "che
 
         aliases = _load_existing_aliases(db)
         candidates = extract_alias_candidates(window_dicts, aliases)
+        title = _load_video_title(db, video_id)
+        candidates.extend(extract_title_alias_candidates({"id": video_id, "title": title}, aliases))
         candidates.extend(extract_keyphrase_candidates(window_dicts, min_distinct_videos=1, min_occurrences=3))
         metrics["candidates"] = len(candidates)
 

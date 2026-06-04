@@ -24,9 +24,12 @@ class FakeResult:
 class FakeDb:
     def __init__(self):
         self.calls = []
+        self.title = ""
 
     def execute(self, sql, params=None):
         self.calls.append((str(sql), params))
+        if "SELECT title FROM videos" in str(sql):
+            return FakeResult([{"title": self.title}])
         if "SELECT status, canonical_id FROM archive_labels" in str(sql):
             return FakeResult([{"status": "published", "canonical_id": None}])
         return FakeResult([])
@@ -195,6 +198,58 @@ def test_extract_labels_for_video_uses_keyphrase_assignment_source(monkeypatch):
     assert assignment_calls[0]["source"] == "keyphrase"
     assert assignment_calls[0]["source"] != "automatic"
     assert captured == [("completed", {})]
+
+
+def test_extract_labels_for_video_uses_title_assignment_source(monkeypatch):
+    from app.archive.labeling import pipeline
+
+    db = FakeDb()
+    db.title = "HasanAbi April 23, 2026 – hanging out after Chadvice"
+    assignment_calls = []
+
+    monkeypatch.setattr(pipeline, "create_extraction_run", lambda *args, **kwargs: "run-title")
+    monkeypatch.setattr(pipeline, "finish_extraction_run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pipeline, "load_source_segments", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(pipeline, "build_windows_from_segments", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(pipeline, "persist_windows", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(
+        pipeline,
+        "_load_existing_aliases",
+        lambda _db: [
+            {
+                "label_id": "tag-chadvice",
+                "label": "Chadvice",
+                "kind": "category",
+                "alias": "chadvice",
+                "status": "active",
+                "is_ambiguous": False,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_load_policy",
+        lambda _db, label_kind, unit_type, extraction_tier: {
+            "min_publish_score": 0.90,
+            "min_review_score": 0.65,
+            "min_evidence_count": 1,
+            "min_distinct_videos": 1,
+            "require_existing_canonical": True,
+            "auto_publish_enabled": True,
+        },
+    )
+    monkeypatch.setattr(pipeline, "extract_keyphrase_candidates", lambda _windows, **kwargs: [])
+    monkeypatch.setattr(pipeline, "extract_alias_candidates", lambda _windows, _aliases: [])
+    monkeypatch.setattr(pipeline, "upsert_label_candidate", lambda _db, **kwargs: "label-chadvice")
+    monkeypatch.setattr(pipeline, "insert_assignment", lambda _db, **kwargs: assignment_calls.append(kwargs) or "assignment-title")
+
+    result = pipeline.extract_labels_for_video(db, video_id="video-title", extraction_tier="cheap")
+
+    assert result["candidates"] == 1
+    assert result["assignments"] == 1
+    assert assignment_calls[0]["source"] == "title"
+    assert assignment_calls[0]["status"] == "auto_published"
+    assert assignment_calls[0]["evidence"][0]["snippet"] == db.title
 
 
 def test_extract_labels_for_video_marks_failed_run_and_reraises(monkeypatch):

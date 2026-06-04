@@ -143,12 +143,14 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
         "description": "Thanksgiving 2025 holiday window",
     },
     {
-        "slug": "christmas-2025",
-        "label": "Christmas 2025",
+        "slug": "christmas",
+        "label": "Christmas",
         "kind": "holiday",
-        "date_from": date(2025, 12, 24),
-        "date_to": date(2025, 12, 26),
-        "description": "Christmas 2025 holiday window",
+        "date_from": date(1970, 12, 25),
+        "date_to": date(1970, 12, 25),
+        "recurring_month": 12,
+        "recurring_day": 25,
+        "description": "Christmas streams across every archive year",
     },
     {
         "slug": "russia-ukraine-invasion-leadup",
@@ -178,15 +180,31 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
         "slug": "september-11",
         "label": "September 11",
         "kind": "anniversary",
-        "date_from": date(2026, 9, 11),
-        "date_to": date(2026, 9, 11),
-        "description": "September 11 reference period",
+        "date_from": date(1970, 9, 11),
+        "date_to": date(1970, 9, 11),
+        "recurring_month": 9,
+        "recurring_day": 11,
+        "description": "September 11 streams across every archive year",
+    },
+    {
+        "slug": "august-21",
+        "label": "August 21",
+        "kind": "anniversary",
+        "date_from": date(1970, 8, 21),
+        "date_to": date(1970, 8, 21),
+        "recurring_month": 8,
+        "recurring_day": 21,
+        "description": "August 21 streams across every archive year",
     },
 )
 
 RETIRED_NAMED_PERIOD_SLUGS: tuple[str, ...] = (
     "october-7-leadup",
-    "august-21",
+    "christmas-2025",
+)
+
+RETIRED_NAMED_PERIOD_PATTERNS: tuple[str, ...] = (
+    r"^[0-9]{4}-august-21$",
 )
 
 
@@ -362,6 +380,8 @@ def _named_period_option_row(row) -> ArchivePeriodOption:
         date_from=row["date_from"],
         date_to=row["date_to"],
         description=row.get("description"),
+        recurring_month=row.get("recurring_month"),
+        recurring_day=row.get("recurring_day"),
         video_count=int(row.get("video_count") or 0),
         total_duration_seconds=int(row.get("total_duration_seconds") or 0),
     )
@@ -377,6 +397,8 @@ def _named_period_model_row(row) -> ArchiveNamedPeriod:
         description=row.get("description"),
         status=row.get("status") or "published",
         sort_order=int(row.get("sort_order") or 0),
+        recurring_month=row.get("recurring_month"),
+        recurring_day=row.get("recurring_day"),
         video_count=int(row.get("video_count") or 0),
         total_duration_seconds=int(row.get("total_duration_seconds") or 0),
         summary=row.get("summary") or "",
@@ -394,6 +416,8 @@ def _named_period_admin_model_row(row) -> ArchiveNamedPeriodAdminResponse:
         description=row.get("description"),
         status=row.get("status") or "published",
         sort_order=int(row.get("sort_order") or 0),
+        recurring_month=row.get("recurring_month"),
+        recurring_day=row.get("recurring_day"),
         video_count=int(row.get("video_count") or 0),
         total_duration_seconds=int(row.get("total_duration_seconds") or 0),
         summary=row.get("summary") or "",
@@ -423,6 +447,8 @@ def _named_period_admin_rows(db, *, where_sql: str = "", params: dict[str, objec
             p.description,
             p.status,
             p.sort_order,
+            p.recurring_month,
+            p.recurring_day,
             COALESCE(s.video_count, 0) AS video_count,
             COALESCE(s.total_duration_seconds, 0) AS total_duration_seconds,
             COALESCE(s.summary, '') AS summary,
@@ -713,36 +739,6 @@ def _named_period_records_from_videos(db, years_back: int) -> list[dict[str, obj
         }
     )
 
-    archive_year_rows = _safe_mappings(
-        db,
-        f"""
-        SELECT DISTINCT EXTRACT(YEAR FROM v.uploaded_at)::int AS archive_year
-        FROM videos v
-        WHERE ({ARCHIVE_VIDEO_FILTER_SQL})
-          AND v.uploaded_at IS NOT NULL
-        ORDER BY archive_year ASC
-        """,
-    )
-    archive_years = {
-        int(row["archive_year"])
-        for row in archive_year_rows
-        if row.get("archive_year") is not None
-    }
-    archive_years.add(_seed_today().year)
-    for year in sorted(archive_years):
-        august_21 = date(year, 8, 21)
-        records.append(
-            {
-                "slug": f"{year}-august-21",
-                "label": f"August 21, {year}",
-                "kind": "anniversary",
-                "date_from": august_21,
-                "date_to": august_21,
-                "description": "Annual August 21 archive marker",
-                "status": "published",
-                "sort_order": august_21.toordinal(),
-            }
-        )
     return records
 
 
@@ -757,6 +753,16 @@ def seed_named_periods(db, years_back: int = 6):
             """,
             {"slug": slug},
         )
+    for pattern in RETIRED_NAMED_PERIOD_PATTERNS:
+        _safe_execute(
+            db,
+            """
+            UPDATE archive_named_periods
+            SET status = 'hidden', updated_at = now()
+            WHERE slug ~ :pattern
+            """,
+            {"pattern": pattern},
+        )
 
     records = _named_period_records_from_videos(db, years_back)
     inserted = 0
@@ -765,9 +771,9 @@ def seed_named_periods(db, years_back: int = 6):
             db,
             """
             INSERT INTO archive_named_periods (
-                slug, label, kind, date_from, date_to, description, status, sort_order, created_at, updated_at
+                slug, label, kind, date_from, date_to, description, status, sort_order, recurring_month, recurring_day, created_at, updated_at
             ) VALUES (
-                :slug, :label, :kind, :date_from, :date_to, :description, :status, :sort_order, now(), now()
+                :slug, :label, :kind, :date_from, :date_to, :description, :status, :sort_order, :recurring_month, :recurring_day, now(), now()
             )
             ON CONFLICT (slug) DO UPDATE SET
                 label = EXCLUDED.label,
@@ -777,9 +783,11 @@ def seed_named_periods(db, years_back: int = 6):
                 description = EXCLUDED.description,
                 status = EXCLUDED.status,
                 sort_order = EXCLUDED.sort_order,
+                recurring_month = EXCLUDED.recurring_month,
+                recurring_day = EXCLUDED.recurring_day,
                 updated_at = now()
             """,
-            record,
+            {"recurring_month": None, "recurring_day": None, **record},
         )
         if result is not None:
             inserted += 1
@@ -791,9 +799,25 @@ def _validate_named_period_range(date_from: date | None, date_to: date | None):
         raise ValidationError("date_from must be on or before date_to", field="date_from")
 
 
+def _validate_recurring_date(recurring_month: int | None, recurring_day: int | None):
+    if (recurring_month is None) != (recurring_day is None):
+        raise ValidationError("recurring_month and recurring_day must be set together", field="recurring_month")
+    if recurring_month is None or recurring_day is None:
+        return
+    try:
+        date(2000, int(recurring_month), int(recurring_day))
+    except ValueError as exc:
+        raise ValidationError("recurring_month/recurring_day must form a valid calendar date", field="recurring_day") from exc
+
+
+def _pydantic_fields_set(payload) -> set[str]:
+    return set(getattr(payload, "model_fields_set", getattr(payload, "__fields_set__", set())))
+
+
 def create_named_period(db, payload: ArchiveNamedPeriodCreate):
     slug = (payload.slug or slugify_topic(payload.label)).strip() or slugify_topic(payload.label)
     _validate_named_period_range(payload.date_from, payload.date_to)
+    _validate_recurring_date(payload.recurring_month, payload.recurring_day)
     params = {
         "slug": slug,
         "label": payload.label,
@@ -803,15 +827,17 @@ def create_named_period(db, payload: ArchiveNamedPeriodCreate):
         "description": payload.description,
         "status": payload.status or "published",
         "sort_order": payload.sort_order or 0,
+        "recurring_month": payload.recurring_month,
+        "recurring_day": payload.recurring_day,
     }
     try:
         db.execute(
             text(
                 """
                 INSERT INTO archive_named_periods (
-                    slug, label, kind, date_from, date_to, description, status, sort_order, created_at, updated_at
+                    slug, label, kind, date_from, date_to, description, status, sort_order, recurring_month, recurring_day, created_at, updated_at
                 ) VALUES (
-                    :slug, :label, :kind, :date_from, :date_to, :description, :status, :sort_order, now(), now()
+                    :slug, :label, :kind, :date_from, :date_to, :description, :status, :sort_order, :recurring_month, :recurring_day, now(), now()
                 )
                 """
             ),
@@ -827,7 +853,7 @@ def update_named_period(db, period_slug: str, payload: ArchiveNamedPeriodUpdate)
     current_rows = _safe_mappings(
         db,
         """
-        SELECT slug, label, kind, date_from, date_to, description, status, sort_order
+        SELECT slug, label, kind, date_from, date_to, description, status, sort_order, recurring_month, recurring_day
         FROM archive_named_periods
         WHERE slug = :period_slug
         """,
@@ -836,15 +862,19 @@ def update_named_period(db, period_slug: str, payload: ArchiveNamedPeriodUpdate)
     if not current_rows:
         return None
     current = current_rows[0]
+    fields_set = _pydantic_fields_set(payload)
     next_date_from = payload.date_from if payload.date_from is not None else current.get("date_from")
     next_date_to = payload.date_to if payload.date_to is not None else current.get("date_to")
     _validate_named_period_range(next_date_from, next_date_to)
+    next_recurring_month = payload.recurring_month if "recurring_month" in fields_set else current.get("recurring_month")
+    next_recurring_day = payload.recurring_day if "recurring_day" in fields_set else current.get("recurring_day")
+    _validate_recurring_date(next_recurring_month, next_recurring_day)
 
     updates: list[str] = []
     params: dict[str, object] = {"period_slug": period_slug}
-    for field in ("label", "kind", "date_from", "date_to", "description", "status", "sort_order"):
+    for field in ("label", "kind", "date_from", "date_to", "description", "status", "sort_order", "recurring_month", "recurring_day"):
         value = getattr(payload, field)
-        if value is not None:
+        if value is not None or field in fields_set:
             updates.append(f"{field} = :{field}")
             params[field] = value
     if not updates:
@@ -912,6 +942,8 @@ def list_period_options(db, kind: str | None = None, limit: int = 120) -> Archiv
             p.description,
             p.status,
             p.sort_order,
+            p.recurring_month,
+            p.recurring_day,
             COALESCE(s.video_count, 0) AS video_count,
             COALESCE(s.total_duration_seconds, 0) AS total_duration_seconds,
             COALESCE(s.summary, '') AS summary
@@ -941,6 +973,8 @@ def _named_period_row_by_slug(db, period_slug: str):
             p.description,
             p.status,
             p.sort_order,
+            p.recurring_month,
+            p.recurring_day,
             COALESCE(s.video_count, 0) AS video_count,
             COALESCE(s.total_duration_seconds, 0) AS total_duration_seconds,
             COALESCE(s.top_topics, '[]'::jsonb) AS top_topics,
@@ -1032,6 +1066,8 @@ def _period_option_from_row(row) -> ArchivePeriodOption:
         date_from=row["date_from"],
         date_to=row["date_to"],
         description=row.get("description"),
+        recurring_month=row.get("recurring_month"),
+        recurring_day=row.get("recurring_day"),
         video_count=int(row.get("video_count") or 0),
         total_duration_seconds=int(row.get("total_duration_seconds") or 0),
     )
@@ -1055,7 +1091,9 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
             p.date_to,
             p.description,
             p.status,
-            p.sort_order
+            p.sort_order,
+            p.recurring_month,
+            p.recurring_day
         FROM archive_named_periods p
         {where_sql}
         ORDER BY p.sort_order DESC, p.date_from DESC, p.slug ASC
@@ -1074,8 +1112,33 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
     for row in rows:
         start_dt = _coerce_datetime(row.get("date_from"))
         end_dt = _coerce_datetime(row.get("date_to"), end=True)
-        if start_dt is None or end_dt is None:
+        recurring_month = row.get("recurring_month")
+        recurring_day = row.get("recurring_day")
+        is_recurring_date = recurring_month is not None and recurring_day is not None
+        if not is_recurring_date and (start_dt is None or end_dt is None):
             continue
+
+        if is_recurring_date:
+            assert recurring_month is not None and recurring_day is not None
+            video_period_sql = """
+              AND EXTRACT(MONTH FROM v.uploaded_at) = :recurring_month
+              AND EXTRACT(DAY FROM v.uploaded_at) = :recurring_day
+            """
+            mention_period_sql = """
+              AND EXTRACT(MONTH FROM COALESCE(m.occurred_at, v.uploaded_at)) = :recurring_month
+              AND EXTRACT(DAY FROM COALESCE(m.occurred_at, v.uploaded_at)) = :recurring_day
+            """
+            period_params: dict[str, object] = {"recurring_month": int(recurring_month), "recurring_day": int(recurring_day)}
+        else:
+            video_period_sql = """
+              AND v.uploaded_at >= :start_dt
+              AND v.uploaded_at < :end_dt
+            """
+            mention_period_sql = """
+              AND COALESCE(m.occurred_at, v.uploaded_at) >= :start_dt
+              AND COALESCE(m.occurred_at, v.uploaded_at) < :end_dt
+            """
+            period_params = {"start_dt": start_dt, "end_dt": end_dt}
 
         video_rows = _safe_mappings(
             db,
@@ -1100,11 +1163,10 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
             FROM videos v
             WHERE ({ARCHIVE_VIDEO_FILTER_SQL})
               AND v.uploaded_at IS NOT NULL
-              AND v.uploaded_at >= :start_dt
-              AND v.uploaded_at < :end_dt
+              {video_period_sql}
             ORDER BY v.uploaded_at DESC NULLS LAST, v.created_at DESC
             """,
-            {"start_dt": start_dt, "end_dt": end_dt},
+            period_params,
         )
 
         mention_rows = _safe_mappings(
@@ -1144,11 +1206,10 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
             JOIN videos v ON v.id = m.video_id
             WHERE t.status = 'published'
               AND ({ARCHIVE_VIDEO_FILTER_SQL})
-              AND COALESCE(m.occurred_at, v.uploaded_at) >= :start_dt
-              AND COALESCE(m.occurred_at, v.uploaded_at) < :end_dt
+              {mention_period_sql}
             ORDER BY COALESCE(m.occurred_at, v.uploaded_at) DESC NULLS LAST, m.start_ms ASC
             """,
-            {"start_dt": start_dt, "end_dt": end_dt},
+            period_params,
         )
         metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in [*video_rows, *mention_rows]])
         _attach_video_metadata(video_rows, metadata_map)

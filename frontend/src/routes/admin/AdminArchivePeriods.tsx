@@ -35,6 +35,8 @@ type PeriodFormState = {
   description: string;
   status: PeriodStatus;
   sort_order: string;
+  recurring_month: string;
+  recurring_day: string;
 };
 
 const emptyForm: PeriodFormState = {
@@ -46,6 +48,8 @@ const emptyForm: PeriodFormState = {
   description: '',
   status: 'published',
   sort_order: '',
+  recurring_month: '',
+  recurring_day: '',
 };
 
 function formatDuration(seconds?: number | null) {
@@ -65,7 +69,16 @@ function formatDateTime(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function formatDateRange(row: Pick<ArchiveNamedPeriodAdminResponse, 'date_from' | 'date_to'>) {
+function formatRecurringDate(row: Pick<ArchiveNamedPeriodAdminResponse, 'recurring_month' | 'recurring_day'>) {
+  if (!row.recurring_month || !row.recurring_day) return null;
+  const sample = new Date(Date.UTC(2024, row.recurring_month - 1, row.recurring_day));
+  if (Number.isNaN(sample.getTime())) return `Every ${row.recurring_month}/${row.recurring_day}`;
+  return `Every ${sample.toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' })}`;
+}
+
+function formatDateRange(row: Pick<ArchiveNamedPeriodAdminResponse, 'date_from' | 'date_to' | 'recurring_month' | 'recurring_day'>) {
+  const recurring = formatRecurringDate(row);
+  if (recurring) return recurring;
   if (row.date_from && row.date_to) return `${row.date_from} → ${row.date_to}`;
   return row.date_from || row.date_to || '—';
 }
@@ -127,6 +140,8 @@ export default function AdminArchivePeriods() {
       description: row.description ?? '',
       status: row.status === 'hidden' ? 'hidden' : 'published',
       sort_order: row.sort_order == null ? '' : String(row.sort_order),
+      recurring_month: row.recurring_month == null ? '' : String(row.recurring_month),
+      recurring_day: row.recurring_day == null ? '' : String(row.recurring_day),
     });
     setNotice(`Editing ${row.label}`);
     setError('');
@@ -167,6 +182,29 @@ export default function AdminArchivePeriods() {
       return;
     }
     if (sortOrder !== undefined) payload.sort_order = sortOrder;
+
+    const recurringMonth = form.recurring_month.trim() === '' ? undefined : Number(form.recurring_month);
+    const recurringDay = form.recurring_day.trim() === '' ? undefined : Number(form.recurring_day);
+    if ((recurringMonth === undefined) !== (recurringDay === undefined)) {
+      setSaving(false);
+      setError('Recurring month and day must be set together.');
+      return;
+    }
+    if (
+      (recurringMonth !== undefined && (!Number.isInteger(recurringMonth) || recurringMonth < 1 || recurringMonth > 12)) ||
+      (recurringDay !== undefined && (!Number.isInteger(recurringDay) || recurringDay < 1 || recurringDay > 31))
+    ) {
+      setSaving(false);
+      setError('Recurring month/day must be valid numbers.');
+      return;
+    }
+    if (recurringMonth !== undefined && recurringDay !== undefined) {
+      payload.recurring_month = recurringMonth;
+      payload.recurring_day = recurringDay;
+    } else if (editingSlug) {
+      payload.recurring_month = null;
+      payload.recurring_day = null;
+    }
 
     try {
       if (editingSlug) {
@@ -420,6 +458,38 @@ export default function AdminArchivePeriods() {
               className="form-control"
               placeholder="0"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-ink" htmlFor="period-recurring-month">
+              Recurring month
+            </label>
+            <input
+              id="period-recurring-month"
+              type="number"
+              min={1}
+              max={12}
+              value={form.recurring_month}
+              onChange={(e) => setForm((current) => ({ ...current, recurring_month: e.target.value }))}
+              className="form-control"
+              placeholder="8"
+            />
+            <p className="mt-1 text-xs text-muted">Set with recurring day for annual date periods like 8/21.</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-ink" htmlFor="period-recurring-day">
+              Recurring day
+            </label>
+            <input
+              id="period-recurring-day"
+              type="number"
+              min={1}
+              max={31}
+              value={form.recurring_day}
+              onChange={(e) => setForm((current) => ({ ...current, recurring_day: e.target.value }))}
+              className="form-control"
+              placeholder="21"
+            />
+            <p className="mt-1 text-xs text-muted">Recurring periods collect streams from that month/day across all years.</p>
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium text-ink" htmlFor="period-description">

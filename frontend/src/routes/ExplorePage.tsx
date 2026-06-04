@@ -56,6 +56,13 @@ function normalizePeriodKind(kind?: string | null): PeriodKind | null {
 
 function formatPeriodRange(option?: ArchivePeriodOption | null) {
   if (!option) return null;
+  if (option.recurring_month && option.recurring_day) {
+    const sample = new Date(Date.UTC(2024, option.recurring_month - 1, option.recurring_day));
+    if (!Number.isNaN(sample.getTime())) {
+      return `Every ${sample.toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' })}`;
+    }
+    return `Every ${option.recurring_month}/${option.recurring_day}`;
+  }
   return `${option.date_from} → ${option.date_to}`;
 }
 

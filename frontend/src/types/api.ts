@@ -109,6 +109,8 @@ export interface ArchivePeriodOption {
   date_from: string;
   date_to: string;
   description?: string | null;
+  recurring_month?: number | null;
+  recurring_day?: number | null;
   video_count: number;
   total_duration_seconds: number;
 }
@@ -123,6 +125,8 @@ export interface ArchiveNamedPeriodAdminResponse {
   description?: string | null;
   status: 'published' | 'hidden' | string;
   sort_order?: number | null;
+  recurring_month?: number | null;
+  recurring_day?: number | null;
   video_count: number;
   total_duration_seconds: number;
   summary?: string | null;
@@ -138,6 +142,8 @@ export interface ArchiveNamedPeriodUpsertPayload {
   description?: string | null;
   status: 'published' | 'hidden';
   sort_order?: number | null;
+  recurring_month?: number | null;
+  recurring_day?: number | null;
 }
 
 export interface ArchivePerson {

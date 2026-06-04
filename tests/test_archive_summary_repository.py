@@ -269,9 +269,11 @@ def test_seed_named_periods_corrects_current_curated_windows(monkeypatch):
     seed_named_periods(db)
 
     by_slug = {row["slug"]: row for row in db.inserted_periods}
-    retired_update_slugs = {params["slug"] for sql, params in db.calls if "UPDATE archive_named_periods" in sql and "SET status = 'hidden'" in sql}
+    retired_update_slugs = {params["slug"] for sql, params in db.calls if "UPDATE archive_named_periods" in sql and "slug = :slug" in sql}
+    retired_update_patterns = {params["pattern"] for sql, params in db.calls if "UPDATE archive_named_periods" in sql and "slug ~ :pattern" in sql}
 
     assert retired_update_slugs == set(RETIRED_NAMED_PERIOD_SLUGS)
+    assert r"^[0-9]{4}-august-21$" in retired_update_patterns
     assert "october-7-leadup" not in by_slug
     assert by_slug["russia-ukraine-invasion-leadup"]["kind"] == "leadup"
     assert str(by_slug["russia-ukraine-invasion-leadup"]["date_from"]) == "2021-11-01"
@@ -283,9 +285,14 @@ def test_seed_named_periods_corrects_current_curated_windows(monkeypatch):
     assert by_slug["2026-midterms-leadup"]["kind"] == "leadup"
     assert str(by_slug["2026-midterms-leadup"]["date_from"]) == "2026-11-03"
     assert str(by_slug["2026-midterms-leadup"]["date_to"]) == "2026-11-03"
-    assert by_slug["2024-august-21"]["kind"] == "anniversary"
-    assert by_slug["2025-august-21"]["kind"] == "anniversary"
-    assert by_slug["2026-august-21"]["kind"] == "anniversary"
+    assert "2024-august-21" not in by_slug
+    assert "2025-august-21" not in by_slug
+    assert by_slug["august-21"]["kind"] == "anniversary"
+    assert by_slug["august-21"]["recurring_month"] == 8
+    assert by_slug["august-21"]["recurring_day"] == 21
+    assert by_slug["christmas"]["kind"] == "holiday"
+    assert by_slug["christmas"]["recurring_month"] == 12
+    assert by_slug["christmas"]["recurring_day"] == 25
 
 
 def test_refresh_named_period_stats_includes_metadata_in_public_payloads():
@@ -316,6 +323,8 @@ def test_refresh_named_period_stats_includes_metadata_in_public_payloads():
                             "description": None,
                             "status": "published",
                             "sort_order": 0,
+                            "recurring_month": None,
+                            "recurring_day": None,
                         }
                     ]
                 )
@@ -440,6 +449,58 @@ def test_refresh_named_period_stats_includes_metadata_in_public_payloads():
     assert representative_videos[0]["tags"][0]["slug"] == tag_slug
     assert evidence[0]["video"]["people"][0]["slug"] == person_slug
     assert evidence[0]["video"]["tags"][0]["slug"] == tag_slug
+
+
+def test_refresh_named_period_stats_uses_recurring_month_day_filter():
+    period_id = uuid.uuid4()
+
+    class _RecurringDb(_FakeDb):
+        def __init__(self):
+            super().__init__([])
+            self.inserted_periods = []
+
+        def execute(self, sql, params=None):
+            sql_text = str(sql)
+            self.calls.append((sql_text, params))
+            if "FROM archive_named_periods p" in sql_text and "ORDER BY p.sort_order DESC" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "id": period_id,
+                            "slug": "august-21",
+                            "label": "August 21",
+                            "kind": "anniversary",
+                            "date_from": date(1970, 8, 21),
+                            "date_to": date(1970, 8, 21),
+                            "description": "August 21 streams across every archive year",
+                            "status": "published",
+                            "sort_order": 0,
+                            "recurring_month": 8,
+                            "recurring_day": 21,
+                        }
+                    ]
+                )
+            if "FROM archive_topics t" in sql_text and "LEFT JOIN archive_topic_aliases" in sql_text:
+                return _FakeResult(rows=[])
+            if "FROM videos v" in sql_text and "EXTRACT(MONTH FROM v.uploaded_at)" in sql_text:
+                assert params == {"recurring_month": 8, "recurring_day": 21}
+                return _FakeResult(rows=[])
+            if "FROM archive_topic_mentions m" in sql_text and "EXTRACT(MONTH FROM COALESCE(m.occurred_at, v.uploaded_at))" in sql_text:
+                assert params == {"recurring_month": 8, "recurring_day": 21}
+                return _FakeResult(rows=[])
+            if "INSERT INTO archive_named_period_stats" in sql_text:
+                self.inserted_periods.append(params)
+                return _FakeResult()
+            return _FakeResult()
+
+    db = _RecurringDb()
+
+    result = refresh_named_period_stats(db, period_slug="august-21")
+
+    assert result["rows"] == 1
+    assert db.inserted_periods[0][0]["video_count"] == 0
+    assert any("EXTRACT(MONTH FROM v.uploaded_at)" in sql for sql, _ in db.calls)
+    assert not any("v.uploaded_at >= :start_dt" in sql for sql, _ in db.calls)
 
 
 def test_autopublish_search_topics_skips_existing_slugs():

@@ -30,6 +30,8 @@ const basePeriod = {
   description: 'Launch fallout window',
   status: 'published',
   sort_order: 10,
+  recurring_month: null,
+  recurring_day: null,
   video_count: 3,
   total_duration_seconds: 3661,
   summary: 'First launch window',
@@ -69,6 +71,8 @@ describe('AdminArchivePeriods', () => {
     fireEvent.change(screen.getByDisplayValue('event'), { target: { value: 'holiday' } });
     fireEvent.change(screen.getByLabelText('Date from'), { target: { value: '2026-12-24' } });
     fireEvent.change(screen.getByLabelText('Date to'), { target: { value: '2026-12-26' } });
+    fireEvent.change(screen.getByLabelText('Recurring month'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Recurring day'), { target: { value: '25' } });
     await user.type(screen.getByLabelText('Description'), 'Christmas lead-in');
     await user.type(screen.getByLabelText('Sort order'), '25');
 
@@ -87,6 +91,8 @@ describe('AdminArchivePeriods', () => {
             description: 'Christmas lead-in',
             status: 'published',
             sort_order: 25,
+            recurring_month: 12,
+            recurring_day: 25,
           }),
         })
       );
@@ -145,6 +151,12 @@ describe('AdminArchivePeriods', () => {
         'admin/archive/periods/launch-day',
         expect.objectContaining({
           json: expect.objectContaining({ label: 'Launch Day Updated' }),
+        })
+      );
+      expect(vi.mocked(http.patch)).toHaveBeenCalledWith(
+        'admin/archive/periods/launch-day',
+        expect.objectContaining({
+          json: expect.objectContaining({ recurring_month: null, recurring_day: null }),
         })
       );
     });

@@ -296,6 +296,8 @@ class ArchiveNamedPeriod(BaseModel):
     description: Optional[str] = Field(None, description="Optional period description")
     status: str = Field("published", description="Period lifecycle status")
     sort_order: int = Field(0, description="Ordering weight for UI presentation")
+    recurring_month: Optional[int] = Field(None, ge=1, le=12, description="Recurring month for annual date periods")
+    recurring_day: Optional[int] = Field(None, ge=1, le=31, description="Recurring day for annual date periods")
     video_count: int = Field(0, description="Cached video count for the period")
     total_duration_seconds: int = Field(0, description="Cached duration for the period")
     summary: str = Field("", description="Cached period summary")
@@ -310,6 +312,8 @@ class ArchiveNamedPeriodCreate(BaseModel):
     description: Optional[str] = Field(None, description="Optional period description")
     status: str = Field("published", description="Period lifecycle status")
     sort_order: Optional[int] = Field(None, description="Ordering weight for UI presentation")
+    recurring_month: Optional[int] = Field(None, ge=1, le=12, description="Recurring month for annual date periods")
+    recurring_day: Optional[int] = Field(None, ge=1, le=31, description="Recurring day for annual date periods")
 
 
 class ArchiveNamedPeriodUpdate(BaseModel):
@@ -320,6 +324,8 @@ class ArchiveNamedPeriodUpdate(BaseModel):
     description: Optional[str] = Field(None, description="Optional period description")
     status: Optional[str] = Field(None, description="Period lifecycle status")
     sort_order: Optional[int] = Field(None, description="Ordering weight for UI presentation")
+    recurring_month: Optional[int] = Field(None, ge=1, le=12, description="Recurring month for annual date periods")
+    recurring_day: Optional[int] = Field(None, ge=1, le=31, description="Recurring day for annual date periods")
 
 
 class ArchiveNamedPeriodAdminResponse(ArchiveNamedPeriod):
@@ -455,6 +461,8 @@ class ArchivePeriodOption(BaseModel):
     date_from: date = Field(..., description="Inclusive start date")
     date_to: date = Field(..., description="Inclusive end date")
     description: Optional[str] = Field(None, description="Optional period description")
+    recurring_month: Optional[int] = Field(None, description="Recurring month for annual date periods")
+    recurring_day: Optional[int] = Field(None, description="Recurring day for annual date periods")
     video_count: int = Field(0, description="Cached video count for the period")
     total_duration_seconds: int = Field(0, description="Cached duration for the period")
 

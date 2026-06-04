@@ -9,13 +9,18 @@ import calendar
 from typing import Iterable, Sequence
 
 from sqlalchemy import bindparam, text
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from app.archive.repository import ARCHIVE_VIDEO_FILTER_SQL, archive_repository
+from app.exceptions import ValidationError
 from app.schemas import (
     ArchiveEvidenceMoment,
     ArchiveIntelligenceResponse,
+    ArchiveNamedPeriodAdminListResponse,
+    ArchiveNamedPeriodAdminResponse,
     ArchiveNamedPeriod,
+    ArchiveNamedPeriodCreate,
+    ArchiveNamedPeriodUpdate,
     ArchivePeriodOption,
     ArchivePeriodOptionsResponse,
     ArchivePeriodIntelligence,
@@ -56,12 +61,36 @@ AUTO_TOPIC_STOP_TERMS = {
 
 CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
     {
+        "slug": "2024-election-leadup",
+        "label": "Election 2024 Leadup",
+        "kind": "leadup",
+        "date_from": date(2024, 10, 1),
+        "date_to": date(2024, 11, 5),
+        "description": "The run-up to the 2024 U.S. election",
+    },
+    {
         "slug": "2024-election",
         "label": "Election 2024",
         "kind": "event",
         "date_from": date(2024, 1, 1),
         "date_to": date(2024, 11, 6),
         "description": "2024 U.S. election cycle and election day coverage",
+    },
+    {
+        "slug": "2024-election-fallout",
+        "label": "Election 2024 Fallout",
+        "kind": "fallout",
+        "date_from": date(2024, 11, 6),
+        "date_to": date(2024, 12, 31),
+        "description": "Post-election coverage and reactions",
+    },
+    {
+        "slug": "october-7-leadup",
+        "label": "October 7 Leadup",
+        "kind": "leadup",
+        "date_from": date(2023, 9, 15),
+        "date_to": date(2023, 10, 6),
+        "description": "Days leading into October 7",
     },
     {
         "slug": "october-7",
@@ -72,9 +101,65 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
         "description": "October 7 attacks and immediate aftermath",
     },
     {
+        "slug": "october-7-fallout",
+        "label": "October 7 Fallout",
+        "kind": "fallout",
+        "date_from": date(2023, 10, 15),
+        "date_to": date(2023, 12, 31),
+        "description": "Longer aftermath of October 7",
+    },
+    {
+        "slug": "2023-labor-day",
+        "label": "Labor Day 2023",
+        "kind": "holiday",
+        "date_from": date(2023, 9, 4),
+        "date_to": date(2023, 9, 4),
+        "description": "Labor Day coverage in 2023",
+    },
+    {
+        "slug": "2024-may-day",
+        "label": "May Day 2024",
+        "kind": "holiday",
+        "date_from": date(2024, 5, 1),
+        "date_to": date(2024, 5, 1),
+        "description": "May Day coverage in 2024",
+    },
+    {
+        "slug": "2025-new-year",
+        "label": "New Year 2025",
+        "kind": "holiday",
+        "date_from": date(2025, 1, 1),
+        "date_to": date(2025, 1, 1),
+        "description": "New Year's Day 2025",
+    },
+    {
+        "slug": "2026-new-year",
+        "label": "New Year 2026",
+        "kind": "holiday",
+        "date_from": date(2026, 1, 1),
+        "date_to": date(2026, 1, 1),
+        "description": "New Year's Day 2026",
+    },
+    {
+        "slug": "thanksgiving-2025",
+        "label": "Thanksgiving 2025",
+        "kind": "holiday",
+        "date_from": date(2025, 11, 27),
+        "date_to": date(2025, 11, 30),
+        "description": "Thanksgiving 2025 holiday window",
+    },
+    {
+        "slug": "christmas-2025",
+        "label": "Christmas 2025",
+        "kind": "holiday",
+        "date_from": date(2025, 12, 24),
+        "date_to": date(2025, 12, 26),
+        "description": "Christmas 2025 holiday window",
+    },
+    {
         "slug": "september-11",
         "label": "September 11",
-        "kind": "date",
+        "kind": "anniversary",
         "date_from": date(2026, 9, 11),
         "date_to": date(2026, 9, 11),
         "description": "September 11 reference period",
@@ -82,7 +167,7 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
     {
         "slug": "august-21",
         "label": "August 21",
-        "kind": "date",
+        "kind": "anniversary",
         "date_from": date(2026, 8, 21),
         "date_to": date(2026, 8, 21),
         "description": "August 21 reference period",
@@ -262,6 +347,71 @@ def _named_period_model_row(row) -> ArchiveNamedPeriod:
         total_duration_seconds=int(row.get("total_duration_seconds") or 0),
         summary=row.get("summary") or "",
     )
+
+
+def _named_period_admin_model_row(row) -> ArchiveNamedPeriodAdminResponse:
+    return ArchiveNamedPeriodAdminResponse(
+        id=row["id"],
+        slug=row["slug"],
+        label=row["label"],
+        kind=row["kind"],
+        date_from=row["date_from"],
+        date_to=row["date_to"],
+        description=row.get("description"),
+        status=row.get("status") or "published",
+        sort_order=int(row.get("sort_order") or 0),
+        video_count=int(row.get("video_count") or 0),
+        total_duration_seconds=int(row.get("total_duration_seconds") or 0),
+        summary=row.get("summary") or "",
+        calculated_at=row.get("calculated_at"),
+    )
+
+
+def _named_period_admin_rows(db, *, where_sql: str = "", params: dict[str, object] | None = None, limit: int | None = None, offset: int = 0):
+    sql_limit = ""
+    sql_params: dict[str, object] = {}
+    if params:
+        sql_params.update(params)
+    if limit is not None:
+        sql_limit = " LIMIT :limit OFFSET :offset"
+        sql_params["offset"] = offset
+        sql_params["limit"] = limit
+    rows = _safe_mappings(
+        db,
+        f"""
+        SELECT
+            p.id,
+            p.slug,
+            p.label,
+            p.kind,
+            p.date_from,
+            p.date_to,
+            p.description,
+            p.status,
+            p.sort_order,
+            COALESCE(s.video_count, 0) AS video_count,
+            COALESCE(s.total_duration_seconds, 0) AS total_duration_seconds,
+            COALESCE(s.summary, '') AS summary,
+            s.calculated_at
+        FROM archive_named_periods p
+        LEFT JOIN archive_named_period_stats s ON s.period_id = p.id
+        {where_sql}
+        ORDER BY p.sort_order DESC, p.date_from DESC, p.date_to DESC, p.slug ASC
+        {sql_limit}
+        """,
+        sql_params,
+    )
+    return rows
+
+
+def _named_period_admin_row_by_slug(db, period_slug: str):
+    rows = _named_period_admin_rows(db, where_sql="WHERE p.slug = :period_slug", params={"period_slug": period_slug}, limit=1)
+    return rows[0] if rows else None
+
+
+def _named_period_admin_row_by_id(db, period_id):
+    rows = _named_period_admin_rows(db, where_sql="WHERE p.id = :period_id", params={"period_id": period_id}, limit=1)
+    return rows[0] if rows else None
 
 
 def _named_period_evidence_rows(rows: Iterable[dict], topic_label: str, limit: int) -> list[dict]:
@@ -543,6 +693,113 @@ def seed_named_periods(db, years_back: int = 6):
     return {"periods": inserted}
 
 
+def _validate_named_period_range(date_from: date | None, date_to: date | None):
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise ValidationError("date_from must be on or before date_to", field="date_from")
+
+
+def create_named_period(db, payload: ArchiveNamedPeriodCreate):
+    slug = (payload.slug or slugify_topic(payload.label)).strip() or slugify_topic(payload.label)
+    _validate_named_period_range(payload.date_from, payload.date_to)
+    params = {
+        "slug": slug,
+        "label": payload.label,
+        "kind": payload.kind,
+        "date_from": payload.date_from,
+        "date_to": payload.date_to,
+        "description": payload.description,
+        "status": payload.status or "published",
+        "sort_order": payload.sort_order or 0,
+    }
+    try:
+        db.execute(
+            text(
+                """
+                INSERT INTO archive_named_periods (
+                    slug, label, kind, date_from, date_to, description, status, sort_order, created_at, updated_at
+                ) VALUES (
+                    :slug, :label, :kind, :date_from, :date_to, :description, :status, :sort_order, now(), now()
+                )
+                """
+            ),
+            params,
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        raise ValidationError(f"Archive period slug '{slug}' already exists", field="slug") from exc
+    return _named_period_admin_row_by_slug(db, slug)
+
+
+def update_named_period(db, period_slug: str, payload: ArchiveNamedPeriodUpdate):
+    current_rows = _safe_mappings(
+        db,
+        """
+        SELECT slug, label, kind, date_from, date_to, description, status, sort_order
+        FROM archive_named_periods
+        WHERE slug = :period_slug
+        """,
+        {"period_slug": period_slug},
+    )
+    if not current_rows:
+        return None
+    current = current_rows[0]
+    next_date_from = payload.date_from if payload.date_from is not None else current.get("date_from")
+    next_date_to = payload.date_to if payload.date_to is not None else current.get("date_to")
+    _validate_named_period_range(next_date_from, next_date_to)
+
+    updates: list[str] = []
+    params: dict[str, object] = {"period_slug": period_slug}
+    for field in ("label", "kind", "date_from", "date_to", "description", "status", "sort_order"):
+        value = getattr(payload, field)
+        if value is not None:
+            updates.append(f"{field} = :{field}")
+            params[field] = value
+    if not updates:
+        return _named_period_admin_row_by_slug(db, period_slug)
+    updates.append("updated_at = now()")
+    db.execute(
+        text(
+            f"""
+            UPDATE archive_named_periods
+            SET {', '.join(updates)}
+            WHERE slug = :period_slug
+            """
+        ),
+        params,
+    )
+    return _named_period_admin_row_by_slug(db, period_slug)
+
+
+def list_named_periods_admin(
+    db,
+    kind: str | None = None,
+    status: str | None = None,
+    q: str | None = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> ArchiveNamedPeriodAdminListResponse:
+    where_parts: list[str] = []
+    params: dict[str, object] = {"limit": limit, "offset": offset}
+    if kind:
+        where_parts.append("p.kind = :kind")
+        params["kind"] = kind
+    if status:
+        where_parts.append("p.status = :status")
+        params["status"] = status
+    if q:
+        where_parts.append("(p.slug ILIKE :q OR p.label ILIKE :q OR COALESCE(p.description, '') ILIKE :q)")
+        params["q"] = f"%{q}%"
+    where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+    rows = _named_period_admin_rows(db, where_sql=where_sql, params=params, limit=limit, offset=offset)
+    return ArchiveNamedPeriodAdminListResponse(items=[_named_period_admin_model_row(row) for row in rows])
+
+
+def refresh_named_period_stats_for_slug(db, slug: str):
+    refresh_named_period_stats(db, period_slug=slug)
+    row = _named_period_admin_row_by_slug(db, slug)
+    return _named_period_admin_model_row(row) if row else None
+
+
 def list_period_options(db, kind: str | None = None, limit: int = 120) -> ArchivePeriodOptionsResponse:
     params: dict[str, object] = {"limit": limit}
     where_parts = ["p.status = 'published'"]
@@ -685,10 +942,15 @@ def _period_option_from_row(row) -> ArchivePeriodOption:
     )
 
 
-def refresh_named_period_stats(db, limit: int | None = None):
+def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | None = None):
+    params: dict[str, object] = {}
+    where_sql = ""
+    if period_slug:
+        where_sql = "WHERE p.slug = :period_slug"
+        params["period_slug"] = period_slug
     rows = _safe_mappings(
         db,
-        """
+        f"""
         SELECT
             p.id,
             p.slug,
@@ -700,9 +962,10 @@ def refresh_named_period_stats(db, limit: int | None = None):
             p.status,
             p.sort_order
         FROM archive_named_periods p
-        WHERE p.status = 'published'
+        {where_sql}
         ORDER BY p.sort_order DESC, p.date_from DESC, p.slug ASC
         """,
+        params,
     )
     if limit is not None:
         rows = rows[:limit]

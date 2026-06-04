@@ -13,6 +13,7 @@ import Protected from './routes/Protected';
 import AdminLayout from './routes/admin/AdminLayout';
 import AdminDashboard from './routes/admin/AdminDashboard';
 import AdminEvents from './routes/admin/AdminEvents';
+import AdminArchivePeriods from './routes/admin/AdminArchivePeriods';
 import AdminUsers from './routes/admin/AdminUsers';
 import { AuthProvider, ThemeProvider } from './services';
 import TopicPage from './routes/TopicPage';
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
         children: [
           { path: 'dashboard', element: <AdminDashboard /> },
           { path: 'events', element: <AdminEvents /> },
+          { path: 'periods', element: <AdminArchivePeriods /> },
           { path: 'users', element: <AdminUsers /> },
         ],
       },

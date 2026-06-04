@@ -25,6 +25,9 @@ export default function AdminLayout() {
           <Link className="nav-link rounded-md px-3 py-2" to="/admin/users">
             Users
           </Link>
+          <Link className="nav-link rounded-md px-3 py-2" to="/admin/periods">
+            Periods
+          </Link>
         </nav>
         <Outlet />
       </div>

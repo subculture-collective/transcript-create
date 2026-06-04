@@ -1,7 +1,8 @@
 """Tests for archive and grouped search routes."""
 
+import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -45,6 +46,21 @@ def _create_completed_video(db_session, *, youtube_id: str, title: str, uploaded
     )
     db_session.commit()
     return video_id
+
+
+def _create_user_session(db_session, *, email: str = "user@example.com") -> str:
+    user_id = uuid.uuid4()
+    session_token = secrets.token_urlsafe(32)
+    db_session.execute(
+        text("INSERT INTO users (id, email, oauth_provider, oauth_subject, plan) VALUES (:id, :email, 'google', :subject, 'free')"),
+        {"id": str(user_id), "email": email, "subject": f"{email}-subject"},
+    )
+    db_session.execute(
+        text("INSERT INTO sessions (user_id, token, expires_at) VALUES (:uid, :token, :exp)"),
+        {"uid": str(user_id), "token": session_token, "exp": datetime.utcnow() + timedelta(days=1)},
+    )
+    db_session.commit()
+    return session_token
 
 
 class TestArchiveRoutes:
@@ -172,6 +188,49 @@ class TestArchiveRoutes:
         _, kwargs = mock_get_archive_period_options.call_args
         assert kwargs["kind"] == "month"
         assert kwargs["limit"] == 5
+
+    def test_admin_archive_period_routes_registered(self, client: TestClient):
+        spec = client.get("/openapi.json").json()
+        expected_paths = {
+            "/admin/archive/periods": {"get", "post"},
+            "/admin/archive/periods/{slug}": {"patch"},
+            "/admin/archive/periods/{slug}/refresh": {"post"},
+            "/admin/archive/periods/seed": {"post"},
+        }
+
+        for path, methods in expected_paths.items():
+            assert path in spec["paths"]
+            assert methods.issubset(set(spec["paths"][path].keys()))
+
+    def test_admin_archive_period_routes_require_auth(self, client: TestClient):
+        assert client.get("/admin/archive/periods").status_code == 401
+        assert (
+            client.post(
+                "/admin/archive/periods",
+                json={"label": "Test Period", "kind": "event", "date_from": "2026-01-01", "date_to": "2026-01-02"},
+            ).status_code
+            == 401
+        )
+        assert client.patch("/admin/archive/periods/test-period", json={"label": "Updated"}).status_code == 401
+        assert client.post("/admin/archive/periods/test-period/refresh").status_code == 401
+        assert client.post("/admin/archive/periods/seed").status_code == 401
+
+    def test_admin_archive_period_routes_require_admin(self, client: TestClient, db_session):
+        session_token = _create_user_session(db_session, email="not-admin@example.com")
+        cookies = {"tc_session": session_token}
+
+        assert client.get("/admin/archive/periods", cookies=cookies).status_code == 403
+        assert (
+            client.post(
+                "/admin/archive/periods",
+                json={"label": "Test Period", "kind": "event", "date_from": "2026-01-01", "date_to": "2026-01-02"},
+                cookies=cookies,
+            ).status_code
+            == 403
+        )
+        assert client.patch("/admin/archive/periods/test-period", json={"label": "Updated"}, cookies=cookies).status_code == 403
+        assert client.post("/admin/archive/periods/test-period/refresh", cookies=cookies).status_code == 403
+        assert client.post("/admin/archive/periods/seed", cookies=cookies).status_code == 403
 
     def test_archive_timeline(self, client: TestClient, db_session):
         first_video = _create_completed_video(

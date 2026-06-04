@@ -113,6 +113,33 @@ export interface ArchivePeriodOption {
   total_duration_seconds: number;
 }
 
+export interface ArchiveNamedPeriodAdminResponse {
+  id: string | number;
+  slug: string;
+  label: string;
+  kind: string;
+  date_from: string;
+  date_to: string;
+  description?: string | null;
+  status: 'published' | 'hidden' | string;
+  sort_order?: number | null;
+  video_count: number;
+  total_duration_seconds: number;
+  summary?: string | null;
+  calculated_at?: string | null;
+}
+
+export interface ArchiveNamedPeriodUpsertPayload {
+  label: string;
+  slug?: string;
+  kind: string;
+  date_from: string;
+  date_to: string;
+  description?: string | null;
+  status: 'published' | 'hidden';
+  sort_order?: number | null;
+}
+
 export interface ArchivePeriodOptionsResponse {
   periods: ArchivePeriodOption[];
   selected_period?: ArchivePeriodOption | null;

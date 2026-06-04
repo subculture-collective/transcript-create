@@ -290,7 +290,7 @@ class ArchiveTrendingSearch(BaseModel):
 class ArchiveNamedPeriod(BaseModel):
     slug: str = Field(..., description="Stable period slug")
     label: str = Field(..., description="Public period label")
-    kind: str = Field(..., description="month, week, event, or date")
+    kind: str = Field(..., description="month, week, event, leadup, fallout, holiday, anniversary, or date")
     date_from: date = Field(..., description="Inclusive start date")
     date_to: date = Field(..., description="Inclusive end date")
     description: Optional[str] = Field(None, description="Optional period description")
@@ -301,10 +301,40 @@ class ArchiveNamedPeriod(BaseModel):
     summary: str = Field("", description="Cached period summary")
 
 
+class ArchiveNamedPeriodCreate(BaseModel):
+    slug: Optional[str] = Field(None, description="Optional stable period slug")
+    label: str = Field(..., description="Public period label")
+    kind: str = Field(..., description="month, week, event, leadup, fallout, holiday, anniversary, or date")
+    date_from: date = Field(..., description="Inclusive start date")
+    date_to: date = Field(..., description="Inclusive end date")
+    description: Optional[str] = Field(None, description="Optional period description")
+    status: str = Field("published", description="Period lifecycle status")
+    sort_order: Optional[int] = Field(None, description="Ordering weight for UI presentation")
+
+
+class ArchiveNamedPeriodUpdate(BaseModel):
+    label: Optional[str] = Field(None, description="Public period label")
+    kind: Optional[str] = Field(None, description="month, week, event, leadup, fallout, holiday, anniversary, or date")
+    date_from: Optional[date] = Field(None, description="Inclusive start date")
+    date_to: Optional[date] = Field(None, description="Inclusive end date")
+    description: Optional[str] = Field(None, description="Optional period description")
+    status: Optional[str] = Field(None, description="Period lifecycle status")
+    sort_order: Optional[int] = Field(None, description="Ordering weight for UI presentation")
+
+
+class ArchiveNamedPeriodAdminResponse(ArchiveNamedPeriod):
+    id: uuid.UUID = Field(..., description="Period identifier")
+    calculated_at: Optional[datetime] = Field(None, description="When cached stats were last calculated")
+
+
+class ArchiveNamedPeriodAdminListResponse(BaseModel):
+    items: List[ArchiveNamedPeriodAdminResponse] = Field(default_factory=list, description="Named archive periods")
+
+
 class ArchivePeriodOption(BaseModel):
     slug: str = Field(..., description="Stable period slug")
     label: str = Field(..., description="Public period label")
-    kind: str = Field(..., description="month, week, event, or date")
+    kind: str = Field(..., description="month, week, event, leadup, fallout, holiday, anniversary, or date")
     date_from: date = Field(..., description="Inclusive start date")
     date_to: date = Field(..., description="Inclusive end date")
     description: Optional[str] = Field(None, description="Optional period description")

@@ -26,6 +26,7 @@ export default function SearchPage() {
   const [q, setQ] = useState(filters.q);
   const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
   const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+  const [suggestedSearches, setSuggestedSearches] = useState<Array<{ term: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<SearchMode>(null);
   const [grouped, setGrouped] = useState<GroupedSearchResponse | null>(null);
@@ -41,6 +42,26 @@ export default function SearchPage() {
     setDateFrom(filters.date_from ?? '');
     setDateTo(filters.date_to ?? '');
   }, [filters.q, filters.date_from, filters.date_to]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api
+      .getExploreIntelligence()
+      .then((response) => {
+        if (cancelled) return;
+        setSuggestedSearches(response.suggested_searches ?? []);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error('Failed to load suggested searches', err);
+        setSuggestedSearches([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const query = filters.q.trim();
@@ -174,6 +195,26 @@ export default function SearchPage() {
           onReset={resetFilters}
         />
       </section>
+
+      {suggestedSearches.length > 0 && (
+        <section className="surface-card space-y-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="archive-eyebrow">Quick starts</div>
+              <h2 className="section-title mt-2">Suggested searches</h2>
+            </div>
+            <p className="text-sm text-muted">Tap a chip to jump straight into a search.</p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {suggestedSearches.map((item) => (
+              <Link key={item.term} to={`/search?q=${encodeURIComponent(item.term)}`} className="badge-warning">
+                {item.term}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {filters.q && (
         <section className="archive-panel flex flex-wrap items-center justify-between gap-4">

@@ -61,6 +61,55 @@ export interface ArchiveSummary {
   popular_searches: ArchivePopularSearch[];
 }
 
+export interface ArchiveEvidenceMoment {
+  video: VideoInfo;
+  start_ms: number;
+  end_ms: number;
+  snippet: string;
+  topic?: string | null;
+}
+
+export interface ArchiveTopicCard {
+  slug: string;
+  label: string;
+  source: 'curated' | 'automatic' | 'hybrid' | string;
+  aliases: string[];
+  total_moments: number;
+  total_videos: number;
+  recent_mentions_90d: number;
+  trend_score: number;
+  related_topics: string[];
+  evidence: ArchiveEvidenceMoment[];
+}
+
+export interface ArchiveTrendingSearch {
+  term: string;
+  frequency: number;
+  trend_score: number;
+  source: 'search' | 'transcript' | 'hybrid' | string;
+}
+
+export interface ArchivePeriodIntelligence {
+  period: string;
+  label: string;
+  video_count: number;
+  total_duration_seconds: number;
+  videos: VideoInfo[];
+  top_topics: ArchiveTopicCard[];
+  summary: string;
+  evidence: ArchiveEvidenceMoment[];
+}
+
+export interface ExploreIntelligenceResponse {
+  summary: ArchiveSummary;
+  exploration_modes: string[];
+  trending_searches: ArchiveTrendingSearch[];
+  suggested_searches: ArchiveTrendingSearch[];
+  topic_cards: ArchiveTopicCard[];
+  periods: ArchivePeriodIntelligence[];
+  query_time_ms?: number | null;
+}
+
 export interface TimelineBucket {
   period: string;
   label: string;

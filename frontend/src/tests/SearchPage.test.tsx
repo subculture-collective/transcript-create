@@ -44,6 +44,9 @@ describe('SearchPage', () => {
       offset: '50',
     })
 
+    vi.spyOn(api, 'getExploreIntelligence').mockResolvedValue({
+      suggested_searches: [{ term: 'gaza', frequency: 5, trend_score: 5, source: 'search' }],
+    } as never)
     const searchGroupedMock = vi.spyOn(api, 'searchGrouped').mockResolvedValue({
       total_moments: 1,
       total_videos: 1,
@@ -91,5 +94,36 @@ describe('SearchPage', () => {
       expect(screen.getByRole('button', { name: 'Copy quote' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument()
     })
+
+    expect(screen.getByRole('link', { name: 'gaza' })).toHaveAttribute('href', '/search?q=gaza')
+  })
+
+  it('keeps search usable when suggested searches fail', async () => {
+    currentSearchParams = new URLSearchParams({ q: 'rent' })
+
+    vi.spyOn(api, 'getExploreIntelligence').mockRejectedValue(new Error('unavailable'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const searchGroupedMock = vi.spyOn(api, 'searchGrouped').mockResolvedValue({
+      total_moments: 0,
+      total_videos: 0,
+      groups: [],
+    } as never)
+
+    renderWithProviders(<SearchPage />)
+
+    await waitFor(() => {
+      expect(searchGroupedMock).toHaveBeenCalledWith(
+        'rent',
+        expect.objectContaining({
+          source: undefined,
+          category: undefined,
+          video_id: undefined,
+          limit: undefined,
+          offset: undefined,
+        })
+      )
+    })
+
+    expect(screen.queryByText('Suggested searches')).not.toBeInTheDocument()
   })
 })

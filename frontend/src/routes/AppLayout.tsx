@@ -5,6 +5,7 @@ import { useAuth, useTheme } from '../services';
 const navItems = [
   { to: '/', label: 'Home' },
   { to: '/search', label: 'Search' },
+  { to: '/explore', label: 'Explore' },
   { to: '/episodes', label: 'VODs' },
   { to: '/saved', label: 'Saved' },
 ];

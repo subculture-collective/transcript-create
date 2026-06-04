@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, Query
 from .. import crud
 from ..archive.repository import archive_repository
 from ..db import get_db
-from ..schemas import ArchiveSummary, ArchiveTimelineResponse
+from ..archive.intelligence import get_archive_intelligence
+from ..schemas import ArchiveIntelligenceResponse, ArchiveSummary, ArchiveTimelineResponse
 
 router = APIRouter(prefix="", tags=["Archive"])
 
@@ -34,3 +35,17 @@ def archive_timeline(
     db=Depends(get_db),
 ):
     return crud.get_archive_timeline(db, limit=limit, granularity=granularity)
+
+
+@router.get(
+    "/archive/intelligence",
+    response_model=ArchiveIntelligenceResponse,
+    summary="Get archive intelligence",
+    description="Composed archive exploration response with timeline, topics, trending searches, and cited evidence.",
+)
+def archive_intelligence(
+    topic_limit: int = Query(8, ge=1, le=20, description="Maximum number of topic cards to include"),
+    period_limit: int = Query(8, ge=1, le=20, description="Maximum number of periods to include"),
+    db=Depends(get_db),
+):
+    return get_archive_intelligence(db, topic_limit=topic_limit, period_limit=period_limit)

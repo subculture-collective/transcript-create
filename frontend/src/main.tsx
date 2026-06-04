@@ -17,6 +17,7 @@ import AdminUsers from './routes/admin/AdminUsers';
 import { AuthProvider, ThemeProvider } from './services';
 import TopicPage from './routes/TopicPage';
 import TimelinePage from './routes/TimelinePage';
+import ExplorePage from './routes/ExplorePage';
 
 const router = createBrowserRouter([
   {
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'explore', element: <ExplorePage /> },
       { path: 'episodes', element: <StreamsPage /> },
       { path: 'streams', element: <StreamsPage /> },
       { path: 'timeline', element: <TimelinePage /> },

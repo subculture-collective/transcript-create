@@ -49,6 +49,8 @@ describe('HomePage', () => {
     expect(screen.getByText('VODs')).toBeInTheDocument();
     expect(screen.getByText('Newest VOD')).toBeInTheDocument();
     expect(screen.getByText('rent')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue with Twitch' })).toBeInTheDocument();
 
     const input = screen.getByPlaceholderText('Search any topic, line, guest, or phrase…');
     await user.type(input, 'archive');

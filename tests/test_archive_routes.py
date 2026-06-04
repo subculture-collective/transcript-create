@@ -83,6 +83,36 @@ class TestArchiveRoutes:
         assert data["recent_videos"]
         assert data["popular_searches"][0]["term"] == "archive query"
 
+    def test_archive_intelligence_route_returns_explore_contract(self, client: TestClient, db_session):
+        video_id = _create_completed_video(
+            db_session,
+            youtube_id="explore1",
+            title="Explore VOD",
+            uploaded_at=datetime(2026, 5, 20, tzinfo=timezone.utc),
+            duration_seconds=3600,
+        )
+        db_session.execute(
+            text("INSERT INTO segments (video_id, start_ms, end_ms, text, speaker_label) VALUES (:vid, 1000, 5000, :text, NULL)"),
+            {"vid": str(video_id), "text": "ICE protests and Gaza coverage made this a major news segment."},
+        )
+        db_session.execute(
+            text("INSERT INTO search_suggestions (term, frequency) VALUES (:term, :frequency)"),
+            {"term": "ice protests", "frequency": 7},
+        )
+        db_session.commit()
+
+        response = client.get("/archive/intelligence?topic_limit=4&period_limit=3")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["summary"]["creator_name"] == "HasAnAra"
+        assert data["exploration_modes"] == ["timeline", "topics", "trending", "suggested"]
+        assert data["trending_searches"][0]["term"] == "ice protests"
+        assert data["topic_cards"]
+        assert data["periods"]
+        assert data["periods"][0]["evidence"]
+        assert data["periods"][0]["evidence"][0]["video"]["youtube_id"] == "explore1"
+
     def test_archive_timeline(self, client: TestClient, db_session):
         first_video = _create_completed_video(
             db_session,

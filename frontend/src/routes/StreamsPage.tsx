@@ -59,6 +59,15 @@ export default function StreamsPage() {
   const endItem = Math.min(offset + items.length, totalCount);
   const pageNumber = Math.floor(offset / DEFAULT_LIMIT) + 1;
   const totalPages = Math.max(1, Math.ceil(Math.max(totalCount, 1) / DEFAULT_LIMIT));
+  const sortedItems = useMemo(
+    () =>
+      [...items].sort((a, b) => {
+        const aTime = new Date(a.uploaded_at ?? a.created_at ?? a.updated_at ?? 0).getTime();
+        const bTime = new Date(b.uploaded_at ?? b.created_at ?? b.updated_at ?? 0).getTime();
+        return bTime - aTime;
+      }),
+    [items]
+  );
 
   function updateParams(next: { q?: string; dateFrom?: string; dateTo?: string; offset?: number }) {
     const nextParams = new URLSearchParams();
@@ -143,9 +152,9 @@ export default function StreamsPage() {
             </div>
           ))}
         </div>
-      ) : items.length > 0 ? (
+      ) : sortedItems.length > 0 ? (
         <section aria-label="Stream results" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {items.map((video) => (
+          {sortedItems.map((video) => (
             <StreamCard key={video.id} video={video} dateField="uploaded_at" />
           ))}
         </section>

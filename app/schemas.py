@@ -203,7 +203,7 @@ class ArchiveSummaryStats(BaseModel):
 
 
 class ArchiveSummary(BaseModel):
-    creator_name: str = Field("HasanAra", description="Archive display name")
+    creator_name: str = Field("HasAnAra", description="Archive display name")
     video_count: int = Field(0, description="Count of archived videos with transcript coverage")
     total_duration_seconds: int = Field(0, description="Total duration across archived videos")
     transcript_word_count: int = Field(0, description="Estimated transcript word count")
@@ -255,6 +255,55 @@ class TimelineBucket(BaseModel):
 class ArchiveTimelineResponse(BaseModel):
     buckets: List[TimelineBucket] = Field(default_factory=list, description="Chronological archive buckets")
     query_time_ms: Optional[int] = Field(None, description="Time taken to build the timeline")
+
+
+class ArchiveEvidenceMoment(BaseModel):
+    video: "VideoInfo" = Field(..., description="VOD containing the cited evidence")
+    start_ms: int = Field(..., description="Moment start timestamp")
+    end_ms: int = Field(..., description="Moment end timestamp")
+    snippet: str = Field(..., description="Evidence snippet from transcript text")
+    topic: Optional[str] = Field(None, description="Topic or query this evidence supports")
+
+
+class ArchiveTopicCard(BaseModel):
+    slug: str = Field(..., description="Stable topic slug")
+    label: str = Field(..., description="Public topic label")
+    source: str = Field(..., description="curated, automatic, or hybrid")
+    aliases: List[str] = Field(default_factory=list, description="Search aliases used for this topic")
+    total_moments: int = Field(0, description="Matched transcript moments")
+    total_videos: int = Field(0, description="VODs with at least one matched moment")
+    recent_mentions_90d: int = Field(0, description="Mentions in the last 90 days")
+    trend_score: float = Field(0, description="Combined search and transcript trend score")
+    related_topics: List[str] = Field(default_factory=list, description="Related topic labels")
+    evidence: List[ArchiveEvidenceMoment] = Field(default_factory=list, description="Timestamped evidence moments")
+
+
+class ArchiveTrendingSearch(BaseModel):
+    term: str = Field(..., description="Trending or popular public search term")
+    frequency: int = Field(0, description="Search frequency from suggestion analytics")
+    trend_score: float = Field(0, description="Combined search and transcript trend score")
+    source: str = Field("search", description="search, transcript, or hybrid")
+
+
+class ArchivePeriodIntelligence(BaseModel):
+    period: str = Field(..., description="Period identifier, e.g. 2026-05")
+    label: str = Field(..., description="Human-readable period label")
+    video_count: int = Field(..., description="VOD count in this period")
+    total_duration_seconds: int = Field(..., description="Total VOD duration in this period")
+    videos: List["VideoInfo"] = Field(default_factory=list, description="Representative VODs")
+    top_topics: List[ArchiveTopicCard] = Field(default_factory=list, description="Top topics for the period")
+    summary: str = Field(..., description="Extractive or generated period summary")
+    evidence: List[ArchiveEvidenceMoment] = Field(default_factory=list, description="Citations supporting the summary")
+
+
+class ArchiveIntelligenceResponse(BaseModel):
+    summary: ArchiveSummary = Field(..., description="Archive summary stats and recent VODs")
+    exploration_modes: List[str] = Field(default_factory=list, description="Available exploration modes")
+    trending_searches: List[ArchiveTrendingSearch] = Field(default_factory=list, description="Trending public searches")
+    suggested_searches: List[ArchiveTrendingSearch] = Field(default_factory=list, description="Suggested archive searches")
+    topic_cards: List[ArchiveTopicCard] = Field(default_factory=list, description="Hybrid curated/automatic topic cards")
+    periods: List[ArchivePeriodIntelligence] = Field(default_factory=list, description="Timeline periods enriched with topic/evidence data")
+    query_time_ms: Optional[int] = Field(None, description="Time taken to compose archive intelligence")
 
 
 class SavedSearchCreate(BaseModel):

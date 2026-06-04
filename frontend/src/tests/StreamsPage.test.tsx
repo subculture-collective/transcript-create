@@ -15,6 +15,21 @@ describe('StreamsPage', () => {
     const firstPage = {
       items: [
         {
+          id: 'video-2',
+          youtube_id: 'def456uvw12',
+          title: 'Older stream',
+          channel_name: 'Channel Beta',
+          duration_seconds: 985,
+          state: 'processing',
+          caption_ingest_state: 'pending',
+          diarization_state: 'queued',
+          uploaded_at: '2026-05-01T12:00:00Z',
+          created_at: '2026-04-30T12:00:00Z',
+          updated_at: '2026-05-02T12:00:00Z',
+          has_whisper_transcript: false,
+          has_youtube_transcript: true,
+        },
+        {
           id: 'video-1',
           youtube_id: 'abc123xyz89',
           title: 'First stream',
@@ -82,9 +97,11 @@ describe('StreamsPage', () => {
       expect(listMock).toHaveBeenCalledTimes(1);
     });
 
+    const renderedLinks = screen.getAllByRole('link', { name: /stream/i });
+    expect(renderedLinks[0]).toHaveAttribute('href', '/v/video-1');
+    expect(renderedLinks[1]).toHaveAttribute('href', '/v/video-2');
     expect(screen.getByText('First stream')).toBeInTheDocument();
     expect(screen.getByText('Channel Alpha')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /First stream/i })).toHaveAttribute('href', '/v/video-1');
     expect(listMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ limit: 24, offset: 0, completed_only: false, date_field: 'uploaded_at' })
     );

@@ -55,7 +55,7 @@ export default function StreamFiltersBar({
           </div>
           <div>
             <div className="text-xs uppercase tracking-wide text-subtle">Date</div>
-            <div className="mt-1 font-semibold text-ink">Broadcast</div>
+            <div className="mt-1 font-semibold text-ink">Broadcast · newest first</div>
           </div>
         </div>
       </div>

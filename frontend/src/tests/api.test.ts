@@ -129,6 +129,35 @@ describe('api service', () => {
     })
   })
 
+  describe('getExploreIntelligence', () => {
+    it('calls archive intelligence endpoint', async () => {
+      const mockResponse = {
+        summary: {
+          creator_name: 'HasAnAra',
+          video_count: 1,
+          total_duration_seconds: 3600,
+          transcript_word_count: 200,
+          recent_videos: [],
+          popular_searches: [],
+        },
+        exploration_modes: ['timeline', 'topics', 'trending', 'suggested'],
+        trending_searches: [],
+        suggested_searches: [],
+        topic_cards: [],
+        periods: [],
+      }
+      const getMock = vi.fn().mockReturnValue({
+        json: vi.fn().mockResolvedValue(mockResponse),
+      })
+      vi.spyOn(http, 'get').mockImplementation(getMock)
+
+      const result = await api.getExploreIntelligence()
+
+      expect(result).toEqual(mockResponse)
+      expect(getMock).toHaveBeenCalledWith('archive/intelligence')
+    })
+  })
+
   describe('saved searches', () => {
     it('lists saved searches', async () => {
       const mockResponse = { items: [] }

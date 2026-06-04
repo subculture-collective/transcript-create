@@ -2,6 +2,7 @@ import ky from 'ky';
 import type {
   ArchiveSearchFilters,
   ArchiveSummary,
+  ExploreIntelligenceResponse,
   GroupedSearchResponse,
   MentionMapResponse,
   PaginatedVideos,
@@ -91,6 +92,9 @@ export const api = {
   async getTimeline() {
     const response = await http.get('archive/timeline').json<TimelineResponse | TimelineBucket[]>();
     return normalizeTimelineResponse(response);
+  },
+  async getExploreIntelligence() {
+    return http.get('archive/intelligence').json<ExploreIntelligenceResponse>();
   },
   async getTranscript(videoId: string) {
     return http

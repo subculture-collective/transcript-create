@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../services';
+import { api, useAuth } from '../services';
 import type { ArchiveSummary } from '../types/api';
 import { buildTimestampLink, formatDate, formatDuration, formatNumber } from '../features/archive/format';
 import { StatCard, VideoCard } from '../components/archive';
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { login, loginTwitch } = useAuth();
   const [summary, setSummary] = useState<ArchiveSummary | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -80,16 +81,34 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-2">
-            <StatCard label="VODs" value={loading ? '—' : summary ? formatNumber(summary.video_count) : '—'} />
-            <StatCard label="Duration" value={loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'} />
-            <StatCard label="Transcript words" value={loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'} />
-            <StatCard
-              label="Updated"
-              value={loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}
-              className="sm:col-span-2 lg:col-span-2"
-              valueClassName="meta-value text-sm"
-            />
+          <div className="space-y-4">
+            <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-2">
+              <StatCard label="VODs" value={loading ? '—' : summary ? formatNumber(summary.video_count) : '—'} />
+              <StatCard label="Duration" value={loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'} />
+              <StatCard label="Transcript words" value={loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'} />
+              <StatCard
+                label="Updated"
+                value={loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}
+                className="sm:col-span-2 lg:col-span-2"
+                valueClassName="meta-value text-sm"
+              />
+            </div>
+
+            <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+              <div className="archive-eyebrow mb-2">Get started</div>
+              <h2 className="text-xl font-semibold tracking-[-0.03em] text-ink">Create an account to save searches and favorites.</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Use your existing Google or Twitch login to keep your archive trail in sync.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={login} className="btn min-h-[44px] px-4 text-sm">
+                  Continue with Google
+                </button>
+                <button type="button" onClick={loginTwitch} className="btn-secondary min-h-[44px] px-4 text-sm">
+                  Continue with Twitch
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>

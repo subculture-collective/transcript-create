@@ -7,15 +7,18 @@ import type { YouTubePlayerHandle } from '../components/YouTubePlayer'
 describe('YouTubePlayer', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockPlayer: any
+  let playerState = 2
 
   beforeEach(() => {
     vi.clearAllMocks()
+    playerState = 2
 
     // Mock YouTube IFrame API
     mockPlayer = {
       seekTo: vi.fn(),
       playVideo: vi.fn(),
-      getPlayerState: vi.fn(() => 2),
+      pauseVideo: vi.fn(),
+      getPlayerState: vi.fn(() => playerState),
       destroy: vi.fn(),
     }
 
@@ -24,6 +27,7 @@ describe('YouTubePlayer', () => {
       Player: vi.fn(function (this: any, _element: any, config: any) {
         this.seekTo = mockPlayer.seekTo
         this.playVideo = mockPlayer.playVideo
+        this.pauseVideo = mockPlayer.pauseVideo
         this.getPlayerState = mockPlayer.getPlayerState
         this.destroy = mockPlayer.destroy
         // Simulate onReady callback
@@ -112,6 +116,28 @@ describe('YouTubePlayer', () => {
 
     expect(mockPlayer.seekTo).toHaveBeenCalledWith(120, true)
     expect(mockPlayer.playVideo).toHaveBeenCalled()
+  })
+
+  it('exposes play, pause, and togglePlay methods via ref', async () => {
+    const ref = createRef<YouTubePlayerHandle>()
+    render(<YouTubePlayer ref={ref} videoId="test-video-id" />)
+
+    await waitFor(() => {
+      expect(window.YT!.Player).toHaveBeenCalled()
+    })
+
+    ref.current?.play()
+    expect(mockPlayer.playVideo).toHaveBeenCalled()
+
+    ref.current?.pause()
+    expect(mockPlayer.pauseVideo).toHaveBeenCalled()
+
+    ref.current?.togglePlay()
+    expect(mockPlayer.playVideo).toHaveBeenCalledTimes(2)
+
+    playerState = 1
+    ref.current?.togglePlay()
+    expect(mockPlayer.pauseVideo).toHaveBeenCalledTimes(2)
   })
 
   it('does not call playVideo when already playing', async () => {

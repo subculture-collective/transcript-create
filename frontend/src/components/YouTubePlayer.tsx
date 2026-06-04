@@ -4,6 +4,7 @@ type YouTubePlayer = {
   destroy?: () => void;
   seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
   playVideo?: () => void;
+  pauseVideo?: () => void;
   getPlayerState?: () => number;
   getCurrentTime?: () => number;
 };
@@ -29,6 +30,9 @@ declare global {
 
 export type YouTubePlayerHandle = {
   seekTo: (seconds: number, options?: { play?: boolean }) => void;
+  play: () => void;
+  pause: () => void;
+  togglePlay: () => void;
   getCurrentTime: () => number | null;
 };
 
@@ -100,6 +104,31 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
   useImperativeHandle(ref, () => ({
     seekTo(seconds: number, options?: { play?: boolean }) {
       seek(seconds, options?.play ?? false);
+    },
+    play() {
+      try {
+        playerRef.current?.playVideo?.();
+      } catch {
+        // Suppress player API errors
+      }
+    },
+    pause() {
+      try {
+        playerRef.current?.pauseVideo?.();
+      } catch {
+        // Suppress player API errors
+      }
+    },
+    togglePlay() {
+      try {
+        if (playerRef.current?.getPlayerState?.() === YOUTUBE_PLAYING_STATE) {
+          playerRef.current.pauseVideo?.();
+        } else {
+          playerRef.current?.playVideo?.();
+        }
+      } catch {
+        // Suppress player API errors
+      }
     },
     getCurrentTime() {
       try {

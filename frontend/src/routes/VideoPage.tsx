@@ -49,7 +49,9 @@ export default function VideoPage() {
   const [currentMs, setCurrentMs] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'standard' | 'theater' | 'reader'>('standard');
   const [isPlayingMatches, setIsPlayingMatches] = useState(false);
+  const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
+  const autoFollowScrollTimeoutRef = useRef<number | null>(null);
 
   const startSeconds = useMemo(() => {
     const tStr = params.get('t');
@@ -57,6 +59,26 @@ export default function VideoPage() {
     return Number.isFinite(t) ? t : 0;
   }, [params]);
   const transcriptQuery = useMemo(() => params.get('q') ?? '', [params]);
+
+  const scrollElementIntoView = useCallback((element: Element | null, options?: ScrollIntoViewOptions) => {
+    if (!element) return;
+    if (autoFollowScrollTimeoutRef.current != null) {
+      window.clearTimeout(autoFollowScrollTimeoutRef.current);
+    }
+    autoFollowScrollTimeoutRef.current = window.setTimeout(() => {
+      autoFollowScrollTimeoutRef.current = null;
+    }, 1000);
+    element.scrollIntoView(options ?? { behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const resumeAutoFollow = useCallback(() => {
+    setAutoFollowEnabled(true);
+    scrollElementIntoView(document.querySelector('[data-current-sentence="true"]'), {
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    });
+  }, [scrollElementIntoView]);
 
   useEffect(() => {
     if (!videoId) return;
@@ -92,6 +114,34 @@ export default function VideoPage() {
     }
   }, [videoId, transcriptQuery, user]);
 
+  useEffect(() => {
+    const unlockAutoFollow = () => setAutoFollowEnabled(false);
+    const onScroll = () => {
+      if (autoFollowScrollTimeoutRef.current != null) return;
+      unlockAutoFollow();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) {
+        unlockAutoFollow();
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('wheel', unlockAutoFollow, { passive: true });
+    window.addEventListener('touchstart', unlockAutoFollow, { passive: true });
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('wheel', unlockAutoFollow);
+      window.removeEventListener('touchstart', unlockAutoFollow);
+      window.removeEventListener('keydown', onKeyDown);
+      if (autoFollowScrollTimeoutRef.current != null) {
+        window.clearTimeout(autoFollowScrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Scroll/select by explicit hash first. The `t=` URL param is whole-second
   // precision, so using it first can select the previous paragraph for starts
   // like 12.8s. Hashes preserve the exact segment/block identity.
@@ -108,7 +158,7 @@ export default function VideoPage() {
         const el = sentenceSuffix ? document.getElementById(`seg-${segId}-s-${sentenceSuffix}`) : null;
         const target = el ?? document.getElementById(`seg-${segId}`) ?? (block ? document.getElementById(`block-${block.block_index}`) : null);
         if (seg && target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          scrollElementIntoView(target, { behavior: 'smooth', block: 'center' });
           setActiveSegId(segId);
           setActiveSentenceId(sentenceId);
           setActiveBlockIndex(block?.block_index ?? null);
@@ -122,7 +172,7 @@ export default function VideoPage() {
         const block = transcript?.blocks?.find((candidate) => candidate.block_index === blockIndex);
         const el = document.getElementById(`block-${blockIndex}`);
         if (block && el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          scrollElementIntoView(el, { behavior: 'smooth', block: 'center' });
           setActiveSegId((block.segment_ids[0] ?? 0) + 1);
           setActiveSentenceId(null);
           setActiveBlockIndex(block.block_index);
@@ -132,7 +182,7 @@ export default function VideoPage() {
 
       const el = document.querySelector(hash);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollElementIntoView(el, { behavior: 'smooth', block: 'center' });
         return;
       }
     }
@@ -144,7 +194,7 @@ export default function VideoPage() {
         const block = transcript.blocks?.find((candidate) => candidate.segment_ids.includes(segIndex));
         const el = block ? document.getElementById(`block-${block.block_index}`) : document.getElementById(`seg-${segIndex + 1}`);
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          scrollElementIntoView(el, { behavior: 'smooth', block: 'center' });
           setActiveSegId(segIndex + 1);
           setActiveSentenceId(null);
           setActiveBlockIndex(block?.block_index ?? null);
@@ -164,11 +214,11 @@ export default function VideoPage() {
   }, []);
 
   useEffect(() => {
-    if (currentMs == null) return;
+    if (!autoFollowEnabled || currentMs == null) return;
     const el = document.querySelector('[data-current-sentence="true"]');
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-  }, [currentMs]);
+    scrollElementIntoView(el, { behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, [autoFollowEnabled, currentMs, scrollElementIntoView]);
 
   const jumpTo = useCallback((ms: number) => {
     const s = Math.floor(ms / 1000);
@@ -241,7 +291,7 @@ export default function VideoPage() {
     const segId = matchIndices[next];
     const blockId = hasFormattedBlocks ? formattedBlocks.find((candidate) => candidate.segment_ids.includes(segId - 1))?.block_index : null;
     const el = blockId !== null ? document.getElementById(`block-${blockId}`) : document.getElementById(`seg-${segId}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el) scrollElementIntoView(el, { behavior: 'smooth', block: 'center' });
     setActiveSegId(segId);
     setActiveSentenceId(null);
     setActiveBlockIndex(blockId ?? null);
@@ -265,7 +315,7 @@ export default function VideoPage() {
       const nextSegId = matchIndices[next];
       const blockId = hasFormattedBlocks ? formattedBlocks.find((candidate) => candidate.segment_ids.includes(nextSegId - 1))?.block_index : null;
       const el = blockId !== null ? document.getElementById(`block-${blockId}`) : document.getElementById(`seg-${nextSegId}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el) scrollElementIntoView(el, { behavior: 'smooth', block: 'center' });
       setActiveSegId(nextSegId);
       setActiveSentenceId(null);
       setActiveBlockIndex(blockId ?? null);
@@ -344,43 +394,72 @@ export default function VideoPage() {
       </div>
 
       <div className={viewMode === 'standard' ? 'grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start' : 'space-y-6'}>
-        {viewMode !== 'reader' && (
-          <PlayerPanel video={video} start={start} playerRef={playerRef} className={viewMode === 'standard' ? 'lg:col-span-1' : ''} />
+        {video && (
+          <PlayerPanel
+            video={video}
+            start={start}
+            playerRef={playerRef}
+            className={viewMode === 'standard' ? 'lg:col-span-1' : viewMode === 'theater' ? 'lg:z-20' : 'hidden'}
+          />
         )}
 
         <section className={viewMode === 'standard' ? 'lg:col-span-2' : 'mx-auto max-w-4xl'}>
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="section-title">VOD transcript</h2>
-          {matchIndices.length > 0 && (
-            <div className="flex items-center gap-2 text-sm text-muted" role="group" aria-label="Search navigation">
-              <button
-                className="btn-secondary"
-                onClick={() => gotoMatch(-1)}
-                aria-label="Go to previous match"
-              >
-                Prev
-              </button>
-              <span aria-live="polite" aria-atomic="true">
-                {matchCursor + 1} / {matchIndices.length}
-              </span>
-              <button
-                className="btn-secondary"
-                onClick={() => gotoMatch(1)}
-                aria-label="Go to next match"
-              >
-                Next
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => setIsPlayingMatches((value) => !value)}
-                aria-label="Play all matching transcript moments"
-              >
-                {isPlayingMatches ? 'Stop play all' : 'Play all matches'}
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="section-title">VOD transcript</h2>
+              {!autoFollowEnabled && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={resumeAutoFollow}
+                  aria-label="Follow current sentence"
+                >
+                  Resume auto-follow
+                </button>
+              )}
             </div>
-          )}
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+              {viewMode === 'reader' && video && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => playerRef.current?.togglePlay()}
+                  aria-label="Toggle playback"
+                >
+                  Play / pause
+                </button>
+              )}
+              {matchIndices.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted" role="group" aria-label="Search navigation">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => gotoMatch(-1)}
+                    aria-label="Go to previous match"
+                  >
+                    Prev
+                  </button>
+                  <span aria-live="polite" aria-atomic="true">
+                    {matchCursor + 1} / {matchIndices.length}
+                  </span>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => gotoMatch(1)}
+                    aria-label="Go to next match"
+                  >
+                    Next
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setIsPlayingMatches((value) => !value)}
+                    aria-label="Play all matching transcript moments"
+                  >
+                    {isPlayingMatches ? 'Stop play all' : 'Play all matches'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        {!transcript && (
+          {!transcript && (
           <div className="py-8 text-center text-muted" role="status" aria-live="polite">
             <span className="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⟳</span>
             <p>Loading transcript…</p>

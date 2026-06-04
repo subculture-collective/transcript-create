@@ -1147,6 +1147,123 @@ def merge_label_topic_cards(existing: list[ArchiveTopicCard], label_cards: list[
     return sorted(by_slug.values(), key=lambda card: card.trend_score, reverse=True)[:limit]
 
 
+def _fallback_evidence_for_videos(db, videos: list[VideoInfo], limit: int = 200) -> list[ArchiveEvidenceMoment]:
+    video_ids = [str(video.id) for video in videos if video.id]
+    if not video_ids:
+        return []
+    placeholders, params = _in_clause("video_id", video_ids[:12])
+    rows = _safe_mappings(
+        db,
+        f"""
+        SELECT * FROM (
+            SELECT
+                v.id AS video_id,
+                v.youtube_id,
+                v.title,
+                v.duration_seconds,
+                v.state,
+                v.caption_ingest_state,
+                v.diarization_state,
+                v.uploaded_at,
+                v.created_at,
+                v.updated_at,
+                v.channel_name,
+                v.language,
+                v.category,
+                EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+                EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript,
+                s.start_ms,
+                s.end_ms,
+                s.text AS snippet,
+                0 AS transcript_source_priority
+            FROM videos v
+            JOIN segments s ON s.video_id = v.id
+            WHERE v.id IN ({placeholders})
+
+            UNION ALL
+
+            SELECT
+                v.id AS video_id,
+                v.youtube_id,
+                v.title,
+                v.duration_seconds,
+                v.state,
+                v.caption_ingest_state,
+                v.diarization_state,
+                v.uploaded_at,
+                v.created_at,
+                v.updated_at,
+                v.channel_name,
+                v.language,
+                v.category,
+                EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+                TRUE AS has_youtube_transcript,
+                ys.start_ms,
+                ys.end_ms,
+                ys.text AS snippet,
+                1 AS transcript_source_priority
+            FROM videos v
+            JOIN youtube_transcripts yt ON yt.video_id = v.id
+            JOIN youtube_segments ys ON ys.youtube_transcript_id = yt.id
+            WHERE v.id IN ({placeholders})
+        ) transcript_segments
+        ORDER BY COALESCE(uploaded_at, created_at) DESC NULLS LAST, transcript_source_priority ASC, start_ms ASC
+        LIMIT :limit
+        """,
+        {**params, "limit": limit},
+    )
+    if not rows:
+        return []
+    metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in rows])
+    _attach_video_metadata(rows, metadata_map)
+    return [_evidence_from_row(row, topic=None) for row in rows]
+
+
+def _fallback_seed_topic_cards(evidence_pool: list[ArchiveEvidenceMoment], limit: int) -> list[ArchiveTopicCard]:
+    cards: list[ArchiveTopicCard] = []
+    for seed in SEED_TOPICS:
+        evidence: list[ArchiveEvidenceMoment] = []
+        for moment in evidence_pool:
+            if any(alias_matches_text(alias, moment.snippet) for alias in seed.aliases):
+                evidence.append(moment.model_copy(update={"topic": seed.label}))
+            if len(evidence) >= 2:
+                break
+        if not evidence:
+            continue
+        cards.append(
+            ArchiveTopicCard(
+                slug=seed.slug,
+                label=seed.label,
+                kind="topic",
+                source="hybrid",
+                status="published",
+                is_editable=True,
+                aliases=list(seed.aliases),
+                total_moments=len(evidence),
+                total_videos=len({str(moment.video.id) for moment in evidence}),
+                recent_mentions_90d=len(evidence),
+                trend_score=float(len(evidence) * 3),
+                related_topics=[],
+                evidence=evidence,
+            )
+        )
+    return sorted(cards, key=lambda card: card.trend_score, reverse=True)[:limit]
+
+
+def _with_named_period_fallback_topics(db, period: ArchivePeriodIntelligence, topic_limit: int) -> ArchivePeriodIntelligence:
+    if period.top_topics and period.evidence:
+        return period
+    evidence_pool = _fallback_evidence_for_videos(db, period.videos)
+    fallback_topics = _fallback_seed_topic_cards(evidence_pool, topic_limit)
+    updates: dict[str, object] = {}
+    if not period.top_topics and fallback_topics:
+        updates["top_topics"] = fallback_topics
+    if not period.evidence:
+        cited = [moment for card in fallback_topics for moment in card.evidence]
+        updates["evidence"] = cited[:5] if cited else evidence_pool[:5]
+    return period.model_copy(update=updates) if updates else period
+
+
 def _period_intelligence_from_row(row, topic_limit: int | None = None) -> ArchivePeriodIntelligence:
     top_topics_payload = _as_list(row.get("top_topics"))
     top_topics = [_topic_card_from_payload(item) for item in top_topics_payload][: topic_limit or len(top_topics_payload)]
@@ -2020,6 +2137,7 @@ def get_named_period_intelligence(db, period_slug: str, topic_limit: int = 8) ->
     period_row = period_rows[0]
     period_option = _period_option_from_row(period_row)
     period_intelligence = _period_intelligence_from_row(period_row, topic_limit=topic_limit)
+    period_intelligence = _with_named_period_fallback_topics(db, period_intelligence, topic_limit=topic_limit)
     label_cards = published_label_cards_for_period(db, period_option.date_from, period_option.date_to, limit=topic_limit)
     period_intelligence = period_intelligence.model_copy(
         update={"top_topics": merge_label_topic_cards(period_intelligence.top_topics, label_cards, topic_limit)}

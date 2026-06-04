@@ -212,7 +212,7 @@ def alias_matches_text(alias: str, text_value: str) -> bool:
 
 def _safe_mappings(db, sql: str, params: dict | None = None):
     try:
-        return db.execute(text(sql), params or {}).mappings().all()
+        return [dict(row) for row in db.execute(text(sql), params or {}).mappings().all()]
     except (OperationalError, ProgrammingError):
         db.rollback()
         return []

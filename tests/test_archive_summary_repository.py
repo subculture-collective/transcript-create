@@ -3,6 +3,7 @@
 import json
 import uuid
 from datetime import date, datetime, timezone
+from types import MappingProxyType
 
 from sqlalchemy.exc import ProgrammingError
 
@@ -12,6 +13,7 @@ from app.archive.intelligence_repository import (
     SEED_TOPICS,
     RETIRED_NAMED_PERIOD_SLUGS,
     _month_bounds,
+    _safe_mappings,
     _week_bounds,
     alias_matches_text,
     autopublish_search_topics,
@@ -20,6 +22,27 @@ from app.archive.intelligence_repository import (
     refresh_named_period_stats,
     slugify_topic,
 )
+
+
+class _ImmutableMappingResult:
+    def mappings(self):
+        return self
+
+    def all(self):
+        return [MappingProxyType({"video_id": "video-1", "title": "Immutable row"})]
+
+
+class _ImmutableMappingDb:
+    def execute(self, *args, **kwargs):
+        return _ImmutableMappingResult()
+
+
+def test_safe_mappings_returns_mutable_dict_rows():
+    rows = _safe_mappings(_ImmutableMappingDb(), "SELECT 1")
+
+    assert rows == [{"video_id": "video-1", "title": "Immutable row"}]
+    rows[0]["people"] = []
+    assert rows[0]["people"] == []
 
 
 class _FakeResult:

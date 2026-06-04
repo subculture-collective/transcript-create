@@ -217,6 +217,8 @@ export interface ExploreIntelligenceResponse {
   trending_searches: ArchiveTrendingSearch[];
   suggested_searches: ArchiveTrendingSearch[];
   topic_cards: ArchiveTopicCard[];
+  people?: ArchivePerson[];
+  tags?: ArchiveVideoTag[];
   periods: ArchivePeriodIntelligence[];
   selected_period?: ArchivePeriodOption | null;
   period_options: ArchivePeriodOption[];

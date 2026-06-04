@@ -56,6 +56,8 @@ describe('ExplorePage', () => {
       exploration_modes: ['timeline', 'topics', 'trending', 'suggested'],
       trending_searches: [{ term: 'ice protests', frequency: 7, trend_score: 7, source: 'hybrid' }],
       suggested_searches: [{ term: 'gaza', frequency: 5, trend_score: 5, source: 'search' }],
+      people: [{ slug: 'guest-one', display_name: 'Guest One', aliases: ['guest one'], role: 'guest' }],
+      tags: [{ slug: 'gaming', label: 'Gaming', kind: 'category' }],
       topic_cards: [
         {
           slug: 'ice',
@@ -82,12 +84,19 @@ describe('ExplorePage', () => {
       ],
       periods: [
         {
-          period: '2026-05',
+          period: 'legacy-may-identifier',
           label: 'May 2026',
           video_count: 2,
-          total_duration_seconds: 5400,
+          total_duration_seconds: 7200,
           videos: [
-            { id: 'video-3', youtube_id: 'thumb123', title: 'Period video', uploaded_at: '2026-05-02T00:00:00Z' },
+            {
+              id: 'video-3',
+              youtube_id: 'thumb123',
+              title: 'Period video',
+              uploaded_at: '2026-05-02T00:00:00Z',
+              people: [{ slug: 'guest-one', display_name: 'Guest One', aliases: [], role: 'guest' }],
+              tags: [{ slug: 'gaming', label: 'Gaming', kind: 'category' }],
+            },
           ],
           top_topics: [
             {
@@ -103,7 +112,7 @@ describe('ExplorePage', () => {
               evidence: [],
             },
           ],
-          summary: 'May 2026 contains 2 archived VODs and 1 highlighted topic.',
+          summary: 'May 2026 contains 12 archived VODs and 1 highlighted topic.',
           evidence: [
             {
               video: { id: 'video-1', youtube_id: 'abc123', title: 'Evidence VOD' },
@@ -138,37 +147,33 @@ describe('ExplorePage', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Archive Intelligence' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Explore the HasanAbi VOD archive' })).toBeInTheDocument()
     })
-    expect(screen.getByRole('navigation', { name: /Explore sections/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '#overview')
-    expect(screen.getByRole('link', { name: 'Trending' })).toHaveAttribute('href', '#trending')
-    expect(screen.getByRole('link', { name: 'Suggested' })).toHaveAttribute('href', '#suggested')
-    expect(screen.getByRole('link', { name: 'Topic Atlas' })).toHaveAttribute('href', '#topics')
-    expect(screen.getByRole('link', { name: 'Timeline' })).toHaveAttribute('href', '#timeline')
-    expect(screen.getByRole('link', { name: 'Method' })).toHaveAttribute('href', '#method')
+    expect(screen.getByRole('navigation', { name: /Discovery rail/i })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /Selected period panel/i })).toBeInTheDocument()
 
     expect(screen.getByRole('button', { name: 'Latest' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Weeks' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Months' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Leadups' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Fallout' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Holidays' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Anniversaries' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Dates' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: '8 topics' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.queryByLabelText('Date from')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Date to')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Selected period')).toBeInTheDocument()
 
     expect(screen.getByText('1 topics')).toBeInTheDocument()
-    expect(screen.getByText('ice protests')).toBeInTheDocument()
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/topics/ICE')).toBeTruthy()
-    expect(screen.queryByText('Published')).not.toBeInTheDocument()
-    expect(screen.queryByText('Editable')).not.toBeInTheDocument()
-    expect(screen.queryByText('Hybrid')).not.toBeInTheDocument()
-    expect(screen.getAllByText('May 2026 · 2026-05-01 → 2026-05-31 · 8 topics').length).toBeGreaterThan(0)
-    expect(screen.getByText('Predefined periods are materialized by a backfill/refresher pipeline, so Explore shows consistent slices instead of live date-window guesses.')).toBeInTheDocument()
+    expect(screen.getAllByText(/May 2026.*8 topics/).length).toBeGreaterThan(0)
+    expect(screen.getByText('May 2026 contains 12 archived VODs and 1 highlighted topic.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Guest One' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Gaming' })).toBeInTheDocument()
     expect(screen.getByAltText('Period video')).toHaveAttribute('src', expect.stringContaining('thumb123'))
-    expect(screen.getByText('May 2026 contains 2 archived VODs and 1 highlighted topic.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Open cited moment/i })).toHaveAttribute('href', '/v/video-1?t=1171')
-    expect(screen.getByText(/Predefined periods are materialized by a backfill\/refresher pipeline/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Open cited moment/i }).length).toBeGreaterThan(0)
+    expect(screen.queryByLabelText(/Date from/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Date to/i)).not.toBeInTheDocument()
 
     expect(getExploreIntelligence).toHaveBeenCalledWith({ topic_limit: 8 })
   })
@@ -243,11 +248,11 @@ describe('ExplorePage', () => {
       </MemoryRouter>
     )
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Archive Intelligence' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Explore the HasanAbi VOD archive' })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Weeks' }))
-    await waitFor(() => expect(screen.getByText('Week 22, 2026')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('Week 22, 2026'))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Week 22, 2026/ })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Week 22, 2026/ }))
     await waitFor(() => {
       expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: '2026-w22', topic_limit: 8 })
     })
@@ -258,8 +263,8 @@ describe('ExplorePage', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Events' }))
-    await waitFor(() => expect(screen.getByText('Launch Day')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('Launch Day'))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Launch Day/ })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Launch Day/ }))
 
     await waitFor(() => {
       expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: 'launch-day', topic_limit: 12 })
@@ -272,6 +277,12 @@ describe('ExplorePage', () => {
         period: 'launch-day',
         topic_limit: 16,
       })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Latest' }))
+
+    await waitFor(() => {
+      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ topic_limit: 16 })
     })
   })
 })

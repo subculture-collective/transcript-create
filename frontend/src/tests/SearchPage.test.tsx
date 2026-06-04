@@ -39,8 +39,6 @@ describe('SearchPage', () => {
   it('forwards URL filters to grouped search and shows grouped actions', async () => {
     currentSearchParams = new URLSearchParams({
       q: 'rent',
-      source: 'native',
-      category: 'news',
       video_id: 'video-1',
       limit: '25',
       offset: '50',
@@ -79,8 +77,8 @@ describe('SearchPage', () => {
       expect(searchGroupedMock).toHaveBeenCalledWith(
         'rent',
         expect.objectContaining({
-          source: 'native',
-          category: 'news',
+          source: undefined,
+          category: undefined,
           video_id: 'video-1',
           limit: 25,
           offset: 50,

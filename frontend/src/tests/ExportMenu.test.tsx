@@ -32,10 +32,9 @@ describe('ExportMenu', () => {
     const exportButton = screen.getByText('Export')
     await user.click(exportButton)
 
-    // Native transcript formats
-    expect(screen.getAllByText('SRT')).toHaveLength(2) // Native + YouTube
-    expect(screen.getAllByText('VTT')).toHaveLength(2)
-    expect(screen.getAllByText('JSON')).toHaveLength(2)
+    expect(screen.getAllByText('SRT')).toHaveLength(1)
+    expect(screen.getAllByText('VTT')).toHaveLength(1)
+    expect(screen.getAllByText('JSON')).toHaveLength(1)
     expect(screen.getByText('PDF')).toBeInTheDocument()
   })
 
@@ -115,26 +114,6 @@ describe('ExportMenu', () => {
     expect(pdfLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/transcript.pdf`)
   })
 
-  it('has correct download links for YouTube transcripts', async () => {
-    const user = userEvent.setup()
-    render(
-      <ExportMenu videoId={mockVideoId} isPro={true} />
-    )
-
-    const exportButton = screen.getByText('Export')
-    await user.click(exportButton)
-
-    // YouTube captions are the second set
-    const srtLink = screen.getAllByText('SRT')[1].closest('a')
-    expect(srtLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/youtube-transcript.srt`)
-
-    const vttLink = screen.getAllByText('VTT')[1].closest('a')
-    expect(vttLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/youtube-transcript.vtt`)
-
-    const jsonLink = screen.getAllByText('JSON')[1].closest('a')
-    expect(jsonLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/youtube-transcript.json`)
-  })
-
   it('tracks different export formats correctly', async () => {
     const user = userEvent.setup()
     render(
@@ -151,11 +130,10 @@ describe('ExportMenu', () => {
       payload: { videoId: mockVideoId, format: 'srt', source: 'best' },
     })
 
-    // Test YouTube VTT
-    await user.click(screen.getAllByText('VTT')[1])
+    await user.click(screen.getAllByText('VTT')[0])
     expect(services.track).toHaveBeenCalledWith({
       type: 'export_click',
-      payload: { videoId: mockVideoId, format: 'vtt', source: 'youtube' },
+      payload: { videoId: mockVideoId, format: 'vtt', source: 'best' },
     })
 
     // Test PDF

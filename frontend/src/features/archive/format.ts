@@ -84,9 +84,6 @@ export function titleCase(value: string) {
     .join(' ');
 }
 
-export function sourceLabel(source?: 'whisper' | 'youtube' | 'merged' | 'best' | 'native') {
-  if (source === 'merged') return 'Merged transcript';
-  if (source === 'youtube') return 'YouTube captions';
-  if (source === 'native' || source === 'whisper') return 'Whisper transcript';
-  return 'Best available';
+export function sourceLabel(_source?: 'whisper' | 'youtube' | 'merged' | 'best' | 'native') {
+  return 'Transcript';
 }

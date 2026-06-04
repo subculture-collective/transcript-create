@@ -46,6 +46,8 @@ export default function VideoPage() {
   const [activeSegId, setActiveSegId] = useState<number | null>(null);
   const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null);
   const [activeBlockIndex, setActiveBlockIndex] = useState<number | null>(null);
+  const [currentMs, setCurrentMs] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'standard' | 'theater' | 'reader'>('standard');
   const [isPlayingMatches, setIsPlayingMatches] = useState(false);
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
 
@@ -151,6 +153,22 @@ export default function VideoPage() {
       }
     }
   }, [startSeconds, transcript]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const seconds = playerRef.current?.getCurrentTime();
+      if (seconds == null || !Number.isFinite(seconds)) return;
+      setCurrentMs(Math.floor(seconds * 1000));
+    }, 750);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (currentMs == null) return;
+    const el = document.querySelector('[data-current-sentence="true"]');
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, [currentMs]);
 
   const jumpTo = useCallback((ms: number) => {
     const s = Math.floor(ms / 1000);
@@ -297,8 +315,6 @@ export default function VideoPage() {
     <div className="space-y-6">
       <VideoHeader
         title={episodeTitle}
-        transcriptSourceLabel={transcript?.source_label}
-        transcriptSource={transcript?.source ?? null}
         actions={video ? <ExportMenu videoId={video.id} /> : null}
       >
         <TranscriptSearchBar
@@ -311,13 +327,28 @@ export default function VideoPage() {
           }}
         />
 
-        {video && <VideoDetailsPanel video={video} transcriptSource={transcript?.source ?? null} />}
+        {video && <VideoDetailsPanel video={video} />}
       </VideoHeader>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-        <PlayerPanel video={video} start={start} playerRef={playerRef} />
+      <div className="flex flex-wrap gap-2">
+        {(['standard', 'theater', 'reader'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className={viewMode === mode ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setViewMode(mode)}
+          >
+            {mode === 'standard' ? 'Standard' : mode === 'theater' ? 'Theater' : 'Reader'}
+          </button>
+        ))}
+      </div>
 
-        <section className="lg:col-span-2">
+      <div className={viewMode === 'standard' ? 'grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start' : 'space-y-6'}>
+        {viewMode !== 'reader' && (
+          <PlayerPanel video={video} start={start} playerRef={playerRef} className={viewMode === 'standard' ? 'lg:col-span-1' : ''} />
+        )}
+
+        <section className={viewMode === 'standard' ? 'lg:col-span-2' : 'mx-auto max-w-4xl'}>
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="section-title">VOD transcript</h2>
           {matchIndices.length > 0 && (
@@ -364,6 +395,7 @@ export default function VideoPage() {
               activeBlockIndex={activeBlockIndex}
               activeSegId={activeSegId}
               activeSentenceId={activeSentenceId}
+              currentMs={currentMs}
               isSavedSegment={isSavedSegment}
               onClickSentence={onClickFormattedSentence}
               onSaveMoment={saveTranscriptMoment}

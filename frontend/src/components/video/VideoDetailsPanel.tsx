@@ -1,12 +1,11 @@
-import type { TranscriptResponse, VideoInfo } from '../../types/api';
-import { formatDate, formatDuration, sourceLabel } from '../../features/archive/format';
+import type { VideoInfo } from '../../types/api';
+import { formatDate, formatDuration } from '../../features/archive/format';
 
 type Props = {
   video: VideoInfo;
-  transcriptSource?: TranscriptResponse['source'] | null;
 };
 
-export default function VideoDetailsPanel({ video, transcriptSource }: Props) {
+export default function VideoDetailsPanel({ video }: Props) {
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
       <div className="rounded-lg border border-border bg-surface-muted p-4">
@@ -23,18 +22,6 @@ export default function VideoDetailsPanel({ video, transcriptSource }: Props) {
           <div>
             <dt className="text-xs uppercase tracking-wide text-subtle">Duration</dt>
             <dd className="mt-1 font-medium text-ink">{formatDuration(video.duration_seconds)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-subtle">Transcript source</dt>
-            <dd className="mt-1 font-medium text-ink">{sourceLabel(transcriptSource ?? 'best')}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-subtle">Video ID</dt>
-            <dd className="mt-1 font-mono text-sm text-ink">{video.id}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-subtle">YouTube ID</dt>
-            <dd className="mt-1 font-mono text-sm text-ink">{video.youtube_id}</dd>
           </div>
         </dl>
       </div>

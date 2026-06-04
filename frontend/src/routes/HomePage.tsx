@@ -33,17 +33,16 @@ export default function HomePage() {
   const suggested = summary?.popular_searches ?? [];
 
   return (
-    <div className="flex min-h-[calc(100vh-11rem)] flex-col space-y-6 lg:space-y-8">
-      <section className="surface-card flex-1 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(183,255,60,0.12),transparent_22%),radial-gradient(circle_at_20%_15%,rgba(192,132,252,0.10),transparent_18%)]" />
-        <div className="relative grid h-full gap-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(19rem,0.8fr)] lg:items-center">
+    <div className="space-y-6 lg:space-y-8">
+      <section className="surface-card overflow-hidden">
+        <div className="grid gap-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(19rem,0.8fr)] lg:items-center">
           <div className="space-y-6">
-            <div className="archive-eyebrow">HasanAbi VOD archive</div>
+            <div className="archive-eyebrow">HasAnAra</div>
 
             <div className="space-y-4">
               <h1 className="page-title max-w-4xl">Search the HasanAbi broadcast archive.</h1>
               <p className="max-w-2xl text-lg leading-8 text-muted">
-                Trace topics, timestamped quotes, debates, guests, and recurring stream moments across HasanAbi VODs pulled from YouTube.
+                Trace topics, timestamped quotes, debates, guests, and recurring stream moments across HasanAbi VODs.
               </p>
             </div>
 
@@ -74,9 +73,6 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-3 text-sm">
               <Link to="/episodes" className="nav-link">
                 Browse VODs
-              </Link>
-              <Link to="/timeline" className="nav-link">
-                Timeline
               </Link>
               <Link to="/saved" className="nav-link">
                 Saved moments

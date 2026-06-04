@@ -84,8 +84,7 @@ describe('StreamsPage', () => {
 
     expect(screen.getByText('First stream')).toBeInTheDocument();
     expect(screen.getByText('Channel Alpha')).toBeInTheDocument();
-    expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(screen.getByText('Whisper transcript')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /First stream/i })).toHaveAttribute('href', '/v/video-1');
     expect(listMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ limit: 24, offset: 0, completed_only: false, date_field: 'uploaded_at' })
     );
@@ -100,8 +99,6 @@ describe('StreamsPage', () => {
       expect.objectContaining({ limit: 24, offset: 24, completed_only: false, date_field: 'uploaded_at' })
     );
     expect(screen.getByText('Second stream')).toBeInTheDocument();
-    expect(screen.getByText('YouTube captions')).toBeInTheDocument();
-    expect(screen.getByText('Search YouTube captions')).toBeInTheDocument();
   });
 
   it('submits search and filter state into the URL', async () => {
@@ -120,7 +117,7 @@ describe('StreamsPage', () => {
     render(
       <MemoryRouter
         initialEntries={[
-          '/streams?q=alpha&completed_only=false&date_field=created_at&date_from=2026-05-01&date_to=2026-05-31',
+          '/streams?q=alpha&date_from=2026-05-01&date_to=2026-05-31',
         ]}
       >
         <StreamsPage />
@@ -132,7 +129,7 @@ describe('StreamsPage', () => {
         expect.objectContaining({
           q: 'alpha',
           completed_only: false,
-          date_field: 'created_at',
+          date_field: 'uploaded_at',
           date_from: '2026-05-01',
           date_to: '2026-05-31',
         })
@@ -140,12 +137,11 @@ describe('StreamsPage', () => {
     });
 
     expect(screen.getByDisplayValue('alpha')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Created date')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /reset/i }));
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Uploaded date')).toBeInTheDocument();
+      expect(screen.getByLabelText('Search VODs')).toHaveValue('');
     });
   });
 
@@ -177,6 +173,6 @@ describe('StreamsPage', () => {
     );
 
     await waitFor(() => expect(screen.getByText('Pending stream')).toBeInTheDocument());
-    expect(screen.getByText('No transcript yet')).toBeInTheDocument();
+    expect(screen.queryByText('No transcript yet')).not.toBeInTheDocument();
   });
 });

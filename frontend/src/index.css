@@ -58,10 +58,7 @@
 }
 
 html {
-  background:
-    radial-gradient(circle at 50% 0%, rgba(183, 255, 60, 0.09), transparent 28%),
-    radial-gradient(circle at 85% 10%, rgba(192, 132, 252, 0.08), transparent 22%),
-    linear-gradient(180deg, #17171d 0%, #101014 36%, #101014 100%);
+  background: #101014;
 }
 
 body {
@@ -72,37 +69,6 @@ body {
   font-family: theme('fontFamily.body');
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-}
-
-body::before,
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-
-body::before {
-  background-image:
-    repeating-linear-gradient(
-      180deg,
-      rgba(241, 241, 244, 0.03) 0,
-      rgba(241, 241, 244, 0.03) 1px,
-      transparent 1px,
-      transparent 4px
-    ),
-    radial-gradient(circle at 20% 20%, rgba(183, 255, 60, 0.035), transparent 22%),
-    radial-gradient(circle at 80% 0%, rgba(192, 132, 252, 0.03), transparent 18%);
-  opacity: 0.35;
-  mix-blend-mode: screen;
-}
-
-body::after {
-  background:
-    radial-gradient(circle at 50% 0%, rgba(183, 255, 60, 0.08), transparent 32%),
-    radial-gradient(circle at 50% 100%, rgba(255, 209, 102, 0.06), transparent 24%);
-  opacity: 0.7;
 }
 
 #root {
@@ -152,7 +118,7 @@ body::after {
   }
 
   .surface-card {
-    @apply relative overflow-hidden rounded-xl border border-border bg-surface/90 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:p-5;
+    @apply relative overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-[0_12px_34px_rgba(0,0,0,0.22)] sm:p-5;
   }
 
   .surface-card::before {
@@ -162,7 +128,7 @@ body::after {
   }
 
   .surface-card-compact {
-    @apply relative overflow-hidden rounded-lg border border-border bg-surface/90 p-3 shadow-[0_12px_28px_rgba(0,0,0,0.24)] backdrop-blur-xl;
+    @apply relative overflow-hidden rounded-lg border border-border bg-surface p-3 shadow-[0_8px_22px_rgba(0,0,0,0.18)];
   }
 
   .form-control {

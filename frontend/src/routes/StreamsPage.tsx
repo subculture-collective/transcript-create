@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services';
 import type { PageInfo, VideoInfo } from '../types/api';
-import { DEFAULT_LIMIT, parseFilters, type DateField, type FilterState } from '../features/streams/library';
+import { DEFAULT_LIMIT, parseFilters } from '../features/streams/library';
 import { StreamCard, StreamFiltersBar } from '../components/archive';
 
 export default function StreamsPage() {
@@ -12,11 +12,8 @@ export default function StreamsPage() {
   const filters = useMemo(() => parseFilters(params), [searchKey]);
 
   const [q, setQ] = useState(filters.q);
-  const [completedOnly, setCompletedOnly] = useState(filters.completedOnly);
-  const [dateField, setDateField] = useState<DateField>(filters.dateField);
   const [dateFrom, setDateFrom] = useState(filters.dateFrom);
   const [dateTo, setDateTo] = useState(filters.dateTo);
-  const [category, setCategory] = useState(filters.category);
   const [items, setItems] = useState<VideoInfo[]>([]);
   const [pageInfo, setPageInfo] = useState<PageInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,12 +21,9 @@ export default function StreamsPage() {
 
   useEffect(() => {
     setQ(filters.q);
-    setCompletedOnly(filters.completedOnly);
-    setDateField(filters.dateField);
     setDateFrom(filters.dateFrom);
     setDateTo(filters.dateTo);
-    setCategory(filters.category);
-  }, [filters.q, filters.completedOnly, filters.dateField, filters.dateFrom, filters.dateTo, filters.category]);
+  }, [filters.q, filters.dateFrom, filters.dateTo]);
 
   useEffect(() => {
     setLoading(true);
@@ -39,12 +33,12 @@ export default function StreamsPage() {
       .listStreamLibrary({
         limit: DEFAULT_LIMIT,
         offset: Math.max(0, Number(params.get('offset') ?? '0') || 0),
-        completed_only: filters.completedOnly,
+        completed_only: false,
         q: filters.q || undefined,
-        date_field: filters.dateField,
+        date_field: 'uploaded_at',
         date_from: filters.dateFrom || undefined,
         date_to: filters.dateTo || undefined,
-        category: filters.category || undefined,
+        category: undefined,
       })
       .then((response) => {
         setItems(response.items);
@@ -57,7 +51,7 @@ export default function StreamsPage() {
         setPageInfo(null);
       })
       .finally(() => setLoading(false));
-  }, [filters.completedOnly, filters.dateField, filters.dateFrom, filters.dateTo, filters.category, filters.q, params]);
+  }, [filters.dateFrom, filters.dateTo, filters.q, params]);
 
   const offset = Math.max(0, Number(params.get('offset') ?? '0') || 0);
   const totalCount = pageInfo?.total_count ?? items.length;
@@ -66,23 +60,17 @@ export default function StreamsPage() {
   const pageNumber = Math.floor(offset / DEFAULT_LIMIT) + 1;
   const totalPages = Math.max(1, Math.ceil(Math.max(totalCount, 1) / DEFAULT_LIMIT));
 
-  function updateParams(next: Partial<FilterState> & { offset?: number }) {
+  function updateParams(next: { q?: string; dateFrom?: string; dateTo?: string; offset?: number }) {
     const nextParams = new URLSearchParams();
     const nextFilters = {
       q: next.q ?? q,
-      completedOnly: next.completedOnly ?? completedOnly,
-      dateField: next.dateField ?? dateField,
       dateFrom: next.dateFrom ?? dateFrom,
       dateTo: next.dateTo ?? dateTo,
-      category: next.category ?? category,
     };
 
     if (nextFilters.q.trim()) nextParams.set('q', nextFilters.q.trim());
-    if (!nextFilters.completedOnly) nextParams.set('completed_only', 'false');
-    if (nextFilters.dateField) nextParams.set('date_field', nextFilters.dateField);
     if (nextFilters.dateFrom) nextParams.set('date_from', nextFilters.dateFrom);
     if (nextFilters.dateTo) nextParams.set('date_to', nextFilters.dateTo);
-    if (nextFilters.category.trim()) nextParams.set('category', nextFilters.category.trim());
 
     const nextOffset = next.offset ?? 0;
     if (nextOffset > 0) nextParams.set('offset', String(nextOffset));
@@ -98,11 +86,8 @@ export default function StreamsPage() {
   function clearFilters() {
     const nextParams = new URLSearchParams();
     setQ('');
-    setCompletedOnly(false);
-    setDateField('uploaded_at');
     setDateFrom('');
     setDateTo('');
-    setCategory('');
     setParams(nextParams);
   }
 
@@ -114,17 +99,11 @@ export default function StreamsPage() {
         pageNumber={pageNumber}
         totalPages={totalPages}
         q={q}
-        completedOnly={completedOnly}
-        dateField={dateField}
         dateFrom={dateFrom}
         dateTo={dateTo}
-        category={category}
         onQChange={setQ}
-        onCompletedOnlyChange={setCompletedOnly}
-        onDateFieldChange={setDateField}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
-        onCategoryChange={setCategory}
         onSubmit={onSubmit}
         onReset={clearFilters}
       />
@@ -167,7 +146,7 @@ export default function StreamsPage() {
       ) : items.length > 0 ? (
         <section aria-label="Stream results" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {items.map((video) => (
-            <StreamCard key={video.id} video={video} dateField={dateField} />
+            <StreamCard key={video.id} video={video} dateField="uploaded_at" />
           ))}
         </section>
       ) : (

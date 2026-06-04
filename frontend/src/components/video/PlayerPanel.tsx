@@ -6,11 +6,12 @@ type Props = {
   video: VideoInfo | null;
   start: number;
   playerRef: RefObject<YouTubePlayerHandle | null>;
+  className?: string;
 };
 
-export default function PlayerPanel({ video, start, playerRef }: Props) {
+export default function PlayerPanel({ video, start, playerRef, className = '' }: Props) {
   return (
-    <aside className="lg:sticky lg:top-24 lg:col-span-1">
+    <aside className={`lg:sticky lg:top-24 ${className}`}>
       {video ? (
         <YouTubePlayer ref={playerRef} videoId={video.youtube_id} start={start} title={video?.title ?? undefined} />
       ) : (

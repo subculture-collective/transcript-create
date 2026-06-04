@@ -24,13 +24,8 @@ export default function SearchPage() {
   const [params, setParams] = useSearchParams();
   const filters = useMemo(() => readFilters(params), [params]);
   const [q, setQ] = useState(filters.q);
-  const [source, setSource] = useState<ArchiveSearchFilters['source']>(filters.source);
-  const [category, setCategory] = useState(filters.category ?? '');
   const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
   const [dateTo, setDateTo] = useState(filters.date_to ?? '');
-  const [minDuration, setMinDuration] = useState(filters.min_duration?.toString() ?? '');
-  const [maxDuration, setMaxDuration] = useState(filters.max_duration?.toString() ?? '');
-  const [sortBy, setSortBy] = useState(filters.sort_by ?? 'relevance');
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<SearchMode>(null);
   const [grouped, setGrouped] = useState<GroupedSearchResponse | null>(null);
@@ -43,14 +38,9 @@ export default function SearchPage() {
 
   useEffect(() => {
     setQ(filters.q);
-    setSource(filters.source);
-    setCategory(filters.category ?? '');
     setDateFrom(filters.date_from ?? '');
     setDateTo(filters.date_to ?? '');
-    setMinDuration(filters.min_duration?.toString() ?? '');
-    setMaxDuration(filters.max_duration?.toString() ?? '');
-    setSortBy(filters.sort_by ?? 'relevance');
-  }, [filters.q, filters.source, filters.category, filters.date_from, filters.date_to, filters.min_duration, filters.max_duration, filters.sort_by]);
+  }, [filters.q, filters.date_from, filters.date_to]);
 
   useEffect(() => {
     const query = filters.q.trim();
@@ -64,13 +54,13 @@ export default function SearchPage() {
     }
 
     const activeFilters: ArchiveSearchFilters = {
-      source: filters.source,
-      category: filters.category,
+      source: undefined,
+      category: undefined,
       date_from: filters.date_from,
       date_to: filters.date_to,
-      min_duration: filters.min_duration,
-      max_duration: filters.max_duration,
-      sort_by: filters.sort_by && filters.sort_by !== 'relevance' ? filters.sort_by : undefined,
+      min_duration: undefined,
+      max_duration: undefined,
+      sort_by: undefined,
       video_id: filters.video_id,
       limit: filters.limit,
       offset: filters.offset,
@@ -101,22 +91,17 @@ export default function SearchPage() {
           });
       })
       .finally(() => setLoading(false));
-  }, [filters.category, filters.date_from, filters.date_to, filters.limit, filters.max_duration, filters.min_duration, filters.offset, filters.q, filters.sort_by, filters.source, filters.video_id, shouldFetch]);
+  }, [filters.date_from, filters.date_to, filters.limit, filters.offset, filters.q, filters.video_id, shouldFetch]);
 
   function submitFilters(event: FormEvent) {
     event.preventDefault();
-    setParams(serializeFilters({ q, source, category: category || undefined, date_from: dateFrom || undefined, date_to: dateTo || undefined, min_duration: minDuration ? Number(minDuration) : undefined, max_duration: maxDuration ? Number(maxDuration) : undefined, sort_by: sortBy, video_id: filters.video_id, limit: filters.limit, offset: filters.offset }));
+    setParams(serializeFilters({ q, date_from: dateFrom || undefined, date_to: dateTo || undefined, video_id: filters.video_id, limit: filters.limit, offset: filters.offset }));
   }
 
   function resetFilters() {
     setQ('');
-    setSource(undefined);
-    setCategory('');
     setDateFrom('');
     setDateTo('');
-    setMinDuration('');
-    setMaxDuration('');
-    setSortBy('relevance');
     setParams(new URLSearchParams());
   }
 
@@ -152,9 +137,8 @@ export default function SearchPage() {
 
   return (
     <div className="space-y-6 lg:space-y-8">
-      <section className="surface-card overflow-hidden space-y-6">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(183,255,60,0.10),transparent_22%),radial-gradient(circle_at_20%_15%,rgba(192,132,252,0.08),transparent_18%)]" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <section className="surface-card space-y-6 overflow-hidden">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl space-y-4">
             <div className="archive-eyebrow">Search deck</div>
             <div>
@@ -170,7 +154,7 @@ export default function SearchPage() {
               <Link to={`/topics/${encodeURIComponent(filters.q)}`} className="btn-secondary">
                 Open topic page
               </Link>
-              <Link to={`/saved?${buildCurrentFilters(q, source, dateFrom, dateTo, category, minDuration, maxDuration, sortBy, filters).toString()}`} className="btn-secondary">
+              <Link to={`/saved?${buildCurrentFilters(q, undefined, dateFrom, dateTo, '', '', '', 'relevance', filters).toString()}`} className="btn-secondary">
                 Save this search
               </Link>
             </div>
@@ -179,23 +163,13 @@ export default function SearchPage() {
 
         <SearchFiltersPanel
           q={q}
-          source={source}
-          category={category}
           dateFrom={dateFrom}
           dateTo={dateTo}
-          minDuration={minDuration}
-          maxDuration={maxDuration}
-          sortBy={sortBy}
           loading={loading}
           canSubmitSearch={canSubmitSearch}
           onQChange={setQ}
-          onSourceChange={setSource}
-          onCategoryChange={setCategory}
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
-          onMinDurationChange={setMinDuration}
-          onMaxDurationChange={setMaxDuration}
-          onSortByChange={setSortBy}
           onSubmit={submitFilters}
           onReset={resetFilters}
         />
@@ -264,7 +238,6 @@ export default function SearchPage() {
                   videoId={group.video.id}
                   moments={group.moments as SearchHit[]}
                   fallbackTitle={title}
-                  defaultSource={source}
                   query={filters.q}
                   savedKeys={savedKeys}
                   onSaveMoment={saveMoment}
@@ -298,7 +271,6 @@ export default function SearchPage() {
                   videoId={videoId}
                   moments={hits}
                   fallbackTitle={title}
-                  defaultSource={source}
                   query={filters.q}
                   savedKeys={savedKeys}
                   onSaveMoment={saveMoment}

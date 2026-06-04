@@ -19,7 +19,7 @@ describe('HomePage', () => {
       return { json: vi.fn().mockResolvedValue({}) } as never;
     }) as never);
     vi.spyOn(api, 'getArchiveSummary').mockResolvedValue({
-      creator_name: 'HasanAra',
+      creator_name: 'HasAnAra',
       video_count: 12,
       total_duration_seconds: 7260,
       transcript_word_count: 4200,

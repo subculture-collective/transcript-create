@@ -1,12 +1,11 @@
-import type { ArchiveSearchFilters, SearchHit } from '../../types/api';
-import { formatTimestamp, sourceLabel } from '../../features/archive/format';
+import type { SearchHit } from '../../types/api';
+import { formatTimestamp } from '../../features/archive/format';
 import MomentActionRow from './MomentActionRow';
 
 type SearchMomentsListProps = {
   videoId: string;
   moments: SearchHit[];
   fallbackTitle: string;
-  defaultSource?: ArchiveSearchFilters['source'];
   query: string;
   savedKeys: Set<string>;
   onSaveMoment: (videoId: string, moment: SearchHit, title: string) => void;
@@ -19,7 +18,6 @@ export default function SearchMomentsList({
   videoId,
   moments,
   fallbackTitle,
-  defaultSource,
   query,
   savedKeys,
   onSaveMoment,
@@ -38,7 +36,6 @@ export default function SearchMomentsList({
               <time className="timestamp-pill">
                 {formatTimestamp(moment.start_ms)}–{formatTimestamp(moment.end_ms)}
               </time>
-              <span className="source-pill">{sourceLabel(moment.source ?? defaultSource ?? 'best')}</span>
               {query && <span className="match-pill">match</span>}
             </div>
             <div className="archive-snippet" dangerouslySetInnerHTML={{ __html: moment.snippet }} />

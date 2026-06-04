@@ -16,7 +16,7 @@ export default function ExportMenu({ videoId }: Props) {
         Export
       </summary>
       <div className="absolute z-10 mt-2 w-64 rounded-[1.25rem] border border-border bg-surface/95 p-3 shadow-[0_20px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-subtle">Best available transcript</div>
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-subtle">Transcript</div>
         <div className="flex flex-wrap gap-2">
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
@@ -51,34 +51,7 @@ export default function ExportMenu({ videoId }: Props) {
             PDF
           </a>
         </div>
-        <div className="mt-2 text-xs text-muted">Uses Whisper when ready; falls back to YouTube captions.</div>
-        <div className="mt-3 mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-subtle">YouTube captions</div>
-        <div className="flex flex-wrap gap-2">
-          <a
-            className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={() => guard({ videoId, format: 'srt', source: 'youtube' })}
-            href={`/api/videos/${videoId}/youtube-transcript.srt`}
-            download={`video-${videoId}.youtube.srt`}
-          >
-            SRT
-          </a>
-          <a
-            className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={() => guard({ videoId, format: 'vtt', source: 'youtube' })}
-            href={`/api/videos/${videoId}/youtube-transcript.vtt`}
-            download={`video-${videoId}.youtube.vtt`}
-          >
-            VTT
-          </a>
-          <a
-            className="btn-secondary min-h-0 px-2 py-1 text-xs"
-            onClick={() => guard({ videoId, format: 'json', source: 'youtube' })}
-            href={`/api/videos/${videoId}/youtube-transcript.json`}
-            download={`video-${videoId}.youtube.json`}
-          >
-            JSON
-          </a>
-        </div>
+        <div className="mt-2 text-xs text-muted">Exports use the best transcript available for this VOD.</div>
         <div className="mt-3 mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-subtle">Per-section</div>
         <div className="text-xs text-muted">
           Use the inline copy link next to any segment, or select text to build a custom pack

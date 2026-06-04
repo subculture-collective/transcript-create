@@ -1,7 +1,7 @@
 {
-  "name": "HasanAra",
-  "short_name": "HasanAra",
-  "description": "Search HasanAbi Twitch broadcast VOD transcripts pulled from YouTube",
+  "name": "HasAnAra",
+  "short_name": "HasAnAra",
+  "description": "Search HasanAbi VOD transcripts",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

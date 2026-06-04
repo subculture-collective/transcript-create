@@ -60,17 +60,15 @@ const router = createBrowserRouter([
   },
 ]);
 
-// Register Service Worker for PWA support
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// Clear older PWA caches/service workers so stale pre-HasAnAra shells cannot reappear.
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        console.log('Service Worker registered:', registration);
-      })
-      .catch((error) => {
-        console.log('Service Worker registration failed:', error);
-      });
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => void registration.unregister());
+    });
+    if ('caches' in window) {
+      caches.keys().then((keys) => keys.forEach((key) => void caches.delete(key)));
+    }
   });
 }
 

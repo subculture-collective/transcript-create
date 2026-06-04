@@ -6,7 +6,6 @@ const navItems = [
   { to: '/', label: 'Home' },
   { to: '/search', label: 'Search' },
   { to: '/episodes', label: 'VODs' },
-  { to: '/timeline', label: 'Timeline' },
   { to: '/saved', label: 'Saved' },
 ];
 
@@ -27,19 +26,10 @@ export default function AppLayout() {
       <header className="sticky top-0 z-40 border-b border-border/80 bg-canvas/85 backdrop-blur-2xl" role="banner">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
-            <Link to="/" className="group flex items-center gap-3" aria-label="Home - HasanAra">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-muted text-xs font-semibold tracking-[0.28em] text-accent shadow-[0_0_0_1px_rgba(183,255,60,0.08)]">
-                HA
-              </span>
-              <span className="leading-none">
-                <span className="block text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-subtle">HasanAbi VOD archive</span>
-                <span className="block text-lg font-semibold tracking-[-0.04em] text-ink group-hover:text-accent">HasanAra</span>
-              </span>
+            <Link to="/" className="group flex items-center gap-3" aria-label="Home - HasAnAra">
+              <img src="/icon.svg" alt="" className="h-10 w-10 rounded-lg border border-border bg-surface object-cover" />
+              <span className="block text-xl font-semibold tracking-[-0.04em] text-ink group-hover:text-accent">HasAnAra</span>
             </Link>
-
-            <div className="hidden xl:block">
-              <div className="archive-eyebrow">HasanAbi broadcast search / pulled from YouTube</div>
-            </div>
           </div>
 
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
@@ -199,7 +189,7 @@ export default function AppLayout() {
 
       <footer className="border-t border-border/80 bg-canvas/80 backdrop-blur-xl" role="contentinfo">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between lg:px-6">
-          <p>&copy; {new Date().getFullYear()} HasanAra. A <a href="https://subcult.tv" className="action-link">Subcult</a> project.</p>
+          <p>&copy; {new Date().getFullYear()} HasAnAra. A <a href="https://subcult.tv" className="action-link">Subcult</a> project.</p>
           <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-subtle"><a href="https://www.patreon.com/cw/subcult" className="action-link">Support Subcult on Patreon</a></p>
         </div>
       </footer>

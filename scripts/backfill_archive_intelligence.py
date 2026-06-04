@@ -47,7 +47,7 @@ def main(*, seed_topics: bool = False, seed_periods: bool = False, auto_topics: 
                 for key, value in refresh_topic_period_stats(db, granularity=granularity).items():
                     stats[f"topic_stats_{granularity}_{key}"] = value
         if refresh_periods:
-            for key, value in refresh_named_period_stats(db, limit=120 if not quick else 72).items():
+            for key, value in refresh_named_period_stats(db).items():
                 stats[f"named_periods_{key}"] = value
         if refresh_search:
             for key, value in refresh_search_trends(db, granularity="week").items():

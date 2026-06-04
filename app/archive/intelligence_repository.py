@@ -1837,7 +1837,7 @@ def refresh_archive_intelligence(db, quick: bool = False):
         ("mentions", refresh_topic_mentions(db, segment_limit=1000 if quick else None)),
         ("topic_stats", refresh_topic_period_stats(db, granularity="month")),
         ("topic_stats_week", refresh_topic_period_stats(db, granularity="week")),
-        ("named_period_stats", refresh_named_period_stats(db, limit=120 if not quick else 72)),
+        ("named_period_stats", refresh_named_period_stats(db)),
         ("search_trends", refresh_search_trends(db, granularity="week")),
         ("period_summaries", refresh_period_summaries(db, granularity="month", limit=120 if not quick else 72)),
         ("period_summaries_week", refresh_period_summaries(db, granularity="week", limit=120 if not quick else 72)),

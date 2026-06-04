@@ -46,14 +46,17 @@ def upgrade() -> None:
     op.execute("""
         UPDATE archive_named_periods
         SET status = 'hidden', updated_at = now()
-        WHERE slug = 'christmas-2025' OR slug ~ '^[0-9]{4}-august-21$'
+        WHERE slug IN ('2023-labor-day', '2024-may-day', '2025-new-year', '2026-new-year', 'thanksgiving-2025', 'christmas-2025')
+           OR slug ~ '^[0-9]{4}-august-21$'
     """)
     op.execute("""
         INSERT INTO archive_named_periods (
             slug, label, kind, date_from, date_to, description, status, sort_order, recurring_month, recurring_day, created_at, updated_at
         ) VALUES
-            ('christmas', 'Christmas', 'holiday', DATE '1970-12-25', DATE '1970-12-25', 'Christmas streams across every archive year', 'published', 719156, 12, 25, now(), now()),
-            ('august-21', 'August 21', 'anniversary', DATE '1970-08-21', DATE '1970-08-21', 'August 21 streams across every archive year', 'published', 719030, 8, 21, now(), now())
+            ('new-year', 'New Year', 'holiday', DATE '1970-01-01', DATE '1970-01-01', 'New Year''s Day streams across every archive year', 'published', 719163, 1, 1, now(), now()),
+            ('may-day', 'May Day', 'holiday', DATE '1970-05-01', DATE '1970-05-01', 'May Day streams across every archive year', 'published', 719283, 5, 1, now(), now()),
+            ('christmas', 'Christmas', 'holiday', DATE '1970-12-25', DATE '1970-12-25', 'Christmas streams across every archive year', 'published', 719521, 12, 25, now(), now()),
+            ('august-21', 'August 21', 'anniversary', DATE '1970-08-21', DATE '1970-08-21', 'August 21 streams across every archive year', 'published', 719395, 8, 21, now(), now())
         ON CONFLICT (slug) DO UPDATE SET
             label = EXCLUDED.label,
             kind = EXCLUDED.kind,

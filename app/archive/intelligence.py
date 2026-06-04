@@ -124,17 +124,33 @@ def _recent_evidence_for_videos(db, videos: list[VideoInfo], limit: int = 24) ->
         db.execute(
             text(
                 f"""
-                SELECT
-                    v.id AS video_id, v.youtube_id, v.title, v.duration_seconds, v.state,
-                    v.caption_ingest_state, v.diarization_state, v.uploaded_at, v.created_at,
-                    v.updated_at, v.channel_name, v.language, v.category,
-                    EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
-                    EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript,
-                    s.start_ms, s.end_ms, s.text AS snippet
-                FROM videos v
-                JOIN segments s ON s.video_id = v.id
-                WHERE v.id IN ({placeholders})
-                ORDER BY COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST, s.start_ms ASC
+                SELECT * FROM (
+                    SELECT
+                        v.id AS video_id, v.youtube_id, v.title, v.duration_seconds, v.state,
+                        v.caption_ingest_state, v.diarization_state, v.uploaded_at, v.created_at,
+                        v.updated_at, v.channel_name, v.language, v.category,
+                        EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+                        EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript,
+                        s.start_ms, s.end_ms, s.text AS snippet, 0 AS transcript_source_priority
+                    FROM videos v
+                    JOIN segments s ON s.video_id = v.id
+                    WHERE v.id IN ({placeholders})
+
+                    UNION ALL
+
+                    SELECT
+                        v.id AS video_id, v.youtube_id, v.title, v.duration_seconds, v.state,
+                        v.caption_ingest_state, v.diarization_state, v.uploaded_at, v.created_at,
+                        v.updated_at, v.channel_name, v.language, v.category,
+                        EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+                        TRUE AS has_youtube_transcript,
+                        ys.start_ms, ys.end_ms, ys.text AS snippet, 1 AS transcript_source_priority
+                    FROM videos v
+                    JOIN youtube_transcripts yt ON yt.video_id = v.id
+                    JOIN youtube_segments ys ON ys.youtube_transcript_id = yt.id
+                    WHERE v.id IN ({placeholders})
+                ) transcript_segments
+                ORDER BY COALESCE(uploaded_at, created_at) DESC NULLS LAST, transcript_source_priority ASC, start_ms ASC
                 LIMIT :limit
                 """
             ),

@@ -161,12 +161,12 @@ describe('ExplorePage', () => {
     expect(screen.getByRole('button', { name: 'Anniversaries' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Dates' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: '8 topics' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Topic discovery')).toBeInTheDocument()
     expect(screen.getByLabelText('Selected period')).toBeInTheDocument()
 
     expect(screen.getByText('1 topics')).toBeInTheDocument()
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/topics/ICE')).toBeTruthy()
-    expect(screen.getAllByText(/May 2026.*8 topics/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/May 2026.*best available topics/).length).toBeGreaterThan(0)
     expect(screen.getByText('May 2026 contains 12 archived VODs and 1 highlighted topic.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Guest One' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Gaming' })).toBeInTheDocument()
@@ -175,10 +175,10 @@ describe('ExplorePage', () => {
     expect(screen.queryByLabelText(/Date from/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/Date to/i)).not.toBeInTheDocument()
 
-    expect(getExploreIntelligence).toHaveBeenCalledWith({ topic_limit: 8 })
+    expect(getExploreIntelligence).toHaveBeenCalledWith({})
   })
 
-  it('refetches selected predefined periods and topic counts with the current period', async () => {
+  it('refetches selected predefined periods and latest default', async () => {
     const weekOption = {
       slug: '2026-w22',
       label: 'Week 22, 2026',
@@ -254,12 +254,7 @@ describe('ExplorePage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Week 22, 2026/ })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /Week 22, 2026/ }))
     await waitFor(() => {
-      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: '2026-w22', topic_limit: 8 })
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: '12 topics' }))
-    await waitFor(() => {
-      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: '2026-w22', topic_limit: 12 })
+      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: '2026-w22' })
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Events' }))
@@ -267,22 +262,13 @@ describe('ExplorePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Launch Day/ }))
 
     await waitFor(() => {
-      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: 'launch-day', topic_limit: 12 })
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: '16 topics' }))
-
-    await waitFor(() => {
-      expect(getExploreIntelligence).toHaveBeenLastCalledWith({
-        period: 'launch-day',
-        topic_limit: 16,
-      })
+      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ period: 'launch-day' })
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Latest' }))
 
     await waitFor(() => {
-      expect(getExploreIntelligence).toHaveBeenLastCalledWith({ topic_limit: 16 })
+      expect(getExploreIntelligence).toHaveBeenLastCalledWith({})
     })
   })
 })

@@ -103,44 +103,24 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
         "description": "Longer aftermath of October 7",
     },
     {
-        "slug": "2023-labor-day",
-        "label": "Labor Day 2023",
+        "slug": "may-day",
+        "label": "May Day",
         "kind": "holiday",
-        "date_from": date(2023, 9, 4),
-        "date_to": date(2023, 9, 4),
-        "description": "Labor Day coverage in 2023",
+        "date_from": date(1970, 5, 1),
+        "date_to": date(1970, 5, 1),
+        "recurring_month": 5,
+        "recurring_day": 1,
+        "description": "May Day streams across every archive year",
     },
     {
-        "slug": "2024-may-day",
-        "label": "May Day 2024",
+        "slug": "new-year",
+        "label": "New Year",
         "kind": "holiday",
-        "date_from": date(2024, 5, 1),
-        "date_to": date(2024, 5, 1),
-        "description": "May Day coverage in 2024",
-    },
-    {
-        "slug": "2025-new-year",
-        "label": "New Year 2025",
-        "kind": "holiday",
-        "date_from": date(2025, 1, 1),
-        "date_to": date(2025, 1, 1),
-        "description": "New Year's Day 2025",
-    },
-    {
-        "slug": "2026-new-year",
-        "label": "New Year 2026",
-        "kind": "holiday",
-        "date_from": date(2026, 1, 1),
-        "date_to": date(2026, 1, 1),
-        "description": "New Year's Day 2026",
-    },
-    {
-        "slug": "thanksgiving-2025",
-        "label": "Thanksgiving 2025",
-        "kind": "holiday",
-        "date_from": date(2025, 11, 27),
-        "date_to": date(2025, 11, 30),
-        "description": "Thanksgiving 2025 holiday window",
+        "date_from": date(1970, 1, 1),
+        "date_to": date(1970, 1, 1),
+        "recurring_month": 1,
+        "recurring_day": 1,
+        "description": "New Year's Day streams across every archive year",
     },
     {
         "slug": "christmas",
@@ -200,6 +180,11 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
 
 RETIRED_NAMED_PERIOD_SLUGS: tuple[str, ...] = (
     "october-7-leadup",
+    "2023-labor-day",
+    "2024-may-day",
+    "2025-new-year",
+    "2026-new-year",
+    "thanksgiving-2025",
     "christmas-2025",
 )
 
@@ -1125,8 +1110,8 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
               AND EXTRACT(DAY FROM v.uploaded_at) = :recurring_day
             """
             mention_period_sql = """
-              AND EXTRACT(MONTH FROM COALESCE(m.occurred_at, v.uploaded_at)) = :recurring_month
-              AND EXTRACT(DAY FROM COALESCE(m.occurred_at, v.uploaded_at)) = :recurring_day
+              AND EXTRACT(MONTH FROM COALESCE(m.occurred_at, v.uploaded_at, v.created_at)) = :recurring_month
+              AND EXTRACT(DAY FROM COALESCE(m.occurred_at, v.uploaded_at, v.created_at)) = :recurring_day
             """
             period_params: dict[str, object] = {"recurring_month": int(recurring_month), "recurring_day": int(recurring_day)}
         else:
@@ -1135,8 +1120,8 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
               AND v.uploaded_at < :end_dt
             """
             mention_period_sql = """
-              AND COALESCE(m.occurred_at, v.uploaded_at) >= :start_dt
-              AND COALESCE(m.occurred_at, v.uploaded_at) < :end_dt
+              AND COALESCE(m.occurred_at, v.uploaded_at, v.created_at) >= :start_dt
+              AND COALESCE(m.occurred_at, v.uploaded_at, v.created_at) < :end_dt
             """
             period_params = {"start_dt": start_dt, "end_dt": end_dt}
 
@@ -1198,7 +1183,7 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
                 m.end_ms,
                 m.snippet,
                 m.score,
-                COALESCE(m.occurred_at, v.uploaded_at) AS when_at,
+                COALESCE(m.occurred_at, v.uploaded_at, v.created_at) AS when_at,
                 EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
                 EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
             FROM archive_topic_mentions m
@@ -1207,7 +1192,7 @@ def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | 
             WHERE t.status = 'published'
               AND ({ARCHIVE_VIDEO_FILTER_SQL})
               {mention_period_sql}
-            ORDER BY COALESCE(m.occurred_at, v.uploaded_at) DESC NULLS LAST, m.start_ms ASC
+            ORDER BY COALESCE(m.occurred_at, v.uploaded_at, v.created_at) DESC NULLS LAST, m.start_ms ASC
             """,
             period_params,
         )
@@ -1388,15 +1373,27 @@ def refresh_topic_mentions(db, topic_slug: str | None = None, segment_limit: int
     )
 
     alias_map: dict[str, list[tuple[str, float]]] = {}
+    alias_terms: list[str] = []
     for row in topics:
         aliases = []
         for alias_row in _as_list(row.get("aliases")):
             alias = (alias_row or {}).get("alias")
             if alias:
                 aliases.append((alias.lower(), float((alias_row or {}).get("weight") or 1)))
+                alias_terms.append(alias.lower())
         alias_map[str(row["id"])] = aliases
 
+    alias_terms = sorted(set(alias_terms), key=lambda value: (len(value), value))
+    if not alias_terms:
+        return {"topics": len(topics), "mentions": 0}
+
     params: dict[str, object] = {}
+    alias_clauses: list[str] = []
+    for idx, alias in enumerate(alias_terms):
+        key = f"alias_{idx}"
+        alias_clauses.append(f"LOWER(snippet) LIKE :{key}")
+        params[key] = f"%{alias}%"
+    alias_filter_sql = " OR ".join(alias_clauses) or "FALSE"
     limit_sql = ""
     if segment_limit is not None:
         limit_sql = "LIMIT :segment_limit"
@@ -1405,29 +1402,62 @@ def refresh_topic_mentions(db, topic_slug: str | None = None, segment_limit: int
     segment_rows = _safe_mappings(
         db,
         f"""
-        SELECT
-            s.id AS segment_id,
-            s.video_id,
-            s.start_ms,
-            s.end_ms,
-            s.text AS snippet,
-            v.youtube_id,
-            v.title,
-            v.duration_seconds,
-            v.state,
-            v.caption_ingest_state,
-            v.diarization_state,
-            v.uploaded_at,
-            v.created_at,
-            v.updated_at,
-            v.channel_name,
-            v.language,
-            v.category,
-            EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
-            EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
-        FROM segments s
-        JOIN videos v ON v.id = s.video_id
-        ORDER BY COALESCE(v.uploaded_at, v.created_at) DESC NULLS LAST, s.start_ms ASC
+        SELECT * FROM (
+            SELECT
+                s.id AS segment_id,
+                s.video_id,
+                s.start_ms,
+                s.end_ms,
+                s.text AS snippet,
+                v.youtube_id,
+                v.title,
+                v.duration_seconds,
+                v.state,
+                v.caption_ingest_state,
+                v.diarization_state,
+                v.uploaded_at,
+                v.created_at,
+                v.updated_at,
+                v.channel_name,
+                v.language,
+                v.category,
+                EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+                EXISTS (SELECT 1 FROM youtube_transcripts yt2 WHERE yt2.video_id = v.id) AS has_youtube_transcript,
+                0 AS transcript_source_priority
+            FROM segments s
+            JOIN videos v ON v.id = s.video_id
+            WHERE ({ARCHIVE_VIDEO_FILTER_SQL})
+
+            UNION ALL
+
+            SELECT
+                -ys.id AS segment_id,
+                yt.video_id,
+                ys.start_ms,
+                ys.end_ms,
+                ys.text AS snippet,
+                v.youtube_id,
+                v.title,
+                v.duration_seconds,
+                v.state,
+                v.caption_ingest_state,
+                v.diarization_state,
+                v.uploaded_at,
+                v.created_at,
+                v.updated_at,
+                v.channel_name,
+                v.language,
+                v.category,
+                EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
+                TRUE AS has_youtube_transcript,
+                1 AS transcript_source_priority
+            FROM youtube_segments ys
+            JOIN youtube_transcripts yt ON yt.id = ys.youtube_transcript_id
+            JOIN videos v ON v.id = yt.video_id
+            WHERE ({ARCHIVE_VIDEO_FILTER_SQL})
+        ) transcript_segments
+        WHERE {alias_filter_sql}
+        ORDER BY COALESCE(uploaded_at, created_at) DESC NULLS LAST, transcript_source_priority ASC, start_ms ASC
         {limit_sql}
         """,
         params,
@@ -1508,7 +1538,7 @@ def refresh_topic_period_stats(db, granularity: str = "month"):
             m.snippet,
             m.score,
             m.occurred_at,
-            COALESCE(m.occurred_at, v.uploaded_at) AS when_at
+            COALESCE(m.occurred_at, v.uploaded_at, v.created_at) AS when_at
         FROM archive_topic_mentions m
         JOIN videos v ON v.id = m.video_id
         WHERE m.topic_id IN ({topic_placeholders})
@@ -1714,14 +1744,14 @@ def refresh_period_summaries(db, granularity: str = "month", limit: int = 120):
             m.end_ms,
             m.snippet,
             m.score,
-            COALESCE(m.occurred_at, v.uploaded_at) AS when_at,
+            COALESCE(m.occurred_at, v.uploaded_at, v.created_at) AS when_at,
             EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
             EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript
         FROM archive_topic_mentions m
         JOIN archive_topics t ON t.id = m.topic_id
         JOIN videos v ON v.id = m.video_id
         WHERE t.status = 'published'
-        ORDER BY COALESCE(m.occurred_at, v.uploaded_at) DESC NULLS LAST, m.start_ms ASC
+        ORDER BY COALESCE(m.occurred_at, v.uploaded_at, v.created_at) DESC NULLS LAST, m.start_ms ASC
         """,
     )
     mention_metadata_map = _safe_video_metadata_map(db, [row["video_id"] for row in mention_rows])
@@ -1841,11 +1871,11 @@ def _topic_evidence_for_period(db, topic_id, period: str, granularity: str, limi
             m.snippet,
             EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
             EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript,
-            COALESCE(m.occurred_at, v.uploaded_at) AS when_at
+            COALESCE(m.occurred_at, v.uploaded_at, v.created_at) AS when_at
         FROM archive_topic_mentions m
         JOIN videos v ON v.id = m.video_id
         WHERE m.topic_id = :topic_id
-        ORDER BY COALESCE(m.occurred_at, v.uploaded_at) DESC NULLS LAST, m.start_ms ASC
+        ORDER BY COALESCE(m.occurred_at, v.uploaded_at, v.created_at) DESC NULLS LAST, m.start_ms ASC
         """,
         {"topic_id": topic_id},
     )
@@ -2016,13 +2046,13 @@ def get_durable_archive_intelligence(
             m.occurred_at,
             EXISTS (SELECT 1 FROM segments s2 WHERE s2.video_id = v.id) AS has_whisper_transcript,
             EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id) AS has_youtube_transcript,
-            COALESCE(m.occurred_at, v.uploaded_at) AS when_at
+            COALESCE(m.occurred_at, v.uploaded_at, v.created_at) AS when_at
         FROM archive_topic_mentions m
         JOIN archive_topics t ON t.id = m.topic_id
         JOIN videos v ON v.id = m.video_id
         WHERE m.topic_id IN ({topic_placeholders})
           AND t.status = 'published'
-        ORDER BY COALESCE(m.occurred_at, v.uploaded_at) DESC NULLS LAST, m.start_ms ASC
+        ORDER BY COALESCE(m.occurred_at, v.uploaded_at, v.created_at) DESC NULLS LAST, m.start_ms ASC
         """,
         topic_params,
     )

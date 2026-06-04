@@ -20,6 +20,8 @@ from app.archive.intelligence_repository import (
     seed_archive_topics,
     seed_named_periods,
     refresh_named_period_stats,
+    refresh_topic_mentions,
+    refresh_topic_period_stats,
     slugify_topic,
 )
 
@@ -293,6 +295,12 @@ def test_seed_named_periods_corrects_current_curated_windows(monkeypatch):
     assert by_slug["christmas"]["kind"] == "holiday"
     assert by_slug["christmas"]["recurring_month"] == 12
     assert by_slug["christmas"]["recurring_day"] == 25
+    assert by_slug["new-year"]["kind"] == "holiday"
+    assert by_slug["new-year"]["recurring_month"] == 1
+    assert by_slug["new-year"]["recurring_day"] == 1
+    assert by_slug["may-day"]["kind"] == "holiday"
+    assert by_slug["may-day"]["recurring_month"] == 5
+    assert by_slug["may-day"]["recurring_day"] == 1
 
 
 def test_refresh_named_period_stats_includes_metadata_in_public_payloads():
@@ -366,7 +374,7 @@ def test_refresh_named_period_stats_includes_metadata_in_public_payloads():
                         }
                     ]
                 )
-            if "FROM archive_topic_mentions m" in sql_text and "COALESCE(m.occurred_at, v.uploaded_at) >= :start_dt" in sql_text:
+            if "FROM archive_topic_mentions m" in sql_text and "COALESCE(m.occurred_at, v.uploaded_at, v.created_at) >= :start_dt" in sql_text:
                 return _FakeResult(
                     rows=[
                         {
@@ -485,7 +493,7 @@ def test_refresh_named_period_stats_uses_recurring_month_day_filter():
             if "FROM videos v" in sql_text and "EXTRACT(MONTH FROM v.uploaded_at)" in sql_text:
                 assert params == {"recurring_month": 8, "recurring_day": 21}
                 return _FakeResult(rows=[])
-            if "FROM archive_topic_mentions m" in sql_text and "EXTRACT(MONTH FROM COALESCE(m.occurred_at, v.uploaded_at))" in sql_text:
+            if "FROM archive_topic_mentions m" in sql_text and "EXTRACT(MONTH FROM COALESCE(m.occurred_at, v.uploaded_at, v.created_at))" in sql_text:
                 assert params == {"recurring_month": 8, "recurring_day": 21}
                 return _FakeResult(rows=[])
             if "INSERT INTO archive_named_period_stats" in sql_text:
@@ -501,6 +509,133 @@ def test_refresh_named_period_stats_uses_recurring_month_day_filter():
     assert db.inserted_periods[0][0]["video_count"] == 0
     assert any("EXTRACT(MONTH FROM v.uploaded_at)" in sql for sql, _ in db.calls)
     assert not any("v.uploaded_at >= :start_dt" in sql for sql, _ in db.calls)
+
+
+def test_refresh_topic_mentions_uses_youtube_caption_segments():
+    topic_id = uuid.uuid4()
+    video_id = uuid.uuid4()
+
+    class _TopicDb(_FakeDb):
+        def __init__(self):
+            super().__init__([])
+            self.inserted_mentions = []
+
+        def execute(self, sql, params=None):
+            sql_text = str(sql)
+            self.calls.append((sql_text, params))
+            if "FROM archive_topics t" in sql_text and "LEFT JOIN archive_topic_aliases" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "id": topic_id,
+                            "slug": "gaza",
+                            "label": "Gaza",
+                            "description": None,
+                            "source": "hybrid",
+                            "status": "published",
+                            "is_editable": True,
+                            "aliases": [{"alias": "gaza", "weight": 1}],
+                        }
+                    ]
+                )
+            if "DELETE FROM archive_topic_mentions" in sql_text:
+                return _FakeResult()
+            if "FROM youtube_segments ys" in sql_text and "UNION ALL" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "segment_id": -123,
+                            "video_id": video_id,
+                            "start_ms": 1000,
+                            "end_ms": 4000,
+                            "snippet": "A YouTube caption segment mentioning Gaza.",
+                            "youtube_id": "yt123",
+                            "title": "Caption-only VOD",
+                            "duration_seconds": 600,
+                            "state": "completed",
+                            "caption_ingest_state": "completed",
+                            "diarization_state": None,
+                            "uploaded_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                            "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                            "updated_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                            "channel_name": "HasanAbi",
+                            "language": "en",
+                            "category": None,
+                            "has_whisper_transcript": False,
+                            "has_youtube_transcript": True,
+                        }
+                    ]
+                )
+            if "INSERT INTO archive_topic_mentions" in sql_text:
+                self.inserted_mentions.extend(params or [])
+                return _FakeResult()
+            return _FakeResult()
+
+    db = _TopicDb()
+
+    result = refresh_topic_mentions(db)
+
+    assert result == {"topics": 1, "mentions": 1}
+    assert db.inserted_mentions[0]["video_id"] == video_id
+    assert db.inserted_mentions[0]["segment_id"] == -123
+    assert "YouTube caption segment" in db.inserted_mentions[0]["snippet"]
+
+
+def test_refresh_topic_period_stats_uses_created_at_when_uploaded_at_missing():
+    topic_id = uuid.uuid4()
+    video_id = uuid.uuid4()
+
+    class _StatsDb(_FakeDb):
+        def __init__(self):
+            super().__init__([])
+            self.inserted_stats = []
+
+        def execute(self, sql, params=None):
+            sql_text = str(sql)
+            self.calls.append((sql_text, params))
+            if "FROM archive_topics t" in sql_text and "LEFT JOIN archive_topic_aliases" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "id": topic_id,
+                            "slug": "gaza",
+                            "label": "Gaza",
+                            "description": None,
+                            "source": "hybrid",
+                            "status": "published",
+                            "is_editable": True,
+                            "aliases": [{"alias": "gaza", "weight": 1}],
+                        }
+                    ]
+                )
+            if "DELETE FROM archive_topic_period_stats" in sql_text:
+                return _FakeResult()
+            if "FROM archive_topic_mentions m" in sql_text and "COALESCE(m.occurred_at, v.uploaded_at, v.created_at) AS when_at" in sql_text:
+                return _FakeResult(
+                    rows=[
+                        {
+                            "topic_id": topic_id,
+                            "video_id": video_id,
+                            "start_ms": 1000,
+                            "end_ms": 4000,
+                            "snippet": "Gaza caption mention",
+                            "score": 1.0,
+                            "occurred_at": None,
+                            "when_at": datetime(2026, 6, 4, tzinfo=timezone.utc),
+                        }
+                    ]
+                )
+            if "INSERT INTO archive_topic_period_stats" in sql_text:
+                self.inserted_stats.extend(params or [])
+                return _FakeResult()
+            return _FakeResult()
+
+    db = _StatsDb()
+
+    result = refresh_topic_period_stats(db, granularity="month")
+
+    assert result == {"rows": 1}
+    assert db.inserted_stats[0]["period"] == "2026-06"
 
 
 def test_autopublish_search_topics_skips_existing_slugs():

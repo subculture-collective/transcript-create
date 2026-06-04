@@ -24,7 +24,6 @@ const PERIOD_KIND_TABS: Array<{ kind: PeriodKind; label: string }> = [
   { kind: 'date', label: 'Dates' },
 ];
 
-const TOPIC_LIMITS = [8, 12, 16] as const;
 const PERIOD_OPTION_FETCH_LIMIT = 24;
 
 function topicHref(label: string) {
@@ -92,14 +91,13 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [topicLimit, setTopicLimit] = useState<(typeof TOPIC_LIMITS)[number]>(8);
   const [selectedPeriodSlug, setSelectedPeriodSlug] = useState<string | null>(null);
   const [periodKind, setPeriodKind] = useState<PeriodKind>('latest');
   const [periodOptionsByKind, setPeriodOptionsByKind] = useState<Partial<Record<Exclude<PeriodKind, 'latest'>, ArchivePeriodOption[]>>>({});
   const [periodOptionsLoading, setPeriodOptionsLoading] = useState(false);
   const cachedPeriodOptions = periodKind === 'latest' ? undefined : periodOptionsByKind[periodKind];
 
-  const loadIntelligence = async (queryPeriod?: string | null, queryTopicLimit = topicLimit, initial = false) => {
+  const loadIntelligence = async (queryPeriod?: string | null, initial = false) => {
     if (initial) setLoading(true);
     else setRefreshing(true);
     setError(null);
@@ -107,7 +105,6 @@ export default function ExplorePage() {
     try {
       const result = await api.getExploreIntelligence({
         ...(queryPeriod ? { period: queryPeriod } : {}),
-        topic_limit: queryTopicLimit,
       });
       setData(result);
       if (result.selected_period?.slug) {
@@ -126,7 +123,7 @@ export default function ExplorePage() {
   };
 
   useEffect(() => {
-    void loadIntelligence(undefined, topicLimit, true);
+    void loadIntelligence(undefined, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -161,9 +158,9 @@ export default function ExplorePage() {
     const pieces = [currentPeriod?.label ?? 'Latest'];
     const range = formatPeriodRange(currentPeriod);
     if (range) pieces.push(range);
-    pieces.push(`${topicLimit} topics`);
+    pieces.push('best available topics');
     return pieces.join(' · ');
-  }, [currentPeriod, topicLimit]);
+  }, [currentPeriod]);
 
   const selectedPeriodKindLabel = useMemo(
     () => (periodKind === 'latest' ? periodKindLabel(currentPeriod?.kind) : periodKindLabel(periodKind)),
@@ -174,6 +171,7 @@ export default function ExplorePage() {
   const selectedPeriodDuration = currentPeriod?.total_duration_seconds ?? selectedPeriodRecord?.total_duration_seconds ?? 0;
   const selectedPeriodEvidence = selectedPeriodRecord?.evidence ?? [];
   const selectedPeriodVideos = selectedPeriodRecord?.videos ?? [];
+  const selectedPeriodIsEmpty = selectedPeriodVods === 0;
 
   useEffect(() => {
     if (periodKind === 'latest') {
@@ -215,13 +213,8 @@ export default function ExplorePage() {
     setPeriodKind(kind);
     if (kind === 'latest') {
       setSelectedPeriodSlug(null);
-      void loadIntelligence(undefined, topicLimit);
+      void loadIntelligence(undefined);
     }
-  };
-
-  const selectTopicLimit = async (limit: (typeof TOPIC_LIMITS)[number]) => {
-    setTopicLimit(limit);
-    await loadIntelligence(selectedPeriodSlug ?? data?.selected_period?.slug ?? null, limit);
   };
 
   const selectPeriodBySlug = async (slug: string) => {
@@ -231,7 +224,7 @@ export default function ExplorePage() {
     const nextKind = normalizePeriodKind(option.kind) ?? 'latest';
     setPeriodKind(nextKind);
     setSelectedPeriodSlug(option.slug);
-    await loadIntelligence(option.slug, topicLimit);
+    await loadIntelligence(option.slug);
   };
 
 
@@ -331,29 +324,10 @@ export default function ExplorePage() {
           </div>
 
           <div className="rounded-2xl border border-border bg-surface-muted/70 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.16)]">
-            <div className="meta-label">Topic cards shown</div>
-            <p className="mt-2 text-sm text-muted">Changing this refetches the selected predefined slice immediately.</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {TOPIC_LIMITS.map((value) => {
-                const active = topicLimit === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => {
-                      void selectTopicLimit(value);
-                    }}
-                    aria-pressed={active}
-                    className={`btn-ghost min-w-24 rounded-xl border px-4 py-2 text-sm transition-colors ${
-                      active ? 'border-accent/60 bg-accent/15 text-ink' : ''
-                    }`}
-                    disabled={refreshing}
-                  >
-                    {value} topics
-                  </button>
-                );
-              })}
-            </div>
+            <div className="meta-label">Topic discovery</div>
+            <p className="mt-2 text-sm text-muted">
+              Topics are generated from available Whisper and YouTube transcripts, then the strongest cards are surfaced automatically.
+            </p>
           </div>
         </div>
       </section>
@@ -472,11 +446,18 @@ export default function ExplorePage() {
                   </div>
                   <div className="rounded-xl border border-border bg-surface p-3 text-sm text-muted">
                     <div className="text-subtle">Topic cards</div>
-                    <div className="mt-1 font-semibold text-ink">{formatNumber(topicLimit)}</div>
+                    <div className="mt-1 font-semibold text-ink">{formatNumber(data.topic_cards.length)}</div>
                   </div>
                 </div>
                 {selectedPeriodNarrative ? (
-                  <p className="mt-4 text-sm text-muted">{selectedPeriodNarrative}</p>
+                  <div className="mt-4 space-y-2 text-sm text-muted">
+                    <p>{selectedPeriodNarrative}</p>
+                    {selectedPeriodIsEmpty ? <p>No archived VODs were found for this selected period yet. Try a nearby month, week, or broader event window.</p> : null}
+                  </div>
+                ) : selectedPeriodIsEmpty ? (
+                  <p className="mt-4 text-sm text-muted">
+                    No archived VODs were found for this selected period yet. Try a nearby month, week, or broader event window.
+                  </p>
                 ) : (
                   <p className="mt-4 text-sm text-muted">
                     Selected periods are calculated snapshots. Use the kind tabs, the period rail, and the dropdown to jump between predefined archive slices.
@@ -639,7 +620,9 @@ export default function ExplorePage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-border bg-surface-muted p-5 text-center text-muted">No representative VODs calculated for this period yet.</div>
+                  <div className="rounded-2xl border border-border bg-surface-muted p-5 text-center text-muted">
+                    {selectedPeriodIsEmpty ? 'No archived VODs were found in this selected period.' : 'No representative VODs calculated for this period yet.'}
+                  </div>
                 )}
 
                 <div className="space-y-3">
@@ -666,7 +649,9 @@ export default function ExplorePage() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-border bg-surface-muted p-5 text-center text-muted">No calculated stats for this predefined period yet.</div>
+              <div className="rounded-2xl border border-border bg-surface-muted p-5 text-center text-muted">
+                {selectedPeriodIsEmpty ? 'No archived VODs were found for this selected period yet.' : 'No calculated stats for this predefined period yet.'}
+              </div>
             )}
           </section>
         </div>

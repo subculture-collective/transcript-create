@@ -85,14 +85,6 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
         "description": "Post-election coverage and reactions",
     },
     {
-        "slug": "october-7-leadup",
-        "label": "October 7 Leadup",
-        "kind": "leadup",
-        "date_from": date(2023, 9, 15),
-        "date_to": date(2023, 10, 6),
-        "description": "Days leading into October 7",
-    },
-    {
         "slug": "october-7",
         "label": "October 7",
         "kind": "date",
@@ -157,6 +149,30 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
         "description": "Christmas 2025 holiday window",
     },
     {
+        "slug": "russia-ukraine-invasion-leadup",
+        "label": "Russia-Ukraine Invasion Leadup",
+        "kind": "leadup",
+        "date_from": date(2021, 11, 1),
+        "date_to": date(2022, 2, 23),
+        "description": "Days leading into the Russian invasion of Ukraine",
+    },
+    {
+        "slug": "russia-ukraine-invasion",
+        "label": "Russia-Ukraine Invasion",
+        "kind": "event",
+        "date_from": date(2022, 2, 24),
+        "date_to": date(2022, 3, 31),
+        "description": "The Russian invasion of Ukraine and immediate coverage",
+    },
+    {
+        "slug": "russia-ukraine-invasion-fallout",
+        "label": "Russia-Ukraine Invasion Fallout",
+        "kind": "fallout",
+        "date_from": date(2022, 2, 24),
+        "date_to": date(2022, 12, 31),
+        "description": "Longer aftermath of the Russian invasion of Ukraine",
+    },
+    {
         "slug": "september-11",
         "label": "September 11",
         "kind": "anniversary",
@@ -164,14 +180,11 @@ CURATED_NAMED_PERIODS: tuple[dict[str, object], ...] = (
         "date_to": date(2026, 9, 11),
         "description": "September 11 reference period",
     },
-    {
-        "slug": "august-21",
-        "label": "August 21",
-        "kind": "anniversary",
-        "date_from": date(2026, 8, 21),
-        "date_to": date(2026, 8, 21),
-        "description": "August 21 reference period",
-    },
+)
+
+RETIRED_NAMED_PERIOD_SLUGS: tuple[str, ...] = (
+    "october-7-leadup",
+    "august-21",
 )
 
 
@@ -257,6 +270,10 @@ def _as_list(value):
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _seed_today() -> date:
+    return date.today()
 
 
 def _coerce_datetime(value: date | datetime | None, *, end: bool = False) -> datetime | None:
@@ -661,10 +678,67 @@ def _named_period_records_from_videos(db, years_back: int) -> list[dict[str, obj
         date_to = record["date_to"]
         assert isinstance(date_to, date)
         records.append({**record, "status": "published", "sort_order": date_to.toordinal()})
+
+    midterms_date_to = date(2026, 11, 3)
+    midterms_date_from = min(_seed_today(), midterms_date_to)
+    records.append(
+        {
+            "slug": "2026-midterms-leadup",
+            "label": "2026 Midterms Leadup",
+            "kind": "leadup",
+            "date_from": midterms_date_from,
+            "date_to": midterms_date_to,
+            "description": "Leadup to the 2026 U.S. midterms",
+            "status": "published",
+            "sort_order": midterms_date_to.toordinal(),
+        }
+    )
+
+    archive_year_rows = _safe_mappings(
+        db,
+        f"""
+        SELECT DISTINCT EXTRACT(YEAR FROM v.uploaded_at)::int AS archive_year
+        FROM videos v
+        WHERE ({ARCHIVE_VIDEO_FILTER_SQL})
+          AND v.uploaded_at IS NOT NULL
+        ORDER BY archive_year ASC
+        """,
+    )
+    archive_years = {
+        int(row["archive_year"])
+        for row in archive_year_rows
+        if row.get("archive_year") is not None
+    }
+    archive_years.add(_seed_today().year)
+    for year in sorted(archive_years):
+        august_21 = date(year, 8, 21)
+        records.append(
+            {
+                "slug": f"{year}-august-21",
+                "label": f"August 21, {year}",
+                "kind": "anniversary",
+                "date_from": august_21,
+                "date_to": august_21,
+                "description": "Annual August 21 archive marker",
+                "status": "published",
+                "sort_order": august_21.toordinal(),
+            }
+        )
     return records
 
 
 def seed_named_periods(db, years_back: int = 6):
+    for slug in RETIRED_NAMED_PERIOD_SLUGS:
+        _safe_execute(
+            db,
+            """
+            UPDATE archive_named_periods
+            SET status = 'hidden', updated_at = now()
+            WHERE slug = :slug
+            """,
+            {"slug": slug},
+        )
+
     records = _named_period_records_from_videos(db, years_back)
     inserted = 0
     for record in records:

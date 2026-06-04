@@ -1,7 +1,7 @@
 """Tests for archive summary repository behavior."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy.exc import ProgrammingError
 
@@ -9,11 +9,13 @@ from app import crud
 from app.archive.repository import ArchiveRepository, archive_repository
 from app.archive.intelligence_repository import (
     SEED_TOPICS,
+    RETIRED_NAMED_PERIOD_SLUGS,
     _month_bounds,
     _week_bounds,
     alias_matches_text,
     autopublish_search_topics,
     seed_archive_topics,
+    seed_named_periods,
     slugify_topic,
 )
 
@@ -58,6 +60,28 @@ class _FakeDb:
 
     def rollback(self):
         self.rollback_count += 1
+
+
+class _SeedDb(_FakeDb):
+    def __init__(self):
+        super().__init__([])
+        self.inserted_periods = []
+        self.retired_periods = []
+
+    def execute(self, sql, params=None):
+        sql_text = str(sql)
+        self.calls.append((sql_text, params))
+        if "UPDATE archive_named_periods" in sql_text and "SET status = 'hidden'" in sql_text:
+            self.retired_periods.append(params)
+            return _FakeResult()
+        if "SELECT DISTINCT date_trunc('month'" in sql_text or "SELECT DISTINCT date_trunc('week'" in sql_text:
+            return _FakeResult(rows=[])
+        if "SELECT DISTINCT EXTRACT(YEAR FROM v.uploaded_at)::int AS archive_year" in sql_text:
+            return _FakeResult(rows=[{"archive_year": 2024}, {"archive_year": 2025}])
+        if "INSERT INTO archive_named_periods" in sql_text:
+            self.inserted_periods.append(params)
+            return _FakeResult()
+        raise AssertionError(f"Unexpected query: {sql_text}")
 
 
 def test_get_summary_uses_cached_stats_when_available():
@@ -210,6 +234,33 @@ def test_seed_archive_topics_uses_publishable_defaults():
     assert stats["topics"] == len(SEED_TOPICS)
     assert any("'hybrid'" in sql and "'published'" in sql for sql, _ in db.calls if "INSERT INTO archive_topics" in sql)
     assert any("INSERT INTO archive_topic_aliases" in sql for sql, _ in db.calls)
+
+
+def test_seed_named_periods_corrects_current_curated_windows(monkeypatch):
+    monkeypatch.setattr("app.archive.intelligence_repository._seed_today", lambda: date(2026, 11, 10))
+
+    db = _SeedDb()
+
+    seed_named_periods(db)
+
+    by_slug = {row["slug"]: row for row in db.inserted_periods}
+    retired_update_slugs = {params["slug"] for sql, params in db.calls if "UPDATE archive_named_periods" in sql and "SET status = 'hidden'" in sql}
+
+    assert retired_update_slugs == set(RETIRED_NAMED_PERIOD_SLUGS)
+    assert "october-7-leadup" not in by_slug
+    assert by_slug["russia-ukraine-invasion-leadup"]["kind"] == "leadup"
+    assert str(by_slug["russia-ukraine-invasion-leadup"]["date_from"]) == "2021-11-01"
+    assert str(by_slug["russia-ukraine-invasion-leadup"]["date_to"]) == "2022-02-23"
+    assert by_slug["russia-ukraine-invasion"]["kind"] == "event"
+    assert str(by_slug["russia-ukraine-invasion"]["date_from"]) == "2022-02-24"
+    assert by_slug["russia-ukraine-invasion-fallout"]["kind"] == "fallout"
+    assert str(by_slug["russia-ukraine-invasion-fallout"]["date_to"]) == "2022-12-31"
+    assert by_slug["2026-midterms-leadup"]["kind"] == "leadup"
+    assert str(by_slug["2026-midterms-leadup"]["date_from"]) == "2026-11-03"
+    assert str(by_slug["2026-midterms-leadup"]["date_to"]) == "2026-11-03"
+    assert by_slug["2024-august-21"]["kind"] == "anniversary"
+    assert by_slug["2025-august-21"]["kind"] == "anniversary"
+    assert by_slug["2026-august-21"]["kind"] == "anniversary"
 
 
 def test_autopublish_search_topics_skips_existing_slugs():

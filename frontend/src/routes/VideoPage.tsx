@@ -44,6 +44,7 @@ export default function VideoPage() {
     Array<{ id: string; start_ms: number; end_ms: number }>
   >([]);
   const [activeSegId, setActiveSegId] = useState<number | null>(null);
+  const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null);
   const [activeBlockIndex, setActiveBlockIndex] = useState<number | null>(null);
   const [isPlayingMatches, setIsPlayingMatches] = useState(false);
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
@@ -95,15 +96,19 @@ export default function VideoPage() {
   useEffect(() => {
     const hash = window.location.hash;
     if (hash) {
-      const segMatch = hash.match(/^#seg-(\d+)$/);
+      const segMatch = hash.match(/^#seg-(\d+)(?:-s-(.+))?$/);
       if (segMatch) {
         const segId = Number(segMatch[1]);
+        const sentenceSuffix = segMatch[2];
         const seg = transcript?.segments[segId - 1];
         const block = transcript?.blocks?.find((candidate) => candidate.segment_ids.includes(segId - 1));
-        const el = document.getElementById(`seg-${segId}`) ?? (block ? document.getElementById(`block-${block.block_index}`) : null);
-        if (seg && el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const sentenceId = sentenceSuffix ? `${block?.block_index}-${segId - 1}-s-${sentenceSuffix}` : null;
+        const el = sentenceSuffix ? document.getElementById(`seg-${segId}-s-${sentenceSuffix}`) : null;
+        const target = el ?? document.getElementById(`seg-${segId}`) ?? (block ? document.getElementById(`block-${block.block_index}`) : null);
+        if (seg && target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
           setActiveSegId(segId);
+          setActiveSentenceId(sentenceId);
           setActiveBlockIndex(block?.block_index ?? null);
           return;
         }
@@ -117,6 +122,7 @@ export default function VideoPage() {
         if (block && el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           setActiveSegId((block.segment_ids[0] ?? 0) + 1);
+          setActiveSentenceId(null);
           setActiveBlockIndex(block.block_index);
           return;
         }
@@ -138,6 +144,7 @@ export default function VideoPage() {
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           setActiveSegId(segIndex + 1);
+          setActiveSentenceId(null);
           setActiveBlockIndex(block?.block_index ?? null);
           return;
         }
@@ -158,18 +165,21 @@ export default function VideoPage() {
 
   function onClickSegment(seg: Segment, id: number) {
     setActiveSegId(id);
+    setActiveSentenceId(null);
     setActiveBlockIndex(null);
     jumpTo(seg.start_ms);
     // update hash for deep-linking this segment
     history.replaceState(null, '', `#seg-${id}`);
   }
 
-  function onClickFormattedSentence(segment: Segment, segIndex: number) {
+  function onClickFormattedSentence(segment: Segment, segIndex: number, sentenceId: string) {
     setActiveSegId(segIndex);
+    setActiveSentenceId(sentenceId);
     const blockId = hasFormattedBlocks ? formattedBlocks.find((candidate) => candidate.segment_ids.includes(segIndex - 1))?.block_index : null;
     setActiveBlockIndex(blockId ?? null);
     jumpTo(segment.start_ms);
-    history.replaceState(null, '', `#seg-${segIndex}`);
+    const sentenceSuffix = sentenceId.split('-s-').at(1);
+    history.replaceState(null, '', sentenceSuffix ? `#seg-${segIndex}-s-${sentenceSuffix}` : `#seg-${segIndex}`);
   }
 
   const start = useMemo(() => secondsToYouTubeTs(startSeconds), [startSeconds]);
@@ -215,6 +225,7 @@ export default function VideoPage() {
     const el = blockId !== null ? document.getElementById(`block-${blockId}`) : document.getElementById(`seg-${segId}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setActiveSegId(segId);
+    setActiveSentenceId(null);
     setActiveBlockIndex(blockId ?? null);
     const seg = transcript?.segments[segId - 1];
     if (seg) jumpTo(seg.start_ms);
@@ -238,6 +249,7 @@ export default function VideoPage() {
       const el = blockId !== null ? document.getElementById(`block-${blockId}`) : document.getElementById(`seg-${nextSegId}`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setActiveSegId(nextSegId);
+      setActiveSentenceId(null);
       setActiveBlockIndex(blockId ?? null);
       const nextSeg = transcript.segments[nextSegId - 1];
       if (nextSeg) jumpTo(nextSeg.start_ms);
@@ -351,6 +363,7 @@ export default function VideoPage() {
               hits={hits}
               activeBlockIndex={activeBlockIndex}
               activeSegId={activeSegId}
+              activeSentenceId={activeSentenceId}
               isSavedSegment={isSavedSegment}
               onClickSentence={onClickFormattedSentence}
               onSaveMoment={saveTranscriptMoment}

@@ -7,8 +7,9 @@ type Props = {
   hits: SearchHit[] | null;
   activeBlockIndex: number | null;
   activeSegId: number | null;
+  activeSentenceId: string | null;
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
-  onClickSentence: (segment: Segment, segIndex: number) => void;
+  onClickSentence: (segment: Segment, segIndex: number, sentenceId: string) => void;
   onSaveMoment: (segment: Segment, segIndex: number, text: string) => void;
   onCopyQuote: (segment: Segment, text: string, segIndex: number) => void;
 };
@@ -43,6 +44,26 @@ function endsSentence(text: string) {
   return /[.!?][”"')\]]*$/.test(text.trim());
 }
 
+function splitIntoSentences(text: string) {
+  const normalized = normalizeSentenceText(text);
+  if (!normalized) return [];
+  return normalized.match(/[^.!?]+[.!?]+[”"')\]]*|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) ?? [normalized];
+}
+
+function estimateSentenceTiming(segment: Segment, sentences: string[], sentenceIndex: number) {
+  if (sentences.length <= 1) return { startMs: segment.start_ms, endMs: segment.end_ms };
+
+  const duration = Math.max(segment.end_ms - segment.start_ms, sentences.length);
+  const weights = sentences.map((sentence) => Math.max(sentence.length, 1));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const startWeight = weights.slice(0, sentenceIndex).reduce((sum, weight) => sum + weight, 0);
+  const endWeight = startWeight + weights[sentenceIndex];
+  return {
+    startMs: Math.round(segment.start_ms + (duration * startWeight) / totalWeight),
+    endMs: Math.round(segment.start_ms + (duration * endWeight) / totalWeight),
+  };
+}
+
 function buildSentencePieces(block: TranscriptBlock, transcriptSegments: Segment[]): SentencePiece[] {
   const pieces: SentencePiece[] = [];
   let currentText: string[] = [];
@@ -75,6 +96,25 @@ function buildSentencePieces(block: TranscriptBlock, transcriptSegments: Segment
     if (!segment) continue;
     const text = normalizeSentenceText(segment.text);
     if (!text) continue;
+
+    const segmentSentences = splitIntoSentences(text);
+    if (segmentSentences.length > 1) {
+      flush();
+      segmentSentences.forEach((sentence, sentenceIndex) => {
+        const timing = estimateSentenceTiming(segment, segmentSentences, sentenceIndex);
+        pieces.push({
+          id: `${block.block_index}-${segId}-s-${sentenceIndex}`,
+          text: sentence,
+          startMs: timing.startMs,
+          endMs: timing.endMs,
+          segmentIds: [segId],
+          firstSegment: { ...segment, start_ms: timing.startMs, end_ms: timing.endMs, text: sentence },
+          firstSegIndex: segId + 1,
+        });
+      });
+      continue;
+    }
+
     currentText.push(text);
     currentIds.push(segId);
     if (endsSentence(text)) flush();
@@ -100,6 +140,7 @@ export default function FormattedTranscriptDocument({
   hits,
   activeBlockIndex,
   activeSegId,
+  activeSentenceId,
   isSavedSegment,
   onClickSentence,
   onSaveMoment,
@@ -109,13 +150,8 @@ export default function FormattedTranscriptDocument({
     <article className="surface-card space-y-3" role="list" aria-label="Formatted transcript document">
       {blocks.map((block) => {
         const pieces = buildSentencePieces(block, transcriptSegments);
-        const selectedPiece = pieces.find((piece) => piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1));
-        const selectedSaved = selectedPiece
-          ? selectedPiece.segmentIds.some((segIdx) => {
-              const segment = transcriptSegments[segIdx];
-              return segment ? isSavedSegment(segment, segIdx + 1) : false;
-            })
-          : false;
+        const selectedPiece = pieces.find((piece) => activeSentenceId === piece.id) ?? pieces.find((piece) => piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1));
+        const selectedSaved = selectedPiece ? isSavedSegment(selectedPiece.firstSegment, selectedPiece.firstSegIndex) : false;
         const isActiveBlock = activeBlockIndex === block.block_index || Boolean(selectedPiece);
 
         return (
@@ -132,8 +168,8 @@ export default function FormattedTranscriptDocument({
             <div className="space-y-1.5 text-lg leading-7 text-ink">
               <p className="font-serif text-[1.05rem] leading-7">
                 {pieces.map((piece) => {
-                  const pieceActive = piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1);
-                  const pieceSaved = piece.segmentIds.some((segIdx) => {
+                  const pieceActive = activeSentenceId ? activeSentenceId === piece.id : piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1);
+                  const pieceSaved = isSavedSegment(piece.firstSegment, piece.firstSegIndex) || piece.segmentIds.some((segIdx) => {
                     const segment = transcriptSegments[segIdx];
                     return segment ? isSavedSegment(segment, segIdx + 1) : false;
                   });
@@ -144,9 +180,9 @@ export default function FormattedTranscriptDocument({
                   return (
                     <span key={piece.id}>
                       <button
-                        id={`seg-${piece.firstSegIndex}`}
+                        id={`seg-${piece.firstSegIndex}-s-${piece.id.split('-s-').at(1) ?? 0}`}
                         type="button"
-                        onClick={() => onClickSentence(piece.firstSegment, piece.firstSegIndex)}
+                        onClick={() => onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id)}
                         className={`inline cursor-pointer rounded-sm bg-transparent p-0 text-left font-inherit leading-inherit text-inherit transition-colors hover:text-accent focus:bg-surface-muted focus:outline-none ${
                           pieceActive ? 'bg-accent-soft px-1 ring-1 ring-accent' : ''
                         } ${pieceHighlighted && !pieceActive ? 'bg-warning-soft px-1 ring-1 ring-warning' : ''} ${pieceSaved ? 'decoration-warning underline decoration-2 underline-offset-4' : ''}`}

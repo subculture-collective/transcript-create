@@ -140,6 +140,71 @@ export interface ArchiveNamedPeriodUpsertPayload {
   sort_order?: number | null;
 }
 
+export interface ArchivePerson {
+  slug: string;
+  display_name: string;
+  aliases: string[];
+  description?: string | null;
+  role?: string | null;
+}
+
+export interface ArchiveVideoTag {
+  slug: string;
+  label: string;
+  kind: string;
+  description?: string | null;
+}
+
+export interface ArchivePersonAdminResponse extends ArchivePerson {
+  id: UUID;
+  status: 'published' | 'hidden' | string;
+  sort_order: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ArchiveVideoTagAdminResponse extends ArchiveVideoTag {
+  id: UUID;
+  status: 'published' | 'hidden' | string;
+  sort_order: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ArchivePersonUpsertPayload {
+  slug?: string;
+  display_name: string;
+  aliases: string[];
+  description?: string | null;
+  status: 'published' | 'hidden';
+  sort_order?: number | null;
+}
+
+export interface ArchiveVideoTagUpsertPayload {
+  slug?: string;
+  label: string;
+  kind: string;
+  description?: string | null;
+  status: 'published' | 'hidden';
+  sort_order?: number | null;
+}
+
+export interface ArchiveVideoAssignmentPayload {
+  people: Array<{ slug: string; role?: string }>;
+  tags: Array<{ slug: string }>;
+}
+
+export interface ArchiveVideoMetadataItem extends VideoInfo {
+  people: ArchivePerson[];
+  tags: ArchiveVideoTag[];
+}
+
+export interface ArchiveVideoMetadataListResponse {
+  items: ArchiveVideoMetadataItem[];
+  total?: number | null;
+  query_time_ms?: number | null;
+}
+
 export interface ArchivePeriodOptionsResponse {
   periods: ArchivePeriodOption[];
   selected_period?: ArchivePeriodOption | null;
@@ -252,6 +317,8 @@ export interface VideoInfo {
   category?: string | null;
   has_whisper_transcript?: boolean;
   has_youtube_transcript?: boolean;
+  people?: ArchivePerson[];
+  tags?: ArchiveVideoTag[];
 }
 
 export type RecentVideo = VideoInfo;

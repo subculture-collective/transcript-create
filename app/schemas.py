@@ -343,6 +343,7 @@ class ArchivePerson(BaseModel):
     display_name: str = Field(..., description="Display name")
     aliases: List[str] = Field(default_factory=list, description="Known aliases")
     description: Optional[str] = Field(None, description="Optional description")
+    default_role: Optional[str] = Field(None, description="Default role/context for automatic video assignments")
     role: Optional[str] = Field(None, description="Role on the video, if assigned")
     sort_order: int = Field(0, exclude=True, description="Internal ordering weight")
 
@@ -360,6 +361,7 @@ class ArchivePersonCreate(BaseModel):
     slug: Optional[str] = Field(None, description="Optional stable person slug")
     aliases: List[str] = Field(default_factory=list, description="Known aliases")
     description: Optional[str] = Field(None, description="Optional description")
+    default_role: Optional[str] = Field(None, description="Default role/context for automatic video assignments")
     status: str = Field("published", description="Lifecycle status")
     sort_order: Optional[int] = Field(None, description="Ordering weight")
 
@@ -368,6 +370,7 @@ class ArchivePersonUpdate(BaseModel):
     display_name: Optional[str] = Field(None, description="Display name")
     aliases: Optional[List[str]] = Field(None, description="Known aliases")
     description: Optional[str] = Field(None, description="Optional description")
+    default_role: Optional[str] = Field(None, description="Default role/context for automatic video assignments")
     status: Optional[str] = Field(None, description="Lifecycle status")
     sort_order: Optional[int] = Field(None, description="Ordering weight")
 

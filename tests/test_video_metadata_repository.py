@@ -80,6 +80,7 @@ class _FakeMetadataDb:
                 "display_name": params.get("display_name") or params.get("label"),
                 "aliases": json.loads(params.get("aliases", "[]")),
                 "description": params.get("description"),
+                "default_role": params.get("default_role"),
                 "status": params.get("status", "published"),
                 "sort_order": params.get("sort_order", 0),
             }
@@ -94,6 +95,8 @@ class _FakeMetadataDb:
             for key in ("slug", "display_name", "description", "status", "sort_order"):
                 if key in params:
                     current[key] = params[key]
+            if "default_role" in params:
+                current["default_role"] = params["default_role"]
             if "aliases" in params:
                 current["aliases"] = json.loads(params["aliases"])
             self.people.pop(params["slug"])

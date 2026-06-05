@@ -36,22 +36,46 @@ def main(limit: int, output_format: str) -> None:
     if output_format == "json":
         print(json.dumps(suggestions, indent=2, default=str))
         return
-    writer = csv.DictWriter(sys.stdout, fieldnames=["name", "count", "example_title", "example_video_id"])
+    writer = csv.DictWriter(
+        sys.stdout,
+        fieldnames=[
+            "candidate",
+            "guess_type",
+            "count",
+            "example_title",
+            "example_video_id",
+            "decision",
+            "entity_type",
+            "person_role",
+            "canonical",
+            "aliases",
+            "notes",
+        ],
+    )
     writer.writeheader()
     for item in suggestions:
         first = item["titles"][0] if item.get("titles") else {}
         writer.writerow(
             {
-                "name": item["name"],
+                "candidate": item["name"],
+                "guess_type": "person",
                 "count": item["count"],
                 "example_title": first.get("title", ""),
                 "example_video_id": first.get("video_id", ""),
+                "decision": "",
+                "entity_type": "",
+                "person_role": "",
+                "canonical": "",
+                "aliases": "",
+                "notes": "",
             }
         )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Suggest possible people to add to the HasanAra people roster from VOD titles.")
+    parser = argparse.ArgumentParser(
+        description="Suggest possible people to add to the HasanAra people roster from VOD titles."
+    )
     parser.add_argument("--limit", type=int, default=2000, help="Maximum videos to scan")
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
     args = parser.parse_args()

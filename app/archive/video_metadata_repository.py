@@ -36,6 +36,7 @@ AUTO_TAG_SLUG_ALLOWLIST = {
 }
 AUTO_TAG_KINDS = {"category", "series", "game", "meme"}
 PERSON_PRESENT_MARKERS = ("joins us", "on stream", "guest", "interview", "talking to", "with ")
+PERSON_ROLES = {"guest", "host", "caller", "subject", "mentioned"}
 
 
 def slugify(value: str) -> str:
@@ -73,6 +74,11 @@ def _normalize_person_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
     data = dict(row)
     data["aliases"] = _string_list(data.get("aliases"))
     return data
+
+
+def _person_role(value: Any, default: str = "guest") -> str:
+    role = str(value or default).strip().lower()
+    return role if role in PERSON_ROLES else default
 
 
 def _normalize_tag_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -313,16 +319,17 @@ def materialize_label_assignments_to_metadata(db, limit: int = 500) -> dict[str,
                 text(
                     """
                     INSERT INTO archive_people (
-                        slug, display_name, aliases, description, status, sort_order, created_at, updated_at
+                        slug, display_name, aliases, description, default_role, status, sort_order, created_at, updated_at
                     ) VALUES (
-                        :slug, :display_name, CAST(:aliases AS JSONB), :description, 'published', 0, now(), now()
+                        :slug, :display_name, CAST(:aliases AS JSONB), :description, 'guest', 'published', 0, now(), now()
                     )
                     ON CONFLICT (slug) DO UPDATE SET
                         display_name = EXCLUDED.display_name,
                         description = COALESCE(archive_people.description, EXCLUDED.description),
+                        default_role = COALESCE(archive_people.default_role, EXCLUDED.default_role),
                         status = CASE WHEN archive_people.status = 'hidden' THEN archive_people.status ELSE 'published' END,
                         updated_at = now()
-                    RETURNING id
+                    RETURNING id, default_role
                     """
                 ),
                 {
@@ -348,7 +355,7 @@ def materialize_label_assignments_to_metadata(db, limit: int = 500) -> dict[str,
                 {
                     "video_id": video_id,
                     "person_id": person_row["id"],
-                    "role": "guest",
+                    "role": _person_role(person_row.get("default_role")),
                     "confidence": "auto",
                     "notes": f"Auto-materialized from label assignment {row.get('assignment_id')}",
                 },
@@ -419,6 +426,7 @@ def create_person(db, payload: dict) -> dict:
         "display_name": display_name,
         "aliases": json.dumps(_string_list(payload.get("aliases"))),
         "description": payload.get("description"),
+        "default_role": _person_role(payload.get("default_role")) if payload.get("default_role") else None,
         "status": payload.get("status") or "published",
         "sort_order": int(payload.get("sort_order") or 0),
     }
@@ -426,9 +434,9 @@ def create_person(db, payload: dict) -> dict:
         db,
         """
         INSERT INTO archive_people (
-            slug, display_name, aliases, description, status, sort_order, created_at, updated_at
+            slug, display_name, aliases, description, default_role, status, sort_order, created_at, updated_at
         ) VALUES (
-            :slug, :display_name, CAST(:aliases AS JSONB), :description, :status, :sort_order, now(), now()
+            :slug, :display_name, CAST(:aliases AS JSONB), :description, :default_role, :status, :sort_order, now(), now()
         )
         RETURNING *
         """,
@@ -453,6 +461,9 @@ def update_person(db, slug: str, payload: dict) -> dict | None:
         if field in payload and payload[field] is not None:
             updates.append(f"{field} = :{field}")
             params[field] = payload[field]
+    if "default_role" in payload:
+        updates.append("default_role = :default_role")
+        params["default_role"] = _person_role(payload.get("default_role")) if payload.get("default_role") else None
     if "aliases" in payload and payload["aliases"] is not None:
         updates.append("aliases = CAST(:aliases AS JSONB)")
         params["aliases"] = json.dumps(_string_list(payload["aliases"]))

@@ -2070,6 +2070,17 @@ def refresh_archive_intelligence(db, quick: bool = False):
     for prefix, result in (
         ("seed", seed_archive_topics(db)),
         ("seed_periods", seed_named_periods(db)),
+    ):
+        for key, value in result.items():
+            stats[f"{prefix}_{key}"] = value
+
+    # Later refresh steps intentionally use defensive helpers that can rollback
+    # on optional-table/query failures. Persist seeded topics/periods first so a
+    # later rollback cannot erase parent rows while downstream stats still hold
+    # their IDs in memory.
+    db.commit()
+
+    for prefix, result in (
         ("hide_stop", hide_automatic_stop_topics(db)),
         ("auto", autopublish_search_topics(db, limit=20)),
         ("mentions", refresh_topic_mentions(db, segment_limit=1000 if quick else None)),

@@ -6,10 +6,14 @@ from sqlalchemy import text
 
 from .extractors import extract_alias_candidates, extract_keyphrase_candidates, extract_title_alias_candidates
 from .policy import classify_candidate
-from .repository import create_extraction_run, finish_extraction_run, insert_assignment, upsert_label_candidate
-from .repository import ASSIGNMENT_SOURCES
+from .repository import (
+    ASSIGNMENT_SOURCES,
+    create_extraction_run,
+    finish_extraction_run,
+    insert_assignment,
+    upsert_label_candidate,
+)
 from .windows import build_windows_from_segments, load_source_segments, persist_windows
-
 
 _DEFAULT_POLICY: dict[str, Any] = {
     "min_publish_score": 0.90,
@@ -131,34 +135,52 @@ def _load_video_title(db: Any, video_id: str) -> str:
     return str(row.get("title") or "") if row else ""
 
 
-def extract_labels_for_video(db: Any, video_id: str, extraction_tier: str = "cheap") -> dict:
-    run_id = create_extraction_run(db, scope="video", extraction_tier=extraction_tier, video_id=video_id, model_name="deterministic")
+def extract_labels_for_video(
+    db: Any,
+    video_id: str,
+    extraction_tier: str = "cheap",
+    *,
+    title_only: bool = False,
+    include_keyphrases: bool = True,
+    run_id: str | None = None,
+) -> dict:
+    run_scope = "video_title" if title_only else "video"
+    if run_id is None:
+        run_id = create_extraction_run(
+            db,
+            scope=run_scope,
+            extraction_tier=extraction_tier,
+            video_id=video_id,
+            model_name="deterministic",
+        )
     metrics = {"windows": 0, "candidates": 0, "assignments": 0}
 
     try:
         window_dicts: list[dict] = []
-        for source in ("whisper", "youtube"):
-            segments = load_source_segments(db, video_id, source)
-            windows = build_windows_from_segments(segments, source=source)
-            persist_windows(db, video_id, windows)
-            metrics["windows"] += len(windows)
-            window_dicts.extend(
-                {
-                    "id": window.text_hash,
-                    "video_id": video_id,
-                    "source": source,
-                    "text": window.text,
-                    "start_ms": window.start_ms,
-                    "end_ms": window.end_ms,
-                }
-                for window in windows
-            )
+        if not title_only:
+            for source in ("whisper", "youtube"):
+                segments = load_source_segments(db, video_id, source)
+                windows = build_windows_from_segments(segments, source=source)
+                persist_windows(db, video_id, windows)
+                metrics["windows"] += len(windows)
+                window_dicts.extend(
+                    {
+                        "id": window.text_hash,
+                        "video_id": video_id,
+                        "source": source,
+                        "text": window.text,
+                        "start_ms": window.start_ms,
+                        "end_ms": window.end_ms,
+                    }
+                    for window in windows
+                )
 
         aliases = _load_existing_aliases(db)
-        candidates = extract_alias_candidates(window_dicts, aliases)
+        candidates = [] if title_only else extract_alias_candidates(window_dicts, aliases)
         title = _load_video_title(db, video_id)
         candidates.extend(extract_title_alias_candidates({"id": video_id, "title": title}, aliases))
-        candidates.extend(extract_keyphrase_candidates(window_dicts, min_distinct_videos=1, min_occurrences=3))
+        if include_keyphrases and not title_only:
+            candidates.extend(extract_keyphrase_candidates(window_dicts, min_distinct_videos=1, min_occurrences=3))
         metrics["candidates"] = len(candidates)
 
         for candidate in candidates:
@@ -192,7 +214,10 @@ def extract_labels_for_video(db: Any, video_id: str, extraction_tier: str = "che
             )
 
             label_row = _fetch_first_dict(
-                db.execute(text("SELECT status, canonical_id FROM archive_labels WHERE id = :label_id"), {"label_id": label_id})
+                db.execute(
+                    text("SELECT status, canonical_id FROM archive_labels WHERE id = :label_id"),
+                    {"label_id": label_id},
+                )
             )
             if label_row and str(label_row.get("status") or "").lower() in {"rejected", "merged"}:
                 continue

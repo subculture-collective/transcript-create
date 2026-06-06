@@ -251,6 +251,16 @@ def extract_labels_for_video(
         finish_extraction_run(db, run_id, "completed", metrics)
         return {"video_id": video_id, "extraction_tier": extraction_tier, "run_id": run_id, **metrics}
     except Exception as exc:
+        # SQL errors such as deadlocks leave the current transaction aborted.
+        # Roll back before attempting to persist failed-run status. For
+        # externally pre-created runs, the run row was already committed by the
+        # caller and can be safely updated after rollback. For internally-created
+        # runs, rollback may remove the run row; the best-effort update is still
+        # harmless and preserves the old API behavior for non-SQL failures.
+        try:
+            db.rollback()
+        except Exception:
+            pass
         finish_extraction_run(db, run_id, "failed", metrics, error=str(exc))
         raise
 

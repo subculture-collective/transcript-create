@@ -54,7 +54,15 @@ def test_normalization_rejects_junk_phrases_and_slugifies_labels():
     assert is_junk_phrase("yeah")
     assert is_junk_phrase("12345")
     assert is_junk_phrase("stream vod chat")
+    assert is_junk_phrase("About")
+    assert is_junk_phrase("About This")
+    assert is_junk_phrase("About The")
+    assert is_junk_phrase("Able To")
+    assert is_junk_phrase("10 Years")
     assert not is_junk_phrase("okbuddy")
+    assert not is_junk_phrase("New Jersey")
+    assert not is_junk_phrase("The Majority Report")
+    assert not is_junk_phrase("Call of Duty")
 
     assert normalize_label("  new jersey  ") == "New Jersey"
     assert normalize_label("ICE") == "ICE"

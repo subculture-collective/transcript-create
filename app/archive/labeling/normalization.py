@@ -23,10 +23,23 @@ STOP_TERMS = {
     "twitch",
     "the",
     "and",
+    "a",
+    "an",
     "for",
+    "to",
+    "of",
+    "in",
+    "on",
     "with",
     "this",
     "that",
+    "me",
+    "my",
+    "it",
+    "it's",
+    "its",
+    "about",
+    "able",
     "you",
     "your",
     "uh",
@@ -54,6 +67,7 @@ _FILLER_TERMS = {
     "huh",
     "idk",
     "kinda",
+    "little",
     "kind of",
     "sort of",
     "literally",
@@ -96,6 +110,9 @@ def is_junk_phrase(value: str) -> bool:
         return True
 
     if normalized in STOP_TERMS or normalized in _FILLER_TERMS:
+        return True
+
+    if re.fullmatch(r"\d+\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)", normalized):
         return True
 
     if all(term in STOP_TERMS or term in _FILLER_TERMS for term in terms):

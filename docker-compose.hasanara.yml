@@ -10,7 +10,8 @@ services:
 
     db:
         container_name: hasanara-db
-        ports: !override []
+        ports: !override
+            - 127.0.0.1:15432:5432
 
     migrations:
         container_name: hasanara-migrations

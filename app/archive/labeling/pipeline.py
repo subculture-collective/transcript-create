@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import text
 
 from .extractors import extract_alias_candidates, extract_keyphrase_candidates, extract_title_alias_candidates
+from .normalization import slugify_label
 from .policy import classify_candidate
 from .repository import (
     ASSIGNMENT_SOURCES,
@@ -182,6 +183,11 @@ def extract_labels_for_video(
         if include_keyphrases and not title_only:
             candidates.extend(extract_keyphrase_candidates(window_dicts, min_distinct_videos=1, min_occurrences=3))
         metrics["candidates"] = len(candidates)
+
+        # Parallel workers upsert many of the same automatic labels. Sort by
+        # slug so every transaction takes per-label advisory locks in the same
+        # order, avoiding lock-order deadlocks across workers.
+        candidates.sort(key=lambda candidate: (slugify_label(candidate.label), candidate.kind, candidate.label))
 
         for candidate in candidates:
             evidence = list(candidate.evidence)

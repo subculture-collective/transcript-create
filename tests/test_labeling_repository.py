@@ -5,7 +5,13 @@ import json
 
 import pytest
 
-from app.archive.labeling.repository import assignment_key, create_extraction_run, finish_extraction_run, insert_assignment, upsert_label_candidate
+from app.archive.labeling.repository import (
+    assignment_key,
+    create_extraction_run,
+    finish_extraction_run,
+    insert_assignment,
+    upsert_label_candidate,
+)
 
 
 def _compact_sql(sql) -> str:
@@ -48,12 +54,18 @@ def test_create_and_finish_run_use_text_clause_and_json_metrics():
     update_sql, update_params = db.calls[1]
     assert insert_sql.__class__.__name__ == "TextClause"
     assert update_sql.__class__.__name__ == "TextClause"
-    assert insert_params == {"scope": "video", "extraction_tier": "cheap", "video_id": "video-1", "model_name": "whisper"}
+    assert insert_params == {
+        "scope": "video",
+        "extraction_tier": "cheap",
+        "video_id": "video-1",
+        "model_name": "whisper",
+    }
     assert json.loads(update_params["metrics"]) == metrics
 
 
 def test_upsert_label_preserves_rejected_and_inserts_normalized_aliases():
     db = _FakeDb([
+        (lambda sql, params: "pg_advisory_xact_lock" in sql, _FakeResult()),
         (lambda sql, params: "INSERT INTO archive_labels" in sql, _FakeResult(first=("label-1",))),
         (lambda sql, params: "INSERT INTO archive_label_aliases" in sql, _FakeResult()),
     ])
@@ -71,15 +83,21 @@ def test_upsert_label_preserves_rejected_and_inserts_normalized_aliases():
     )
 
     assert label_id == "label-1"
-    insert_sql, insert_params = db.calls[0]
-    alias_sql, alias_params = db.calls[1]
+    lock_sql, lock_params = db.calls[0]
+    insert_sql, insert_params = db.calls[1]
+    alias_sql, alias_params = db.calls[2]
+    assert "pg_advisory_xact_lock" in str(lock_sql)
+    assert lock_params == {"slug": "new-jersey"}
     compact_insert_sql = _compact_sql(insert_sql)
-    assert "CASE WHEN archive_labels.status IN ('published', 'rejected', 'merged') THEN archive_labels.status ELSE EXCLUDED.status END" in compact_insert_sql
+    assert (
+        "CASE WHEN archive_labels.status IN ('published', 'rejected', 'merged') "
+        "THEN archive_labels.status ELSE EXCLUDED.status END"
+    ) in compact_insert_sql
     assert "GREATEST(archive_labels.confidence_score, EXCLUDED.confidence_score)" in compact_insert_sql
     assert "ON CONFLICT (label_id, normalized_alias) DO NOTHING" in str(alias_sql)
     assert alias_params["normalized_alias"] == "new jersey"
     assert alias_params["alias"] == "New Jersey"
-    assert len(db.calls) == 2
+    assert len(db.calls) == 3
 
 
 def test_assignment_key_is_deterministic_and_sensitive_to_dimensions():

@@ -29,7 +29,13 @@ def _extract_id(row: Any) -> str:
     return str(row[0])
 
 
-def create_extraction_run(db, scope: str, extraction_tier: str, video_id: str | None = None, model_name: str | None = None) -> str:
+def create_extraction_run(
+    db,
+    scope: str,
+    extraction_tier: str,
+    video_id: str | None = None,
+    model_name: str | None = None,
+) -> str:
     row = db.execute(
         text(
             """
@@ -82,6 +88,10 @@ def upsert_label_candidate(
     run_id: str | None,
 ) -> str:
     slug = slugify_label(label)
+    # Parallel backfills commonly upsert the same automatic label slug from
+    # multiple workers. PostgreSQL can deadlock concurrent ON CONFLICT UPDATEs
+    # across hot slugs, so serialize each slug within the current transaction.
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:slug))"), {"slug": slug})
     row = db.execute(
         text(
             """

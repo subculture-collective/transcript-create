@@ -12,6 +12,7 @@ services:
         container_name: hasanara-db
         ports: !override
             - 127.0.0.1:15432:5432
+        restart: unless-stopped
 
     migrations:
         container_name: hasanara-migrations
@@ -27,6 +28,7 @@ services:
         environment:
             FRONTEND_ORIGIN: https://hasanara.tv
             CORS_ALLOW_ORIGINS: https://hasanara.tv
+        restart: unless-stopped
 
     worker:
         container_name: hasanara-worker

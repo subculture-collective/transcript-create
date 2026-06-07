@@ -37,6 +37,7 @@ services:
         healthcheck:
             disable: true
         ports: !override []
+        restart: unless-stopped
 
     summary-refresher:
         image: transcript-create:gtx1080

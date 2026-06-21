@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -145,6 +146,15 @@ class Settings(BaseSettings):
     CORS_ALLOW_ORIGINS: str = ""  # Comma-separated allowed origins; empty = use FRONTEND_ORIGIN only
     MAX_LOGIN_ATTEMPTS: int = 5  # Max failed login attempts before rate limiting
     LOGIN_ATTEMPT_WINDOW_MINUTES: int = 15  # Time window for tracking login attempts
+    # Job creation abuse controls
+    JOB_CREATE_QUOTA_WINDOW_HOURS: int = 24  # Rolling quota window for user-created ingestion jobs
+    JOB_CREATE_DAILY_LIMIT: int = 5  # Regular-user jobs per quota window
+    JOB_CREATE_PRO_DAILY_LIMIT: int = 25  # Pro-user jobs per quota window
+    JOB_CREATE_CHANNEL_DAILY_LIMIT: int = 1  # Regular-user channel jobs per quota window
+    JOB_CREATE_PRO_CHANNEL_DAILY_LIMIT: int = 5  # Pro-user channel jobs per quota window
+    JOB_CREATE_MAX_CHANNEL_VIDEOS: int = 250  # Maximum videos a channel job may expand into
+    JOB_CREATE_MAX_BATCH_EXPECTED_JOBS: int = 100  # Upper bound for staged batch coordination fan-out
+    JOB_CREATE_ADMIN_BYPASS_QUOTAS: bool = True  # Admins may create ingestion jobs without quota limits
 
     # Backup and disaster recovery configuration
     BACKUP_DIR: str = "/backups"  # Root directory for all backups
@@ -226,6 +236,103 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+
+def _has_value(value: str | None) -> bool:
+    return bool((value or "").strip())
+
+
+def _parse_db_password(database_url: str) -> str:
+    parsed = urlparse(database_url)
+    return parsed.password or ""
+
+
+def _is_local_origin(origin: str) -> bool:
+    parsed = urlparse(origin)
+    return parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+
+
+def _is_valid_origin(origin: str) -> bool:
+    parsed = urlparse(origin)
+    return bool(
+        parsed.scheme == "https"
+        and parsed.hostname
+        and not _is_local_origin(origin)
+        and parsed.path in {"", "/"}
+        and not parsed.params
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
+def _is_valid_production_redirect_uri(uri: str) -> bool:
+    parsed = urlparse(uri)
+    return bool(
+        parsed.scheme == "https"
+        and parsed.hostname
+        and not _is_local_origin(uri)
+    )
+
+
+def validate_production_settings(config: Settings | None = None) -> None:
+    """Fail closed when production settings keep unsafe defaults."""
+
+    cfg = config or settings
+    if (cfg.ENVIRONMENT or "").strip().lower() != "production":
+        return
+
+    errors: list[str] = []
+
+    if not _has_value(cfg.SESSION_SECRET) or cfg.SESSION_SECRET.strip() == "change-me":
+        errors.append("SESSION_SECRET must be a generated secret in production (not 'change-me').")
+
+    db_password = _parse_db_password(cfg.DATABASE_URL)
+    if not db_password or db_password in {"postgres", "change-me", "change-me-in-production"}:
+        errors.append("DATABASE_URL must use a non-default database password in production.")
+
+    if (
+        not _has_value(cfg.FRONTEND_ORIGIN)
+        or cfg.FRONTEND_ORIGIN.strip() == "*"
+        or not _is_valid_origin(cfg.FRONTEND_ORIGIN.strip())
+    ):
+        errors.append("FRONTEND_ORIGIN must be a production https origin without path/query/fragment.")
+
+    cors_origins = [origin.strip() for origin in (cfg.CORS_ALLOW_ORIGINS or "").split(",") if origin.strip()]
+    if any(
+        origin == "*" or origin.startswith("*") or origin.endswith("*") or _is_local_origin(origin)
+        for origin in cors_origins
+    ):
+        errors.append("CORS_ALLOW_ORIGINS must not contain wildcards or local development origins in production.")
+
+    oauth_providers = {
+        "google": (
+            cfg.OAUTH_GOOGLE_CLIENT_ID,
+            cfg.OAUTH_GOOGLE_CLIENT_SECRET,
+            cfg.OAUTH_GOOGLE_REDIRECT_URI,
+        ),
+        "twitch": (
+            cfg.OAUTH_TWITCH_CLIENT_ID,
+            cfg.OAUTH_TWITCH_CLIENT_SECRET,
+            cfg.OAUTH_TWITCH_REDIRECT_URI,
+        ),
+    }
+    for provider, (client_id, client_secret, redirect_uri) in oauth_providers.items():
+        if _has_value(client_id) or _has_value(client_secret):
+            if not _has_value(client_id):
+                errors.append(f"OAUTH_{provider.upper()}_CLIENT_ID must be set when {provider} OAuth is enabled.")
+            if not _has_value(client_secret):
+                errors.append(f"OAUTH_{provider.upper()}_CLIENT_SECRET must be set when {provider} OAuth is enabled.")
+            if (
+                not _has_value(redirect_uri)
+                or not _is_valid_production_redirect_uri(redirect_uri.strip())
+            ):
+                errors.append(
+                    f"OAUTH_{provider.upper()}_REDIRECT_URI must be an https production callback URI when "
+                    f"{provider} OAuth is enabled."
+                )
+
+    if errors:
+        raise ValueError("Production configuration validation failed:\n- " + "\n- ".join(errors))
 
 
 @lru_cache

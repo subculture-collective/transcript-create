@@ -1,4 +1,5 @@
 import { track } from '../services';
+import { buildApiUrl } from '../services/api';
 
 type Props = {
   videoId: string;
@@ -21,7 +22,7 @@ export default function ExportMenu({ videoId }: Props) {
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
             onClick={() => guard({ videoId, format: 'srt', source: 'best' })}
-            href={`/api/videos/${videoId}/transcript.srt`}
+            href={buildApiUrl(`videos/${videoId}/transcript.srt`)}
             download={`video-${videoId}.srt`}
           >
             SRT
@@ -29,7 +30,7 @@ export default function ExportMenu({ videoId }: Props) {
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
             onClick={() => guard({ videoId, format: 'vtt', source: 'best' })}
-            href={`/api/videos/${videoId}/transcript.vtt`}
+            href={buildApiUrl(`videos/${videoId}/transcript.vtt`)}
             download={`video-${videoId}.vtt`}
           >
             VTT
@@ -37,7 +38,7 @@ export default function ExportMenu({ videoId }: Props) {
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
             onClick={() => guard({ videoId, format: 'json', source: 'best' })}
-            href={`/api/videos/${videoId}/transcript.json`}
+            href={buildApiUrl(`videos/${videoId}/transcript.json`)}
             download={`video-${videoId}.json`}
           >
             JSON
@@ -45,7 +46,7 @@ export default function ExportMenu({ videoId }: Props) {
           <a
             className="btn-secondary min-h-0 px-2 py-1 text-xs"
             onClick={() => guard({ videoId, format: 'pdf', source: 'whisper' })}
-            href={`/api/videos/${videoId}/transcript.pdf`}
+            href={buildApiUrl(`videos/${videoId}/transcript.pdf`)}
             download={`video-${videoId}.pdf`}
           >
             PDF

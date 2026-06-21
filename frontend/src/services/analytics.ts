@@ -1,4 +1,4 @@
-import { http } from './api';
+import { buildApiUrl, http } from './api';
 
 export type EventPayload = {
   type:
@@ -46,7 +46,7 @@ async function flush() {
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
     if (queue.length) {
-      navigator.sendBeacon?.('/api/events/batch', JSON.stringify({ events: queue }));
+      navigator.sendBeacon?.(buildApiUrl('events/batch'), JSON.stringify({ events: queue }));
     }
   });
 }

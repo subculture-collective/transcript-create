@@ -214,7 +214,7 @@ def expand_channel_if_needed(conn):
         conn.execute(
             text(
                 """
-        SELECT j.id, j.input_url
+        SELECT j.id, j.input_url, j.meta
         FROM jobs j
         WHERE j.kind='channel'
           AND j.state IN ('pending','downloading')
@@ -281,6 +281,33 @@ def expand_channel_if_needed(conn):
 
             entries = data.get("entries", [])
             entry_count = len(entries)
+            raw_meta = job.get("meta") or {}
+            try:
+                job_meta = raw_meta if isinstance(raw_meta, dict) else json.loads(raw_meta)
+            except (TypeError, ValueError):
+                logger.warning("Unable to parse job metadata for channel cap", extra={"job_id": str(job["id"])})
+                job_meta = {}
+            max_channel_videos = int(job_meta.get("max_channel_videos") or settings.JOB_CREATE_MAX_CHANNEL_VIDEOS or 0)
+
+            if max_channel_videos > 0 and entry_count > max_channel_videos:
+                error_message = (
+                    f"Channel expansion found {entry_count} videos, exceeding configured cap "
+                    f"of {max_channel_videos}."
+                )
+                logger.warning(
+                    "Channel expansion exceeds configured cap",
+                    extra={
+                        "job_id": str(job["id"]),
+                        "entry_count": entry_count,
+                        "max_channel_videos": max_channel_videos,
+                    },
+                )
+                conn.execute(
+                    text("UPDATE jobs SET state='failed', error=:e, updated_at=now() WHERE id=:i"),
+                    {"i": job["id"], "e": error_message[:5000]},
+                )
+                youtube_requests_total.labels(operation="channel_expansion", result="failure").inc()
+                continue
 
             # Extract channel ID for logging (None if not available)
             channel_id = data.get("channel_id") or data.get("uploader_id")

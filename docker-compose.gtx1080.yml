@@ -3,13 +3,13 @@ services:
         build:
             context: .
             dockerfile: Dockerfile.cuda
-        image: transcript-create:gtx1080
+        image: hasanara:gtx1080
 
     api:
         build:
             context: .
             dockerfile: Dockerfile.cuda
-        image: transcript-create:gtx1080
+        image: hasanara:gtx1080
         environment:
             SEARCH_BACKEND: postgres
             REDIS_URL: ''
@@ -27,7 +27,7 @@ services:
         build:
             context: .
             dockerfile: Dockerfile.cuda
-        image: transcript-create:gtx1080
+        image: hasanara:gtx1080
         environment:
             SEARCH_BACKEND: postgres
             OPENSEARCH_URL: ''
@@ -69,7 +69,7 @@ services:
         build:
             context: .
             dockerfile: Dockerfile.cuda
-        image: transcript-create:gtx1080
+        image: hasanara:gtx1080
         env_file: .env
         environment:
             DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts

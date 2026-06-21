@@ -5,8 +5,25 @@ import uuid
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+
+from app.main import app
+from app.security import get_user_required
+
+
+@pytest.fixture(autouse=True)
+def authenticated_job_user():
+    user = {
+        "id": str(uuid.uuid4()),
+        "email": "search-user@example.com",
+        "name": "Search User",
+        "plan": "free",
+    }
+    app.dependency_overrides[get_user_required] = lambda: user
+    yield user
+    app.dependency_overrides.pop(get_user_required, None)
 
 
 class TestSearchRoutes:

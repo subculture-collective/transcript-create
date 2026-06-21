@@ -9,7 +9,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 from .exceptions import AppError
 from .logging_config import configure_logging, get_logger, request_id_ctx, user_id_ctx
 from .middleware import setup_security_middleware
-from .settings import settings
+from .settings import settings, validate_production_settings
 from .ytdlp_validation import validate_js_runtime_or_exit
 
 # Configure structured logging for API service
@@ -116,6 +116,8 @@ async def startup_event():
     """Log application startup and initialize metrics."""
     from app.metrics import setup_app_info
     from app.version import get_version
+
+    validate_production_settings(settings)
 
     # Validate JavaScript runtime for yt-dlp before starting
     validate_js_runtime_or_exit()

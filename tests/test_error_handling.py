@@ -2,7 +2,24 @@
 
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.main import app
+from app.security import get_user_required
+
+
+@pytest.fixture
+def authenticated_user():
+    user = {
+        "id": str(uuid.uuid4()),
+        "email": "errors-user@example.com",
+        "name": "Errors User",
+        "plan": "free",
+    }
+    app.dependency_overrides[get_user_required] = lambda: user
+    yield user
+    app.dependency_overrides.pop(get_user_required, None)
 
 
 class TestErrorHandling:
@@ -34,7 +51,7 @@ class TestErrorHandling:
         assert "message" in data
         assert "details" in data
 
-    def test_invalid_url_returns_422_with_validation_error(self, client: TestClient):
+    def test_invalid_url_returns_422_with_validation_error(self, client: TestClient, authenticated_user):
         """Test that invalid URL returns validation error."""
         response = client.post(
             "/jobs",
@@ -49,7 +66,7 @@ class TestErrorHandling:
         assert "details" in data
         assert "errors" in data["details"]
 
-    def test_non_youtube_url_returns_422(self, client: TestClient):
+    def test_non_youtube_url_returns_422(self, client: TestClient, authenticated_user):
         """Test that non-YouTube URL returns validation error."""
         response = client.post(
             "/jobs",
@@ -61,7 +78,7 @@ class TestErrorHandling:
         assert "error" in data
         assert data["error"] == "validation_error"
 
-    def test_missing_required_field_returns_422(self, client: TestClient):
+    def test_missing_required_field_returns_422(self, client: TestClient, authenticated_user):
         """Test that missing required field returns validation error."""
         response = client.post(
             "/jobs",
@@ -84,7 +101,7 @@ class TestErrorHandling:
         assert "error" in data
         assert data["error"] == "validation_error"
 
-    def test_invalid_kind_returns_422(self, client: TestClient):
+    def test_invalid_kind_returns_422(self, client: TestClient, authenticated_user):
         """Test that invalid job kind returns validation error."""
         response = client.post(
             "/jobs",
@@ -143,7 +160,7 @@ class TestErrorHandling:
 class TestYouTubeURLValidation:
     """Tests for YouTube URL validation."""
 
-    def test_valid_youtube_watch_url(self, client: TestClient):
+    def test_valid_youtube_watch_url(self, client: TestClient, authenticated_user):
         """Test that valid YouTube watch URL is accepted."""
         response = client.post(
             "/jobs",
@@ -151,7 +168,7 @@ class TestYouTubeURLValidation:
         )
         assert response.status_code == 200
 
-    def test_valid_youtube_watch_url_with_www(self, client: TestClient):
+    def test_valid_youtube_watch_url_with_www(self, client: TestClient, authenticated_user):
         """Test that valid YouTube watch URL with www is accepted."""
         response = client.post(
             "/jobs",
@@ -159,7 +176,7 @@ class TestYouTubeURLValidation:
         )
         assert response.status_code == 200
 
-    def test_valid_youtube_channel_url(self, client: TestClient):
+    def test_valid_youtube_channel_url(self, client: TestClient, authenticated_user):
         """Test that valid YouTube channel URL is accepted."""
         response = client.post(
             "/jobs",
@@ -167,7 +184,7 @@ class TestYouTubeURLValidation:
         )
         assert response.status_code == 200
 
-    def test_valid_youtube_at_url(self, client: TestClient):
+    def test_valid_youtube_at_url(self, client: TestClient, authenticated_user):
         """Test that valid YouTube @ URL is accepted."""
         response = client.post(
             "/jobs",
@@ -175,7 +192,7 @@ class TestYouTubeURLValidation:
         )
         assert response.status_code == 200
 
-    def test_valid_youtu_be_url(self, client: TestClient):
+    def test_valid_youtu_be_url(self, client: TestClient, authenticated_user):
         """Test that valid youtu.be URL is accepted."""
         response = client.post(
             "/jobs",

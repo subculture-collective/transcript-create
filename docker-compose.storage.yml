@@ -1,0 +1,37 @@
+# Host-storage override for deployments where project data should live with the
+# compose directory instead of Docker's default /var/lib/docker volume store.
+#
+# Use with:
+#   docker compose -p hasanara \
+#     -f docker-compose.yml \
+#     -f docker-compose.gtx1080.yml \
+#     -f docker-compose.hasanara.yml \
+#     -f docker-compose.storage.yml up -d
+
+services:
+    db:
+        volumes: !override
+            - ./docker-volumes/dbdata:/var/lib/postgresql/data
+
+    redis:
+        volumes: !override
+            - ./docker-volumes/redis-data:/data
+
+    prometheus:
+        volumes: !override
+            - ./config/prometheus:/etc/prometheus
+            - ./docker-volumes/prometheus-data:/prometheus
+
+    grafana:
+        volumes: !override
+            - ./docker-volumes/grafana-data:/var/lib/grafana
+            - ./config/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+            - ./config/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+            - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+    backup:
+        volumes: !override
+            - ./docker-volumes/dbdata:/var/lib/postgresql/data:ro
+            - ./backups:/backups
+            - ./scripts:/scripts:ro
+            - ./data:/data:ro

@@ -70,7 +70,7 @@ Located in `/ansible/`:
 
 ```bash
 # Follow: docs/deployment/docker-compose.md
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 **Cost:** ~$200-400/month (dedicated server with GPU)

@@ -3,11 +3,27 @@
 import uuid
 from unittest.mock import Mock
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from app.main import app
 from app.routes.videos import get_youtube_transcript
+from app.security import get_user_required
 from app.transcripts.blocks import FORMATTER_VERSION
+
+
+@pytest.fixture(autouse=True)
+def authenticated_job_user():
+    user = {
+        "id": str(uuid.uuid4()),
+        "email": "videos-user@example.com",
+        "name": "Videos User",
+        "plan": "free",
+    }
+    app.dependency_overrides[get_user_required] = lambda: user
+    yield user
+    app.dependency_overrides.pop(get_user_required, None)
 
 
 class TestVideosRoutes:

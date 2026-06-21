@@ -30,7 +30,7 @@ NC='\033[0m' # No Color
 ROCM_VERSION="${1:-6.0}"
 NO_CACHE=""
 PUSH_IMAGE=false
-IMAGE_NAME="${IMAGE_NAME:-transcript-create}"
+IMAGE_NAME="${IMAGE_NAME:-hasanara}"
 IMAGE_TAG="${IMAGE_TAG:-rocm${ROCM_VERSION}}"
 
 # Parse arguments

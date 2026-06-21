@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.audit import ACTION_API_KEY_CREATED, ACTION_API_KEY_REVOKED
-from app.security import ROLE_ADMIN, ROLE_PRO, ROLE_USER, generate_api_key, get_user_role, has_role
+from app.security import ROLE_ADMIN, ROLE_PRO, ROLE_USER, generate_api_key, get_user_role, has_role, verify_api_key
 
 
 class TestRBAC:
@@ -68,6 +68,39 @@ class TestAPIKeyGeneration:
 
         assert key1 != key2
         assert hash1 != hash2
+
+    def test_verify_api_key_returns_user(self, db_session):
+        """Test API key verification returns the owning user."""
+        user_id = uuid.uuid4()
+        api_key, api_key_hash = generate_api_key()
+
+        db_session.execute(
+            text(
+                "INSERT INTO users (id, email, name, oauth_provider, oauth_subject) "
+                "VALUES (:id, :email, :name, 'google', 'verify-api-key')"
+            ),
+            {"id": str(user_id), "email": "api-user@example.com", "name": "API User"},
+        )
+        db_session.execute(
+            text(
+                "INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix) "
+                "VALUES (:id, :uid, :name, :hash, :prefix)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "uid": str(user_id),
+                "name": "Job Creator",
+                "hash": api_key_hash,
+                "prefix": api_key[:10] + "...",
+            },
+        )
+        db_session.commit()
+
+        user = verify_api_key(db_session, api_key)
+
+        assert user is not None
+        assert str(user["id"]) == str(user_id)
+        assert user["api_key_name"] == "Job Creator"
 
 
 class TestAPIKeyEndpoints:

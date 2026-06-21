@@ -20,7 +20,30 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-export const http = ky.create({ prefixUrl: API_BASE, timeout: 15000 });
+export function buildApiUrl(
+  path = '',
+  searchParams?: URLSearchParams | Record<string, string | number | boolean | null | undefined>,
+  base = API_BASE
+) {
+  const normalizedBase = base.replace(/\/+$/, '');
+  const normalizedPath = path.replace(/^\/+/, '');
+  const url = normalizedPath ? `${normalizedBase ? `${normalizedBase}/` : '/'}${normalizedPath}` : normalizedBase || '/';
+
+  if (!searchParams) return url;
+
+  const params = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams();
+  if (!(searchParams instanceof URLSearchParams)) {
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (value == null) continue;
+      params.set(key, String(value));
+    }
+  }
+
+  const query = params.toString();
+  return query ? `${url}?${query}` : url;
+}
+
+export const http = ky.create({ prefixUrl: API_BASE, timeout: 15000, credentials: 'include' });
 
 function appendSearchFilters(params: URLSearchParams, opts?: ArchiveSearchFilters) {
   if (!opts) return;

@@ -7,7 +7,7 @@ from prometheus_client import start_http_server
 from sqlalchemy import create_engine, text
 
 from app.logging_config import configure_logging, get_logger, video_id_ctx
-from app.settings import settings
+from app.settings import settings, validate_production_settings
 from app.ytdlp_validation import validate_js_runtime_or_exit
 from worker.metrics import setup_worker_info, try_collect_gpu_metrics
 from worker.caption_ingest import ingest_available_captions
@@ -159,6 +159,8 @@ def pending_video_claim_sql() -> str:
 
 
 def run():
+    validate_production_settings(settings)
+
     # Validate JavaScript runtime for yt-dlp before starting worker
     validate_js_runtime_or_exit()
 

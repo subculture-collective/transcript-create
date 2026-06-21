@@ -125,7 +125,7 @@ class TestOpenAPISpec:
 
         # Check a few important endpoints for error responses
         test_cases = [
-            ("POST", "/jobs", ["422"]),
+            ("POST", "/jobs", ["401", "409", "422", "429"]),
             ("GET", "/jobs/{job_id}", ["404"]),
             ("GET", "/videos/{video_id}/transcript", ["404", "503"]),
             ("GET", "/search", ["400", "429"]),

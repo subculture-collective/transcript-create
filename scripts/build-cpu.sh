@@ -28,7 +28,7 @@ NC='\033[0m' # No Color
 # Default values
 NO_CACHE=""
 PUSH_IMAGE=false
-IMAGE_NAME="${IMAGE_NAME:-transcript-create}"
+IMAGE_NAME="${IMAGE_NAME:-hasanara}"
 IMAGE_TAG="${IMAGE_TAG:-cpu}"
 
 # Parse arguments

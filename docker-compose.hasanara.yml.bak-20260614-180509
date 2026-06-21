@@ -37,10 +37,10 @@ services:
         healthcheck:
             disable: true
         ports: !override []
-        restart: no
+        restart: unless-stopped
 
     summary-refresher:
-        image: hasanara:gtx1080
+        image: transcript-create:gtx1080
         container_name: hasanara-summary-refresher
         env_file: .env
         environment:
@@ -67,7 +67,7 @@ services:
         ports: !override []
 
     archive-intelligence-refresher:
-        image: hasanara:gtx1080
+        image: transcript-create:gtx1080
         container_name: hasanara-archive-intelligence-refresher
         env_file: .env
         environment:

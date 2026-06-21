@@ -6,8 +6,9 @@ version: '3.8'
 
 services:
   db:
+    ports: !reset []
     environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./backups/db:/backups
@@ -22,6 +23,7 @@ services:
           memory: 2G
 
   redis:
+    ports: !reset []
     restart: unless-stopped
     deploy:
       resources:
@@ -32,12 +34,13 @@ services:
   migrations:
     env_file: .env.prod
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-change-me-in-production}@db:5432/transcripts
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
 
   api:
+    ports: !reset []
     env_file: .env.prod
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-change-me-in-production}@db:5432/transcripts
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
       REDIS_URL: redis://redis:6379/0
       OPENSEARCH_URL: http://opensearch:9200
       ENVIRONMENT: production
@@ -65,7 +68,7 @@ services:
   worker:
     env_file: .env.prod
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-change-me-in-production}@db:5432/transcripts
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
       OPENSEARCH_URL: http://opensearch:9200
       ENVIRONMENT: production
       LOG_LEVEL: INFO
@@ -83,6 +86,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
 
   opensearch:
+    ports: !reset []
     restart: unless-stopped
     deploy:
       resources:
@@ -92,6 +96,17 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
+
+  dashboards:
+    ports: !reset []
+
+  prometheus:
+    ports: !reset []
+
+  grafana:
+    ports: !reset []
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
 
   # Reverse proxy with automatic SSL
   caddy:
@@ -115,15 +130,16 @@ services:
 
   # Automated backups service
   backup:
-    image: transcript-create:latest
+    image: hasanara:latest
     env_file: .env.prod
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD}@db:5432/transcripts
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
       BACKUP_DIR: /backups
       BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-7}
       BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}
       BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
       MEDIA_RETENTION_DAYS: ${MEDIA_RETENTION_DAYS:-30}
+      PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - ./data:/data:ro
       - ./backups:/backups

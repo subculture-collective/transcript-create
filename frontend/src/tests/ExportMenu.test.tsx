@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ExportMenu from '../components/ExportMenu'
 import * as services from '../services'
+import { buildApiUrl } from '../services/api'
 
 vi.mock('../services', () => ({
   track: vi.fn(),
@@ -101,17 +102,17 @@ describe('ExportMenu', () => {
     await user.click(exportButton)
 
     const srtLink = screen.getAllByText('SRT')[0].closest('a')
-    expect(srtLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/transcript.srt`)
+    expect(srtLink).toHaveAttribute('href', buildApiUrl(`videos/${mockVideoId}/transcript.srt`))
     expect(srtLink).toHaveAttribute('download', `video-${mockVideoId}.srt`)
 
     const vttLink = screen.getAllByText('VTT')[0].closest('a')
-    expect(vttLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/transcript.vtt`)
+    expect(vttLink).toHaveAttribute('href', buildApiUrl(`videos/${mockVideoId}/transcript.vtt`))
 
     const jsonLink = screen.getAllByText('JSON')[0].closest('a')
-    expect(jsonLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/transcript.json`)
+    expect(jsonLink).toHaveAttribute('href', buildApiUrl(`videos/${mockVideoId}/transcript.json`))
 
     const pdfLink = screen.getByText('PDF').closest('a')
-    expect(pdfLink).toHaveAttribute('href', `/api/videos/${mockVideoId}/transcript.pdf`)
+    expect(pdfLink).toHaveAttribute('href', buildApiUrl(`videos/${mockVideoId}/transcript.pdf`))
   })
 
   it('tracks different export formats correctly', async () => {

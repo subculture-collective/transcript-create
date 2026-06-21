@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { http } from './api';
+import { buildApiUrl, http } from './api';
 
 type User = {
   id: string;
@@ -35,10 +35,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         login: () => {
-          window.location.href = '/api/auth/login/google';
+          window.location.href = buildApiUrl('auth/login/google');
         },
         loginTwitch: () => {
-          window.location.href = '/api/auth/login/twitch';
+          window.location.href = buildApiUrl('auth/login/twitch');
         },
         logout: async () => {
           await http

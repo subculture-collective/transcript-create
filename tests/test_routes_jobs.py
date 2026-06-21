@@ -2,13 +2,38 @@
 
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.main import app
+from app.security import get_user_required
+
+
+@pytest.fixture
+def authenticated_user():
+    user = {
+        "id": str(uuid.uuid4()),
+        "email": "jobs-user@example.com",
+        "name": "Jobs User",
+        "plan": "free",
+    }
+    app.dependency_overrides[get_user_required] = lambda: user
+    yield user
+    app.dependency_overrides.pop(get_user_required, None)
 
 
 class TestJobsRoutes:
     """Tests for /jobs endpoints."""
 
-    def test_create_job_single_success(self, client: TestClient):
+    def test_create_job_requires_authentication(self, client: TestClient):
+        """Test creating a job without authentication is rejected."""
+        response = client.post(
+            "/jobs",
+            json={"url": "https://youtube.com/watch?v=dQw4w9WgXcQ", "kind": "single"},
+        )
+        assert response.status_code == 401
+
+    def test_create_job_single_success(self, client: TestClient, authenticated_user):
         """Test creating a single video job successfully."""
         response = client.post(
             "/jobs",
@@ -20,7 +45,7 @@ class TestJobsRoutes:
         assert data["kind"] == "single"
         assert data["state"] in ["pending", "expanded"]
 
-    def test_create_job_channel_success(self, client: TestClient):
+    def test_create_job_channel_success(self, client: TestClient, authenticated_user):
         """Test creating a channel job successfully."""
         response = client.post(
             "/jobs",
@@ -30,7 +55,7 @@ class TestJobsRoutes:
         data = response.json()
         assert data["kind"] == "channel"
 
-    def test_create_job_default_kind(self, client: TestClient):
+    def test_create_job_default_kind(self, client: TestClient, authenticated_user):
         """Test creating a job with default kind (single)."""
         response = client.post(
             "/jobs",
@@ -40,7 +65,7 @@ class TestJobsRoutes:
         data = response.json()
         assert data["kind"] == "single"
 
-    def test_create_job_invalid_url(self, client: TestClient):
+    def test_create_job_invalid_url(self, client: TestClient, authenticated_user):
         """Test creating a job with an invalid URL."""
         response = client.post(
             "/jobs",
@@ -48,7 +73,7 @@ class TestJobsRoutes:
         )
         assert response.status_code == 422  # Validation error
 
-    def test_create_job_missing_url(self, client: TestClient):
+    def test_create_job_missing_url(self, client: TestClient, authenticated_user):
         """Test creating a job without a URL."""
         response = client.post(
             "/jobs",
@@ -56,7 +81,7 @@ class TestJobsRoutes:
         )
         assert response.status_code == 422  # Validation error
 
-    def test_get_job_success(self, client: TestClient):
+    def test_get_job_success(self, client: TestClient, authenticated_user):
         """Test getting a job by ID successfully."""
         # First create a job
         create_response = client.post(
@@ -87,7 +112,7 @@ class TestJobsRoutes:
         response = client.get("/jobs/not-a-uuid")
         assert response.status_code == 422  # Validation error
 
-    def test_job_has_required_fields(self, client: TestClient):
+    def test_job_has_required_fields(self, client: TestClient, authenticated_user):
         """Test that a created job has all required fields."""
         response = client.post(
             "/jobs",
@@ -101,7 +126,7 @@ class TestJobsRoutes:
         for field in required_fields:
             assert field in data, f"Missing required field: {field}"
 
-    def test_job_error_field_nullable(self, client: TestClient):
+    def test_job_error_field_nullable(self, client: TestClient, authenticated_user):
         """Test that the error field is nullable for successful jobs."""
         response = client.post(
             "/jobs",
@@ -112,7 +137,7 @@ class TestJobsRoutes:
         # Error field should be null or not present for new jobs
         assert data.get("error") is None or "error" not in data
 
-    def test_multiple_jobs_different_urls(self, client: TestClient):
+    def test_multiple_jobs_different_urls(self, client: TestClient, authenticated_user):
         """Test creating multiple jobs with different URLs."""
         urls = [
             "https://youtube.com/watch?v=test1",
@@ -128,3 +153,66 @@ class TestJobsRoutes:
 
         # All job IDs should be unique
         assert len(job_ids) == len(set(job_ids))
+
+    def test_duplicate_single_video_job_rejected(self, client: TestClient, authenticated_user):
+        """Test duplicate active single-video jobs are rejected by canonical YouTube ID."""
+        first = client.post(
+            "/jobs",
+            json={"url": "https://youtube.com/watch?v=dupe123", "kind": "single"},
+        )
+        assert first.status_code == 200
+
+        duplicate = client.post(
+            "/jobs",
+            json={"url": "https://youtu.be/dupe123", "kind": "single"},
+        )
+        assert duplicate.status_code == 409
+        assert duplicate.json()["error"] == "duplicate_job"
+
+    def test_job_daily_quota_rejected(self, client: TestClient, authenticated_user, monkeypatch):
+        """Test per-user job quotas reject excess job creation."""
+        monkeypatch.setattr("app.routes.jobs.settings.JOB_CREATE_DAILY_LIMIT", 1)
+
+        first = client.post(
+            "/jobs",
+            json={"url": "https://youtube.com/watch?v=quota1", "kind": "single"},
+        )
+        assert first.status_code == 200
+
+        second = client.post(
+            "/jobs",
+            json={"url": "https://youtube.com/watch?v=quota2", "kind": "single"},
+        )
+        assert second.status_code == 429
+        assert second.json()["error"] == "rate_limit_exceeded"
+
+    def test_channel_job_quota_rejected(self, client: TestClient, authenticated_user, monkeypatch):
+        """Test per-user channel-job quotas reject excess channel jobs."""
+        monkeypatch.setattr("app.routes.jobs.settings.JOB_CREATE_CHANNEL_DAILY_LIMIT", 1)
+
+        first = client.post(
+            "/jobs",
+            json={"url": "https://youtube.com/@quota-channel-one", "kind": "channel"},
+        )
+        assert first.status_code == 200
+
+        second = client.post(
+            "/jobs",
+            json={"url": "https://youtube.com/@quota-channel-two", "kind": "channel"},
+        )
+        assert second.status_code == 429
+        assert second.json()["error"] == "rate_limit_exceeded"
+
+    def test_batch_expected_jobs_cap_rejected(self, client: TestClient, authenticated_user, monkeypatch):
+        """Test oversized staged batch fan-out is rejected."""
+        monkeypatch.setattr("app.routes.jobs.settings.JOB_CREATE_MAX_BATCH_EXPECTED_JOBS", 2)
+        response = client.post(
+            "/jobs",
+            json={
+                "url": "https://youtube.com/watch?v=batchcap",
+                "kind": "single",
+                "batch_expected_jobs": 3,
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["error"] == "validation_error"

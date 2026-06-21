@@ -61,7 +61,22 @@ Create and monitor transcription jobs for YouTube videos and channels.
 
 Create a new transcription job.
 
-**Authentication:** Required
+**Authentication:** Required via session cookie or API key (`Authorization: Bearer tc_...` or `X-API-Key`).
+
+Job creation is quota-protected because each job can spend YouTube quota, disk,
+and GPU time. Current server-side controls are configurable with
+`JOB_CREATE_*` environment variables:
+
+- `JOB_CREATE_DAILY_LIMIT`: regular-user jobs per rolling quota window
+- `JOB_CREATE_PRO_DAILY_LIMIT`: pro-user jobs per rolling quota window
+- `JOB_CREATE_CHANNEL_DAILY_LIMIT`: regular-user channel jobs per rolling quota window
+- `JOB_CREATE_PRO_CHANNEL_DAILY_LIMIT`: pro-user channel jobs per rolling quota window
+- `JOB_CREATE_MAX_CHANNEL_VIDEOS`: maximum videos a channel job may expand into
+- `JOB_CREATE_MAX_BATCH_EXPECTED_JOBS`: maximum staged batch fan-out
+- `JOB_CREATE_ADMIN_BYPASS_QUOTAS`: whether admins bypass creation quotas
+
+Duplicate active single-video jobs are rejected per user when HasanAra can
+canonicalize the YouTube video ID.
 
 **Request Body:**
 
@@ -99,13 +114,17 @@ Create a new transcription job.
 
 **Errors:**
 
+- `401`: Authentication required
+- `409`: Duplicate active job
 - `422`: Invalid URL or parameters
+- `429`: Job creation quota exceeded
 
 ### GET /jobs/{job_id}
 
 Get the status of a transcription job.
 
-**Authentication:** Required
+**Authentication:** Not required. Job IDs are UUIDs and this response returns
+status fields only, not the original input URL or owner metadata.
 
 **Path Parameters:**
 

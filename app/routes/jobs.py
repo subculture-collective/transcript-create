@@ -1,13 +1,144 @@
 import uuid
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import text
 
 from .. import crud
 from ..db import get_db
-from ..exceptions import JobNotFoundError
+from ..exceptions import DuplicateJobError, JobNotFoundError, RateLimitError, ValidationError
 from ..schemas import ErrorResponse, JobCreate, JobStatus
+from ..security import ROLE_ADMIN, ROLE_PRO, get_user_required, get_user_role
+from ..settings import settings
 
 router = APIRouter(prefix="", tags=["Jobs"])
+
+
+def _extract_youtube_video_id(url: str) -> str | None:
+    """Extract a canonical YouTube video ID for duplicate suppression."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if host == "youtu.be" or host.endswith(".youtu.be"):
+        candidate = parsed.path.strip("/").split("/")[0]
+        return candidate or None
+    if host in {"youtube.com", "www.youtube.com", "m.youtube.com"} or host.endswith(".youtube.com"):
+        query_video = parse_qs(parsed.query).get("v", [None])[0]
+        if query_video:
+            return query_video
+    return None
+
+
+def _normalize_job_url(url: str, kind: str) -> str:
+    """Normalize a submitted URL enough for same-owner duplicate detection."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if kind == "single":
+        youtube_id = _extract_youtube_video_id(url)
+        if youtube_id:
+            return f"youtube:video:{youtube_id}"
+    if kind == "channel":
+        path = parsed.path.rstrip("/")
+        if path and not path.endswith("/videos") and ("/channel/" in path or path.startswith("/@")):
+            path = f"{path}/videos"
+        return f"{parsed.scheme.lower()}://{host}{path}"
+    return url.rstrip("/")
+
+
+def _quota_limits_for_user(user: dict) -> tuple[int, int]:
+    """Return (total_limit, channel_limit) for a user in the configured quota window."""
+    role = get_user_role(user)
+    if role == ROLE_ADMIN and settings.JOB_CREATE_ADMIN_BYPASS_QUOTAS:
+        return -1, -1
+    if role == ROLE_PRO:
+        return settings.JOB_CREATE_PRO_DAILY_LIMIT, settings.JOB_CREATE_PRO_CHANNEL_DAILY_LIMIT
+    return settings.JOB_CREATE_DAILY_LIMIT, settings.JOB_CREATE_CHANNEL_DAILY_LIMIT
+
+
+def _count_recent_user_jobs(db, *, user_id: str, kind: str | None = None) -> int:
+    where = ["j.meta->>'owner_user_id' = :user_id", "j.created_at >= now() - make_interval(hours => :hours)"]
+    params: dict[str, object] = {
+        "user_id": user_id,
+        "hours": settings.JOB_CREATE_QUOTA_WINDOW_HOURS,
+    }
+    if kind:
+        where.append("j.kind = :kind")
+        params["kind"] = kind
+    row = db.execute(
+        text(f"SELECT COUNT(*) FROM jobs j WHERE {' AND '.join(where)}"),
+        params,
+    ).first()
+    return int(row[0] if row else 0)
+
+
+def _enforce_job_quota(db, *, user: dict, kind: str) -> None:
+    user_id = str(user["id"])
+    total_limit, channel_limit = _quota_limits_for_user(user)
+    window_hours = settings.JOB_CREATE_QUOTA_WINDOW_HOURS
+
+    if total_limit >= 0 and _count_recent_user_jobs(db, user_id=user_id) >= total_limit:
+        raise RateLimitError(
+            "Job creation quota exceeded. Please try again later.",
+            details={
+                "limit": total_limit,
+                "window_hours": window_hours,
+                "quota": "jobs",
+            },
+        )
+    if kind == "channel" and channel_limit >= 0 and _count_recent_user_jobs(db, user_id=user_id, kind="channel") >= channel_limit:
+        raise RateLimitError(
+            "Channel job creation quota exceeded. Please try again later.",
+            details={
+                "limit": channel_limit,
+                "window_hours": window_hours,
+                "quota": "channel_jobs",
+            },
+        )
+
+
+def _find_duplicate_job(db, *, user_id: str, kind: str, normalized_url: str, youtube_id: str | None):
+    params = {
+        "user_id": user_id,
+        "kind": kind,
+        "normalized_url": normalized_url,
+        "youtube_id": youtube_id,
+    }
+    return (
+        db.execute(
+            text(
+                """
+                SELECT j.id
+                FROM jobs j
+                LEFT JOIN videos v ON v.job_id = j.id
+                WHERE j.meta->>'owner_user_id' = :user_id
+                  AND j.kind = :kind
+                  AND j.state <> 'failed'
+                  AND (
+                    j.meta->>'normalized_url' = :normalized_url
+                    OR (:youtube_id IS NOT NULL AND (j.meta->>'youtube_id' = :youtube_id OR v.youtube_id = :youtube_id))
+                  )
+                ORDER BY j.created_at DESC
+                LIMIT 1
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .first()
+    )
+
+
+def _enforce_job_shape_limits(payload: JobCreate) -> None:
+    if payload.kind == "channel" and settings.JOB_CREATE_MAX_CHANNEL_VIDEOS <= 0:
+        raise ValidationError("Channel job creation is disabled", field="kind")
+    if (
+        payload.batch_expected_jobs is not None
+        and payload.batch_expected_jobs > settings.JOB_CREATE_MAX_BATCH_EXPECTED_JOBS
+    ):
+        raise ValidationError(
+            f"batch_expected_jobs cannot exceed {settings.JOB_CREATE_MAX_BATCH_EXPECTED_JOBS}",
+            field="batch_expected_jobs",
+            details={"max": settings.JOB_CREATE_MAX_BATCH_EXPECTED_JOBS},
+        )
 
 
 def _row_to_status(row):
@@ -28,6 +159,10 @@ def _row_to_status(row):
     summary="Create a transcription job",
     description="""
     Create a new transcription job for a YouTube video or channel.
+
+    Authentication is required via session cookie or API key. Creation is subject
+    to configurable per-user quotas and channel-size caps to protect GPU, disk,
+    and YouTube quota.
 
     The job will be processed asynchronously by the worker. Use the returned job ID
     to check status via GET /jobs/{job_id}.
@@ -67,16 +202,65 @@ def _row_to_status(row):
                 }
             },
         },
+        401: {
+            "description": "Authentication required",
+            "model": ErrorResponse,
+        },
+        409: {
+            "description": "Duplicate active job",
+            "model": ErrorResponse,
+        },
+        429: {
+            "description": "Job creation quota exceeded",
+            "model": ErrorResponse,
+        },
         422: {
             "description": "Validation error - invalid URL or parameters",
             "model": ErrorResponse,
         },
     },
 )
-def create_job(payload: JobCreate, db=Depends(get_db)):
+def create_job(payload: JobCreate, db=Depends(get_db), user=Depends(get_user_required)):
     """Create a new transcription job."""
+    _enforce_job_shape_limits(payload)
+    _enforce_job_quota(db, user=user, kind=payload.kind)
+
+    owner_user_id = str(user["id"])
+    source_url = str(payload.url)
+    normalized_url = _normalize_job_url(source_url, payload.kind)
+    youtube_id = _extract_youtube_video_id(source_url) if payload.kind == "single" else None
+
+    duplicate = _find_duplicate_job(
+        db,
+        user_id=owner_user_id,
+        kind=payload.kind,
+        normalized_url=normalized_url,
+        youtube_id=youtube_id,
+    )
+    if duplicate:
+        raise DuplicateJobError(
+            source_url,
+            existing_job_id=str(duplicate["id"]),
+            details={
+                "url": source_url,
+                "normalized_url": normalized_url,
+                "youtube_id": youtube_id,
+                "existing_job_id": str(duplicate["id"]),
+            },
+        )
+
     # Build job metadata with quality settings and vocabulary
-    meta = {}
+    meta: dict[str, object] = {
+        "owner_user_id": owner_user_id,
+        "created_by": "api_key" if user.get("api_key_id") else "session",
+        "normalized_url": normalized_url,
+    }
+    if user.get("api_key_id"):
+        meta["api_key_id"] = str(user["api_key_id"])
+    if youtube_id:
+        meta["youtube_id"] = youtube_id
+    if payload.kind == "channel":
+        meta["max_channel_videos"] = settings.JOB_CREATE_MAX_CHANNEL_VIDEOS
     if payload.quality:
         meta["quality"] = payload.quality.model_dump(exclude_none=True)
     if payload.vocabulary_ids:

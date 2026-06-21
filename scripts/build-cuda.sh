@@ -30,7 +30,7 @@ NC='\033[0m' # No Color
 CUDA_VERSION="${1:-12.1}"
 NO_CACHE=""
 PUSH_IMAGE=false
-IMAGE_NAME="${IMAGE_NAME:-transcript-create}"
+IMAGE_NAME="${IMAGE_NAME:-hasanara}"
 IMAGE_TAG="${IMAGE_TAG:-cuda${CUDA_VERSION}}"
 
 # Parse arguments

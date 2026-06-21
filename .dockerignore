@@ -38,6 +38,7 @@ cover/
 data/
 cache/
 .cache
+docker-volumes/
 
 # Frontend build artifacts
 frontend/node_modules

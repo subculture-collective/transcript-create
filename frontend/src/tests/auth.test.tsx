@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { AuthProvider, useAuth } from '../services/auth'
-import { http } from '../services/api'
+import { buildApiUrl, http } from '../services/api'
 
 // Test component that uses auth
 function TestComponent() {
@@ -138,7 +138,7 @@ describe('auth service', () => {
       const loginBtn = screen.getByText('Login Google')
       loginBtn.click()
 
-      expect(window.location.href).toBe('/api/auth/login/google')
+      expect(window.location.href).toBe(buildApiUrl('auth/login/google'))
     })
 
     it('redirects to Twitch login', async () => {
@@ -160,7 +160,7 @@ describe('auth service', () => {
       const loginBtn = screen.getByText('Login Twitch')
       loginBtn.click()
 
-      expect(window.location.href).toBe('/api/auth/login/twitch')
+      expect(window.location.href).toBe(buildApiUrl('auth/login/twitch'))
     })
 
     it('handles logout', async () => {

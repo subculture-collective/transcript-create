@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text as _text
 
@@ -12,6 +12,38 @@ from ..exceptions import AuthorizationError, ValidationError
 from ..security import ROLE_ADMIN, require_role
 
 router = APIRouter(prefix="", tags=["Admin"])
+
+
+@router.get(
+    "/admin/users",
+    summary="List users (Admin)",
+    description="List users with search and pagination. Admin only.",
+    responses={
+        200: {"description": "List of users"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+    },
+)
+def admin_users(
+    db=Depends(get_db),
+    user=Depends(require_role(ROLE_ADMIN)),
+    q: str | None = Query(None, description="Search email or name"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum number of users to return"),
+    offset: int = Query(0, ge=0, description="Number of users to skip"),
+):
+    """List users with search and pagination (admin only)."""
+    where: list[str] = []
+    params: dict = {"limit": limit, "offset": offset}
+    if q:
+        where.append("(email ILIKE :q OR COALESCE(name, '') ILIKE :q)")
+        params["q"] = f"%{q}%"
+
+    sql = "SELECT id, email, name, avatar_url, plan, role, created_at, updated_at FROM users"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"
+    rows = db.execute(_text(sql), params).mappings().all()
+    return {"items": [dict(row) for row in rows]}
 
 
 @router.get(

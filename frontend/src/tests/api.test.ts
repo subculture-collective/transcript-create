@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { api, http, apiListSavedSearches } from '../services/api'
+import { api, buildApiUrl, http, apiListSavedSearches } from '../services/api'
 
 // Mock ky
 vi.mock('ky', () => ({
@@ -423,6 +423,23 @@ describe('api service', () => {
 
       expect(result.items).toEqual(legacyResponse)
       expect(result.page_info.total_count).toBe(1)
+    })
+  })
+
+  describe('buildApiUrl', () => {
+    it('uses the default api base for relative urls', () => {
+      expect(buildApiUrl('auth/login/google')).toBe('/api/auth/login/google')
+      expect(buildApiUrl('/videos/test/transcript.srt')).toBe('/api/videos/test/transcript.srt')
+    })
+
+    it('handles a root api base without adding a double slash', () => {
+      expect(buildApiUrl('auth/me', undefined, '/')).toBe('/auth/me')
+    })
+
+    it('supports absolute api bases and query params', () => {
+      expect(
+        buildApiUrl('admin/events.csv', { type: 'export', start: '2026-06-01' }, 'https://api.example.com/api')
+      ).toBe('https://api.example.com/api/admin/events.csv?type=export&start=2026-06-01')
     })
   })
 })

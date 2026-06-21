@@ -34,7 +34,7 @@ services:
         restart: unless-stopped
 
     migrations:
-        image: transcript-create:latest
+        image: hasanara:latest
         env_file: .env
         environment:
             DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
@@ -50,7 +50,7 @@ services:
             args:
                 # Change to rocm6.1 or rocm6.2 if your host ROCm matches those
                 ROCM_WHEEL_INDEX: https://download.pytorch.org/whl/rocm6.0
-        image: transcript-create:latest
+        image: hasanara:latest
         env_file: .env
         environment:
             # Point app to the compose network Postgres
@@ -87,7 +87,7 @@ services:
             - 'video'
 
     worker:
-        image: transcript-create:latest
+        image: hasanara:latest
         env_file: .env
         environment:
             DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts

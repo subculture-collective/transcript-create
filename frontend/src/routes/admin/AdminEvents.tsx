@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { http } from '../../services/api';
+import { buildApiUrl, http } from '../../services/api';
 
 type EventRow = {
   id: number;
@@ -97,7 +97,7 @@ export default function AdminEvents() {
         </button>
         <a
           className="btn"
-          href={`/api/admin/events.csv?${new URLSearchParams(Object.fromEntries(Object.entries({ type, user_email: email, start, end }).filter(([, v]) => !!v)))}`}
+          href={buildApiUrl('admin/events.csv', new URLSearchParams(Object.entries({ type, user_email: email, start, end }).filter(([, v]) => !!v)))}
         >
           Export CSV
         </a>

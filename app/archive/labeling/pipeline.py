@@ -225,7 +225,7 @@ def extract_labels_for_video(
                     {"label_id": label_id},
                 )
             )
-            if label_row and str(label_row.get("status") or "").lower() in {"rejected", "merged"}:
+            if label_row and str(label_row.get("status") or "").lower() in {"rejected", "merged", "hidden"}:
                 continue
 
             for item in evidence:

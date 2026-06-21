@@ -90,7 +90,7 @@ def test_upsert_label_preserves_rejected_and_inserts_normalized_aliases():
     assert lock_params == {"slug": "new-jersey"}
     compact_insert_sql = _compact_sql(insert_sql)
     assert (
-        "CASE WHEN archive_labels.status IN ('published', 'rejected', 'merged') "
+        "CASE WHEN archive_labels.status IN ('published', 'rejected', 'merged', 'hidden') "
         "THEN archive_labels.status ELSE EXCLUDED.status END"
     ) in compact_insert_sql
     assert "GREATEST(archive_labels.confidence_score, EXCLUDED.confidence_score)" in compact_insert_sql

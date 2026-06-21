@@ -22,6 +22,75 @@ def test_keyphrase_extractor_finds_repeated_domain_phrase_and_filters_single_vid
     assert candidate.evidence[0]["extractor"] == "keyphrase"
 
 
+def test_keyphrase_extractor_rejects_repeated_transcript_junk():
+    windows = [
+        {"id": "w1", "video_id": "v1", "text": "what not just know going this is in the", "start_ms": 0, "end_ms": 60000},
+        {"id": "w2", "video_id": "v2", "text": "what not just know going this is in the", "start_ms": 0, "end_ms": 60000},
+        {"id": "w3", "video_id": "v3", "text": "what not just know going this is in the", "start_ms": 0, "end_ms": 60000},
+    ]
+
+    assert extract_keyphrase_candidates(windows, min_distinct_videos=2, min_occurrences=2) == []
+
+
+def test_alias_extractor_rejects_low_information_published_aliases():
+    windows = [
+        {
+            "id": "w1",
+            "video_id": "v1",
+            "text": "by his s actually really will neff joined the stream",
+            "start_ms": 0,
+            "end_ms": 60000,
+        }
+    ]
+    aliases = [
+        {"label_id": "junk-1", "label": "By His", "alias": "by his", "kind": "topic", "status": "active"},
+        {"label_id": "junk-2", "label": "S Actually Really", "alias": "s actually really", "kind": "topic", "status": "active"},
+        {"label_id": "person-1", "label": "Will Neff", "alias": "will neff", "kind": "person", "status": "active"},
+    ]
+
+    candidates = extract_alias_candidates(windows, aliases)
+
+    assert [candidate.label for candidate in candidates] == ["Will Neff"]
+
+
+def test_normalization_rejects_transcript_sentence_fragments_but_keeps_topics():
+    junk_labels = [
+        "M So Sorry",
+        "S Say",
+        "I Got My",
+        "Ll See You",
+        "Shit Like That",
+        "While I M",
+        "You When You",
+        "She Wants To",
+        "Had To Go",
+        "No Matter Where",
+        "To Hide",
+        "A Seat",
+        "T Watch",
+        "Are We Thinking",
+        "Bit Yeah",
+        "Do It Let",
+    ]
+    durable_topics = [
+        "Kaya",
+        "The Amazon",
+        "Greg Abbott",
+        "Ubisoft",
+        "Nick And Milena",
+        "Collective Bargaining",
+        "Federal Government",
+        "Dead Bodies",
+        "Mortician",
+        "Hacking",
+    ]
+
+    for label in junk_labels:
+        assert is_junk_phrase(label), label
+    for label in durable_topics:
+        assert not is_junk_phrase(label), label
+
+
 def test_alias_extractor_uses_matching_alias_evidence_and_ignores_non_matches():
     windows = [
         {"id": "w1", "video_id": "v1", "text": "Trump and Gaza were discussed", "start_ms": 1000, "end_ms": 5000},
@@ -58,8 +127,15 @@ def test_normalization_rejects_junk_phrases_and_slugifies_labels():
     assert is_junk_phrase("About This")
     assert is_junk_phrase("About The")
     assert is_junk_phrase("Able To")
+    assert is_junk_phrase("By His")
+    assert is_junk_phrase("S Actually Really")
+    assert is_junk_phrase("Will He")
+    assert is_junk_phrase("Motherfuckers")
+    assert is_junk_phrase("M So Sorry")
+    assert is_junk_phrase("Ll See You")
     assert is_junk_phrase("10 Years")
     assert not is_junk_phrase("okbuddy")
+    assert not is_junk_phrase("Will Neff")
     assert not is_junk_phrase("New Jersey")
     assert not is_junk_phrase("The Majority Report")
     assert not is_junk_phrase("Call of Duty")

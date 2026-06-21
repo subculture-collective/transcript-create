@@ -6,6 +6,9 @@ from typing import Any
 from sqlalchemy import text
 
 
+SUPPRESSED_LABEL_STATUSES = {"hidden", "rejected", "merged"}
+
+
 @dataclass(frozen=True)
 class LabelQualityMetrics:
     labels_total: int = 0
@@ -55,6 +58,8 @@ def calculate_label_quality_metrics(labels: list[dict[str, Any]], assignments: l
 
     labels_without_evidence = 0
     for label in labels:
+        if str(label.get("status") or "").lower() in SUPPRESSED_LABEL_STATUSES:
+            continue
         rows = assignment_by_label.get(str(label.get("id") or ""), [])
         if not any(int(row.get("evidence_count") or 0) > 0 for row in rows):
             labels_without_evidence += 1

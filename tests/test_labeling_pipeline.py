@@ -252,6 +252,52 @@ def test_extract_labels_for_video_uses_title_assignment_source(monkeypatch):
     assert assignment_calls[0]["evidence"][0]["snippet"] == db.title
 
 
+def test_extract_labels_for_video_skips_assignments_for_hidden_labels(monkeypatch):
+    from app.archive.labeling import pipeline
+
+    db = FakeDb()
+    assignment_calls = []
+
+    monkeypatch.setattr(pipeline, "create_extraction_run", lambda *args, **kwargs: "run-hidden")
+    monkeypatch.setattr(pipeline, "finish_extraction_run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pipeline, "load_source_segments", lambda *_args, **_kwargs: [{"id": 1, "start_ms": 0, "end_ms": 1000, "text": "hidden label text"}])
+    monkeypatch.setattr(pipeline, "build_windows_from_segments", lambda segments, source: [SimpleNamespace(source=source, start_ms=0, end_ms=1000, text="hidden label text", text_hash=f"{source}-hash", segment_ids=[1], token_count=3)] if segments else [])
+    monkeypatch.setattr(pipeline, "persist_windows", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(pipeline, "_load_existing_aliases", lambda _db: [])
+    monkeypatch.setattr(pipeline, "_load_policy", lambda _db, label_kind, unit_type, extraction_tier: {"min_publish_score": 0.90, "min_review_score": 0.65, "min_evidence_count": 1, "min_distinct_videos": 1, "require_existing_canonical": False, "auto_publish_enabled": True})
+    monkeypatch.setattr(
+        pipeline,
+        "extract_keyphrase_candidates",
+        lambda _windows, min_distinct_videos, min_occurrences: [
+            LabelCandidate(
+                label="Hidden Junk",
+                kind="topic",
+                aliases=("hidden junk",),
+                confidence_score=0.95,
+                component_scores={"occurrences": 3.0, "distinct_videos": 1.0},
+                evidence=({"extractor": "keyphrase", "video_id": "video-hidden", "start_ms": 0, "end_ms": 1000, "snippet": "hidden label text"},),
+            )
+        ],
+    )
+    monkeypatch.setattr(pipeline, "upsert_label_candidate", lambda _db, **kwargs: "label-hidden")
+    monkeypatch.setattr(pipeline, "insert_assignment", lambda _db, **kwargs: assignment_calls.append(kwargs) or "assignment-hidden")
+
+    def fake_execute(sql, params=None):
+        if "SELECT title FROM videos" in str(sql):
+            return FakeResult([{"title": ""}])
+        if "SELECT status, canonical_id FROM archive_labels" in str(sql):
+            return FakeResult([{"status": "hidden", "canonical_id": None}])
+        return FakeResult([])
+
+    db.execute = fake_execute
+
+    result = pipeline.extract_labels_for_video(db, video_id="video-hidden", extraction_tier="cheap")
+
+    assert result["candidates"] == 1
+    assert result["assignments"] == 0
+    assert assignment_calls == []
+
+
 def test_extract_labels_for_video_marks_failed_run_and_reraises(monkeypatch):
     from app.archive.labeling import pipeline
 

@@ -112,7 +112,7 @@ def upsert_label_candidate(
                     ELSE archive_labels.publish_tier
                 END,
                 status = CASE
-                    WHEN archive_labels.status IN ('published', 'rejected', 'merged') THEN archive_labels.status
+                    WHEN archive_labels.status IN ('published', 'rejected', 'merged', 'hidden') THEN archive_labels.status
                     ELSE EXCLUDED.status
                 END,
                 updated_at = now()

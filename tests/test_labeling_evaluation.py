@@ -33,6 +33,20 @@ def test_calculate_label_quality_metrics_counts_statuses_evidence_and_rates():
     assert metrics.chapter_assignments == 1
 
 
+def test_calculate_label_quality_metrics_ignores_suppressed_labels_without_evidence():
+    labels = [
+        {"id": "published-empty", "slug": "published-empty", "label": "Published Empty", "status": "published", "aliases": []},
+        {"id": "hidden-empty", "slug": "hidden-empty", "label": "Hidden Empty", "status": "hidden", "aliases": []},
+        {"id": "rejected-empty", "slug": "rejected-empty", "label": "Rejected Empty", "status": "rejected", "aliases": []},
+        {"id": "merged-empty", "slug": "merged-empty", "label": "Merged Empty", "status": "merged", "aliases": []},
+    ]
+
+    metrics = calculate_label_quality_metrics(labels, [])
+
+    assert metrics.labels_total == 4
+    assert metrics.labels_without_evidence == 1
+
+
 def test_format_label_quality_report_prints_contract_lines():
     metrics = calculate_label_quality_metrics([], [])
 

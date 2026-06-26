@@ -196,11 +196,13 @@ def extract_labels_for_video(
             existing_canonical = _candidate_existing_canonical(candidate)
             publish_tier, assignment_status = classify_candidate(
                 {
+                    "label": candidate.label,
                     "kind": candidate.kind,
                     "unit_type": "window",
                     "confidence_score": candidate.confidence_score,
                     "evidence_count": len(evidence),
                     "distinct_videos": distinct_videos,
+                    "source": str(evidence[0].get("extractor") or "hybrid") if evidence else "hybrid",
                 },
                 policy,
                 existing_canonical=existing_canonical,

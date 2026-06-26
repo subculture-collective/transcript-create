@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.archive.labeling.quality import apply_quality_gate
+
 
 def classify_candidate(candidate: dict, policy: dict, existing_canonical: bool) -> tuple[str, str]:
     score = float(candidate.get("confidence_score") or 0)
@@ -17,11 +19,33 @@ def classify_candidate(candidate: dict, policy: dict, existing_canonical: bool) 
     canonical_ok = existing_canonical or not require_existing
 
     if score >= min_publish and evidence_ok and canonical_ok:
-        return "gold", "auto_published" if auto_publish else "candidate"
+        publish_tier, assignment_status = "gold", "auto_published" if auto_publish else "candidate"
+        if candidate.get("label"):
+            publish_tier, assignment_status, _assessment = apply_quality_gate(
+                str(candidate.get("label") or ""),
+                publish_tier,
+                assignment_status,
+                source=str(candidate.get("source") or "") or None,
+                assignment_count=evidence_count,
+                distinct_videos=distinct_videos,
+                existing_canonical=existing_canonical,
+            )
+        return publish_tier, assignment_status
 
     silver_threshold = max(min_review, min_publish - 0.12)
     if score >= silver_threshold and evidence_ok and existing_canonical:
-        return "silver", "auto_published" if auto_publish else "candidate"
+        publish_tier, assignment_status = "silver", "auto_published" if auto_publish else "candidate"
+        if candidate.get("label"):
+            publish_tier, assignment_status, _assessment = apply_quality_gate(
+                str(candidate.get("label") or ""),
+                publish_tier,
+                assignment_status,
+                source=str(candidate.get("source") or "") or None,
+                assignment_count=evidence_count,
+                distinct_videos=distinct_videos,
+                existing_canonical=existing_canonical,
+            )
+        return publish_tier, assignment_status
 
     if score >= min_review and evidence_count > 0:
         return "bronze", "candidate"

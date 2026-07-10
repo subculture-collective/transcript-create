@@ -360,6 +360,31 @@ export interface TranscriptResponse {
   source_label?: string;
 }
 
+export interface VideoChapterEvidence {
+  block_index: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+}
+
+export interface VideoChapter {
+  chapter_index: number;
+  start_ms: number;
+  end_ms: number;
+  title: string;
+  summary: string;
+  confidence_score: number;
+  status: string;
+  source: 'automatic' | 'manual' | 'hybrid' | 'transcript';
+  evidence: VideoChapterEvidence[];
+}
+
+export interface VideoChaptersResponse {
+  video_id: UUID;
+  chapters: VideoChapter[];
+  source: 'persisted' | 'transcript';
+}
+
 export interface VideoInfo {
   id: UUID;
   youtube_id: string;

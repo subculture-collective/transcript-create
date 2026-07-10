@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, apiAddFavorite, apiListFavorites, favorites, useAuth, track } from '../services';
-import type { Segment, TranscriptResponse, VideoInfo, SearchHit } from '../types/api';
+import type { Segment, TranscriptResponse, VideoInfo, SearchHit, VideoChapter } from '../types/api';
 // favorites, useAuth imported from services barrel
 import { ExportMenu } from '../components';
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer';
@@ -13,6 +13,7 @@ import {
 } from '../features/videoTranscript/transcript';
 import {
   FormattedTranscriptDocument,
+  EpisodeOutline,
   PlayerPanel,
   PlainTranscriptTurns,
   TranscriptSearchBar,
@@ -33,6 +34,7 @@ export default function VideoPage() {
   const [params, setParams] = useSearchParams();
   const [video, setVideo] = useState<VideoInfo | null>(null);
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null);
+  const [chapters, setChapters] = useState<VideoChapter[]>([]);
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const { user } = useAuth();
   const [serverFavs, setServerFavs] = useState<
@@ -88,6 +90,10 @@ export default function VideoPage() {
       .getTranscript(videoId)
       .then(setTranscript)
       .catch(() => setTranscript(null));
+    api
+      .getVideoChapters(videoId)
+      .then((response) => setChapters(response.chapters ?? []))
+      .catch(() => setChapters([]));
     if (transcriptQuery) {
       api
         .search(transcriptQuery, { video_id: videoId })
@@ -426,6 +432,13 @@ export default function VideoPage() {
     [serverFavs, videoId]
   );
   const episodeTitle = video?.title ?? 'Loading VOD...';
+
+  function selectChapter(chapter: VideoChapter) {
+    jumpTo(chapter.start_ms);
+    const evidence = chapter.evidence[0];
+    const target = evidence ? document.getElementById(`block-${evidence.block_index}`) : null;
+    scrollElementIntoView(target, { behavior: 'smooth', block: 'start' });
+  }
   return (
     <div className="episode-page space-y-7">
       <VideoHeader title={episodeTitle} actions={video ? <ExportMenu videoId={video.id} /> : null}>
@@ -467,6 +480,7 @@ export default function VideoPage() {
                 Select any sentence to play from that moment. Scroll manually to pause auto-follow.
               </p>
             </div>
+            <EpisodeOutline chapters={chapters} currentMs={currentMs} onSelect={selectChapter} />
           </div>
         </aside>
 

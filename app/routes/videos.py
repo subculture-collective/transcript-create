@@ -2,29 +2,32 @@ import uuid
 from typing import Literal, Union
 
 from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import text
 
 from .. import crud
+from ..archive.video_chapters import build_grounded_chapters
 from ..db import get_db
 from ..exceptions import TranscriptNotReadyError, VideoNotFoundError
-from ..transcripts.blocks import FORMATTER_VERSION, build_transcript_blocks
-from ..transcripts.merged import build_merged_transcript
-from ..transcripts.youtube_formatting import build_youtube_caption_blocks, format_youtube_caption_text
-from ..transcripts.service import TranscriptPresentationService
-from ..transcripts.types import TranscriptSegment
 from ..schemas import (
     CleanedTranscriptResponse,
     CleanupConfig,
     ErrorResponse,
     FormattedTranscriptResponse,
-    PaginatedVideos,
     PageInfo,
+    PaginatedVideos,
     Segment,
     TranscriptBlockResponse,
     TranscriptResponse,
+    VideoChaptersResponse,
     VideoInfo,
     YouTubeTranscriptResponse,
     YTSegment,
 )
+from ..transcripts.blocks import FORMATTER_VERSION, build_transcript_blocks
+from ..transcripts.merged import build_merged_transcript
+from ..transcripts.service import TranscriptPresentationService
+from ..transcripts.types import TranscriptSegment
+from ..transcripts.youtube_formatting import build_youtube_caption_blocks, format_youtube_caption_text
 
 router = APIRouter(prefix="", tags=["Videos"])
 transcript_presentation_service = TranscriptPresentationService()
@@ -293,6 +296,83 @@ def get_video_info(video_id: uuid.UUID, db=Depends(get_db)):
     if not v:
         raise VideoNotFoundError(str(video_id))
     return VideoInfo(**dict(v))
+
+
+@router.get(
+    "/videos/{video_id}/chapters",
+    response_model=VideoChaptersResponse,
+    summary="Get citation-backed video chapters",
+)
+def get_video_chapters(video_id: uuid.UUID, db=Depends(get_db)):
+    video = crud.get_video(db, video_id)
+    if not video:
+        raise VideoNotFoundError(str(video_id))
+
+    blocks = [dict(block) for block in crud.list_transcript_blocks(db, video_id)]
+    if not blocks:
+        segments = [transcript_presentation_service.from_db_row(row) for row in crud.list_segments(db, video_id)]
+        blocks = [
+            {
+                "block_index": block.block_index,
+                "start_ms": block.start_ms,
+                "end_ms": block.end_ms,
+                "text": block.text,
+            }
+            for block in build_transcript_blocks(segments)
+        ]
+
+    persisted_rows = (
+        db.execute(
+            text(
+                """
+                SELECT chapter_index, start_ms, end_ms, title, summary,
+                       confidence_score, status, source
+                FROM archive_video_chapters
+                WHERE video_id = :video_id AND status = 'published'
+                ORDER BY chapter_index
+                """
+            ),
+            {"video_id": str(video_id)},
+        )
+        .mappings()
+        .all()
+    )
+    if persisted_rows:
+        chapters = []
+        for row in persisted_rows:
+            chapter = dict(row)
+            evidence_block = next(
+                (
+                    block
+                    for block in blocks
+                    if int(block.get("start_ms") or 0) >= int(chapter["start_ms"])
+                    and int(block.get("start_ms") or 0) < int(chapter["end_ms"])
+                ),
+                None,
+            )
+            evidence = []
+            if evidence_block:
+                evidence.append(
+                    {
+                        "block_index": int(evidence_block.get("block_index") or 0),
+                        "start_ms": int(evidence_block.get("start_ms") or 0),
+                        "end_ms": int(evidence_block.get("end_ms") or 0),
+                        "text": str(evidence_block.get("text") or "")[:280],
+                    }
+                )
+            chapter["title"] = chapter.get("title") or f"Part {int(chapter['chapter_index']) + 1}"
+            chapter["summary"] = chapter.get("summary") or (evidence[0]["text"] if evidence else "")
+            chapter["confidence_score"] = float(chapter.get("confidence_score") or 0)
+            chapter["evidence"] = evidence
+            chapters.append(chapter)
+        return VideoChaptersResponse(video_id=video_id, chapters=chapters, source="persisted")
+
+    duration_seconds = dict(video).get("duration_seconds")
+    chapters = build_grounded_chapters(
+        blocks,
+        duration_ms=int(duration_seconds * 1000) if duration_seconds else None,
+    )
+    return VideoChaptersResponse(video_id=video_id, chapters=chapters, source="transcript")
 
 
 @router.get(

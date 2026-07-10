@@ -940,6 +940,31 @@ class TranscriptBlockResponse(BaseModel):
     similarity: Optional[float] = Field(None, description="Token similarity between Whisper and YouTube text for this block")
 
 
+class VideoChapterEvidence(BaseModel):
+    block_index: int = Field(..., description="Transcript block supporting the chapter")
+    start_ms: int = Field(..., ge=0)
+    end_ms: int = Field(..., ge=0)
+    text: str
+
+
+class VideoChapterResponse(BaseModel):
+    chapter_index: int
+    start_ms: int = Field(..., ge=0)
+    end_ms: int = Field(..., ge=0)
+    title: str
+    summary: str
+    confidence_score: float = Field(..., ge=0, le=1)
+    status: str
+    source: Literal["automatic", "manual", "hybrid", "transcript"]
+    evidence: List[VideoChapterEvidence] = Field(default_factory=list)
+
+
+class VideoChaptersResponse(BaseModel):
+    video_id: uuid.UUID
+    chapters: List[VideoChapterResponse] = Field(default_factory=list)
+    source: Literal["persisted", "transcript"]
+
+
 class FormattedTranscriptResponse(BaseModel):
     """Response containing formatted transcript text."""
 

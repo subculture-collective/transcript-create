@@ -16,6 +16,7 @@ import type {
   TimelineResponse,
   TranscriptResponse,
   VideoInfo,
+  VideoChaptersResponse,
 } from '../types/api';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -27,7 +28,9 @@ export function buildApiUrl(
 ) {
   const normalizedBase = base.replace(/\/+$/, '');
   const normalizedPath = path.replace(/^\/+/, '');
-  const url = normalizedPath ? `${normalizedBase ? `${normalizedBase}/` : '/'}${normalizedPath}` : normalizedBase || '/';
+  const url = normalizedPath
+    ? `${normalizedBase ? `${normalizedBase}/` : '/'}${normalizedPath}`
+    : normalizedBase || '/';
 
   if (!searchParams) return url;
 
@@ -128,7 +131,9 @@ export const api = {
     if (opts?.date_to) params.set('date_to', opts.date_to);
 
     if (params.toString()) {
-      return http.get('archive/intelligence', { searchParams: params }).json<ExploreIntelligenceResponse>();
+      return http
+        .get('archive/intelligence', { searchParams: params })
+        .json<ExploreIntelligenceResponse>();
     }
 
     return http.get('archive/intelligence').json<ExploreIntelligenceResponse>();
@@ -139,7 +144,9 @@ export const api = {
     if (opts?.limit != null) params.set('limit', String(opts.limit));
 
     if (params.toString()) {
-      return http.get('archive/intelligence/periods', { searchParams: params }).json<ArchivePeriodOptionsResponse>();
+      return http
+        .get('archive/intelligence/periods', { searchParams: params })
+        .json<ArchivePeriodOptionsResponse>();
     }
 
     return http.get('archive/intelligence/periods').json<ArchivePeriodOptionsResponse>();
@@ -148,6 +155,9 @@ export const api = {
     return http
       .get(`videos/${videoId}/transcript`, { searchParams: { mode: 'formatted', source: 'best' } })
       .json<TranscriptResponse>();
+  },
+  async getVideoChapters(videoId: string) {
+    return http.get(`videos/${videoId}/chapters`).json<VideoChaptersResponse>();
   },
   async getVideo(videoId: string) {
     return http.get(`videos/${videoId}`).json<VideoInfo>();
@@ -163,13 +173,16 @@ export const api = {
       limit: String(filters.limit ?? 24),
       offset: String(filters.offset ?? 0),
     };
-    if (filters.completed_only !== undefined) searchParams.completed_only = String(filters.completed_only);
+    if (filters.completed_only !== undefined)
+      searchParams.completed_only = String(filters.completed_only);
     if (filters.q) searchParams.q = filters.q;
     if (filters.date_field) searchParams.date_field = filters.date_field;
     if (filters.date_from) searchParams.date_from = filters.date_from;
     if (filters.date_to) searchParams.date_to = filters.date_to;
     if (filters.category) searchParams.category = filters.category;
-    const response = await http.get('videos', { searchParams }).json<PaginatedVideos | VideoInfo[]>();
+    const response = await http
+      .get('videos', { searchParams })
+      .json<PaginatedVideos | VideoInfo[]>();
     return normalizeVideosResponse(response);
   },
 };
@@ -204,7 +217,10 @@ export async function apiListSavedSearches() {
   return http.get('users/me/saved-searches').json<{ items: SavedSearch[] }>();
 }
 
-export async function apiCreateSavedSearch(payload: { query: string; filters?: SavedSearchFilters }) {
+export async function apiCreateSavedSearch(payload: {
+  query: string;
+  filters?: SavedSearchFilters;
+}) {
   return http.post('users/me/saved-searches', { json: payload }).json<SavedSearch>();
 }
 

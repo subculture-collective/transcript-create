@@ -369,6 +369,43 @@ body {
   .selection-action {
     @apply rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted transition-colors hover:bg-surface hover:text-ink disabled:cursor-default disabled:opacity-55;
   }
+
+  .outline-panel {
+    @apply overflow-hidden rounded-xl border border-border bg-surface/90 shadow-[0_14px_45px_rgba(0,0,0,0.16)];
+  }
+
+  .outline-heading {
+    @apply flex cursor-pointer list-none items-center justify-between gap-4 border-b border-border px-4 py-4;
+  }
+
+  .outline-heading::-webkit-details-marker {
+    display: none;
+  }
+
+  .outline-list {
+    @apply max-h-[min(34rem,52vh)] overflow-y-auto;
+  }
+
+  .outline-item {
+    @apply grid w-full grid-cols-[1.75rem_minmax(0,1fr)] gap-2 border-b border-border/60 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-muted;
+  }
+
+  .outline-item-active {
+    @apply bg-accent-soft/50;
+    box-shadow: inset 2px 0 0 var(--color-accent);
+  }
+
+  .outline-index {
+    @apply pt-0.5 font-mono text-[9px] font-semibold text-subtle;
+  }
+
+  .outline-title {
+    @apply line-clamp-2 text-xs font-semibold leading-4 text-ink;
+  }
+
+  .outline-time {
+    @apply shrink-0 font-mono text-[9px] text-subtle;
+  }
 }
 
 @media (min-width: 1536px) {

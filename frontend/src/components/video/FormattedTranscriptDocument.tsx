@@ -27,14 +27,21 @@ type SentencePiece = {
 
 function msToHms(ms: number) {
   const total = Math.floor(ms / 1000);
-  const hh = Math.floor(total / 3600).toString().padStart(2, '0');
-  const mm = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
+  const hh = Math.floor(total / 3600)
+    .toString()
+    .padStart(2, '0');
+  const mm = Math.floor((total % 3600) / 60)
+    .toString()
+    .padStart(2, '0');
   const ss = (total % 60).toString().padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
 }
 
 function normalizeSentenceText(text: string) {
-  return text.replace(/\s+/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim();
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .trim();
 }
 
 function endsSentence(text: string) {
@@ -44,7 +51,12 @@ function endsSentence(text: string) {
 function splitIntoSentences(text: string) {
   const normalized = normalizeSentenceText(text);
   if (!normalized) return [];
-  return normalized.match(/[^.!?]+[.!?]+[”"')\]]*|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) ?? [normalized];
+  return (
+    normalized
+      .match(/[^.!?]+[.!?]+[”"')\]]*|[^.!?]+$/g)
+      ?.map((part) => part.trim())
+      .filter(Boolean) ?? [normalized]
+  );
 }
 
 function estimateSentenceTiming(segment: Segment, sentences: string[], sentenceIndex: number) {
@@ -60,7 +72,10 @@ function estimateSentenceTiming(segment: Segment, sentences: string[], sentenceI
   };
 }
 
-function buildSentencePieces(block: TranscriptBlock, transcriptSegments: Segment[]): SentencePiece[] {
+function buildSentencePieces(
+  block: TranscriptBlock,
+  transcriptSegments: Segment[]
+): SentencePiece[] {
   const pieces: SentencePiece[] = [];
   let currentText: string[] = [];
   let currentIds: number[] = [];
@@ -104,7 +119,12 @@ function buildSentencePieces(block: TranscriptBlock, transcriptSegments: Segment
           startMs: timing.startMs,
           endMs: timing.endMs,
           segmentIds: [segId],
-          firstSegment: { ...segment, start_ms: timing.startMs, end_ms: timing.endMs, text: sentence },
+          firstSegment: {
+            ...segment,
+            start_ms: timing.startMs,
+            end_ms: timing.endMs,
+            text: sentence,
+          },
           firstSegIndex: segId + 1,
         });
       });
@@ -119,19 +139,28 @@ function buildSentencePieces(block: TranscriptBlock, transcriptSegments: Segment
   flush();
   return pieces.length > 0
     ? pieces
-    : [{
-        id: `${block.block_index}-fallback`,
-        text: normalizeSentenceText(block.text),
-        startMs: block.start_ms,
-        endMs: block.end_ms,
-        segmentIds: block.segment_ids,
-        firstSegment: { start_ms: block.start_ms, end_ms: block.end_ms, text: block.text, speaker_label: block.speaker_label },
-        firstSegIndex: (block.segment_ids[0] ?? 0) + 1,
-      }];
+    : [
+        {
+          id: `${block.block_index}-fallback`,
+          text: normalizeSentenceText(block.text),
+          startMs: block.start_ms,
+          endMs: block.end_ms,
+          segmentIds: block.segment_ids,
+          firstSegment: {
+            start_ms: block.start_ms,
+            end_ms: block.end_ms,
+            text: block.text,
+            speaker_label: block.speaker_label,
+          },
+          firstSegIndex: (block.segment_ids[0] ?? 0) + 1,
+        },
+      ];
 }
 
 function sentenceDomId(piece: SentencePiece) {
-  const suffix = piece.id.includes('-s-') ? piece.id.split('-s-').at(1) : piece.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const suffix = piece.id.includes('-s-')
+    ? piece.id.split('-s-').at(1)
+    : piece.id.replace(/[^a-zA-Z0-9_-]/g, '_');
   return `seg-${piece.firstSegIndex}-s-${suffix ?? 0}`;
 }
 
@@ -149,61 +178,117 @@ export default function FormattedTranscriptDocument({
   onCopyQuote,
 }: Props) {
   return (
-    <article className="surface-card space-y-5" aria-label="Readable transcript">
+    <article className="transcript-document" aria-label="Readable transcript">
       {blocks.map((block) => {
         const pieces = buildSentencePieces(block, transcriptSegments);
-        const selectedPiece = pieces.find((piece) => activeSentenceId === piece.id) ?? pieces.find((piece) => piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1));
-        const selectedSaved = selectedPiece ? isSavedSegment(selectedPiece.firstSegment, selectedPiece.firstSegIndex) : false;
+        const selectedPiece =
+          pieces.find((piece) => activeSentenceId === piece.id) ??
+          pieces.find((piece) => piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1));
+        const selectedSaved = selectedPiece
+          ? isSavedSegment(selectedPiece.firstSegment, selectedPiece.firstSegIndex)
+          : false;
         const isActiveBlock = activeBlockIndex === block.block_index || Boolean(selectedPiece);
 
         return (
-          <section key={block.block_index} id={`block-${block.block_index}`} className="rounded-xl px-1 py-0.5" data-active={isActiveBlock ? 'true' : undefined}>
-            {block.speaker_label && <div className="mb-1 text-sm font-semibold uppercase tracking-wide text-subtle">{block.speaker_label}</div>}
-            <p className="font-serif text-[1.05rem] leading-8 text-ink">
-              {pieces.map((piece) => {
-                const pieceActive = activeSentenceId ? activeSentenceId === piece.id : piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1);
-                const pieceCurrent = currentMs != null && currentMs >= piece.startMs && currentMs < piece.endMs;
-                const pieceSaved = isSavedSegment(piece.firstSegment, piece.firstSegIndex);
-                const pieceHighlighted = piece.segmentIds.some((segIdx) =>
-                  hits?.some((h) => h.start_ms >= transcriptSegments[segIdx]?.start_ms && h.start_ms < transcriptSegments[segIdx]?.end_ms)
-                );
+          <section
+            key={block.block_index}
+            id={`block-${block.block_index}`}
+            className="transcript-block"
+            data-active={isActiveBlock ? 'true' : undefined}
+          >
+            <div className="transcript-block-meta">
+              <button
+                type="button"
+                className="transcript-timecode"
+                onClick={() =>
+                  pieces[0] &&
+                  onClickSentence(pieces[0].firstSegment, pieces[0].firstSegIndex, pieces[0].id)
+                }
+                aria-label={`Play from ${msToHms(block.start_ms)}`}
+              >
+                {formatTimestamp(block.start_ms)}
+              </button>
+              {block.speaker_label && (
+                <div className="transcript-speaker">{block.speaker_label}</div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="transcript-copy">
+                {pieces.map((piece) => {
+                  const pieceActive = activeSentenceId
+                    ? activeSentenceId === piece.id
+                    : piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1);
+                  const pieceCurrent =
+                    currentMs != null && currentMs >= piece.startMs && currentMs < piece.endMs;
+                  const pieceSaved = isSavedSegment(piece.firstSegment, piece.firstSegIndex);
+                  const pieceHighlighted = piece.segmentIds.some((segIdx) =>
+                    hits?.some(
+                      (h) =>
+                        h.start_ms >= transcriptSegments[segIdx]?.start_ms &&
+                        h.start_ms < transcriptSegments[segIdx]?.end_ms
+                    )
+                  );
 
-                return (
-                  <span key={piece.id}>
-                    <span
-                      id={sentenceDomId(piece)}
-                      role="button"
-                      tabIndex={0}
-                      data-current-sentence={pieceCurrent ? 'true' : undefined}
-                      onClick={() => onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id);
+                  return (
+                    <span key={piece.id}>
+                      <span
+                        id={sentenceDomId(piece)}
+                        role="button"
+                        tabIndex={0}
+                        data-current-sentence={pieceCurrent ? 'true' : undefined}
+                        onClick={() =>
+                          onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id)
                         }
-                      }}
-                      className={`cursor-pointer rounded-sm decoration-warning decoration-2 underline-offset-4 transition-colors hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/50 ${
-                        pieceActive ? 'bg-accent-soft px-1 text-accent ring-1 ring-accent/70' : ''
-                      } ${pieceCurrent && !pieceActive ? 'text-accent' : ''} ${pieceHighlighted && !pieceActive ? 'bg-warning-soft px-1 text-warning' : ''} ${pieceSaved ? 'underline' : ''}`}
-                      aria-label={`Play sentence from ${msToHms(piece.startMs)}`}
-                    >
-                      {piece.text}
-                    </span>{' '}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id);
+                          }
+                        }}
+                        className={`transcript-sentence ${pieceActive ? 'transcript-sentence-active' : ''} ${pieceCurrent && !pieceActive ? 'transcript-sentence-current' : ''} ${pieceHighlighted && !pieceActive ? 'transcript-sentence-match' : ''} ${pieceSaved ? 'underline decoration-warning decoration-2 underline-offset-4' : ''}`}
+                        aria-label={`Play sentence from ${msToHms(piece.startMs)}`}
+                      >
+                        {piece.text}
+                      </span>{' '}
+                    </span>
+                  );
+                })}
+              </p>
+              {selectedPiece && (
+                <div className="selection-toolbar">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent">
+                    Selected · {formatTimestamp(selectedPiece.startMs)}
                   </span>
-                );
-              })}
-            </p>
-            {selectedPiece && (
-              <div className="mt-2 flex flex-wrap items-center gap-3 border-l-2 border-accent pl-3 text-sm">
-                <span className="text-xs uppercase tracking-wide text-subtle">Selected {formatTimestamp(selectedPiece.startMs)}</span>
-                <button type="button" className="nav-link" disabled={selectedSaved} onClick={() => onSaveMoment(selectedPiece.firstSegment, selectedPiece.firstSegIndex, selectedPiece.text)}>
-                  {selectedSaved ? 'Saved moment' : 'Save moment'}
-                </button>
-                <button type="button" className="nav-link" onClick={() => onCopyQuote(selectedPiece.firstSegment, selectedPiece.text, selectedPiece.firstSegIndex)}>
-                  Copy quote
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    className="selection-action"
+                    disabled={selectedSaved}
+                    onClick={() =>
+                      onSaveMoment(
+                        selectedPiece.firstSegment,
+                        selectedPiece.firstSegIndex,
+                        selectedPiece.text
+                      )
+                    }
+                  >
+                    {selectedSaved ? 'Saved moment' : 'Save moment'}
+                  </button>
+                  <button
+                    type="button"
+                    className="selection-action"
+                    onClick={() =>
+                      onCopyQuote(
+                        selectedPiece.firstSegment,
+                        selectedPiece.text,
+                        selectedPiece.firstSegIndex
+                      )
+                    }
+                  >
+                    Copy quote
+                  </button>
+                </div>
+              )}
+            </div>
           </section>
         );
       })}

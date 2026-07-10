@@ -270,7 +270,7 @@ def generate_period_summary_proposals(
             SELECT period, granularity, summary, evidence
             FROM archive_period_summaries
             WHERE granularity = :granularity
-              AND (:period IS NULL OR period = :period)
+              AND (CAST(:period AS text) IS NULL OR period = CAST(:period AS text))
               AND jsonb_array_length(evidence) > 0
             ORDER BY period DESC
             LIMIT :limit

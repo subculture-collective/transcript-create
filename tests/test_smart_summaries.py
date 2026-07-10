@@ -8,6 +8,7 @@ from app.archive.smart_summaries import (
     PROMPT_VERSION,
     SummaryValidationError,
     build_summary_request,
+    generate_period_summary_proposals,
     parse_summary_response,
 )
 
@@ -36,6 +37,38 @@ EVIDENCE = [
         ),
     },
 ]
+
+
+class _EmptyMappingsResult:
+    def mappings(self):
+        return self
+
+    def all(self):
+        return []
+
+
+class _CapturingDb:
+    def __init__(self):
+        self.sql = ""
+
+    def execute(self, statement, _params):
+        self.sql = str(statement)
+        return _EmptyMappingsResult()
+
+
+def test_period_query_casts_optional_period_for_psycopg():
+    db = _CapturingDb()
+
+    proposals = generate_period_summary_proposals(
+        db,
+        base_url="http://ollama:11434",
+        model="qwen3:8b",
+        period="2026-04",
+        limit=1,
+    )
+
+    assert proposals == []
+    assert "CAST(:period AS text)" in db.sql
 
 
 def test_summary_request_uses_structured_output_and_disables_thinking():

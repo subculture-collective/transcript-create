@@ -432,6 +432,17 @@ Frontend env: `frontend/.env` supports `VITE_API_BASE` to point the web app at a
 
 Consult `.env.example` for a complete list and defaults. Compose sets `DATABASE_URL` to the internal `db` service automatically.
 
+### Evidence-grounded archive summaries
+
+Generate bounded period-summary proposals with a local Ollama model. The command is a dry run unless `--apply` is passed, and it rejects claims without known transcript evidence IDs.
+
+```bash
+python3 scripts/generate_archive_summaries.py --granularity month --limit 3
+python3 scripts/generate_archive_summaries.py --granularity month --period 2026-04 --apply
+```
+
+Configure `OLLAMA_URL` and `ARCHIVE_SUMMARY_MODEL` as needed. On Almaz, the archive intelligence refresher joins the external `dev` network so it can reach the existing `ollama` service. Summary generation expands each topic moment with nearby Whisper or YouTube transcript context before prompting the model.
+
 ## Running without Docker (dev)
 
 ```bash

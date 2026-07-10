@@ -77,7 +77,21 @@ def _load_existing_aliases(db: Any) -> list[dict]:
     if "is_ambiguous" in alias_columns:
         select_columns.append("a.is_ambiguous AS is_ambiguous")
 
-    where_clauses = ["l.status IN ('published', 'candidate', 'review')"]
+    # Only curated labels or labels with an explicit human publish decision may
+    # seed future alias matches. Automatic keyphrases remain review candidates,
+    # but cannot bootstrap themselves into high-confidence canonical aliases.
+    where_clauses = [
+        "l.status = 'published'",
+        """(
+            l.source IN ('admin', 'seed', 'hybrid')
+            OR EXISTS (
+                SELECT 1
+                FROM archive_label_feedback AS f
+                WHERE f.label_id = l.id
+                  AND f.action IN ('approve', 'publish')
+            )
+        )""",
+    ]
     if "status" in alias_columns:
         where_clauses.append("a.status = 'active'")
 

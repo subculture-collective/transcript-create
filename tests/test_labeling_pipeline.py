@@ -35,6 +35,20 @@ class FakeDb:
         return FakeResult([])
 
 
+def test_existing_alias_loader_only_trusts_curated_or_reviewed_labels():
+    from app.archive.labeling import pipeline
+
+    db = FakeDb()
+
+    pipeline._load_existing_aliases(db)
+
+    alias_query = next(sql for sql, _params in db.calls if "FROM archive_labels AS l" in sql)
+    assert "l.status = 'published'" in alias_query
+    assert "l.source IN ('admin', 'seed', 'hybrid')" in alias_query
+    assert "FROM archive_label_feedback AS f" in alias_query
+    assert "f.action IN ('approve', 'publish')" in alias_query
+
+
 def test_extract_labels_for_video_persists_windows_and_assignments(monkeypatch):
     from app.archive.labeling import pipeline
 

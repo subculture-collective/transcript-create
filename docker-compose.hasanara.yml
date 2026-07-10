@@ -2,6 +2,9 @@ networks:
     management:
         name: management
         external: true
+    dev:
+        name: dev
+        external: true
 
 services:
     redis:
@@ -73,8 +76,13 @@ services:
         environment:
             DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/transcripts
             ARCHIVE_INTELLIGENCE_REFRESH_SECONDS: ${ARCHIVE_INTELLIGENCE_REFRESH_SECONDS:-3600}
+            OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+            ARCHIVE_SUMMARY_MODEL: ${ARCHIVE_SUMMARY_MODEL:-qwen3:8b}
             OTEL_SDK_DISABLED: 'true'
             PYTHONPATH: /app
+        networks:
+            - default
+            - dev
         depends_on:
             db:
                 condition: service_healthy

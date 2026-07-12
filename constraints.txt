@@ -110,7 +110,7 @@ sortedcontainers==2.4.0
 soundfile==0.13.1
 SQLAlchemy==2.0.44
 starlette==0.48.0
-stripe==13.0.1
+stripe==13.2.0
 sympy==1.14.0
 threadpoolctl==3.6.0
 tiktoken==0.12.0

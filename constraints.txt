@@ -24,7 +24,7 @@ cryptography==46.0.3
 ctranslate2==4.6.0
 cycler==0.12.1
 einops==0.8.1
-fastapi==0.119.0
+fastapi==0.121.2
 faster-whisper==1.2.0
 filelock==3.20.0
 flatbuffers==25.9.23

@@ -1,0 +1,445 @@
+name: Release candidate artifacts
+
+on:
+  push:
+    tags:
+      - 'v*-rc.*'
+      - 'v*-beta.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize prerelease or validation
+        env:
+          EVENT_NAME: ${{ gitea.event_name }}
+          REF: ${{ gitea.ref }}
+          REF_NAME: ${{ gitea.ref_name }}
+          ACTOR: ${{ gitea.actor }}
+          RELEASE_OPERATOR: ${{ vars.RELEASE_OPERATOR }}
+        run: |
+          set -euo pipefail
+          [[ -n "$RELEASE_OPERATOR" && "$ACTOR" == "$RELEASE_OPERATOR" ]]
+          if [[ "$EVENT_NAME" == push ]]; then
+            [[ "$REF_NAME" =~ ^v[0-9]+(\.[0-9]+)*-(rc|beta)\.[0-9]+([-.][0-9A-Za-z]+)*$ ]]
+          else
+            [[ "$EVENT_NAME" == workflow_dispatch ]]
+            [[ "$REF" =~ ^refs/heads/release/v[0-9]+(\.[0-9]+)*-(rc|beta)\.[0-9]+([-.][0-9A-Za-z]+)*$ ]]
+          fi
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+      - name: Install Python dependencies
+        run: |
+          "${{ steps.python.outputs.python-path }}" -m pip install --upgrade pip
+          "${{ steps.python.outputs.python-path }}" -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Install frontend and end-to-end dependencies
+        run: |
+          npm ci --prefix frontend
+          npm ci --prefix e2e
+      - name: Install Chromium
+        run: npx --prefix e2e playwright install --with-deps chromium
+      - name: Run canonical verification
+        env:
+          PYTHON_BIN: ${{ steps.python.outputs.python-path }}
+        run: make verify
+
+  cross-browser:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: firefox
+            project: firefox
+          - browser: webkit
+            project: webkit
+          - browser: chromium
+            project: Mobile Chrome
+          - browser: webkit
+            project: Mobile Safari
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+      - name: Install frontend and end-to-end dependencies
+        run: |
+          npm ci --prefix frontend
+          npm ci --prefix e2e
+      - name: Install ${{ matrix.browser }}
+        run: npx --prefix e2e playwright install --with-deps ${{ matrix.browser }}
+      - name: Run seeded archive smoke test
+        working-directory: e2e
+        run: npx playwright test tests/archive-smoke.spec.ts --project="${{ matrix.project }}"
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3
+        with:
+          name: cross-browser-${{ matrix.browser }}-${{ matrix.project }}
+          if-no-files-found: warn
+          path: |
+            e2e/test-results
+            e2e/playwright-report
+
+  images:
+    runs-on: ubuntu-latest
+    needs: [verify, cross-browser]
+    if: >-
+      vars.RELEASE_OPERATOR != '' && gitea.actor == vars.RELEASE_OPERATOR &&
+      (gitea.event_name == 'push' ||
+      (gitea.event_name == 'workflow_dispatch' && startsWith(gitea.ref, 'refs/heads/release/v')))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: api
+            dockerfile: Dockerfile.api
+            image: git.subcult.tv/subculture-collective/hasanara-api
+          - role: ingest-cuda
+            dockerfile: Dockerfile.ingest.cuda
+            image: git.subcult.tv/subculture-collective/hasanara-ingest-cuda
+          - role: ml-cuda
+            dockerfile: Dockerfile.cuda
+            image: git.subcult.tv/subculture-collective/hasanara-ml-cuda
+          - role: frontend
+            dockerfile: frontend/Dockerfile
+            image: git.subcult.tv/subculture-collective/hasanara-frontend
+          - role: postgres-walg
+            dockerfile: Dockerfile.postgres-walg
+            image: git.subcult.tv/subculture-collective/hasanara-postgres-walg
+    steps:
+      - name: Authorize registry use
+        env:
+          EVENT_NAME: ${{ gitea.event_name }}
+          REF: ${{ gitea.ref }}
+          REF_NAME: ${{ gitea.ref_name }}
+          ACTOR: ${{ gitea.actor }}
+          RELEASE_OPERATOR: ${{ vars.RELEASE_OPERATOR }}
+        run: |
+          set -euo pipefail
+          [[ -n "$RELEASE_OPERATOR" && "$ACTOR" == "$RELEASE_OPERATOR" ]]
+          if [[ "$EVENT_NAME" == push ]]; then
+            [[ "$REF_NAME" =~ ^v[0-9]+(\.[0-9]+)*-(rc|beta)\.[0-9]+([-.][0-9A-Za-z]+)*$ ]]
+          else
+            [[ "$EVENT_NAME" == workflow_dispatch && "$REF" =~ ^refs/heads/release/v[0-9]+(\.[0-9]+)*-(rc|beta)\.[0-9]+([-.][0-9A-Za-z]+)*$ ]]
+          fi
+      - name: Validate release prerequisites
+        env:
+          REGISTRY_USER: ${{ vars.REGISTRY_USER }}
+          REGISTRY_PAT: ${{ secrets.REGISTRY_PAT }}
+          COSIGN_PUBLIC_KEY_B64: ${{ vars.COSIGN_PUBLIC_KEY_B64 }}
+          HASANARA_REDIS_IMAGE: ${{ vars.HASANARA_REDIS_IMAGE }}
+        run: |
+          set -euo pipefail
+          for required in REGISTRY_USER REGISTRY_PAT COSIGN_PUBLIC_KEY_B64; do
+            [[ -n "${!required}" ]] || { printf '%s is required\n' "$required" >&2; exit 1; }
+          done
+          [[ "$HASANARA_REDIS_IMAGE" =~ ^[^@[:space:]]+@sha256:[0-9a-f]{64}$ ]]
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set release image tag
+        id: target
+        run: |
+          set -euo pipefail
+          if [[ '${{ gitea.event_name }}' == push ]]; then
+            tag='${{ gitea.ref_name }}'
+          else
+            short_sha="$(printf '%s' '${{ gitea.sha }}' | cut -c1-12)"
+            tag="validation-${short_sha}-${{ gitea.run_number }}"
+          fi
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Log in to Gitea registry
+        uses: docker/login-action@06fb636fac595d6fb4b28a5dfcb21a6f5091859c # v4
+        with:
+          registry: git.subcult.tv
+          username: ${{ vars.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PAT }}
+      - name: Build ${{ matrix.role }} once for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ matrix.image }}:${{ steps.target.outputs.tag }}
+      - name: Block local high and critical application-library vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:${{ steps.target.outputs.tag }}
+          format: sarif
+          output: trivy-${{ matrix.role }}-local-library.sarif
+          severity: CRITICAL,HIGH
+          pkg-types: library
+          exit-code: '1'
+      - name: Push scanned local image and resolve digest
+        id: publish
+        env:
+          IMAGE: ${{ matrix.image }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE:$TAG"
+          digest="$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{.Manifest.Digest}}')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+      - name: Block digest high and critical application-library vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          format: sarif
+          output: trivy-${{ matrix.role }}-library.sarif
+          severity: CRITICAL,HIGH
+          pkg-types: library
+          exit-code: '1'
+      - name: Report digest OS vulnerabilities
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          format: sarif
+          output: trivy-${{ matrix.role }}-os.sarif
+          severity: CRITICAL,HIGH
+          pkg-types: os
+          exit-code: '0'
+      - name: Generate SPDX JSON SBOM for digest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          format: spdx-json
+          output: ${{ matrix.role }}.spdx.json
+          exit-code: '0'
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
+      - name: Generate provenance and image fragment
+        env:
+          IMAGE: ${{ matrix.image }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+          ROLE: ${{ matrix.role }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          SOURCE_COMMIT: ${{ gitea.sha }}
+          RUN_ID: ${{ gitea.run_id }}
+          REPOSITORY_URI: https://git.subcult.tv/${{ gitea.repository }}
+        run: |
+          set -euo pipefail
+          export TIMESTAMP="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          image = f"{os.environ['IMAGE']}@{os.environ['DIGEST']}"
+          Path(f"{os.environ['ROLE']}.json").write_text(json.dumps({"role": os.environ["ROLE"], "image": image}) + "\n")
+          Path(f"{os.environ['ROLE']}.provenance.json").write_text(json.dumps({
+              "buildType": "https://hasanara.example/release",
+              "builder": {"id": f"gitea-run/{os.environ['RUN_ID']}"},
+              "invocation": {"configSource": {"uri": os.environ["REPOSITORY_URI"], "digest": {"sha1": os.environ["SOURCE_COMMIT"]}, "entryPoint": os.environ["DOCKERFILE"]}, "parameters": {"role": os.environ["ROLE"], "dockerfile": os.environ["DOCKERFILE"]}},
+              "metadata": {"buildInvocationId": os.environ["RUN_ID"], "buildStartedOn": os.environ["TIMESTAMP"], "buildFinishedOn": os.environ["TIMESTAMP"], "completeness": {"parameters": True, "environment": False, "materials": True}, "reproducible": False},
+              "materials": [{"uri": os.environ["REPOSITORY_URI"], "digest": {"sha1": os.environ["SOURCE_COMMIT"]}}]
+          }) + "\n")
+          PY
+      - name: Sign and attest digest
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          IMAGE_REF: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          ROLE: ${{ matrix.role }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE_REF"
+          cosign attest --yes --key env://COSIGN_PRIVATE_KEY --type slsaprovenance --predicate "${ROLE}.provenance.json" "$IMAGE_REF"
+          cosign attest --yes --key env://COSIGN_PRIVATE_KEY --type spdxjson --predicate "${ROLE}.spdx.json" "$IMAGE_REF"
+      - name: Verify signed digest evidence
+        env:
+          COSIGN_PUBLIC_KEY_B64: ${{ vars.COSIGN_PUBLIC_KEY_B64 }}
+          IMAGE_REF: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+          ROLE: ${{ matrix.role }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          SOURCE_COMMIT: ${{ gitea.sha }}
+          REPOSITORY_URI: https://git.subcult.tv/${{ gitea.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import binascii
+          import os
+          from pathlib import Path
+
+          try:
+              public_key = base64.b64decode(os.environ["COSIGN_PUBLIC_KEY_B64"], validate=True)
+          except (KeyError, binascii.Error) as error:
+              raise SystemExit("invalid COSIGN_PUBLIC_KEY_B64") from error
+          if not public_key:
+              raise SystemExit("invalid COSIGN_PUBLIC_KEY_B64")
+          Path(f"{os.environ['ROLE']}.cosign.pub").write_bytes(public_key)
+          PY
+          cosign verify --key "${ROLE}.cosign.pub" "$IMAGE_REF" > "${ROLE}.signature.verify.json"
+          cosign verify-attestation --key "${ROLE}.cosign.pub" --type slsaprovenance "$IMAGE_REF" > "${ROLE}.provenance.verify.json"
+          cosign verify-attestation --key "${ROLE}.cosign.pub" --type spdxjson "$IMAGE_REF" > "${ROLE}.sbom.verify.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          expected_digest = os.environ["DIGEST"].removeprefix("sha256:")
+          expected_commit = os.environ["SOURCE_COMMIT"]
+          expected_role = os.environ["ROLE"]
+          expected_dockerfile = os.environ["DOCKERFILE"]
+          expected_repository = os.environ["REPOSITORY_URI"]
+
+          def statements(path):
+              text = Path(path).read_text(encoding="utf-8")
+              try:
+                  parsed = json.loads(text)
+              except json.JSONDecodeError:
+                  try:
+                      parsed = [json.loads(line) for line in text.splitlines() if line.strip()]
+                  except json.JSONDecodeError as error:
+                      raise SystemExit("invalid verified attestation output") from error
+              return parsed if isinstance(parsed, list) else [parsed]
+
+          def has_subject(statement):
+              return any(
+                  isinstance(subject, dict)
+                  and subject.get("digest") == {"sha256": expected_digest}
+                  for subject in statement.get("subject", [])
+              )
+
+          def is_expected_slsa(statement):
+              predicate = statement.get("predicate", {})
+              config_source = predicate.get("invocation", {}).get("configSource", {})
+              parameters = predicate.get("invocation", {}).get("parameters", {})
+              return (
+                  statement.get("predicateType") == "https://slsa.dev/provenance/v0.2"
+                  and has_subject(statement)
+                  and config_source.get("uri") == expected_repository
+                  and config_source.get("digest") == {"sha1": expected_commit}
+                  and config_source.get("entryPoint") == expected_dockerfile
+                  and parameters.get("role") == expected_role
+                  and parameters.get("dockerfile") == expected_dockerfile
+                  and any(
+                      material.get("uri") == expected_repository
+                      and material.get("digest") == {"sha1": expected_commit}
+                      for material in predicate.get("materials", [])
+                      if isinstance(material, dict)
+                  )
+              )
+
+          if not any(is_expected_slsa(statement) for statement in statements(f"{expected_role}.provenance.verify.json")):
+              raise SystemExit("no verified SLSA attestation matches this release")
+          if not any(
+              statement.get("predicateType") == "https://spdx.dev/Document" and has_subject(statement)
+              for statement in statements(f"{expected_role}.sbom.verify.json")
+          ):
+              raise SystemExit("no verified SPDX attestation matches this release")
+          PY
+      - name: Upload ${{ matrix.role }} image evidence
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3
+        with:
+          name: image-evidence-${{ matrix.role }}
+          path: |
+            ${{ matrix.role }}.json
+            trivy-${{ matrix.role }}-library.sarif
+            trivy-${{ matrix.role }}-os.sarif
+            ${{ matrix.role }}.spdx.json
+            ${{ matrix.role }}.provenance.json
+            ${{ matrix.role }}.cosign.pub
+            ${{ matrix.role }}.signature.verify.json
+            ${{ matrix.role }}.provenance.verify.json
+            ${{ matrix.role }}.sbom.verify.json
+
+  release:
+    runs-on: ubuntu-latest
+    needs: images
+    permissions:
+      contents: read
+      releases: write
+    steps:
+      - name: Download API evidence
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3
+        with:
+          name: image-evidence-api
+          path: image-evidence/api
+      - name: Download ingest evidence
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3
+        with:
+          name: image-evidence-ingest-cuda
+          path: image-evidence/ingest-cuda
+      - name: Download ML evidence
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3
+        with:
+          name: image-evidence-ml-cuda
+          path: image-evidence/ml-cuda
+      - name: Download frontend evidence
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3
+        with:
+          name: image-evidence-frontend
+          path: image-evidence/frontend
+      - name: Download database evidence
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3
+        with:
+          name: image-evidence-postgres-walg
+          path: image-evidence/postgres-walg
+      - name: Generate immutable release manifest
+        env:
+          REDIS_IMAGE: ${{ vars.HASANARA_REDIS_IMAGE }}
+          SOURCE_COMMIT: ${{ gitea.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          roles = {"api", "ingest-cuda", "ml-cuda", "frontend", "postgres-walg"}
+          ref = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
+          images = {}
+          for path in Path("image-evidence").glob("*/*.json"):
+              item = json.loads(path.read_text())
+              if set(item) == {"role", "image"}:
+                  if item["role"] in images or item["role"] not in roles or not ref.fullmatch(item["image"]): raise SystemExit("invalid image fragment")
+                  images[item["role"]] = item["image"]
+          if set(images) != roles or not ref.fullmatch(os.environ["REDIS_IMAGE"]): raise SystemExit("missing release digest")
+          Path("release-images.json").write_text(json.dumps({"schema_version": 1, "source_commit": os.environ["SOURCE_COMMIT"], "images": {**dict(sorted(images.items())), "redis": os.environ["REDIS_IMAGE"]}, "services": {"db": "postgres-walg", "backup": "postgres-walg", "migrations": "api", "api": "api", "analytics-retention": "api", "summary-refresher": "api", "archive-intelligence-refresher": "api", "worker": "ingest-cuda", "diarization-worker": "ml-cuda", "frontend": "frontend", "redis": "redis"}}, indent=2) + "\n")
+          PY
+      - name: Upload release evidence bundle
+        uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3
+        with:
+          name: release-evidence
+          path: |
+            release-images.json
+            image-evidence
+      - name: Create Gitea prerelease and attach evidence
+        if: gitea.event_name == 'push'
+        env:
+          API_URL: ${{ gitea.api_url }}
+          REPOSITORY: ${{ gitea.repository }}
+          TAG: ${{ gitea.ref_name }}
+          TOKEN: ${{ gitea.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > release-request.json
+          import json, os
+          print(json.dumps({"tag_name": os.environ["TAG"], "name": f"Release {os.environ['TAG']}", "body": "Immutable deployment image manifest and evidence attached. Redis is third-party and is not attested by this repository.", "prerelease": True, "draft": False}))
+          PY
+          release="$(curl --fail-with-body --silent --show-error -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' --data @release-request.json "$API_URL/repos/$REPOSITORY/releases")"
+          release_id="$(RELEASE="$release" python3 -c 'import json, os; value=json.loads(os.environ["RELEASE"]); identifier=value.get("id"); assert isinstance(identifier, int); print(identifier)')"
+          for asset in release-images.json image-evidence/*/*; do
+            name="$(ASSET="$asset" python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.path.basename(os.environ["ASSET"]), safe=""))')"
+            curl --fail-with-body --silent --show-error -H "Authorization: token $TOKEN" -F "attachment=@$asset" "$API_URL/repos/$REPOSITORY/releases/$release_id/assets?name=$name" >/dev/null
+          done

@@ -1,21 +1,18 @@
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import text as _text
 
 from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
-from ..common.session import is_admin as _is_admin
 from ..db import get_db
-from ..exceptions import ExternalServiceError, ValidationError
+from ..exceptions import ValidationError
 from ..schemas import (
     ErrorResponse,
     GroupedSearchResponse,
     MentionMap,
     SearchAnalytics,
     SearchHistoryResponse,
-    SearchHit,
     SearchResponse,
     SearchSuggestionsResponse,
 )
@@ -101,6 +98,7 @@ def search(
     language: str | None = Query(None, description="Filter by language code (e.g., 'en', 'es')"),
     has_speaker_labels: bool | None = Query(None, description="Filter videos with speaker diarization"),
     category: str | None = Query(None, description="Filter by video category/type"),
+    match_mode: str = Query("topic", description="Matching rule: topic, exact_phrase, or whole_word"),
     sort_by: str = Query(
         "relevance", description="Sort results by: relevance, date_asc, date_desc, duration_asc, duration_desc"
     ),
@@ -115,6 +113,8 @@ def search(
         raise ValidationError("Limit must be between 1 and 200", field="limit")
     if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
         raise ValidationError("Invalid sort_by value", field="sort_by")
+    if match_mode not in ("topic", "exact_phrase", "whole_word"):
+        raise ValidationError("Invalid match_mode value", field="match_mode")
     return _search_orchestrator.search(
         db,
         request,
@@ -131,8 +131,11 @@ def search(
         language=language,
         has_speaker_labels=has_speaker_labels,
         category=category,
+        match_mode=match_mode,
         sort_by=sort_by,
     )
+
+
 @router.get(
     "/search/suggestions",
     response_model=SearchSuggestionsResponse,
@@ -378,6 +381,7 @@ def search_grouped(
     language: str | None = Query(None, description="Filter by language code (e.g., 'en', 'es')"),
     has_speaker_labels: bool | None = Query(None, description="Filter videos with speaker diarization"),
     category: str | None = Query(None, description="Filter by video category/type"),
+    match_mode: str = Query("topic", description="Matching rule: topic, exact_phrase, or whole_word"),
     sort_by: str = Query(
         "relevance", description="Sort results by: relevance, date_asc, date_desc, duration_asc, duration_desc"
     ),
@@ -391,6 +395,8 @@ def search_grouped(
         raise ValidationError("Limit must be between 1 and 200", field="limit")
     if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
         raise ValidationError("Invalid sort_by value", field="sort_by")
+    if match_mode not in ("topic", "exact_phrase", "whole_word"):
+        raise ValidationError("Invalid match_mode value", field="match_mode")
 
     return _search_orchestrator.grouped_search(
         db,
@@ -408,6 +414,7 @@ def search_grouped(
         language=language,
         has_speaker_labels=has_speaker_labels,
         category=category,
+        match_mode=match_mode,
         sort_by=sort_by,
     )
 
@@ -433,6 +440,7 @@ def search_mention_map(
     language: str | None = Query(None, description="Filter by language code (e.g., 'en', 'es')"),
     has_speaker_labels: bool | None = Query(None, description="Filter videos with speaker diarization"),
     category: str | None = Query(None, description="Filter by video category/type"),
+    match_mode: str = Query("topic", description="Matching rule: topic, exact_phrase, or whole_word"),
     sort_by: str = Query(
         "relevance", description="Sort results by: relevance, date_asc, date_desc, duration_asc, duration_desc"
     ),
@@ -447,6 +455,8 @@ def search_mention_map(
         raise ValidationError("Limit must be between 1 and 200", field="limit")
     if sort_by not in ("relevance", "date_asc", "date_desc", "duration_asc", "duration_desc"):
         raise ValidationError("Invalid sort_by value", field="sort_by")
+    if match_mode not in ("topic", "exact_phrase", "whole_word"):
+        raise ValidationError("Invalid match_mode value", field="match_mode")
 
     return _search_orchestrator.mention_map(
         db,
@@ -464,6 +474,7 @@ def search_mention_map(
         language=language,
         has_speaker_labels=has_speaker_labels,
         category=category,
+        match_mode=match_mode,
         sort_by=sort_by,
         top_limit=top_limit,
     )

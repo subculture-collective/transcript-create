@@ -115,6 +115,60 @@ body {
 }
 
 @layer components {
+  .transcript-quality {
+    @apply grid gap-3 border-b border-border/70 bg-warning-soft/40 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(12rem,0.45fr)_minmax(18rem,1fr)_auto] lg:items-center;
+  }
+
+  .search-mode-option {
+    @apply flex min-h-[44px] cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted transition-colors;
+  }
+
+  .search-mode-option input {
+    @apply mt-1 accent-[var(--color-accent)];
+  }
+
+  .search-mode-option span {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .search-mode-option strong {
+    @apply font-semibold text-ink;
+  }
+
+  .search-mode-option small {
+    @apply text-xs text-subtle;
+  }
+
+  .search-mode-option-active {
+    @apply border-accent bg-accent-soft;
+  }
+
+  .filter-disclosure,
+  .moment-actions-menu {
+    @apply rounded-lg border border-border bg-surface-muted/70;
+  }
+
+  .filter-disclosure > summary,
+  .moment-actions-menu > summary {
+    @apply cursor-pointer px-3 py-2 font-medium text-ink;
+  }
+
+  .filter-disclosure > div {
+    @apply px-3 pb-3;
+  }
+
+  .moment-actions-menu {
+    @apply relative;
+  }
+
+  .moment-actions-popover {
+    @apply grid min-w-44 gap-1 border-t border-border p-2 sm:absolute sm:right-0 sm:z-20 sm:mt-1 sm:rounded-lg sm:border sm:bg-surface sm:shadow-xl;
+  }
+
+  .transcript-window-controls {
+    @apply flex flex-col items-center justify-between gap-3 border-y border-border/70 bg-surface-muted/60 px-4 py-3 sm:flex-row sm:px-6;
+  }
+
   .page-title {
     @apply text-4xl font-semibold tracking-[-0.04em] text-ink md:text-5xl;
     text-wrap: balance;

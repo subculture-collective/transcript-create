@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, useAuth } from '../services';
 import type { ArchiveSummary } from '../types/api';
-import { buildTimestampLink, formatDate, formatDuration, formatNumber } from '../features/archive/format';
+import {
+  buildTimestampLink,
+  formatDate,
+  formatDuration,
+  formatNumber,
+} from '../features/archive/format';
 import { StatCard, VideoCard } from '../components/archive';
 
 export default function HomePage() {
@@ -41,7 +46,8 @@ export default function HomePage() {
             <div className="archive-eyebrow">HasAnAra</div>
             <h1 className="page-title max-w-4xl">Search the HasanAbi broadcast archive.</h1>
             <p className="max-w-2xl text-lg leading-8 text-muted">
-              Trace topics, timestamped quotes, debates, guests, and recurring stream moments across HasanAbi VODs.
+              Trace topics, timestamped quotes, debates, guests, and recurring stream moments across
+              HasanAbi VODs.
             </p>
           </div>
 
@@ -83,31 +89,46 @@ export default function HomePage() {
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)] lg:items-stretch">
           <div className="archive-panel grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-              <StatCard label="VODs" value={loading ? '—' : summary ? formatNumber(summary.video_count) : '—'} />
-              <StatCard label="Duration" value={loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'} />
-              <StatCard label="Transcript words" value={loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'} />
-              <StatCard
-                label="Updated"
-                value={loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}
-                className="sm:col-span-1"
-                valueClassName="meta-value text-sm"
-              />
+            <StatCard
+              label="VODs"
+              value={loading ? '—' : summary ? formatNumber(summary.video_count) : '—'}
+            />
+            <StatCard
+              label="Duration"
+              value={loading ? '—' : summary ? formatDuration(summary.total_duration_seconds) : '—'}
+            />
+            <StatCard
+              label="Transcript words"
+              value={loading ? '—' : summary ? formatNumber(summary.transcript_word_count) : '—'}
+            />
+            <StatCard
+              label="Updated"
+              value={loading ? 'Loading…' : formatDate(summary?.updated_at ?? null)}
+              className="sm:col-span-1"
+              valueClassName="meta-value text-sm"
+            />
           </div>
 
           <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
-              <div className="archive-eyebrow mb-2">Get started</div>
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-ink">Create an account to save searches and favorites.</h2>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                Use your existing Google or Twitch login to keep your archive trail in sync.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" onClick={login} className="btn min-h-[44px] px-4 text-sm">
-                  Continue with Google
-                </button>
-                <button type="button" onClick={loginTwitch} className="btn-secondary min-h-[44px] px-4 text-sm">
-                  Continue with Twitch
-                </button>
-              </div>
+            <div className="archive-eyebrow mb-2">Get started</div>
+            <h2 className="text-xl font-semibold tracking-[-0.03em] text-ink">
+              Create an account to save searches and favorites.
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Use your existing Google or Twitch login to keep your archive trail in sync.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={login} className="btn min-h-[44px] px-4 text-sm">
+                Continue with Google
+              </button>
+              <button
+                type="button"
+                onClick={loginTwitch}
+                className="btn-secondary min-h-[44px] px-4 text-sm"
+              >
+                Continue with Twitch
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -116,7 +137,7 @@ export default function HomePage() {
         <div className="surface-card space-y-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="archive-eyebrow mb-2">Latest signal</div>
+              <div className="archive-eyebrow mb-2">Recent archive</div>
               <h2 className="section-title">Recent VODs</h2>
             </div>
             <Link to="/episodes" className="action-link text-sm">
@@ -139,15 +160,21 @@ export default function HomePage() {
 
         <aside className="surface-card space-y-5">
           <div>
-            <div className="archive-eyebrow mb-2">Popular signal</div>
+            <div className="archive-eyebrow mb-2">Popular searches</div>
             <h2 className="section-title">Suggested searches</h2>
-            <p className="mt-2 text-sm text-muted">Real archive terms with fast jump links into the search engine.</p>
+            <p className="mt-2 text-sm text-muted">
+              Real archive terms with fast jump links into the search engine.
+            </p>
           </div>
 
           {suggested.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {suggested.map((item) => (
-                <Link key={item.term} to={`/search?q=${encodeURIComponent(item.term)}`} className="badge-warning">
+                <Link
+                  key={item.term}
+                  to={`/search?q=${encodeURIComponent(item.term)}`}
+                  className="badge-warning"
+                >
                   {item.term}
                 </Link>
               ))}

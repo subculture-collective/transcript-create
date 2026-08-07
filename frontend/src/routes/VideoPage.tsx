@@ -6,7 +6,13 @@ import type { Segment, TranscriptResponse, VideoInfo, SearchHit, VideoChapter } 
 import { ExportMenu } from '../components';
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer';
 // track imported from services barrel
-import { buildTimestampLink, formatTimestamp } from '../features/archive/format';
+import {
+  buildTimestampLink,
+  canonicalMomentId,
+  formatTimestamp,
+  formatVideoTitle,
+} from '../features/archive/format';
+import type { TranscriptSource } from '../features/archive/format';
 import {
   buildTranscriptTurns,
   normalizeTranscriptText,
@@ -17,9 +23,14 @@ import {
   PlayerPanel,
   PlainTranscriptTurns,
   TranscriptSearchBar,
+  TranscriptQualityNotice,
+  TranscriptWindowControls,
   VideoDetailsPanel,
   VideoHeader,
 } from '../components/video';
+import { ensureIndexVisible, windowAroundIndex } from '../features/videoTranscript/window';
+
+const TRANSCRIPT_WINDOW_SIZE = 80;
 
 function secondsToYouTubeTs(s: number) {
   return Math.max(0, Math.floor(s));
@@ -47,6 +58,10 @@ export default function VideoPage() {
   const [viewMode, setViewMode] = useState<'standard' | 'theater' | 'reader'>('standard');
   const [isPlayingMatches, setIsPlayingMatches] = useState(false);
   const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
+  const [transcriptWindow, setTranscriptWindow] = useState({
+    start: 0,
+    end: TRANSCRIPT_WINDOW_SIZE,
+  });
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
   const autoFollowScrollTimeoutRef = useRef<number | null>(null);
 
@@ -56,6 +71,54 @@ export default function VideoPage() {
     return Number.isFinite(t) ? t : 0;
   }, [params]);
   const transcriptQuery = useMemo(() => params.get('q') ?? '', [params]);
+  const requestedTranscriptSource = useMemo(() => {
+    const source = params.get('source');
+    return source === 'whisper' || source === 'youtube' || source === 'merged' ? source : 'best';
+  }, [params]);
+  const formattedBlocks = useMemo(
+    () => transcript?.blocks?.filter((block) => block.text.trim()) ?? [],
+    [transcript?.blocks]
+  );
+  const hasFormattedBlocks = formattedBlocks.length > 0;
+  const transcriptTurns = useMemo(
+    () => buildTranscriptTurns(transcript?.segments ?? [], hits),
+    [transcript?.segments, hits]
+  );
+  const requestedMomentMs = useMemo(() => {
+    const match = (window.location.hash ?? '').match(/^#moment-(?:whisper|youtube|merged)-(\d+)$/);
+    return match ? Number(match[1]) : startSeconds * 1000;
+  }, [startSeconds]);
+  const requestedSegmentIndex = useMemo(() => {
+    if (!transcript || requestedMomentMs <= 0) return 0;
+    const index = transcript.segments.findIndex(
+      (segment) =>
+        segment.start_ms === requestedMomentMs ||
+        (requestedMomentMs >= segment.start_ms && requestedMomentMs < segment.end_ms)
+    );
+    return Math.max(0, index);
+  }, [requestedMomentMs, transcript]);
+  const requestedContentIndex = useMemo(() => {
+    if (hasFormattedBlocks) {
+      const index = formattedBlocks.findIndex((block) =>
+        block.segment_ids.includes(requestedSegmentIndex)
+      );
+      return Math.max(0, index);
+    }
+    const segmentId = requestedSegmentIndex + 1;
+    const index = transcriptTurns.findIndex((turn) =>
+      turn.segments.some((segment) => segment.id === segmentId)
+    );
+    return Math.max(0, index);
+  }, [formattedBlocks, hasFormattedBlocks, requestedSegmentIndex, transcriptTurns]);
+  const transcriptSectionCount = hasFormattedBlocks
+    ? formattedBlocks.length
+    : transcriptTurns.length;
+
+  useEffect(() => {
+    setTranscriptWindow(
+      windowAroundIndex(transcriptSectionCount, requestedContentIndex, TRANSCRIPT_WINDOW_SIZE)
+    );
+  }, [requestedContentIndex, transcriptSectionCount, videoId]);
 
   const scrollElementIntoView = useCallback(
     (element: Element | null, options?: ScrollIntoViewOptions) => {
@@ -87,7 +150,7 @@ export default function VideoPage() {
       .then(setVideo)
       .catch(() => setVideo(null));
     api
-      .getTranscript(videoId)
+      .getTranscript(videoId, requestedTranscriptSource)
       .then(setTranscript)
       .catch(() => setTranscript(null));
     api
@@ -116,7 +179,7 @@ export default function VideoPage() {
     } else {
       setServerFavs([]);
     }
-  }, [videoId, transcriptQuery, user]);
+  }, [requestedTranscriptSource, videoId, transcriptQuery, user]);
 
   useEffect(() => {
     const unlockAutoFollow = () => setAutoFollowEnabled(false);
@@ -152,6 +215,29 @@ export default function VideoPage() {
   useEffect(() => {
     const hash = window.location.hash;
     if (hash) {
+      const momentMatch = hash.match(/^#moment-(whisper|youtube|merged)-(\d+)$/);
+      if (momentMatch) {
+        const source = momentMatch[1] as TranscriptSource;
+        const momentMs = Number(momentMatch[2]);
+        const segIndex =
+          transcript?.segments.findIndex(
+            (segment) =>
+              segment.start_ms === momentMs ||
+              (momentMs >= segment.start_ms && momentMs < segment.end_ms)
+          ) ?? -1;
+        const target = document.getElementById(canonicalMomentId(source, momentMs));
+        if (segIndex >= 0 && target) {
+          const block = transcript?.blocks?.find((candidate) =>
+            candidate.segment_ids.includes(segIndex)
+          );
+          scrollElementIntoView(target, { behavior: 'smooth', block: 'center' });
+          setActiveSegId(segIndex + 1);
+          setActiveSentenceId(null);
+          setActiveBlockIndex(block?.block_index ?? null);
+          return;
+        }
+      }
+
       const segMatch = hash.match(/^#seg-(\d+)(?:-s-(.+))?$/);
       if (segMatch) {
         const segId = Number(segMatch[1]);
@@ -221,7 +307,13 @@ export default function VideoPage() {
         }
       }
     }
-  }, [scrollElementIntoView, startSeconds, transcript]);
+  }, [
+    scrollElementIntoView,
+    startSeconds,
+    transcript,
+    transcriptWindow.end,
+    transcriptWindow.start,
+  ]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -312,11 +404,64 @@ export default function VideoPage() {
       );
     }
   }, [matchIndicesKey, matchIndices, params, startSeconds, transcript]);
-  const formattedBlocks = useMemo(
-    () => transcript?.blocks?.filter((block) => block.text.trim()) ?? [],
-    [transcript?.blocks]
+  const activeContentIndex = useMemo(() => {
+    if (hasFormattedBlocks) {
+      if (activeBlockIndex != null) {
+        return formattedBlocks.findIndex((block) => block.block_index === activeBlockIndex);
+      }
+      if (currentMs != null) {
+        return formattedBlocks.findIndex(
+          (block) => currentMs >= block.start_ms && currentMs < block.end_ms
+        );
+      }
+      return -1;
+    }
+    if (activeSegId != null) {
+      return transcriptTurns.findIndex((turn) =>
+        turn.segments.some((segment) => segment.id === activeSegId)
+      );
+    }
+    return -1;
+  }, [
+    activeBlockIndex,
+    activeSegId,
+    currentMs,
+    formattedBlocks,
+    hasFormattedBlocks,
+    transcriptTurns,
+  ]);
+
+  useEffect(() => {
+    if (!autoFollowEnabled || activeContentIndex < 0) return;
+    setTranscriptWindow((current) =>
+      ensureIndexVisible(
+        transcriptSectionCount,
+        activeContentIndex,
+        current,
+        TRANSCRIPT_WINDOW_SIZE
+      )
+    );
+  }, [activeContentIndex, autoFollowEnabled, transcriptSectionCount]);
+
+  const visibleFormattedBlocks = formattedBlocks.slice(
+    transcriptWindow.start,
+    transcriptWindow.end
   );
-  const hasFormattedBlocks = formattedBlocks.length > 0;
+  const visibleTranscriptTurns = transcriptTurns.slice(
+    transcriptWindow.start,
+    transcriptWindow.end
+  );
+
+  function moveTranscriptWindow(direction: -1 | 1) {
+    const nextIndex =
+      direction < 0
+        ? Math.max(0, transcriptWindow.start - TRANSCRIPT_WINDOW_SIZE)
+        : Math.min(Math.max(0, transcriptSectionCount - 1), transcriptWindow.end);
+    setAutoFollowEnabled(false);
+    setTranscriptWindow(
+      windowAroundIndex(transcriptSectionCount, nextIndex, TRANSCRIPT_WINDOW_SIZE)
+    );
+  }
 
   function gotoMatch(direction: 1 | -1) {
     if (matchIndices.length === 0) return;
@@ -408,18 +553,14 @@ export default function VideoPage() {
     }
   }
 
-  function copyTranscriptQuote(segment: Segment, text: string, segIndex: number) {
+  function copyTranscriptQuote(segment: Segment, text: string) {
     if (!videoId) return;
-    const url = `${window.location.origin}${buildTimestampLink(videoId, segment.start_ms, segIndex)}`;
+    const url = `${window.location.origin}${buildTimestampLink(videoId, segment.start_ms, transcript?.source)}`;
     copyText(
       `“${normalizeTranscriptText(text)}”\n\n— ${episodeTitle}, ${formatTimestamp(segment.start_ms)}\n${url}`
     );
   }
 
-  const transcriptTurns = useMemo(
-    () => buildTranscriptTurns(transcript?.segments ?? [], hits),
-    [transcript?.segments, hits]
-  );
   const isSavedSegment = useCallback(
     (segment: Segment, segIndex: number) => {
       if (!videoId) return false;
@@ -431,7 +572,12 @@ export default function VideoPage() {
     },
     [serverFavs, videoId]
   );
-  const episodeTitle = video?.title ?? 'Loading VOD...';
+  const episodeTitle = video ? formatVideoTitle(video.title, video.uploaded_at) : 'Loading VOD...';
+
+  useEffect(() => {
+    if (!video) return;
+    document.title = `${episodeTitle} | HasanAra`;
+  }, [episodeTitle, video]);
 
   function selectChapter(chapter: VideoChapter) {
     jumpTo(chapter.start_ms);
@@ -609,28 +755,64 @@ export default function VideoPage() {
               )}
               {transcript &&
                 (hasFormattedBlocks ? (
-                  <FormattedTranscriptDocument
-                    blocks={formattedBlocks}
-                    transcriptSegments={transcript.segments}
-                    hits={hits}
-                    activeBlockIndex={activeBlockIndex}
-                    activeSegId={activeSegId}
-                    activeSentenceId={activeSentenceId}
-                    currentMs={currentMs}
-                    isSavedSegment={isSavedSegment}
-                    onClickSentence={onClickFormattedSentence}
-                    onSaveMoment={saveTranscriptMoment}
-                    onCopyQuote={copyTranscriptQuote}
-                  />
+                  <>
+                    <TranscriptQualityNotice
+                      source={(transcript.source ?? 'whisper') as TranscriptSource}
+                      sourceLabel={transcript.source_label}
+                      blocks={formattedBlocks}
+                    />
+                    <TranscriptWindowControls
+                      range={transcriptWindow}
+                      total={transcriptSectionCount}
+                      onMove={moveTranscriptWindow}
+                    />
+                    <FormattedTranscriptDocument
+                      blocks={visibleFormattedBlocks}
+                      transcriptSegments={transcript.segments}
+                      hits={hits}
+                      activeBlockIndex={activeBlockIndex}
+                      activeSegId={activeSegId}
+                      activeSentenceId={activeSentenceId}
+                      currentMs={currentMs}
+                      source={(transcript.source ?? 'whisper') as TranscriptSource}
+                      isSavedSegment={isSavedSegment}
+                      onClickSentence={onClickFormattedSentence}
+                      onSaveMoment={saveTranscriptMoment}
+                      onCopyQuote={copyTranscriptQuote}
+                    />
+                    <TranscriptWindowControls
+                      range={transcriptWindow}
+                      total={transcriptSectionCount}
+                      onMove={moveTranscriptWindow}
+                    />
+                  </>
                 ) : (
-                  <PlainTranscriptTurns
-                    turns={transcriptTurns}
-                    activeSegId={activeSegId}
-                    isSavedSegment={isSavedSegment}
-                    onClickSegment={onClickSegment}
-                    onSaveMoment={saveTranscriptMoment}
-                    onCopyQuote={copyTranscriptQuote}
-                  />
+                  <>
+                    <TranscriptQualityNotice
+                      source={(transcript.source ?? 'whisper') as TranscriptSource}
+                      sourceLabel={transcript.source_label}
+                      blocks={[]}
+                    />
+                    <TranscriptWindowControls
+                      range={transcriptWindow}
+                      total={transcriptSectionCount}
+                      onMove={moveTranscriptWindow}
+                    />
+                    <PlainTranscriptTurns
+                      turns={visibleTranscriptTurns}
+                      activeSegId={activeSegId}
+                      source={(transcript.source ?? 'whisper') as TranscriptSource}
+                      isSavedSegment={isSavedSegment}
+                      onClickSegment={onClickSegment}
+                      onSaveMoment={saveTranscriptMoment}
+                      onCopyQuote={copyTranscriptQuote}
+                    />
+                    <TranscriptWindowControls
+                      range={transcriptWindow}
+                      total={transcriptSectionCount}
+                      onMove={moveTranscriptWindow}
+                    />
+                  </>
                 ))}
             </div>
           </div>

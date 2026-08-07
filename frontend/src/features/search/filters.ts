@@ -5,6 +5,7 @@ export type SearchFilters = ArchiveSearchFilters & { q: string };
 export function readFilters(params: URLSearchParams): SearchFilters {
   return {
     q: params.get('q') ?? '',
+    match_mode: (params.get('match_mode') as ArchiveSearchFilters['match_mode']) ?? 'topic',
     source: (params.get('source') as ArchiveSearchFilters['source']) ?? undefined,
     category: params.get('category') ?? undefined,
     date_from: params.get('date_from') ?? undefined,
@@ -21,16 +22,22 @@ export function readFilters(params: URLSearchParams): SearchFilters {
 export function serializeFilters(filters: SearchFilters) {
   const next = new URLSearchParams();
   if (filters.q.trim()) next.set('q', filters.q.trim());
+  if (filters.match_mode && filters.match_mode !== 'topic')
+    next.set('match_mode', filters.match_mode);
   if (filters.source) next.set('source', filters.source);
   if (filters.category) next.set('category', filters.category);
   if (filters.date_from) next.set('date_from', filters.date_from);
   if (filters.date_to) next.set('date_to', filters.date_to);
-  if (filters.min_duration != null && !Number.isNaN(filters.min_duration)) next.set('min_duration', String(filters.min_duration));
-  if (filters.max_duration != null && !Number.isNaN(filters.max_duration)) next.set('max_duration', String(filters.max_duration));
+  if (filters.min_duration != null && !Number.isNaN(filters.min_duration))
+    next.set('min_duration', String(filters.min_duration));
+  if (filters.max_duration != null && !Number.isNaN(filters.max_duration))
+    next.set('max_duration', String(filters.max_duration));
   if (filters.sort_by) next.set('sort_by', filters.sort_by);
   if (filters.video_id) next.set('video_id', filters.video_id);
-  if (filters.limit != null && !Number.isNaN(filters.limit)) next.set('limit', String(filters.limit));
-  if (filters.offset != null && !Number.isNaN(filters.offset)) next.set('offset', String(filters.offset));
+  if (filters.limit != null && !Number.isNaN(filters.limit))
+    next.set('limit', String(filters.limit));
+  if (filters.offset != null && !Number.isNaN(filters.offset))
+    next.set('offset', String(filters.offset));
   return next;
 }
 
@@ -47,6 +54,7 @@ export function buildCurrentFilters(
 ) {
   return serializeFilters({
     q,
+    match_mode: existing.match_mode,
     source,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,

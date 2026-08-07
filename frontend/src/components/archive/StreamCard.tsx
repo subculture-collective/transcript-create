@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { DateField } from '../../features/streams/library';
 import { formatDate, formatDuration } from '../../features/streams/library';
+import { formatVideoTitle } from '../../features/archive/format';
 import type { VideoInfo } from '../../types/api';
 import VideoMetadataChips from './VideoMetadataChips';
 
@@ -10,15 +11,21 @@ type StreamCardProps = {
 };
 
 export default function StreamCard({ video, dateField }: StreamCardProps) {
-  const title = video.title || `Video ${video.youtube_id}`;
+  const title = formatVideoTitle(video.title, video.uploaded_at);
   const dateValue = video[dateField];
   const metadata = [
-    ...(video.people ?? []).map((person) => ({ key: `person-${person.slug}`, label: person.display_name })),
+    ...(video.people ?? []).map((person) => ({
+      key: `person-${person.slug}`,
+      label: person.display_name,
+    })),
     ...(video.tags ?? []).map((tag) => ({ key: `tag-${tag.slug}`, label: tag.label })),
   ];
 
   return (
-    <Link to={`/v/${video.id}`} className="surface-card-compact group flex h-full flex-col overflow-hidden border border-border/80 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent hover:shadow-lg">
+    <Link
+      to={`/v/${video.id}`}
+      className="surface-card-compact group flex h-full flex-col overflow-hidden border border-border/80 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent hover:shadow-lg"
+    >
       <div className="relative overflow-hidden rounded-xl border border-border/60 bg-surface-muted">
         <img
           src={`https://i.ytimg.com/vi/${video.youtube_id}/hqdefault.jpg`}

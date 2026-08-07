@@ -1,5 +1,6 @@
 import type { SearchHit, Segment, TranscriptBlock } from '../../types/api';
-import { formatTimestamp } from '../../features/archive/format';
+import { canonicalMomentId, formatTimestamp } from '../../features/archive/format';
+import type { TranscriptSource } from '../../features/archive/format';
 
 type Props = {
   blocks: TranscriptBlock[];
@@ -9,6 +10,7 @@ type Props = {
   activeSegId: number | null;
   activeSentenceId: string | null;
   currentMs: number | null;
+  source: TranscriptSource;
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
   onClickSentence: (segment: Segment, segIndex: number, sentenceId: string) => void;
   onSaveMoment: (segment: Segment, segIndex: number, text: string) => void;
@@ -157,13 +159,6 @@ function buildSentencePieces(
       ];
 }
 
-function sentenceDomId(piece: SentencePiece) {
-  const suffix = piece.id.includes('-s-')
-    ? piece.id.split('-s-').at(1)
-    : piece.id.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return `seg-${piece.firstSegIndex}-s-${suffix ?? 0}`;
-}
-
 export default function FormattedTranscriptDocument({
   blocks,
   transcriptSegments,
@@ -172,6 +167,7 @@ export default function FormattedTranscriptDocument({
   activeSegId,
   activeSentenceId,
   currentMs,
+  source,
   isSavedSegment,
   onClickSentence,
   onSaveMoment,
@@ -214,7 +210,7 @@ export default function FormattedTranscriptDocument({
             </div>
             <div className="min-w-0">
               <p className="transcript-copy">
-                {pieces.map((piece) => {
+                {pieces.map((piece, pieceIndex) => {
                   const pieceActive = activeSentenceId
                     ? activeSentenceId === piece.id
                     : piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1);
@@ -231,8 +227,25 @@ export default function FormattedTranscriptDocument({
 
                   return (
                     <span key={piece.id}>
+                      {piece.segmentIds
+                        .filter(
+                          (segmentIndex) =>
+                            !pieces
+                              .slice(0, pieceIndex)
+                              .some((previous) => previous.segmentIds.includes(segmentIndex))
+                        )
+                        .map((segmentIndex) => {
+                          const segment = transcriptSegments[segmentIndex];
+                          return segment ? (
+                            <span
+                              key={segmentIndex}
+                              id={canonicalMomentId(source, segment.start_ms)}
+                              className="moment-anchor"
+                              aria-hidden="true"
+                            />
+                          ) : null;
+                        })}
                       <span
-                        id={sentenceDomId(piece)}
                         role="button"
                         tabIndex={0}
                         data-current-sentence={pieceCurrent ? 'true' : undefined}

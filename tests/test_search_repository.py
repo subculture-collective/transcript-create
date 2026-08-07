@@ -60,6 +60,34 @@ def test_search_native_builds_expected_sql_and_params():
     assert db.calls[0]["params"]["language"] == "en"
 
 
+def test_search_native_whole_word_mode_uses_escaped_word_boundaries():
+    db = FakeDB([])
+    SearchRepository().search_native(
+        db,
+        q="house",
+        filters={"match_mode": "whole_word"},
+    )
+
+    sql = str(db.calls[0]["statement"])
+    assert "s.text ~* :whole_word_q" in sql
+    assert "websearch_to_tsquery" not in sql
+    assert db.calls[0]["params"]["whole_word_q"] == r"\mhouse\M"
+
+
+def test_search_best_exact_phrase_mode_uses_literal_text_for_both_sources():
+    db = FakeDB([])
+    SearchRepository().search_best(
+        db,
+        q="public housing",
+        filters={"match_mode": "exact_phrase"},
+    )
+
+    sql = str(db.calls[0]["statement"])
+    assert "position(lower(:literal_q) in lower(s.text)) > 0" in sql
+    assert "position(lower(:literal_q) in lower(ys.text)) > 0" in sql
+    assert db.calls[0]["params"]["literal_q"] == "public housing"
+
+
 def test_search_youtube_builds_expected_sql_and_params():
     rows = [
         {

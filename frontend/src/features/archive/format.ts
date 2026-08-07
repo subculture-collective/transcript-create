@@ -38,6 +38,13 @@ export function formatDate(value?: string | null) {
   return DATE_FORMAT.format(date);
 }
 
+export function formatVideoTitle(title?: string | null, uploadedAt?: string | null) {
+  const cleaned = title?.replace(/\s*[—-]\s*$/, '').trim();
+  if (cleaned) return cleaned;
+  const date = formatDate(uploadedAt);
+  return date === '—' ? 'Broadcast recording' : `Broadcast from ${date}`;
+}
+
 export function formatDateTime(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
@@ -47,8 +54,12 @@ export function formatDateTime(value?: string | null) {
 
 export function formatTimestamp(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(total / 3600).toString().padStart(2, '0');
-  const minutes = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
+  const hours = Math.floor(total / 3600)
+    .toString()
+    .padStart(2, '0');
+  const minutes = Math.floor((total % 3600) / 60)
+    .toString()
+    .padStart(2, '0');
   const seconds = (total % 60).toString().padStart(2, '0');
   return `${hours}:${minutes}:${seconds}`;
 }
@@ -71,9 +82,17 @@ export function buildMonthRange(year: number, month: number) {
   };
 }
 
-export function buildTimestampLink(videoId: string, startMs: number, segmentId?: number) {
+export type TranscriptSource = 'whisper' | 'youtube' | 'merged';
+
+export function canonicalMomentId(source: TranscriptSource, startMs: number) {
+  return `moment-${source}-${Math.max(0, Math.floor(startMs))}`;
+}
+
+export function buildTimestampLink(videoId: string, startMs: number, source?: TranscriptSource) {
   const seconds = Math.max(0, Math.floor(startMs / 1000));
-  return `/v/${videoId}?t=${seconds}${segmentId ? `#seg-${segmentId}` : ''}`;
+  const params = new URLSearchParams({ t: String(seconds) });
+  if (source) params.set('source', source);
+  return `/v/${videoId}?${params.toString()}${source ? `#${canonicalMomentId(source, startMs)}` : ''}`;
 }
 
 export function titleCase(value: string) {
@@ -84,6 +103,8 @@ export function titleCase(value: string) {
     .join(' ');
 }
 
-export function sourceLabel(_source?: 'whisper' | 'youtube' | 'merged' | 'best' | 'native') {
-  return 'Transcript';
+export function sourceLabel(source?: 'whisper' | 'youtube' | 'merged' | 'best' | 'native') {
+  if (source === 'youtube') return 'YouTube captions';
+  if (source === 'merged' || source === 'best') return 'Best available transcript';
+  return 'Whisper transcript';
 }

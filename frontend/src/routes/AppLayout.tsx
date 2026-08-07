@@ -1,19 +1,50 @@
-import { useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth, useTheme } from '../services';
 
 const navItems = [
   { to: '/', label: 'Home' },
   { to: '/search', label: 'Search' },
-  { to: '/explore', label: 'Explore' },
-  { to: '/episodes', label: 'VODs' },
-  { to: '/saved', label: 'Saved' },
+  { to: '/explore', label: 'Topics & periods' },
+  { to: '/episodes', label: 'All VODs' },
+  { to: '/saved', label: 'My saves' },
 ];
 
 export default function AppLayout() {
   const { user, loading, login, loginTwitch, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search).get('q');
+    const routeTitle =
+      location.pathname === '/'
+        ? 'Search the broadcast archive'
+        : location.pathname === '/search'
+          ? query
+            ? `Search: ${query}`
+            : 'Transcript search'
+          : location.pathname.startsWith('/v/')
+            ? 'VOD transcript'
+            : location.pathname === '/explore'
+              ? 'Topics and periods'
+              : location.pathname === '/episodes'
+                ? 'All VODs'
+                : location.pathname === '/saved'
+                  ? 'My saves'
+                  : 'Broadcast archive';
+    document.title = `${routeTitle} | HasanAra`;
+
+    let canonical = document.querySelector<HTMLLinkElement>('link[data-hasanara-canonical]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      canonical.dataset.hasanaraCanonical = 'true';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = `${window.location.origin}${location.pathname}${location.search}`;
+  }, [location.pathname, location.search]);
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink transition-colors">

@@ -2,14 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, apiAddFavorite, favorites, track, useAuth } from '../services';
-import type {
-  ArchiveSearchFilters,
-  GroupedSearchResponse,
-  SearchHit,
-} from '../types/api';
-import { buildTimestampLink, formatDate, formatDuration, formatNumber } from '../features/archive/format';
+import type { ArchiveSearchFilters, GroupedSearchResponse, SearchHit } from '../types/api';
+import {
+  buildTimestampLink,
+  formatDate,
+  formatDuration,
+  formatNumber,
+} from '../features/archive/format';
 import { buildCurrentFilters, readFilters, serializeFilters } from '../features/search/filters';
-import { buildPlayMatchesLink, buildQuoteText, plainTextFromSnippet } from '../features/search/moments';
+import {
+  buildPlayMatchesLink,
+  buildQuoteText,
+  plainTextFromSnippet,
+} from '../features/search/moments';
 import { groupHitsByVideo } from '../features/searchTranscript/matches';
 
 import { SearchFiltersPanel, SearchMomentsList } from '../components/archive';
@@ -26,6 +31,7 @@ export default function SearchPage() {
   const [q, setQ] = useState(filters.q);
   const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
   const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+  const [matchMode, setMatchMode] = useState(filters.match_mode ?? 'topic');
   const [suggestedSearches, setSuggestedSearches] = useState<Array<{ term: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<SearchMode>(null);
@@ -41,7 +47,8 @@ export default function SearchPage() {
     setQ(filters.q);
     setDateFrom(filters.date_from ?? '');
     setDateTo(filters.date_to ?? '');
-  }, [filters.q, filters.date_from, filters.date_to]);
+    setMatchMode(filters.match_mode ?? 'topic');
+  }, [filters.q, filters.date_from, filters.date_to, filters.match_mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +82,7 @@ export default function SearchPage() {
     }
 
     const activeFilters: ArchiveSearchFilters = {
+      match_mode: filters.match_mode ?? 'topic',
       source: undefined,
       category: undefined,
       date_from: filters.date_from,
@@ -112,17 +120,37 @@ export default function SearchPage() {
           });
       })
       .finally(() => setLoading(false));
-  }, [filters.date_from, filters.date_to, filters.limit, filters.offset, filters.q, filters.video_id, shouldFetch]);
+  }, [
+    filters.date_from,
+    filters.date_to,
+    filters.limit,
+    filters.match_mode,
+    filters.offset,
+    filters.q,
+    filters.video_id,
+    shouldFetch,
+  ]);
 
   function submitFilters(event: FormEvent) {
     event.preventDefault();
-    setParams(serializeFilters({ q, date_from: dateFrom || undefined, date_to: dateTo || undefined, video_id: filters.video_id, limit: filters.limit, offset: filters.offset }));
+    setParams(
+      serializeFilters({
+        q,
+        match_mode: matchMode,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        video_id: filters.video_id,
+        limit: filters.limit,
+        offset: filters.offset,
+      })
+    );
   }
 
   function resetFilters() {
     setQ('');
     setDateFrom('');
     setDateTo('');
+    setMatchMode('topic');
     setParams(new URLSearchParams());
   }
 
@@ -136,9 +164,20 @@ export default function SearchPage() {
     const text = plainTextFromSnippet(moment.snippet);
     try {
       if (user) {
-        await apiAddFavorite({ video_id: videoId, start_ms: moment.start_ms, end_ms: moment.end_ms, text });
+        await apiAddFavorite({
+          video_id: videoId,
+          start_ms: moment.start_ms,
+          end_ms: moment.end_ms,
+          text,
+        });
       } else {
-        favorites.toggle({ videoId, segIndex: moment.id, startMs: moment.start_ms, endMs: moment.end_ms, text });
+        favorites.toggle({
+          videoId,
+          segIndex: moment.id,
+          startMs: moment.start_ms,
+          endMs: moment.end_ms,
+          text,
+        });
       }
       setSavedKeys((current) => new Set([...current, key]));
       track({ type: 'favorite_add', payload: { videoId, start_ms: moment.start_ms, title } });
@@ -149,7 +188,9 @@ export default function SearchPage() {
   }
 
   function copyMomentTimestamp(videoId: string, moment: SearchHit) {
-    copyText(`${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.id)}`);
+    copyText(
+      `${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.source)}`
+    );
   }
 
   function copyMomentQuote(videoId: string, moment: SearchHit, title: string) {
@@ -161,11 +202,12 @@ export default function SearchPage() {
       <section className="surface-card space-y-6 overflow-hidden">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl space-y-4">
-            <div className="archive-eyebrow">Search deck</div>
+            <div className="archive-eyebrow">Transcript search</div>
             <div>
               <h1 className="page-title">Search the HasanAbi archive.</h1>
               <p className="mt-3 max-w-2xl text-muted">
-                Find when Hasan covered a topic, what was said, and which VOD it came from — with timestamped results and dossier-style metadata.
+                Find when Hasan covered a topic, what was said, and which VOD it came from — with
+                timestamped results and source context.
               </p>
             </div>
           </div>
@@ -175,7 +217,10 @@ export default function SearchPage() {
               <Link to={`/topics/${encodeURIComponent(filters.q)}`} className="btn-secondary">
                 Open topic page
               </Link>
-              <Link to={`/saved?${buildCurrentFilters(q, undefined, dateFrom, dateTo, '', '', '', 'relevance', filters).toString()}`} className="btn-secondary">
+              <Link
+                to={`/saved?${buildCurrentFilters(q, undefined, dateFrom, dateTo, '', '', '', 'relevance', filters).toString()}`}
+                className="btn-secondary"
+              >
                 Save this search
               </Link>
             </div>
@@ -186,11 +231,13 @@ export default function SearchPage() {
           q={q}
           dateFrom={dateFrom}
           dateTo={dateTo}
+          matchMode={matchMode}
           loading={loading}
           canSubmitSearch={canSubmitSearch}
           onQChange={setQ}
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
+          onMatchModeChange={setMatchMode}
           onSubmit={submitFilters}
           onReset={resetFilters}
         />
@@ -208,7 +255,11 @@ export default function SearchPage() {
 
           <div className="flex flex-wrap gap-2">
             {suggestedSearches.map((item) => (
-              <Link key={item.term} to={`/search?q=${encodeURIComponent(item.term)}`} className="badge-warning">
+              <Link
+                key={item.term}
+                to={`/search?q=${encodeURIComponent(item.term)}`}
+                className="badge-warning"
+              >
                 {item.term}
               </Link>
             ))}
@@ -219,9 +270,18 @@ export default function SearchPage() {
       {filters.q && (
         <section className="archive-panel flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="archive-eyebrow">Topic map</div>
+            <div className="archive-eyebrow">Result summary</div>
             <p className="mt-2 text-muted">
-              {loading ? 'Updating counts…' : `${formatNumber(totalMoments)} moments across ${formatNumber(totalVideos)} VODs`}
+              {loading
+                ? 'Updating counts…'
+                : `${formatNumber(totalMoments)} moments across ${formatNumber(totalVideos)} VODs`}
+            </p>
+            <p className="mt-1 text-xs text-subtle">
+              {filters.match_mode === 'whole_word'
+                ? 'Whole words only — word forms are not expanded.'
+                : filters.match_mode === 'exact_phrase'
+                  ? 'Exact phrase — words must appear together in this order.'
+                  : 'Topic matching — related grammatical word forms may be included.'}
             </p>
           </div>
           <Link to={`/topics/${encodeURIComponent(filters.q)}`} className="action-link">
@@ -230,7 +290,11 @@ export default function SearchPage() {
         </section>
       )}
 
-      {error && <div className="alert-warning" role="alert">{error}</div>}
+      {error && (
+        <div className="alert-warning" role="alert">
+          {error}
+        </div>
+      )}
 
       {loading && filters.q && (
         <div className="archive-panel p-8 text-center text-muted" role="status" aria-live="polite">
@@ -252,14 +316,23 @@ export default function SearchPage() {
               <article key={group.video.id} className="surface-card space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-2">
-                    <div className="archive-eyebrow">VOD dossier</div>
-                    <Link to={`/v/${group.video.id}`} className="block text-2xl font-semibold tracking-[-0.03em] text-ink hover:text-accent">
+                    <div className="archive-eyebrow">VOD record</div>
+                    <Link
+                      to={`/v/${group.video.id}`}
+                      className="block text-2xl font-semibold tracking-[-0.03em] text-ink hover:text-accent"
+                    >
                       {title}
                     </Link>
                     <div className="flex flex-wrap gap-2 text-sm text-muted">
-                      <span className="source-pill">{group.video.channel_name || 'Unknown channel'}</span>
-                      <span className="timestamp-pill">{formatDate(group.video.uploaded_at ?? null)}</span>
-                      <span className="source-pill">{formatDuration(group.video.duration_seconds)}</span>
+                      <span className="source-pill">
+                        {group.video.channel_name || 'Unknown channel'}
+                      </span>
+                      <span className="timestamp-pill">
+                        {formatDate(group.video.uploaded_at ?? null)}
+                      </span>
+                      <span className="source-pill">
+                        {formatDuration(group.video.duration_seconds)}
+                      </span>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -270,7 +343,14 @@ export default function SearchPage() {
                 </div>
                 <div className="flex flex-wrap gap-3 text-sm">
                   {group.moments[0] && filters.q && (
-                    <Link to={buildPlayMatchesLink(group.video.id, group.moments[0] as SearchHit, filters.q)} className="btn-secondary">
+                    <Link
+                      to={buildPlayMatchesLink(
+                        group.video.id,
+                        group.moments[0] as SearchHit,
+                        filters.q
+                      )}
+                      className="btn-secondary"
+                    >
                       Play all matches
                     </Link>
                   )}
@@ -284,7 +364,12 @@ export default function SearchPage() {
                   onSaveMoment={saveMoment}
                   onCopyTimestamp={copyMomentTimestamp}
                   onCopyQuote={copyMomentQuote}
-                  onTrackResultClick={(resultVideoId, moment) => track({ type: 'result_click', payload: { videoId: resultVideoId, start_ms: moment.start_ms, id: moment.id } })}
+                  onTrackResultClick={(resultVideoId, moment) =>
+                    track({
+                      type: 'result_click',
+                      payload: { videoId: resultVideoId, start_ms: moment.start_ms, id: moment.id },
+                    })
+                  }
                 />
               </article>
             );
@@ -301,7 +386,10 @@ export default function SearchPage() {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-2">
                     <div className="archive-eyebrow">VOD dossier</div>
-                    <Link to={`/v/${videoId}`} className="block text-2xl font-semibold tracking-[-0.03em] text-ink hover:text-accent">
+                    <Link
+                      to={`/v/${videoId}`}
+                      className="block text-2xl font-semibold tracking-[-0.03em] text-ink hover:text-accent"
+                    >
                       {title}
                     </Link>
                     <p className="text-sm text-muted">Flat search fallback</p>
@@ -317,7 +405,12 @@ export default function SearchPage() {
                   onSaveMoment={saveMoment}
                   onCopyTimestamp={copyMomentTimestamp}
                   onCopyQuote={copyMomentQuote}
-                  onTrackResultClick={(resultVideoId, moment) => track({ type: 'result_click', payload: { videoId: resultVideoId, start_ms: moment.start_ms, id: moment.id } })}
+                  onTrackResultClick={(resultVideoId, moment) =>
+                    track({
+                      type: 'result_click',
+                      payload: { videoId: resultVideoId, start_ms: moment.start_ms, id: moment.id },
+                    })
+                  }
                 />
               </article>
             );

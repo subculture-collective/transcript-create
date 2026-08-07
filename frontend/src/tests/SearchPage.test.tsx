@@ -1,52 +1,53 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
-import SearchPage from '../routes/SearchPage'
-import { api, http } from '../services'
-import { renderWithProviders } from './test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import SearchPage from '../routes/SearchPage';
+import { api, http } from '../services';
+import { renderWithProviders } from './test-utils';
 
-const searchParamsMock = vi.fn()
-let currentSearchParams = new URLSearchParams()
+const searchParamsMock = vi.fn();
+let currentSearchParams = new URLSearchParams();
 
 vi.mock('../services', async () => {
-  const actual = await vi.importActual<typeof import('../services')>('../services')
+  const actual = await vi.importActual<typeof import('../services')>('../services');
   return {
     ...actual,
     track: vi.fn(),
-  }
-})
+  };
+});
 
 vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return {
     ...actual,
     useSearchParams: () => [currentSearchParams, searchParamsMock],
-  }
-})
+  };
+});
 
 describe('SearchPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    currentSearchParams = new URLSearchParams()
+    vi.clearAllMocks();
+    currentSearchParams = new URLSearchParams();
 
     vi.spyOn(http, 'get').mockImplementation(((path: string) => {
       if (path === 'auth/me') {
-        return { json: vi.fn().mockResolvedValue({ user: null }) } as never
+        return { json: vi.fn().mockResolvedValue({ user: null }) } as never;
       }
-      return { json: vi.fn().mockResolvedValue({}) } as never
-    }) as never)
-  })
+      return { json: vi.fn().mockResolvedValue({}) } as never;
+    }) as never);
+  });
 
   it('forwards URL filters to grouped search and shows grouped actions', async () => {
     currentSearchParams = new URLSearchParams({
       q: 'rent',
+      match_mode: 'whole_word',
       video_id: 'video-1',
       limit: '25',
       offset: '50',
-    })
+    });
 
     vi.spyOn(api, 'getExploreIntelligence').mockResolvedValue({
       suggested_searches: [{ term: 'gaza', frequency: 5, trend_score: 5, source: 'search' }],
-    } as never)
+    } as never);
     const searchGroupedMock = vi.spyOn(api, 'searchGrouped').mockResolvedValue({
       total_moments: 1,
       total_videos: 1,
@@ -72,44 +73,47 @@ describe('SearchPage', () => {
           ],
         },
       ],
-    } as never)
+    } as never);
 
-    renderWithProviders(<SearchPage />)
+    renderWithProviders(<SearchPage />);
 
     await waitFor(() => {
       expect(searchGroupedMock).toHaveBeenCalledWith(
         'rent',
         expect.objectContaining({
           source: undefined,
+          match_mode: 'whole_word',
           category: undefined,
           video_id: 'video-1',
           limit: 25,
           offset: 50,
         })
-      )
-    })
+      );
+    });
 
     await waitFor(() => {
-      expect(screen.getByText('Play all matches')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Copy quote' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument()
-    })
+      expect(screen.getByText('Play all matches')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Copy quote' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument();
+    });
 
-    expect(screen.getByRole('link', { name: 'gaza' })).toHaveAttribute('href', '/search?q=gaza')
-  })
+    expect(screen.getByText(/Whole words only/i)).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'gaza' })).toHaveAttribute('href', '/search?q=gaza');
+  });
 
   it('keeps search usable when suggested searches fail', async () => {
-    currentSearchParams = new URLSearchParams({ q: 'rent' })
+    currentSearchParams = new URLSearchParams({ q: 'rent' });
 
-    vi.spyOn(api, 'getExploreIntelligence').mockRejectedValue(new Error('unavailable'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(api, 'getExploreIntelligence').mockRejectedValue(new Error('unavailable'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     const searchGroupedMock = vi.spyOn(api, 'searchGrouped').mockResolvedValue({
       total_moments: 0,
       total_videos: 0,
       groups: [],
-    } as never)
+    } as never);
 
-    renderWithProviders(<SearchPage />)
+    renderWithProviders(<SearchPage />);
 
     await waitFor(() => {
       expect(searchGroupedMock).toHaveBeenCalledWith(
@@ -121,9 +125,9 @@ describe('SearchPage', () => {
           limit: undefined,
           offset: undefined,
         })
-      )
-    })
+      );
+    });
 
-    expect(screen.queryByText('Suggested searches')).not.toBeInTheDocument()
-  })
-})
+    expect(screen.queryByText('Suggested searches')).not.toBeInTheDocument();
+  });
+});

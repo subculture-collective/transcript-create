@@ -1,10 +1,13 @@
 import type { Segment } from '../../types/api';
 import type { TranscriptTurn } from '../../features/videoTranscript/transcript';
 import { formatTimestamp } from '../../features/archive/format';
+import { canonicalMomentId } from '../../features/archive/format';
+import type { TranscriptSource } from '../../features/archive/format';
 
 type Props = {
   turns: TranscriptTurn[];
   activeSegId: number | null;
+  source: TranscriptSource;
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
   onClickSegment: (segment: Segment, id: number) => void;
   onSaveMoment: (segment: Segment, segIndex: number, text: string) => void;
@@ -26,6 +29,7 @@ function msToHms(ms: number) {
 export default function PlainTranscriptTurns({
   turns,
   activeSegId,
+  source,
   isSavedSegment,
   onClickSegment,
   onSaveMoment,
@@ -57,7 +61,7 @@ export default function PlainTranscriptTurns({
 
                   return (
                     <button
-                      id={`seg-${id}`}
+                      id={canonicalMomentId(source, seg.start_ms)}
                       key={id}
                       type="button"
                       onClick={() => onClickSegment(seg, id)}

@@ -16,9 +16,19 @@ export default function TopicMentionCard({ label, moment }: TopicMentionCardProp
       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
         <span>{formatTimestamp(moment.start_ms)}</span>
         <span>{sourceLabel(moment.source ?? 'best')}</span>
-        {videoId && <Link className="action-link" to={buildTimestampLink(videoId, moment.start_ms, moment.id)}>Open cited moment</Link>}
+        {videoId && (
+          <Link
+            className="action-link"
+            to={buildTimestampLink(videoId, moment.start_ms, moment.source)}
+          >
+            Open cited moment
+          </Link>
+        )}
       </div>
-      <div className="prose prose-sm mt-3 max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: moment.snippet }} />
+      <div
+        className="prose prose-sm mt-3 max-w-none dark:prose-invert"
+        dangerouslySetInnerHTML={{ __html: moment.snippet }}
+      />
     </div>
   );
 }

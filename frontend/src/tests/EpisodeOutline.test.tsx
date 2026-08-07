@@ -45,4 +45,21 @@ describe('EpisodeOutline', () => {
     fireEvent.click(screen.getByRole('button', { name: /Opening discussion/ }));
     expect(onSelect).toHaveBeenCalledWith(chapters[0]);
   });
+
+  it('labels generated chapters as transcript landmarks and suppresses filler fragments', () => {
+    render(
+      <EpisodeOutline
+        chapters={[
+          { ...chapters[0], chapter_index: 0, title: 'Okay.' },
+          { ...chapters[1], chapter_index: 1, title: 'Housing policy debate' },
+        ]}
+        currentMs={null}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Transcript landmarks')).toBeInTheDocument();
+    expect(screen.queryByText('Okay.')).not.toBeInTheDocument();
+    expect(screen.getByText('Housing policy debate')).toBeInTheDocument();
+  });
 });

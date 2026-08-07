@@ -25,27 +25,36 @@ export default function MomentActionRow({
   onSaveMoment,
 }: MomentActionRowProps) {
   return (
-    <div className="mt-4 flex flex-wrap gap-3 text-sm">
-      <Link to={buildTimestampLink(videoId, moment.start_ms, moment.id)} className="action-link" onClick={onOpenTimestamp}>
+    <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+      <Link
+        to={buildTimestampLink(videoId, moment.start_ms, moment.source)}
+        className="action-link"
+        onClick={onOpenTimestamp}
+      >
         Open at timestamp
       </Link>
-      <button type="button" className="nav-link" onClick={onCopyTimestamp}>
-        Copy timestamp
-      </button>
-      <button type="button" className="nav-link" onClick={onCopyQuote}>
-        Copy quote
-      </button>
-      <button type="button" className="nav-link" disabled={saved} onClick={onSaveMoment}>
-        {saved ? 'Saved moment' : 'Save moment'}
-      </button>
       {query && (
         <Link to={buildPlayMatchesLink(videoId, moment, query)} className="action-link">
           Play from here
         </Link>
       )}
-      <Link to={`/v/${videoId}`} className="action-link">
-        Open VOD
-      </Link>
+      <details className="moment-actions-menu">
+        <summary>More actions</summary>
+        <div className="moment-actions-popover">
+          <button type="button" className="nav-link" onClick={onCopyTimestamp}>
+            Copy timestamp
+          </button>
+          <button type="button" className="nav-link" onClick={onCopyQuote}>
+            Copy quote
+          </button>
+          <button type="button" className="nav-link" disabled={saved} onClick={onSaveMoment}>
+            {saved ? 'Saved moment' : 'Save moment'}
+          </button>
+          <Link to={`/v/${videoId}`} className="nav-link">
+            Open full VOD
+          </Link>
+        </div>
+      </details>
     </div>
   );
 }

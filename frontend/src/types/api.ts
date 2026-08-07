@@ -432,6 +432,7 @@ export interface StreamLibraryFilters {
 }
 
 export interface ArchiveSearchFilters {
+  match_mode?: 'topic' | 'exact_phrase' | 'whole_word';
   source?: 'best' | 'native' | 'youtube';
   category?: string;
   video_id?: string;

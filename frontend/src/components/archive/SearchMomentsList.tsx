@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { SearchHit } from '../../types/api';
 import { formatTimestamp } from '../../features/archive/format';
 import MomentActionRow from './MomentActionRow';
@@ -25,34 +26,54 @@ export default function SearchMomentsList({
   onCopyQuote,
   onTrackResultClick,
 }: SearchMomentsListProps) {
-  return (
-    <ul className="space-y-3">
-      {moments.map((moment) => {
-        const key = `${videoId}:${moment.start_ms}:${moment.end_ms}`;
+  const [expanded, setExpanded] = useState(false);
+  const visibleMoments = expanded ? moments : moments.slice(0, 3);
 
-        return (
-          <li key={moment.id} className="group rounded-lg border border-border bg-surface-muted/80 p-4 transition-all hover:border-border-strong hover:bg-surface-muted/95">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <time className="timestamp-pill">
-                {formatTimestamp(moment.start_ms)}–{formatTimestamp(moment.end_ms)}
-              </time>
-              {query && <span className="match-pill">match</span>}
-            </div>
-            <div className="archive-snippet" dangerouslySetInnerHTML={{ __html: moment.snippet }} />
-            <MomentActionRow
-              videoId={videoId}
-              moment={moment}
-              query={query}
-              saved={savedKeys.has(key)}
-              onOpenTimestamp={() => onTrackResultClick(videoId, moment)}
-              onCopyTimestamp={() => onCopyTimestamp(videoId, moment)}
-              onCopyQuote={() => onCopyQuote(videoId, moment, fallbackTitle)}
-              onSaveMoment={() => onSaveMoment(videoId, moment, fallbackTitle)}
-            />
-            <p className="mt-3 text-xs text-subtle">{fallbackTitle}</p>
-          </li>
-        );
-      })}
-    </ul>
+  return (
+    <div className="space-y-3">
+      <ul className="space-y-3">
+        {visibleMoments.map((moment) => {
+          const key = `${videoId}:${moment.start_ms}:${moment.end_ms}`;
+
+          return (
+            <li
+              key={moment.id}
+              className="group rounded-lg border border-border bg-surface-muted/80 p-4 transition-all hover:border-border-strong hover:bg-surface-muted/95"
+            >
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <time className="timestamp-pill">
+                  {formatTimestamp(moment.start_ms)}–{formatTimestamp(moment.end_ms)}
+                </time>
+                {query && <span className="match-pill">match</span>}
+              </div>
+              <div
+                className="archive-snippet"
+                dangerouslySetInnerHTML={{ __html: moment.snippet }}
+              />
+              <MomentActionRow
+                videoId={videoId}
+                moment={moment}
+                query={query}
+                saved={savedKeys.has(key)}
+                onOpenTimestamp={() => onTrackResultClick(videoId, moment)}
+                onCopyTimestamp={() => onCopyTimestamp(videoId, moment)}
+                onCopyQuote={() => onCopyQuote(videoId, moment, fallbackTitle)}
+                onSaveMoment={() => onSaveMoment(videoId, moment, fallbackTitle)}
+              />
+              <p className="mt-3 text-xs text-subtle">{fallbackTitle}</p>
+            </li>
+          );
+        })}
+      </ul>
+      {moments.length > 3 && (
+        <button
+          type="button"
+          className="btn-secondary w-full"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Show fewer matches' : `Show ${moments.length - 3} more matches`}
+        </button>
+      )}
+    </div>
   );
 }

@@ -8,26 +8,31 @@ type Props = {
 };
 
 export default function EpisodeOutline({ chapters, currentMs, onSelect }: Props) {
+  const visibleChapters = chapters.filter(
+    (chapter) => !/^(okay|i mean|um|uh|you know)[.!?…\s]*$/i.test(chapter.title.trim())
+  );
   const activeIndex =
     currentMs == null
       ? -1
-      : chapters.findIndex(
+      : visibleChapters.findIndex(
           (chapter) => currentMs >= chapter.start_ms && currentMs < chapter.end_ms
         );
 
-  if (chapters.length === 0) return null;
+  if (visibleChapters.length === 0) return null;
 
   return (
     <details className="outline-panel" open>
       <summary className="outline-heading">
         <span>
-          <span className="meta-label block">Episode outline</span>
-          <span className="mt-1 block text-xs text-subtle">{chapters.length} cited chapters</span>
+          <span className="meta-label block">Transcript landmarks</span>
+          <span className="mt-1 block text-xs text-subtle">
+            {visibleChapters.length} generated, cited sections
+          </span>
         </span>
         <span className="font-mono text-[10px] text-accent">Navigate ↓</span>
       </summary>
-      <nav className="outline-list" aria-label="Episode chapters">
-        {chapters.map((chapter, index) => {
+      <nav className="outline-list" aria-label="Transcript landmarks">
+        {visibleChapters.map((chapter, index) => {
           const active = index === activeIndex;
           const citation = chapter.evidence[0];
           return (

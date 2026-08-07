@@ -1,35 +1,35 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
-import TopicPage from '../routes/TopicPage'
-import { api } from '../services'
-import { favorites } from '../services/favorites'
-import { http } from '../services/api'
-import { renderWithProviders } from './test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import TopicPage from '../routes/TopicPage';
+import { api } from '../services';
+import { favorites } from '../services/favorites';
+import { http } from '../services/api';
+import { renderWithProviders } from './test-utils';
 
 vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return {
     ...actual,
     useParams: () => ({ query: 'rent' }),
-  }
-})
+  };
+});
 
 describe('TopicPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.clearAllMocks();
 
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn() },
       configurable: true,
-    })
+    });
 
     vi.spyOn(http, 'get').mockImplementation(((path: string) => {
       if (path === 'auth/me') {
-        return { json: vi.fn().mockResolvedValue({ user: null }) } as never
+        return { json: vi.fn().mockResolvedValue({ user: null }) } as never;
       }
-      return { json: vi.fn().mockResolvedValue({}) } as never
-    }) as never)
-  })
+      return { json: vi.fn().mockResolvedValue({}) } as never;
+    }) as never);
+  });
 
   it('renders mention map stats, first/latest mentions, and grouped actions', async () => {
     const mentionMapMock = vi.spyOn(api, 'getMentionMap').mockResolvedValue({
@@ -111,40 +111,40 @@ describe('TopicPage', () => {
           ],
         },
       ],
-    } as never)
+    } as never);
 
-    const toggleMock = vi.spyOn(favorites, 'toggle')
+    const toggleMock = vi.spyOn(favorites, 'toggle');
 
-    renderWithProviders(<TopicPage />)
+    renderWithProviders(<TopicPage />);
 
     await waitFor(() => {
-      expect(mentionMapMock).toHaveBeenCalledWith('rent')
-    })
+      expect(mentionMapMock).toHaveBeenCalledWith('rent');
+    });
 
-    expect(screen.getByText('Query').parentElement).toHaveTextContent('“rent”')
-    expect(screen.getByText('First mentioned').parentElement).toHaveTextContent('2021')
-    expect(screen.getByText('Most discussed').parentElement).toHaveTextContent('2024')
-    expect(screen.getByText('Most discussed').parentElement).toHaveTextContent('3 moments')
-    expect(screen.getByText('Recent mentions').parentElement).toHaveTextContent('6')
-    expect(screen.getByText('Related topics').parentElement).toHaveTextContent('copyright')
-    expect(screen.getAllByText('Top VODs')[0].parentElement).toHaveTextContent('5')
-    expect(screen.getByText('Total moments').parentElement).toHaveTextContent('4')
-    expect(screen.getByText('VODs').parentElement).toHaveTextContent('2')
-    expect(screen.getByText('First mention')).toBeInTheDocument()
-    expect(screen.getByText('Latest mention')).toBeInTheDocument()
-    expect(screen.getAllByText('Top VODs').length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: 'Play all matches' })).toHaveLength(2)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Copy quote' })[0])
+    expect(screen.getByText('Query').parentElement).toHaveTextContent('“rent”');
+    expect(screen.getByText('First mentioned').parentElement).toHaveTextContent('2021');
+    expect(screen.getByText('Most discussed').parentElement).toHaveTextContent('2024');
+    expect(screen.getByText('Most discussed').parentElement).toHaveTextContent('3 moments');
+    expect(screen.getByText('Recent mentions').parentElement).toHaveTextContent('6');
+    expect(screen.getByText('Related topics').parentElement).toHaveTextContent('copyright');
+    expect(screen.getAllByText('Top VODs')[0].parentElement).toHaveTextContent('5');
+    expect(screen.getByText('Total moments').parentElement).toHaveTextContent('4');
+    expect(screen.getByText('VODs').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('First mention')).toBeInTheDocument();
+    expect(screen.getByText('Latest mention')).toBeInTheDocument();
+    expect(screen.getAllByText('Top VODs').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Play all matches' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Copy quote' })[0]);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      expect.stringContaining('/v/video-1?t=1#seg-11')
-    )
+      expect.stringContaining('/v/video-1?t=1&source=whisper#moment-whisper-1000')
+    );
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save moment' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save moment' })[0]);
     expect(toggleMock).toHaveBeenCalledWith(
       expect.objectContaining({ videoId: 'video-1', segIndex: 11, startMs: 1000, endMs: 2000 })
-    )
+    );
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Saved moment' })).toBeInTheDocument()
-    })
-  })
-})
+      expect(screen.getByRole('button', { name: 'Saved moment' })).toBeInTheDocument();
+    });
+  });
+});

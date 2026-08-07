@@ -50,6 +50,7 @@ export const http = ky.create({ prefixUrl: API_BASE, timeout: 15000, credentials
 
 function appendSearchFilters(params: URLSearchParams, opts?: ArchiveSearchFilters) {
   if (!opts) return;
+  if (opts.match_mode && opts.match_mode !== 'topic') params.set('match_mode', opts.match_mode);
   if (opts.source) params.set('source', opts.source);
   if (opts.category) params.set('category', opts.category);
   if (opts.video_id) params.set('video_id', opts.video_id);
@@ -151,9 +152,9 @@ export const api = {
 
     return http.get('archive/intelligence/periods').json<ArchivePeriodOptionsResponse>();
   },
-  async getTranscript(videoId: string) {
+  async getTranscript(videoId: string, source: 'best' | 'merged' | 'whisper' | 'youtube' = 'best') {
     return http
-      .get(`videos/${videoId}/transcript`, { searchParams: { mode: 'formatted', source: 'best' } })
+      .get(`videos/${videoId}/transcript`, { searchParams: { mode: 'formatted', source } })
       .json<TranscriptResponse>();
   },
   async getVideoChapters(videoId: string) {

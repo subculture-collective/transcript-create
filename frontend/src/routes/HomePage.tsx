@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../services';
+import { api, useAuth } from '../services';
 import type { ArchiveSummary } from '../types/api';
 import {
   buildTimestampLink,
@@ -14,6 +14,7 @@ const searchExamples = ['labor', 'Gaza', 'housing', 'election'];
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { user, loading: authLoading, login, loginTwitch } = useAuth();
   const [summary, setSummary] = useState<ArchiveSummary | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -144,6 +145,45 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="archive-section">
+        {!authLoading && !user ? (
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <div>
+              <div className="archive-eyebrow">Save your archive trail</div>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-ink">
+                Sign in to synchronize saved moments and searches.
+              </h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={login} className="btn min-h-11 px-4 text-sm">
+                Continue with Google
+              </button>
+              <button
+                type="button"
+                onClick={loginTwitch}
+                className="btn-secondary min-h-11 px-4 text-sm"
+              >
+                Continue with Twitch
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="archive-eyebrow">Archive trail</div>
+              <p className="mt-2 font-semibold text-ink">
+                {authLoading ? 'Checking your account…' : 'Your saves are synchronized.'}
+              </p>
+            </div>
+            {!authLoading && (
+              <Link to="/saved" className="btn-secondary min-h-11 px-4 text-sm">
+                Open my saves
+              </Link>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">

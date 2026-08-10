@@ -54,7 +54,9 @@ def test_frontend_nginx_serves_a_strict_application_csp():
         "form-action": {"'self'"},
         "frame-ancestors": {"'none'"},
         "frame-src": {"https://www.youtube.com"},
-        "img-src": {"'self'", "data:", "https://i.ytimg.com"},
+        # OAuth and user-configured avatars are absolute HTTPS URLs. Keep
+        # non-HTTPS images blocked without restricting profiles to fixed hosts.
+        "img-src": {"'self'", "data:", "https:"},
         "object-src": {"'none'"},
         "script-src": {"'self'", "https://www.youtube.com"},
         "style-src": {"'self'", "https://fonts.googleapis.com"},

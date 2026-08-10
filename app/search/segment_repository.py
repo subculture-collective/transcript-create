@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from sqlalchemy import text
@@ -16,21 +15,20 @@ def _match_expressions(
     text_column = f"{alias}.text"
     tsv_column = f"{alias}.text_tsv"
     if mode == "exact_phrase":
-        params["literal_q"] = q.strip().lower()
+        simple_query = "phraseto_tsquery('simple', :q)"
         return (
-            f"position(lower(:literal_q) in lower({text_column})) > 0",
-            text_column,
-            "1.0",
-            "position(lower(:literal_q) in lower(v.title)) > 0",
+            f"to_tsvector('simple', coalesce({text_column}, '')) @@ {simple_query}",
+            f"ts_headline('simple', {text_column}, {simple_query})",
+            f"ts_rank_cd(to_tsvector('simple', coalesce({text_column}, '')), {simple_query})",
+            f"to_tsvector('simple', coalesce(v.title, '')) @@ {simple_query}",
         )
     if mode == "whole_word":
-        escaped = re.escape(q.strip()).replace(r"\ ", r"\s+")
-        params["whole_word_q"] = rf"\m{escaped}\M"
+        simple_query = "plainto_tsquery('simple', :q)"
         return (
-            f"{text_column} ~* :whole_word_q",
-            text_column,
-            "1.0",
-            "v.title ~* :whole_word_q",
+            f"to_tsvector('simple', coalesce({text_column}, '')) @@ {simple_query}",
+            f"ts_headline('simple', {text_column}, {simple_query})",
+            f"ts_rank_cd(to_tsvector('simple', coalesce({text_column}, '')), {simple_query})",
+            f"to_tsvector('simple', coalesce(v.title, '')) @@ {simple_query}",
         )
     return (
         f"{tsv_column} @@ websearch_to_tsquery('english', :q)",

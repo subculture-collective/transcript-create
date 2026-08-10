@@ -152,6 +152,11 @@ export default function VideoPage() {
   }, [loadTranscript, videoId]);
 
   useEffect(() => {
+    if (!video) return;
+    document.title = `${formatVideoTitle(video.title, video.uploaded_at)} | HasanAra`;
+  }, [video]);
+
+  useEffect(() => {
     if (!videoId) return;
     if (transcriptQuery) {
       api
@@ -803,6 +808,7 @@ export default function VideoPage() {
                     />
                     <PlainTranscriptTurns
                       turns={transcriptTurns}
+                      source={(transcript.source ?? 'whisper') as TranscriptSource}
                       activeSegId={activeSegId}
                       isSavedSegment={isSavedSegment}
                       onClickSegment={onClickSegment}

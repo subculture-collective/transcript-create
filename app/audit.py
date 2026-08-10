@@ -30,6 +30,7 @@ ACTION_USER_DATA_EXPORT = "user_data_export"
 ACTION_IDENTITY_LINKED = "identity_linked"
 ACTION_IDENTITY_UNLINKED = "identity_unlinked"
 ACTION_IDENTITY_COLLISION = "identity_collision"
+ACTION_ACCOUNTS_MERGED = "accounts_merged"
 ACTION_BOOTSTRAP_ADMIN_PROMOTED = "bootstrap_admin_promoted"
 ACTION_USER_DATA_DELETION = "user_data_deletion"
 

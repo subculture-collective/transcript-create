@@ -453,7 +453,9 @@ class TestOAuthSecurity:
             )
 
         assert response.status_code == 307
-        assert response.headers["location"].endswith("/account?error=identity_conflict")
+        assert response.headers["location"].endswith(
+            "/account?error=identity_conflict&provider=google"
+        )
         assert (
             db_session.execute(
                 text("SELECT count(*) FROM user_identities WHERE user_id=:id AND provider='google'"),
@@ -461,6 +463,61 @@ class TestOAuthSecurity:
             ).scalar_one()
             == 0
         )
+
+    def test_merge_callback_combines_separate_provider_accounts_and_rotates_session(
+        self, client: TestClient, db_session
+    ):
+        source_id, target_id = uuid.uuid4(), uuid.uuid4()
+        old_token = "pre-merge-target-session"
+        db_session.execute(
+            text("INSERT INTO users (id, email, role) VALUES (:id, 'source@example.com', 'user')"),
+            {"id": str(source_id)},
+        )
+        db_session.execute(
+            text("INSERT INTO users (id, email, role) VALUES (:id, 'target@example.com', 'user')"),
+            {"id": str(target_id)},
+        )
+        db_session.execute(
+            text("INSERT INTO user_identities (user_id, provider, subject) VALUES (:id, 'google', 'merge-google')"),
+            {"id": str(source_id)},
+        )
+        db_session.execute(
+            text("INSERT INTO user_identities (user_id, provider, subject) VALUES (:id, 'twitch', 'merge-twitch')"),
+            {"id": str(target_id)},
+        )
+        db_session.execute(
+            text("INSERT INTO sessions (user_id, token_hash, expires_at) VALUES (:id, :hash, now() + interval '1 hour')"),
+            {"id": str(target_id), "hash": sha256(old_token.encode()).hexdigest()},
+        )
+        self._binding(db_session, "merge-callback", "nonce", intent="merge", link_user_id=target_id)
+        oauth = self._google_oauth(
+            {"id_token": "id-token", "userinfo": {"sub": "merge-google", "nonce": "nonce"}}
+        )
+
+        with (
+            patch("app.routes.auth.OAuth", return_value=oauth),
+            patch.object(settings, "OAUTH_GOOGLE_CLIENT_ID", "id"),
+            patch.object(settings, "OAUTH_GOOGLE_CLIENT_SECRET", "secret"),
+        ):
+            response = client.get(
+                "/auth/callback/google",
+                params={"state": "merge-callback"},
+                cookies={"tc_session": old_token},
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 307
+        assert response.headers["location"].endswith("/account?merged=google")
+        assert response.cookies.get("tc_session") not in {None, old_token}
+        assert db_session.execute(
+            text("SELECT count(*) FROM users WHERE id=:id"), {"id": str(source_id)}
+        ).scalar_one() == 0
+        assert db_session.execute(
+            text("SELECT count(*) FROM user_identities WHERE user_id=:id"), {"id": str(target_id)}
+        ).scalar_one() == 2
+        assert db_session.execute(
+            text("SELECT count(*) FROM sessions WHERE user_id=:id"), {"id": str(target_id)}
+        ).scalar_one() == 1
 
     def test_successful_link_callback_persists_identity(self, client: TestClient, db_session):
         user_id, session_token = uuid.uuid4(), "successful-link-session"

@@ -216,6 +216,14 @@ async def link_provider(provider: str, request: Request, db=Depends(get_db), use
     return {"authorization_url": await _start_oauth_link(request, db, provider, user["id"])}
 
 
+@router.post("/identities/{provider}/merge", response_model=LinkResponse)
+async def merge_provider(provider: str, request: Request, db=Depends(get_db), user=Depends(require_auth)):
+    """Start a fresh OAuth proof before merging a separately created account."""
+    from .auth import _start_oauth_link
+
+    return {"authorization_url": await _start_oauth_link(request, db, provider, user["id"], merge=True)}
+
+
 @router.delete("/identities/{provider}", response_model=OkResponse)
 def delete_identity(provider: str, request: Request, db=Depends(get_db), user=Depends(require_auth)):
     exists = db.execute(

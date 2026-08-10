@@ -27,7 +27,7 @@ export default function MomentActionRow({
   return (
     <div className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2 border-t border-border/60 pt-3 text-xs">
       <Link
-        to={buildTimestampLink(videoId, moment.start_ms, moment.id)}
+        to={buildTimestampLink(videoId, moment.start_ms, moment.source)}
         className="btn-secondary min-h-11 px-3 text-xs"
         onClick={onOpenTimestamp}
       >

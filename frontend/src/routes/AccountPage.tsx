@@ -156,7 +156,8 @@ function SessionRow({
 }
 
 export default function AccountPage() {
-  const { user, status, error, refresh, invalidateLocalAuth, linkProvider } = useAuth();
+  const { user, status, error, refresh, invalidateLocalAuth, linkProvider, mergeProvider } =
+    useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [account, setAccount] = useState<AccountResponse | null>(null);
@@ -171,6 +172,7 @@ export default function AccountPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [providerBusy, setProviderBusy] = useState<OAuthProvider | null>(null);
   const [unlinkPending, setUnlinkPending] = useState<OAuthProvider | null>(null);
+  const [mergePending, setMergePending] = useState<OAuthProvider | null>(null);
   const [sessionBusy, setSessionBusy] = useState<string | 'others' | 'all' | null>(null);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -182,14 +184,22 @@ export default function AccountPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const linked = params.get('linked');
+    const merged = params.get('merged');
     const error = params.get('error');
+    const provider = params.get('provider');
     if (linked) setNotice(`${linked[0]?.toUpperCase() ?? linked} identity linked successfully.`);
-    if (error === 'identity_conflict') {
+    if (merged)
+      setNotice(`${merged[0]?.toUpperCase() ?? merged} linked and the accounts were merged.`);
+    if (error === 'identity_conflict' && (provider === 'google' || provider === 'twitch')) {
+      setMergePending(provider);
       setNotice(
-        'That identity is already linked to another HasanAra account. No accounts were merged.'
+        `That ${provider[0].toUpperCase()}${provider.slice(1)} identity belongs to another HasanAra account. You can merge it into this account after confirming ownership again.`
       );
     }
-    if (linked || error) navigate(location.pathname, { replace: true });
+    if (error === 'account_merge_conflict') {
+      setNotice('Those accounts could not be merged safely. Nothing was changed.');
+    }
+    if (linked || merged || error) navigate(location.pathname, { replace: true });
   }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
@@ -319,6 +329,17 @@ export default function AccountPage() {
     }
   }
 
+  async function startMerge(provider: OAuthProvider) {
+    setProviderBusy(provider);
+    setNotice(null);
+    try {
+      await mergeProvider(provider);
+    } catch (error: unknown) {
+      setNotice((await apiFailure(error, 'The account merge could not be started.')).message);
+      setProviderBusy(null);
+    }
+  }
+
   async function unlinkProvider(provider: OAuthProvider) {
     if (unlinkPending !== provider) {
       setUnlinkPending(provider);
@@ -444,6 +465,45 @@ export default function AccountPage() {
         <div className="alert-success" role="status" aria-live="polite">
           {notice}
         </div>
+      )}
+
+      {mergePending && (
+        <section
+          className="archive-section border-warning/40"
+          role="alertdialog"
+          aria-labelledby="merge-account-heading"
+          aria-describedby="merge-account-description"
+        >
+          <div className="archive-eyebrow">Account merge</div>
+          <h2 id="merge-account-heading" className="mt-3 text-xl font-semibold text-ink">
+            Merge and link {mergePending === 'google' ? 'Google' : 'Twitch'}?
+          </h2>
+          <p id="merge-account-description" className="mt-3 max-w-3xl text-sm leading-6 text-muted">
+            This signed-in account will be kept. Saved moments, searches, vocabularies, and job
+            ownership from the other account will move here. Other sessions and API keys from the
+            absorbed account will be revoked. This cannot be undone.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn"
+              disabled={providerBusy === mergePending}
+              onClick={() => void startMerge(mergePending)}
+            >
+              {providerBusy === mergePending
+                ? 'Opening…'
+                : `Merge and link ${mergePending === 'google' ? 'Google' : 'Twitch'}`}
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={providerBusy === mergePending}
+              onClick={() => setMergePending(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
       )}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

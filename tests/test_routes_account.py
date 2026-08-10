@@ -342,6 +342,29 @@ def test_identity_link_returns_url_and_persists_link_binding(client, db_session)
     assert binding == {"intent": "link", "link_user_id": user_id}
 
 
+def test_identity_merge_returns_url_and_persists_merge_binding(client, db_session):
+    user_id, token = _auth_client(client, db_session)
+    oauth = MagicMock()
+    oauth.twitch.authorize_redirect = AsyncMock(
+        return_value=RedirectResponse("https://twitch.example.invalid/authorize")
+    )
+    with (
+        patch("app.routes.auth.OAuth", return_value=oauth),
+        patch.object(settings, "OAUTH_TWITCH_CLIENT_ID", "id"),
+        patch.object(settings, "OAUTH_TWITCH_CLIENT_SECRET", "secret"),
+    ):
+        response = client.post("/account/identities/twitch/merge", headers=_headers(token))
+
+    assert response.status_code == 200
+    assert response.json() == {"authorization_url": "https://twitch.example.invalid/authorize"}
+    binding = (
+        db_session.execute(text("SELECT intent, link_user_id FROM oauth_requests ORDER BY expires_at DESC LIMIT 1"))
+        .mappings()
+        .one()
+    )
+    assert binding == {"intent": "merge", "link_user_id": user_id}
+
+
 def test_unlink_last_identity_is_rejected(client, db_session):
     _, token = _auth_client(client, db_session)
     response = client.delete("/account/identities/google", headers=_headers(token))

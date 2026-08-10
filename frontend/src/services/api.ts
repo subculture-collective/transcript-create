@@ -143,6 +143,9 @@ export const api = {
   async linkProvider(provider: OAuthProvider) {
     return http.post(`account/identities/${provider}/link`).json<LinkProviderResponse>();
   },
+  async mergeProvider(provider: OAuthProvider) {
+    return http.post(`account/identities/${provider}/merge`).json<LinkProviderResponse>();
+  },
   async unlinkProvider(provider: OAuthProvider) {
     return http.delete(`account/identities/${provider}`).json<{ ok: boolean }>();
   },

@@ -2,6 +2,7 @@ import { render, type RenderOptions } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../services/auth';
+import { ThemeProvider } from '../services/theme';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createQueryClient } from '../services/query';
 
@@ -24,7 +25,9 @@ export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptio
     wrapper: ({ children }) => (
       <BrowserRouter>
         <QueryClientProvider client={client}>
-          <AuthProvider>{children}</AuthProvider>
+          <ThemeProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ThemeProvider>
         </QueryClientProvider>
       </BrowserRouter>
     ),

@@ -107,10 +107,6 @@ export default function SearchPage() {
   const [q, setQ] = useState(filters.q);
   const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
   const [dateTo, setDateTo] = useState(filters.date_to ?? '');
-  const [source, setSource] = useState<ArchiveSearchFilters['source']>(filters.source ?? 'best');
-  const [category, setCategory] = useState(filters.category ?? '');
-  const [minDuration, setMinDuration] = useState(String(filters.min_duration ?? ''));
-  const [maxDuration, setMaxDuration] = useState(String(filters.max_duration ?? ''));
   const [sortBy, setSortBy] = useState<NonNullable<ArchiveSearchFilters['sort_by']>>(
     filters.sort_by ?? 'relevance'
   );
@@ -127,10 +123,6 @@ export default function SearchPage() {
     setQ(filters.q);
     setDateFrom(filters.date_from ?? '');
     setDateTo(filters.date_to ?? '');
-    setSource(filters.source ?? 'best');
-    setCategory(filters.category ?? '');
-    setMinDuration(String(filters.min_duration ?? ''));
-    setMaxDuration(String(filters.max_duration ?? ''));
     setSortBy(filters.sort_by ?? 'relevance');
   }, [filters]);
 
@@ -141,12 +133,8 @@ export default function SearchPage() {
     setParams(
       serializeFilters({
         q,
-        source,
-        category: category || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        min_duration: minDuration ? Number(minDuration) : undefined,
-        max_duration: maxDuration ? Number(maxDuration) : undefined,
         sort_by: sortBy,
         video_id: filters.video_id,
         limit: filters.limit,
@@ -159,10 +147,6 @@ export default function SearchPage() {
     setQ('');
     setDateFrom('');
     setDateTo('');
-    setSource('best');
-    setCategory('');
-    setMinDuration('');
-    setMaxDuration('');
     setSortBy('relevance');
     setParams(new URLSearchParams());
   }
@@ -254,20 +238,12 @@ export default function SearchPage() {
             q={q}
             dateFrom={dateFrom}
             dateTo={dateTo}
-            source={source}
-            category={category}
-            minDuration={minDuration}
-            maxDuration={maxDuration}
             sortBy={sortBy}
             loading={loading}
             canSubmitSearch={canSubmitSearch}
             onQChange={setQ}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onSourceChange={setSource}
-            onCategoryChange={setCategory}
-            onMinDurationChange={setMinDuration}
-            onMaxDurationChange={setMaxDuration}
             onSortByChange={setSortBy}
             onSubmit={submitFilters}
             onReset={resetFilters}
@@ -432,7 +408,7 @@ export default function SearchPage() {
                 </span>
               </Link>
               <Link
-                to={`/saved?${buildCurrentFilters(q, source, dateFrom, dateTo, category, minDuration, maxDuration, sortBy, filters).toString()}`}
+                to={`/saved?${buildCurrentFilters(q, dateFrom, dateTo, sortBy, filters).toString()}`}
                 className="block rounded-lg border border-border bg-surface-muted p-3 text-sm text-ink transition-colors hover:border-accent/50"
               >
                 <strong className="block">Save this query</strong>

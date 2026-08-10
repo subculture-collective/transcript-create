@@ -46,13 +46,27 @@ def main() -> int:
         validate_links(path, errors)
 
     retired_assets = (
-        "frontend/public/sw.js",
         "frontend/public/offline.html",
         "frontend/public/manifest.json",
     )
     for relative in retired_assets:
         if (ROOT / relative).exists():
             errors.append(f"retired PWA asset exists: {relative}")
+
+    retirement_worker = ROOT / "frontend/public/sw.js"
+    if retirement_worker.exists():
+        worker_source = retirement_worker.read_text(encoding="utf-8")
+        required_retirement_markers = (
+            "caches.keys()",
+            "caches.delete(key)",
+            "self.registration.unregister()",
+            "self.clients.matchAll",
+            "client.navigate(client.url)",
+        )
+        if any(marker not in worker_source for marker in required_retirement_markers):
+            errors.append("frontend/public/sw.js is not the approved retirement worker")
+        if "addEventListener('fetch'" in worker_source or "cache.put(" in worker_source:
+            errors.append("frontend/public/sw.js must not cache or intercept application requests")
 
     retired_sources = (
         "requirements.txt",

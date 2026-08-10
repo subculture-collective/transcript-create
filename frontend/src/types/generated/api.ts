@@ -77,6 +77,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/account/identities/{provider}/merge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Merge Provider
+     * @description Start a fresh OAuth proof before merging a separately created account.
+     */
+    post: operations['merge_provider_account_identities__provider__merge_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/account/sessions': {
     parameters: {
       query?: never;
@@ -5461,6 +5481,37 @@ export interface operations {
     };
   };
   link_provider_account_identities__provider__link_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        provider: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LinkResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  merge_provider_account_identities__provider__merge_post: {
     parameters: {
       query?: never;
       header?: never;

@@ -6196,6 +6196,49 @@
         ]
       }
     },
+    "/account/identities/{provider}/merge": {
+      "post": {
+        "description": "Start a fresh OAuth proof before merging a separately created account.",
+        "operationId": "merge_provider_account_identities__provider__merge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Merge Provider",
+        "tags": [
+          "Account"
+        ]
+      }
+    },
     "/account/sessions": {
       "delete": {
         "operationId": "revoke_sessions_account_sessions_delete",

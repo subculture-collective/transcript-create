@@ -17,6 +17,7 @@ from app.archive.intelligence_repository import (
     _period_intelligence_from_row,
     _safe_mappings,
     _safe_video_metadata_map,
+    _scope_named_period_intelligence,
     _week_bounds,
     alias_matches_text,
     autopublish_search_topics,
@@ -29,7 +30,13 @@ from app.archive.intelligence_repository import (
     slugify_topic,
 )
 from app.archive.repository import ArchiveRepository, archive_repository
-from app.schemas import ArchiveTopicCard
+from app.schemas import (
+    ArchiveEvidenceMoment,
+    ArchivePeriodIntelligence,
+    ArchivePeriodOption,
+    ArchiveTopicCard,
+    VideoInfo,
+)
 
 
 class _ImmutableMappingResult:
@@ -91,6 +98,53 @@ def test_safe_video_metadata_map_uses_savepoint_without_rolling_back_refresh_wri
     assert db.refresh_writes == ["stats row"]
     assert db.rollback_count == 0
     assert db.savepoints_started == db.savepoints_rolled_back == 1
+
+
+def test_named_period_cache_drops_out_of_scope_videos_and_citations():
+    july_video = VideoInfo(
+        id=uuid.uuid4(),
+        youtube_id="july-video",
+        uploaded_at=datetime(2026, 7, 10, tzinfo=timezone.utc),
+    )
+    june_video = VideoInfo(
+        id=uuid.uuid4(),
+        youtube_id="june-video",
+        uploaded_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
+    )
+
+    def evidence(video, snippet):
+        return ArchiveEvidenceMoment(video=video, start_ms=0, end_ms=1000, snippet=snippet)
+
+    period = ArchivePeriodIntelligence(
+        period="2026-07",
+        label="July 2026",
+        video_count=2,
+        total_duration_seconds=200,
+        videos=[july_video, june_video],
+        top_topics=[
+            ArchiveTopicCard(
+                slug="housing",
+                label="Housing",
+                source="hybrid",
+                evidence=[evidence(july_video, "July citation"), evidence(june_video, "June citation")],
+            )
+        ],
+        summary="Cached summary",
+        evidence=[evidence(july_video, "July citation"), evidence(june_video, "June citation")],
+    )
+    option = ArchivePeriodOption(
+        slug="2026-07",
+        label="July 2026",
+        kind="month",
+        date_from=date(2026, 7, 1),
+        date_to=date(2026, 7, 31),
+    )
+
+    scoped = _scope_named_period_intelligence(period, option)
+
+    assert [video.youtube_id for video in scoped.videos] == ["july-video"]
+    assert [moment.snippet for moment in scoped.evidence] == ["July citation"]
+    assert [moment.snippet for moment in scoped.top_topics[0].evidence] == ["July citation"]
 
 
 class _FakeResult:

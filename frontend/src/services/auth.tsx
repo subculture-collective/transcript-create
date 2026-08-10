@@ -32,6 +32,7 @@ export type AuthState = {
   loginTwitch: () => void;
   loginWith: (provider: OAuthProvider) => void;
   linkProvider: (provider: OAuthProvider) => Promise<void>;
+  mergeProvider: (provider: OAuthProvider) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -147,6 +148,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         linkProvider: async (provider: OAuthProvider) => {
           const response = await http
             .post(`account/identities/${provider}/link`)
+            .json<{ authorization_url: string }>();
+          window.location.href = response.authorization_url;
+        },
+        mergeProvider: async (provider: OAuthProvider) => {
+          const response = await http
+            .post(`account/identities/${provider}/merge`)
             .json<{ authorization_url: string }>();
           window.location.href = response.authorization_url;
         },

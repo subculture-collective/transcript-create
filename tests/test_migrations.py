@@ -406,7 +406,7 @@ def test_fresh_schema_linked_identity_contract(clean_db, test_db_url):
                   AND contype = 'c'
             """)).scalars())
             assert "CHECK ((provider = ANY (ARRAY['google'::text, 'twitch'::text])))" in checks
-            assert "CHECK ((intent = ANY (ARRAY['login'::text, 'link'::text])))" in checks
+            assert "CHECK ((intent = ANY (ARRAY['login'::text, 'link'::text, 'merge'::text])))" in checks
             assert any("link_user_id IS NULL" in check and "link_user_id IS NOT NULL" in check for check in checks)
             indexes = set(conn.execute(text("""
                 SELECT indexname FROM pg_indexes

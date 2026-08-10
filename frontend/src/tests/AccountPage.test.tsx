@@ -389,8 +389,8 @@ describe('AccountPage', () => {
     expect(await screen.findByTestId('location')).toHaveTextContent('/login');
   });
 
-  it('explains an identity ownership conflict without merging account identities', async () => {
-    installApi((request) => {
+  it('requires explicit confirmation and fresh OAuth proof before merging accounts', async () => {
+    const fetchMock = installApi((request) => {
       const path = new URL(request.url).pathname;
       if (path.endsWith('/auth/me')) {
         return json({ user, role: 'moderator', capabilities: [] });
@@ -399,18 +399,55 @@ describe('AccountPage', () => {
       if (path.endsWith('/account')) {
         return json({ ...account, identities: [googleIdentity] });
       }
+      if (path.endsWith('/account/identities/twitch/merge')) {
+        return json({ authorization_url: 'https://twitch.example/merge-authorize' });
+      }
       return json({ error: 'unexpected' }, 500);
     });
+    const events = userEvent.setup();
 
-    renderPage('/account?error=identity_conflict');
+    renderPage('/account?error=identity_conflict&provider=twitch');
 
     expect(
       await screen.findByText(
-        'That identity is already linked to another HasanAra account. No accounts were merged.'
+        'That Twitch identity belongs to another HasanAra account. You can merge it into this account after confirming ownership again.'
       )
     ).toBeVisible();
-    expect(screen.getByText('Google')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Link Twitch' })).toBeEnabled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'Other sessions and API keys from the absorbed account will be revoked.'
+    );
+
+    await events.click(screen.getByRole('button', { name: 'Merge and link Twitch' }));
+    await waitFor(() =>
+      expect(window.location.href).toBe('https://twitch.example/merge-authorize')
+    );
+    const mergeRequest = fetchMock.mock.calls
+      .map(([request]) => request as Request)
+      .find((request) => request.url.endsWith('/account/identities/twitch/merge'));
+    expect(mergeRequest?.method).toBe('POST');
+    expect(mergeRequest?.headers.get('X-CSRF-Token')).toBe('csrf-token');
+  });
+
+  it('cancels an account merge without starting another OAuth request', async () => {
+    const fetchMock = installApi((request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith('/auth/me')) return json({ user, role: 'moderator', capabilities: [] });
+      if (path.endsWith('/auth/csrf')) return json({ csrf_token: 'csrf-token' });
+      if (path.endsWith('/account')) return json({ ...account, identities: [googleIdentity] });
+      return json({ error: 'unexpected' }, 500);
+    });
+    const events = userEvent.setup();
+
+    renderPage('/account?error=identity_conflict&provider=twitch');
+    await screen.findByRole('alertdialog');
+    await events.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([request]) =>
+        (request as Request).url.endsWith('/account/identities/twitch/merge')
+      )
+    ).toBe(false);
   });
 
   it('shows a retryable session error when auth initialization fails', async () => {

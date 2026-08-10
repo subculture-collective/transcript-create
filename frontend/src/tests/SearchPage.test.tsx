@@ -74,7 +74,7 @@ describe('SearchPage', () => {
     }) as never);
   });
 
-  it('forwards URL filters to grouped search and shows grouped actions', async () => {
+  it('ignores removed URL filters and shows grouped actions', async () => {
     currentSearchParams = new URLSearchParams({
       q: 'rent',
       source: 'youtube',
@@ -123,10 +123,10 @@ describe('SearchPage', () => {
       expect(searchGroupedMock).toHaveBeenCalledWith(
         'rent',
         expect.objectContaining({
-          source: 'youtube',
-          category: 'news',
-          min_duration: 120,
-          max_duration: 3600,
+          source: undefined,
+          category: undefined,
+          min_duration: undefined,
+          max_duration: undefined,
           sort_by: 'date_desc',
           video_id: 'video-1',
           limit: 25,
@@ -136,11 +136,9 @@ describe('SearchPage', () => {
       );
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('Play all matches')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Copy quote' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Play all matches')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy quote' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument();
 
     expect(screen.getByText('rent', { selector: 'mark' })).toBeInTheDocument();
     expect(screen.getByText('Channel Alpha')).toBeInTheDocument();
@@ -157,6 +155,10 @@ describe('SearchPage', () => {
     );
 
     expect(screen.getByRole('link', { name: 'gaza' })).toHaveAttribute('href', '/search?q=gaza');
+    expect(screen.queryByRole('combobox', { name: 'Transcript' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Category' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'Minimum seconds' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'Maximum seconds' })).not.toBeInTheDocument();
     expect((await axe.run(container)).violations).toEqual([]);
   });
 
@@ -269,7 +271,6 @@ describe('SearchPage', () => {
     expect(searchParamsMock).toHaveBeenCalledOnce();
     expect(searchParamsMock.mock.calls[0]?.[0]).toEqual(new URLSearchParams());
     expect(screen.getByRole('searchbox', { name: 'Search query' })).toHaveValue('');
-    expect(screen.getByRole('combobox', { name: 'Transcript' })).toHaveValue('best');
     expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveValue('relevance');
   });
 

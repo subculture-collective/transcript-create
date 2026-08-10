@@ -25,6 +25,13 @@ class IdentityConflictError(AppError):
         super().__init__("identity_conflict", "This provider identity is already linked", 409)
 
 
+class AccountMergeConflictError(AppError):
+    """Two accounts cannot be merged without losing an identity."""
+
+    def __init__(self) -> None:
+        super().__init__("account_merge_conflict", "These accounts cannot be merged safely", 409)
+
+
 class LastIdentityError(AppError):
     def __init__(self) -> None:
         super().__init__("last_identity", "An account must retain a login identity", 409)
@@ -167,6 +174,13 @@ def delete_account(db, user_id: UUID | str) -> None:
 class SignInResult:
     user: dict
     created: bool
+
+
+@dataclass(frozen=True)
+class AccountMergeResult:
+    user: dict
+    source_user_id: str
+    session_token: str
 
 
 def session_token_hash(token: str) -> str:
@@ -359,6 +373,221 @@ def link_identity(db, user_id: UUID | str, profile: ProviderProfile) -> dict:
         # Both identity uniqueness constraints intentionally have the same
         # public result: a provider cannot be linked twice to an account.
         raise IdentityConflictError() from exc
+
+
+def merge_account_identity(
+    db,
+    target_user_id: UUID | str,
+    profile: ProviderProfile,
+    *,
+    user_agent: str | None,
+    ip_address: str | None,
+) -> AccountMergeResult:
+    """Merge the account owning ``profile`` into the authenticated account.
+
+    The caller owns the transaction and has already verified both the target
+    session and a fresh provider OAuth callback. No email-based matching occurs.
+    """
+    target_user_id = str(target_user_id)
+    values = _identity_values(profile)
+    owner = (
+        db.execute(
+            text("""
+                SELECT user_id FROM user_identities
+                WHERE provider=:provider AND subject=:subject
+            """),
+            values,
+        )
+        .mappings()
+        .first()
+    )
+    if not owner:
+        link_identity(db, target_user_id, profile)
+        db.execute(
+            text("DELETE FROM sessions WHERE user_id=CAST(:target AS uuid)"),
+            {"target": target_user_id},
+        )
+        return AccountMergeResult(
+            user=_user(db, target_user_id),
+            source_user_id=target_user_id,
+            session_token=create_session(db, target_user_id, user_agent=user_agent, ip_address=ip_address),
+        )
+
+    source_user_id = str(owner["user_id"])
+    if source_user_id == target_user_id:
+        raise IdentityConflictError()
+
+    lock_admin_role_mutation(db)
+    users = (
+        db.execute(
+            text("""
+                SELECT * FROM users
+                WHERE id IN (CAST(:target AS uuid), CAST(:source AS uuid))
+                ORDER BY id FOR UPDATE
+            """),
+            {"target": target_user_id, "source": source_user_id},
+        )
+        .mappings()
+        .all()
+    )
+    if len(users) != 2:
+        raise AccountMergeConflictError()
+
+    owner = (
+        db.execute(
+            text("""
+                SELECT user_id FROM user_identities
+                WHERE provider=:provider AND subject=:subject FOR UPDATE
+            """),
+            values,
+        )
+        .mappings()
+        .first()
+    )
+    if not owner or str(owner["user_id"]) != source_user_id:
+        raise AccountMergeConflictError()
+
+    overlapping_provider = db.execute(
+        text("""
+            SELECT provider FROM user_identities WHERE user_id=CAST(:target AS uuid)
+            INTERSECT
+            SELECT provider FROM user_identities WHERE user_id=CAST(:source AS uuid)
+            LIMIT 1
+        """),
+        {"target": target_user_id, "source": source_user_id},
+    ).first()
+    if overlapping_provider:
+        raise AccountMergeConflictError()
+
+    target = next(row for row in users if str(row["id"]) == target_user_id)
+    source = next(row for row in users if str(row["id"]) == source_user_id)
+    role_rank = {"user": 0, "moderator": 1, "admin": 2}
+    merged_role = max((target["role"], source["role"]), key=lambda role: role_rank.get(role, 0))
+    merged_plan = source["plan"] if target["plan"] == "free" and source["plan"] != "free" else target["plan"]
+    db.execute(
+        text("""
+            UPDATE users
+            SET email=COALESCE(email, :email), name=COALESCE(name, :name),
+                avatar_url=COALESCE(avatar_url, :avatar_url), role=:role,
+                plan=:plan, updated_at=now()
+            WHERE id=CAST(:target AS uuid)
+        """),
+        {
+            "target": target_user_id,
+            "email": source["email"],
+            "name": source["name"],
+            "avatar_url": source["avatar_url"],
+            "role": merged_role,
+            "plan": merged_plan,
+        },
+    )
+
+    # The canonical account's existing saved-search definition wins when both
+    # accounts saved the same query, matching create_saved_search upsert rules.
+    db.execute(
+        text("""
+            DELETE FROM saved_searches source
+            WHERE source.user_id=CAST(:source AS uuid)
+              AND EXISTS (
+                  SELECT 1 FROM saved_searches target
+                  WHERE target.user_id=CAST(:target AS uuid)
+                    AND target.query=source.query
+              )
+        """),
+        {"target": target_user_id, "source": source_user_id},
+    )
+
+    # Preserve jobs while clearing only deduplication fields that would violate
+    # the target account's partial uniqueness contracts.
+    db.execute(
+        text("""
+            UPDATE jobs source SET canonical_source=NULL
+            WHERE source.owner_user_id=CAST(:source AS uuid)
+              AND source.canonical_source IS NOT NULL
+              AND source.state NOT IN ('failed', 'completed', 'needs_attention')
+              AND EXISTS (
+                  SELECT 1 FROM jobs target
+                  WHERE target.owner_user_id=CAST(:target AS uuid)
+                    AND target.kind=source.kind
+                    AND target.canonical_source=source.canonical_source
+                    AND target.state NOT IN ('failed', 'completed', 'needs_attention')
+              )
+        """),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    db.execute(
+        text("""
+            UPDATE jobs source SET idempotency_key=NULL
+            WHERE source.owner_user_id=CAST(:source AS uuid)
+              AND source.idempotency_key IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM jobs target
+                  WHERE target.owner_user_id=CAST(:target AS uuid)
+                    AND target.idempotency_key=source.idempotency_key
+              )
+        """),
+        {"target": target_user_id, "source": source_user_id},
+    )
+
+    for table in ("favorites", "user_searches", "user_vocabularies", "saved_searches"):
+        db.execute(
+            text(f"UPDATE {table} SET user_id=CAST(:target AS uuid) WHERE user_id=CAST(:source AS uuid)"),
+            {"target": target_user_id, "source": source_user_id},
+        )
+    db.execute(
+        text("""
+            UPDATE jobs
+            SET owner_user_id=CAST(:target AS uuid),
+                meta=jsonb_set(COALESCE(meta, '{}'::jsonb) - 'api_key_id',
+                               '{owner_user_id}', to_jsonb(CAST(:target AS text)))
+            WHERE owner_user_id=CAST(:source AS uuid)
+               OR meta->>'owner_user_id'=CAST(:source AS text)
+        """),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    db.execute(
+        text("""
+            UPDATE source_deletions
+            SET owner_user_id=CASE WHEN owner_user_id=CAST(:source AS uuid)
+                                   THEN CAST(:target AS uuid) ELSE owner_user_id END,
+                deleted_by_user_id=CASE WHEN deleted_by_user_id=CAST(:source AS uuid)
+                                        THEN NULL ELSE deleted_by_user_id END
+            WHERE owner_user_id=CAST(:source AS uuid)
+               OR deleted_by_user_id=CAST(:source AS uuid)
+        """),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    db.execute(
+        text("""
+            UPDATE user_identities
+            SET user_id=CAST(:target AS uuid), updated_at=now()
+            WHERE user_id=CAST(:source AS uuid)
+        """),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    db.execute(
+        text("""
+            UPDATE user_identities
+            SET provider_email=:email, provider_email_verified=:email_verified,
+                provider_name=:name, provider_avatar_url=:avatar_url,
+                updated_at=now(), last_login_at=now()
+            WHERE user_id=CAST(:target AS uuid)
+              AND provider=:provider AND subject=:subject
+        """),
+        {**values, "target": target_user_id},
+    )
+
+    db.execute(
+        text("DELETE FROM sessions WHERE user_id IN (CAST(:target AS uuid), CAST(:source AS uuid))"),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    db.execute(
+        text("DELETE FROM api_keys WHERE user_id=CAST(:source AS uuid)"),
+        {"source": source_user_id},
+    )
+    db.execute(text("DELETE FROM users WHERE id=CAST(:source AS uuid)"), {"source": source_user_id})
+    session_token = create_session(db, target_user_id, user_agent=user_agent, ip_address=ip_address)
+    return AccountMergeResult(_user(db, target_user_id), source_user_id, session_token)
 
 
 def unlink_identity(db, user_id: UUID | str, provider: str) -> None:

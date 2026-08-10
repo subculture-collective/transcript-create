@@ -50,6 +50,22 @@ def test_build_grounded_chapters_uses_representative_sentence_instead_of_filler(
     assert chapters[0]["evidence"][0]["block_index"] == 1
 
 
+def test_build_grounded_chapters_replaces_low_information_landmarks():
+    blocks = [
+        {"block_index": 0, "start_ms": 0, "end_ms": 10_000, "text": "Welcome to the show."},
+        {"block_index": 1, "start_ms": 660_000, "end_ms": 670_000, "text": "Anyway, Mr."},
+        {"block_index": 2, "start_ms": 1_320_000, "end_ms": 1_330_000, "text": "Do it on here."},
+    ]
+
+    chapters = build_grounded_chapters(blocks)
+
+    assert [chapter["title"] for chapter in chapters] == [
+        "Opening: Welcome to the show.",
+        "Transcript section 2",
+        "Transcript section 3",
+    ]
+
+
 def test_video_chapter_route_uses_transcript_fallback(monkeypatch):
     video_id = uuid.uuid4()
     blocks = [{"block_index": 0, "start_ms": 0, "end_ms": 20_000, "text": "Opening discussion."}]

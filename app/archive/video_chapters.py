@@ -4,6 +4,23 @@ import re
 from typing import Any, Iterable
 
 DEFAULT_CHAPTER_MS = 10 * 60 * 1000
+LOW_INFORMATION_WORDS = {
+    "anyway",
+    "do",
+    "here",
+    "it",
+    "mr",
+    "on",
+    "that",
+    "there",
+    "this",
+    "well",
+    "yeah",
+    "yep",
+    "yes",
+    "you",
+    "yup",
+}
 
 
 def _clean_text(value: str) -> str:
@@ -21,8 +38,10 @@ def _truncate(value: str, limit: int) -> str:
 def _chapter_title(text: str, index: int) -> str:
     sentence = re.split(r"(?<=[.!?])\s+", _clean_text(text), maxsplit=1)[0]
     title = _truncate(sentence, 72)
-    if not title:
-        return "Opening" if index == 0 else f"Part {index + 1}"
+    words = re.findall(r"[a-z0-9]+", title.lower())
+    content_words = [word for word in words if word not in LOW_INFORMATION_WORDS]
+    if not title or not content_words:
+        return "Opening" if index == 0 else f"Transcript section {index + 1}"
     return f"Opening: {title}" if index == 0 else title
 
 

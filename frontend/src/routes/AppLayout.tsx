@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth, useTheme } from '../services';
 
 const navItems = [
@@ -12,10 +12,15 @@ const navItems = [
 ];
 
 export default function AppLayout() {
-  const { user, loading, login, loginTwitch, logout } = useAuth();
+  const { user, loading, error: authError, login, loginTwitch, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -328,6 +333,14 @@ export default function AppLayout() {
               </div>
             </div>
           </nav>
+        )}
+        {authError && (
+          <div
+            className="border-t border-warning/30 bg-warning-soft px-4 py-2 text-center text-sm text-warning"
+            role="alert"
+          >
+            {authError}
+          </div>
         )}
       </header>
 

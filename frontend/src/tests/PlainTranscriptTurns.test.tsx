@@ -6,6 +6,7 @@ describe('PlainTranscriptTurns', () => {
   it('renders search matches as inert text with code-point highlights', () => {
     const { container } = render(
       <PlainTranscriptTurns
+        source="whisper"
         turns={[
           {
             key: 'paragraph-1',

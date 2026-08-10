@@ -7,8 +7,17 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from ..accounts import IdentityConflictError, create_session, link_identity, session_token_hash, sign_in_identity
+from ..accounts import (
+    AccountMergeConflictError,
+    IdentityConflictError,
+    create_session,
+    link_identity,
+    merge_account_identity,
+    session_token_hash,
+    sign_in_identity,
+)
 from ..audit import (
+    ACTION_ACCOUNTS_MERGED,
     ACTION_IDENTITY_COLLISION,
     ACTION_IDENTITY_LINKED,
     ACTION_LOGIN_FAILED,
@@ -148,8 +157,14 @@ async def _start_oauth_login(request: Request, db, provider_name: str, *, intent
         ) from None
 
 
-async def _start_oauth_link(request: Request, db, provider_name: str, user_id) -> str:
-    response = await _start_oauth_login(request, db, provider_name, intent="link", link_user_id=user_id)
+async def _start_oauth_link(request: Request, db, provider_name: str, user_id, *, merge: bool = False) -> str:
+    response = await _start_oauth_login(
+        request,
+        db,
+        provider_name,
+        intent="merge" if merge else "link",
+        link_user_id=user_id,
+    )
     location = response.headers["location"]
     if not isinstance(location, str):
         raise RuntimeError("OAuth provider did not return a redirect location")
@@ -188,7 +203,7 @@ def _consume_oauth_request(db, request: Request, provider_name: str):
         raise DatabaseError("Authentication state could not be verified") from None
     if row["provider"] != provider_name:
         raise ValidationError("Invalid OAuth state parameter")
-    if row["intent"] == "link":
+    if row["intent"] in {"link", "merge"}:
         user = _get_user_from_session(db, _get_session_token(request))
         if not user or str(user["id"]) != str(row["link_user_id"]):
             raise ValidationError("Invalid OAuth state parameter")
@@ -361,6 +376,30 @@ async def _oauth_callback(request: Request, db, provider_name: str):
             provider.name.title(), "Authentication failed", details={"code": "oauth_callback_failed"}
         )
     try:
+        if binding["intent"] == "merge":
+            user_id = binding["link_user_id"]
+            merged = merge_account_identity(
+                db,
+                user_id,
+                profile,
+                user_agent=request.headers.get("user-agent"),
+                ip_address=request.client.host if request.client else None,
+            )
+            write_audit_event(
+                db,
+                ACTION_ACCOUNTS_MERGED,
+                user_id=user_id,
+                resource_type="user",
+                resource_id=str(user_id),
+                details={"provider": provider_name, "source_user_id": merged.source_user_id},
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
+            db.commit()
+            response = RedirectResponse(url=f"{settings.FRONTEND_ORIGIN.rstrip('/')}/account?merged={provider_name}")
+            _set_session_cookie(response, merged.session_token)
+            return response
+
         if binding["intent"] == "link":
             user_id = binding["link_user_id"]
             link_identity(db, user_id, profile)
@@ -392,7 +431,7 @@ async def _oauth_callback(request: Request, db, provider_name: str):
             user_agent=request.headers.get("user-agent"),
         )
         db.commit()
-    except IdentityConflictError:
+    except (AccountMergeConflictError, IdentityConflictError):
         db.rollback()
         # A collision is meaningful operationally but does not disclose who
         # owns the identity to the linking account.
@@ -409,8 +448,11 @@ async def _oauth_callback(request: Request, db, provider_name: str):
             db.commit()
         except Exception:
             db.rollback()
-        if binding["intent"] == "link":
-            return RedirectResponse(url=f"{settings.FRONTEND_ORIGIN.rstrip('/')}/account?error=identity_conflict")
+        if binding["intent"] in {"link", "merge"}:
+            error = "account_merge_conflict" if binding["intent"] == "merge" else "identity_conflict"
+            return RedirectResponse(
+                url=f"{settings.FRONTEND_ORIGIN.rstrip('/')}/account?error={error}&provider={provider_name}"
+            )
         raise DatabaseError("Authentication could not be completed") from None
     except Exception as exc:
         db.rollback()

@@ -77,7 +77,7 @@ def test_search_native_builds_expected_sql_and_params():
     assert db.calls[0]["params"]["headline_options"] == POSTGRES_HEADLINE_OPTIONS
 
 
-def test_search_native_whole_word_mode_uses_escaped_word_boundaries():
+def test_search_native_whole_word_mode_uses_unstemmed_full_text_index():
     db = FakeDB([])
     SearchRepository().search_native(
         db,
@@ -86,12 +86,11 @@ def test_search_native_whole_word_mode_uses_escaped_word_boundaries():
     )
 
     sql = str(db.calls[0]["statement"])
-    assert "s.text ~* :whole_word_q" in sql
+    assert "to_tsvector('simple', coalesce(s.text, '')) @@ plainto_tsquery('simple', :q)" in sql
     assert "websearch_to_tsquery" not in sql
-    assert db.calls[0]["params"]["whole_word_q"] == r"\mhouse\M"
 
 
-def test_search_best_exact_phrase_mode_uses_literal_text_for_both_sources():
+def test_search_best_exact_phrase_mode_uses_unstemmed_phrase_query_for_both_sources():
     db = FakeDB([])
     SearchRepository().search_best(
         db,
@@ -100,9 +99,8 @@ def test_search_best_exact_phrase_mode_uses_literal_text_for_both_sources():
     )
 
     sql = str(db.calls[0]["statement"])
-    assert "position(lower(:literal_q) in lower(s.text)) > 0" in sql
-    assert "position(lower(:literal_q) in lower(ys.text)) > 0" in sql
-    assert db.calls[0]["params"]["literal_q"] == "public housing"
+    assert "to_tsvector('simple', coalesce(s.text, '')) @@ phraseto_tsquery('simple', :q)" in sql
+    assert "to_tsvector('simple', coalesce(ys.text, '')) @@ phraseto_tsquery('simple', :q)" in sql
 
 
 def test_search_youtube_builds_expected_sql_and_params():

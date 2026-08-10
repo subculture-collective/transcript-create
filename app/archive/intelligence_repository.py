@@ -1561,6 +1561,30 @@ def _period_option_from_row(row) -> ArchivePeriodOption:
     )
 
 
+def _video_is_in_named_period(video: VideoInfo, period: ArchivePeriodOption) -> bool:
+    when_at = video.uploaded_at or video.created_at
+    if when_at is None:
+        return False
+    video_date = when_at.date()
+    if period.recurring_month and period.recurring_day:
+        return video_date.month == period.recurring_month and video_date.day == period.recurring_day
+    return period.date_from <= video_date <= period.date_to
+
+
+def _scope_named_period_intelligence(
+    period: ArchivePeriodIntelligence, option: ArchivePeriodOption
+) -> ArchivePeriodIntelligence:
+    """Never publish cached citations that fall outside the selected period."""
+
+    videos = [video for video in period.videos if _video_is_in_named_period(video, option)]
+    evidence = [moment for moment in period.evidence if _video_is_in_named_period(moment.video, option)]
+    topics = []
+    for topic in period.top_topics:
+        scoped_evidence = [moment for moment in topic.evidence if _video_is_in_named_period(moment.video, option)]
+        topics.append(topic.model_copy(update={"evidence": scoped_evidence}))
+    return period.model_copy(update={"videos": videos, "evidence": evidence, "top_topics": topics})
+
+
 def refresh_named_period_stats(db, limit: int | None = None, period_slug: str | None = None):
     params: dict[str, object] = {}
     where_sql = ""
@@ -2450,6 +2474,7 @@ def get_named_period_intelligence(db, period_slug: str, topic_limit: int = 8) ->
     period_row = period_rows[0]
     period_option = _period_option_from_row(period_row)
     period_intelligence = _period_intelligence_from_row(period_row, topic_limit=topic_limit)
+    period_intelligence = _scope_named_period_intelligence(period_intelligence, period_option)
     period_intelligence = _with_named_period_fallback_topics(db, period_intelligence, topic_limit=topic_limit)
     label_cards = published_label_cards_for_period(
         db, period_option.date_from, period_option.date_to, limit=topic_limit

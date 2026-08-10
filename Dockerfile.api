@@ -4,7 +4,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements-api.txt constraints.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade setuptools==81.0.0 wheel==0.47.0 && \
+    pip install --upgrade setuptools==83.0.0 wheel==0.47.0 && \
     pip install -c constraints.txt -r requirements-api.txt && \
     pip check
 

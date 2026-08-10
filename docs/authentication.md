@@ -1,6 +1,6 @@
 # Authentication and accounts
 
-HasanAra supports Google and Twitch OAuth sign-in. There is no password registration, password reset, automatic email-based account merging, or provider access-token persistence. A HasanAra account may link one Google and one Twitch identity; the immutable provider subject, not email, identifies an external account.
+HasanAra supports Google and Twitch OAuth sign-in. There is no password registration, password reset, automatic email-based account merging, or provider access-token persistence. A HasanAra account may link one Google and one Twitch identity; the immutable provider subject, not email, identifies an external account. If the two identities were used to create separate HasanAra accounts, the signed-in user may explicitly merge them after proving control of the second provider again.
 
 ## Provider setup
 
@@ -78,12 +78,15 @@ All account endpoints require authentication. Cookie-authenticated mutations als
 - `PATCH /account` updates the display name (1–100 trimmed characters) and optional absolute HTTPS avatar URL.
 - `GET /account/identities` lists linked provider metadata; subjects and tokens are never returned.
 - `POST /account/identities/{provider}/link` starts a link flow and returns an `authorization_url`; the callback returns to the account page.
+- `POST /account/identities/{provider}/merge` starts a fresh OAuth proof for an explicitly confirmed merge after an ownership collision.
 - `DELETE /account/identities/{provider}` removes a linked identity, except the final login identity cannot be unlinked.
 - `GET /account/sessions` lists active sessions without tokens or token hashes.
 - `DELETE /account/sessions/{session_id}` revokes one session; `DELETE /account/sessions?keep_current=true` revokes other sessions, and `keep_current=false` revokes all sessions and clears the cookie.
 - `DELETE /account` requires JSON `{ "confirmation": "DELETE" }`, revokes account sessions and API keys, deletes private account data, and clears the cookie.
 
-Linking requires an authenticated session both before redirect and at callback. If an identity is already linked to another account, the callback redirects to `/account?error=identity_conflict`; neither account is merged or changed.
+Linking requires an authenticated session both before redirect and at callback. If an identity is already linked to another account, the callback redirects to `/account?error=identity_conflict&provider=<provider>`; neither account is changed until the user chooses the explicit merge action and completes a second provider OAuth flow.
+
+During a merge, the currently signed-in account remains canonical. The absorbed account's identities, saved moments, search history, vocabularies, non-conflicting saved searches, and job ownership move to it. For duplicate saved-search queries, the canonical account's existing definition wins. Job deduplication fields are cleared only where transferring ownership would violate an active uniqueness constraint. The higher role and non-free entitlement are preserved. Sessions for both accounts are revoked and replaced with one new session; API keys belonging to the absorbed account are deleted. The operation is one transaction and never uses email as proof of identity.
 
 ## Roles and administration
 

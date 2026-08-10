@@ -1,10 +1,15 @@
 import type { Segment } from '../../types/api';
 import type { TranscriptTurn } from '../../features/videoTranscript/transcript';
-import { formatTimestamp } from '../../features/archive/format';
+import {
+  canonicalMomentId,
+  formatTimestamp,
+  type TranscriptSource,
+} from '../../features/archive/format';
 import HighlightedSnippet from '../HighlightedSnippet';
 
 type Props = {
   turns: TranscriptTurn[];
+  source: TranscriptSource;
   activeSegId: number | null;
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
   onClickSegment: (segment: Segment, id: number) => void;
@@ -26,6 +31,7 @@ function msToHms(ms: number) {
 
 export default function PlainTranscriptTurns({
   turns,
+  source,
   activeSegId,
   isSavedSegment,
   onClickSegment,
@@ -60,22 +66,24 @@ export default function PlainTranscriptTurns({
                   const saved = isSavedSegment(seg, id);
 
                   return (
-                    <button
-                      id={`seg-${id}`}
-                      key={id}
-                      type="button"
-                      data-transcript-sentence="true"
-                      data-start-ms={seg.start_ms}
-                      data-end-ms={seg.end_ms}
-                      onClick={() => onClickSegment(seg, id)}
-                      className={`transcript-sentence mx-0.5 text-left ${activeSegId === id ? 'transcript-sentence-active' : ''} ${match ? 'transcript-sentence-match' : ''} ${saved ? 'underline decoration-warning decoration-2 underline-offset-4' : ''}`}
-                      aria-label={`Play ${turn.speaker ?? 'paragraph'} from ${msToHms(seg.start_ms)}`}
-                    >
-                      {seg.text
-                        .replace(/\s+/g, ' ')
-                        .replace(/\s+([,.!?;:])/g, '$1')
-                        .trim()}{' '}
-                    </button>
+                    <span key={id}>
+                      <span id={canonicalMomentId(source, seg.start_ms)} aria-hidden="true" />
+                      <button
+                        id={`seg-${id}`}
+                        type="button"
+                        data-transcript-sentence="true"
+                        data-start-ms={seg.start_ms}
+                        data-end-ms={seg.end_ms}
+                        onClick={() => onClickSegment(seg, id)}
+                        className={`transcript-sentence mx-0.5 text-left ${activeSegId === id ? 'transcript-sentence-active' : ''} ${match ? 'transcript-sentence-match' : ''} ${saved ? 'underline decoration-warning decoration-2 underline-offset-4' : ''}`}
+                        aria-label={`Play ${turn.speaker ?? 'paragraph'} from ${msToHms(seg.start_ms)}`}
+                      >
+                        {seg.text
+                          .replace(/\s+/g, ' ')
+                          .replace(/\s+([,.!?;:])/g, '$1')
+                          .trim()}{' '}
+                      </button>
+                    </span>
                   );
                 })}
               </p>

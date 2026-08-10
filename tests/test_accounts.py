@@ -15,6 +15,7 @@ from app.accounts import (
     create_session,
     delete_account,
     link_identity,
+    merge_account_identity,
     sign_in_identity,
     unlink_identity,
 )
@@ -73,6 +74,92 @@ def test_linking_provider_already_on_authenticated_account_is_a_conflict(db_sess
 
     with pytest.raises(IdentityConflictError):
         link_identity(db_session, owner.user["id"], google_profile("g-1", "a@example.com"))
+
+
+def test_merge_existing_provider_account_preserves_data_and_rotates_access(db_session):
+    target = sign_in_identity(db_session, google_profile("merge-target", "target@example.com"))
+    source = sign_in_identity(db_session, twitch_profile("merge-source", "source@example.com"))
+    db_session.execute(
+        text("UPDATE users SET role='admin', plan='pro' WHERE id=:id"),
+        {"id": str(source.user["id"])},
+    )
+    create_session(db_session, target.user["id"], user_agent="target-old", ip_address=None)
+    create_session(db_session, source.user["id"], user_agent="source-old", ip_address=None)
+    db_session.execute(
+        text("""
+            INSERT INTO saved_searches (id, user_id, query, filters) VALUES
+                (:target_saved, :target, 'shared', '{"owner":"target"}'::jsonb),
+                (:source_saved, :source, 'shared', '{"owner":"source"}'::jsonb),
+                (:source_unique, :source, 'source-only', '{}'::jsonb)
+        """),
+        {
+            "target_saved": str(uuid.uuid4()),
+            "source_saved": str(uuid.uuid4()),
+            "source_unique": str(uuid.uuid4()),
+            "target": str(target.user["id"]),
+            "source": str(source.user["id"]),
+        },
+    )
+    db_session.execute(
+        text("""
+            INSERT INTO api_keys (user_id, name, key_hash, key_prefix)
+            VALUES (:source, 'absorbed key', :hash, 'tc_merge')
+        """),
+        {"source": str(source.user["id"]), "hash": "b" * 64},
+    )
+
+    merged = merge_account_identity(
+        db_session,
+        target.user["id"],
+        twitch_profile("merge-source", "source@example.com"),
+        user_agent="merged-session",
+        ip_address="127.0.0.1",
+    )
+
+    assert merged.source_user_id == str(source.user["id"])
+    assert merged.user["role"] == "admin"
+    assert merged.user["plan"] == "pro"
+    assert db_session.execute(
+        text("SELECT count(*) FROM users WHERE id=:id"), {"id": str(source.user["id"])}
+    ).scalar_one() == 0
+    assert db_session.execute(
+        text("SELECT count(*) FROM user_identities WHERE user_id=:id"),
+        {"id": str(target.user["id"])},
+    ).scalar_one() == 2
+    searches = db_session.execute(
+        text("SELECT query, filters FROM saved_searches WHERE user_id=:id ORDER BY query"),
+        {"id": str(target.user["id"])},
+    ).mappings().all()
+    assert searches == [
+        {"query": "shared", "filters": {"owner": "target"}},
+        {"query": "source-only", "filters": {}},
+    ]
+    assert db_session.execute(
+        text("SELECT count(*) FROM sessions WHERE user_id=:id"), {"id": str(target.user["id"])}
+    ).scalar_one() == 1
+    assert db_session.execute(
+        text("SELECT count(*) FROM api_keys WHERE key_hash=:hash"), {"hash": "b" * 64}
+    ).scalar_one() == 0
+
+
+def test_merge_rejects_overlapping_provider_without_mutation(db_session):
+    target = sign_in_identity(db_session, google_profile("overlap-target", "target@example.com"))
+    source = sign_in_identity(db_session, twitch_profile("overlap-source", "source@example.com"))
+    link_identity(db_session, source.user["id"], google_profile("overlap-other", "other@example.com"))
+
+    from app.accounts import AccountMergeConflictError
+
+    with pytest.raises(AccountMergeConflictError):
+        merge_account_identity(
+            db_session,
+            target.user["id"],
+            twitch_profile("overlap-source", "source@example.com"),
+            user_agent=None,
+            ip_address=None,
+        )
+
+    assert identity_count(db_session, target.user["id"]) == 1
+    assert identity_count(db_session, source.user["id"]) == 2
 
 
 def test_unlink_rejects_final_identity(db_session):

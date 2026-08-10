@@ -1,11 +1,14 @@
 import { memo, useMemo } from 'react';
 import type { SearchHit, Segment, TranscriptBlock } from '../../types/api';
-import { canonicalMomentId, formatTimestamp } from '../../features/archive/format';
-import type { TranscriptSource } from '../../features/archive/format';
+import {
+  canonicalMomentId,
+  formatTimestamp,
+  type TranscriptSource,
+} from '../../features/archive/format';
 
 type Props = {
-  source: TranscriptSource;
   blocks: TranscriptBlock[];
+  source: TranscriptSource;
   transcriptSegments: Segment[];
   hits: SearchHit[] | null;
   activeBlockIndex: number | null;

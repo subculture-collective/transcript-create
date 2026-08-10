@@ -19,12 +19,8 @@ export function readFilters(params: URLSearchParams): SearchFilters {
   return {
     q: params.get('q') ?? '',
     match_mode: (params.get('match_mode') as ArchiveSearchFilters['match_mode']) ?? 'topic',
-    source: (params.get('source') as ArchiveSearchFilters['source']) ?? undefined,
-    category: params.get('category') ?? undefined,
     date_from: params.get('date_from') ?? undefined,
     date_to: params.get('date_to') ?? undefined,
-    min_duration: params.get('min_duration') ? Number(params.get('min_duration')) : undefined,
-    max_duration: params.get('max_duration') ? Number(params.get('max_duration')) : undefined,
     sort_by: readSort(params.get('sort_by')),
     video_id: params.get('video_id') ?? undefined,
     limit: params.get('limit') ? Number(params.get('limit')) : undefined,
@@ -56,24 +52,16 @@ export function serializeFilters(filters: SearchFilters) {
 
 export function buildCurrentFilters(
   q: string,
-  source: ArchiveSearchFilters['source'],
   dateFrom: string,
   dateTo: string,
-  category: string,
-  minDuration: string,
-  maxDuration: string,
   sortBy: NonNullable<ArchiveSearchFilters['sort_by']>,
   existing: ArchiveSearchFilters & { video_id?: string; limit?: number; offset?: number }
 ) {
   return serializeFilters({
     q,
     match_mode: existing.match_mode,
-    source,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
-    category: category || undefined,
-    min_duration: minDuration ? Number(minDuration) : undefined,
-    max_duration: maxDuration ? Number(maxDuration) : undefined,
     sort_by: sortBy,
     video_id: existing.video_id,
     limit: existing.limit,

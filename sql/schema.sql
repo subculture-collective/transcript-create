@@ -146,6 +146,8 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS segments_text_tsv_idx ON segments USING GIN (text_tsv);
+CREATE INDEX IF NOT EXISTS segments_text_simple_tsv_idx
+    ON segments USING GIN (to_tsvector('simple', COALESCE(text, '')));
 
 -- Set video_id automatically when only transcript_id is provided on insert
 CREATE OR REPLACE FUNCTION segments_set_video_from_transcript() RETURNS trigger LANGUAGE plpgsql AS $set_video$
@@ -208,6 +210,8 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS youtube_segments_text_tsv_idx ON youtube_segments USING GIN (text_tsv);
+CREATE INDEX IF NOT EXISTS youtube_segments_text_simple_tsv_idx
+    ON youtube_segments USING GIN (to_tsvector('simple', COALESCE(text, '')));
 
 -- ---
 -- Users, sessions, and favorites for web frontend
@@ -253,13 +257,14 @@ CREATE TABLE IF NOT EXISTS oauth_requests (
     state_hash CHAR(64) NOT NULL UNIQUE,
     nonce_hash CHAR(64) NOT NULL,
     provider TEXT NOT NULL CHECK (provider IN ('google', 'twitch')),
-    intent TEXT NOT NULL CHECK (intent IN ('login', 'link')),
+    intent TEXT NOT NULL CHECK (intent IN ('login', 'link', 'merge')),
     link_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ,
+    CONSTRAINT oauth_requests_binding_check
     CHECK ((intent = 'login' AND link_user_id IS NULL)
-        OR (intent = 'link' AND link_user_id IS NOT NULL))
+        OR (intent IN ('link', 'merge') AND link_user_id IS NOT NULL))
 );
 CREATE INDEX IF NOT EXISTS oauth_requests_expiry_idx ON oauth_requests(expires_at);
 

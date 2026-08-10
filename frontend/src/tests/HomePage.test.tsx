@@ -6,6 +6,7 @@ import HomePage from '../routes/HomePage';
 import { renderWithProviders } from './test-utils';
 import { api } from '../services';
 import { http } from '../services/api';
+import { AuthProvider } from '../services/auth';
 
 function LocationProbe() {
   const location = useLocation();
@@ -111,8 +112,10 @@ describe('HomePage', () => {
 
     render(
       <MemoryRouter initialEntries={['/']}>
-        <HomePage />
-        <LocationProbe />
+        <AuthProvider>
+          <HomePage />
+          <LocationProbe />
+        </AuthProvider>
       </MemoryRouter>
     );
 

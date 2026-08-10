@@ -13,7 +13,7 @@ export function buildQuoteText(
   title: string,
   origin = window.location.origin
 ) {
-  const url = `${origin}${buildTimestampLink(videoId, moment.start_ms, moment.id)}`;
+  const url = `${origin}${buildTimestampLink(videoId, moment.start_ms, moment.source)}`;
   return `“${plainTextFromSnippet(moment.snippet, moment.highlights)}”\n\n— ${title}, ${formatTimestamp(moment.start_ms)}\n${url}`;
 }
 

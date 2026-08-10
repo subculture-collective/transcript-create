@@ -534,7 +534,7 @@ test("mobile navigation closes after selection and restores focus on Escape", as
   await expect(page.getByRole("button", { name: "Open menu" })).toBeFocused();
 });
 
-test("a shared filtered search restores the same state in a fresh browser profile", async ({
+test("a shared filtered search restores supported state and ignores retired filters", async ({
   browser,
   page,
 }) => {
@@ -562,10 +562,10 @@ test("a shared filtered search restores the same state in a fresh browser profil
     await expect(recipient.getByLabel("To", { exact: true })).toHaveValue(
       "2026-06-30",
     );
-    await expect(recipient.getByLabel("Transcript")).toHaveValue("native");
-    await expect(recipient.getByLabel("Category")).toHaveValue("politics");
-    await expect(recipient.getByLabel("Minimum seconds")).toHaveValue("10");
-    await expect(recipient.getByLabel("Maximum seconds")).toHaveValue("90");
+    await expect(recipient.getByLabel("Transcript")).toHaveCount(0);
+    await expect(recipient.getByLabel("Category")).toHaveCount(0);
+    await expect(recipient.getByLabel("Minimum seconds")).toHaveCount(0);
+    await expect(recipient.getByLabel("Maximum seconds")).toHaveCount(0);
     await expect(recipient.getByLabel("Sort")).toHaveValue("date_desc");
     await expect(recipient.getByText("labor rights").first()).toBeVisible();
   } finally {
@@ -600,7 +600,7 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   await openMoment.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(
-    new RegExp(`/v/${seededVideo.id}\\?t=12#seg-1$`),
+    new RegExp(`/v/${seededVideo.id}\\?t=12&source=whisper#moment-whisper-12000$`),
   );
 
   const sentence = page.getByRole("button", {
@@ -630,7 +630,7 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   await transcriptSearch.focus();
   await page.keyboard.type("rights");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\?t=12&q=rights$/);
+  await expect(page).toHaveURL(/\?t=12&source=whisper&q=rights$/);
   await expect(
     page.getByRole("button", { name: "Go to next match" }),
   ).toBeVisible();

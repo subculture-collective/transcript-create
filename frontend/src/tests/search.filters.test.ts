@@ -38,9 +38,7 @@ describe('search filters helpers', () => {
         limit: 25,
         offset: 50,
       }).toString()
-    ).toBe(
-      'q=hasan&source=native&category=news&date_from=2026-05-01&min_duration=120&sort_by=relevance&limit=25&offset=50'
-    );
+    ).toBe('q=hasan&date_from=2026-05-01&sort_by=relevance&limit=25&offset=50');
   });
 
   it('builds save-search filters without stale blanks', () => {

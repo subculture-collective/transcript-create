@@ -188,6 +188,7 @@ describe('auth service', () => {
       );
 
       await screen.findByText('initial@example.com');
+      await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'));
       fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
       await waitFor(() => expect(resolveOlder).toBeDefined());
       fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));

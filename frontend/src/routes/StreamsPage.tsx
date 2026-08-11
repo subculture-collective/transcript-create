@@ -27,6 +27,7 @@ export default function StreamsPage() {
   }, [filters.q, filters.dateFrom, filters.dateTo]);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
@@ -40,18 +41,21 @@ export default function StreamsPage() {
         date_from: filters.dateFrom || undefined,
         date_to: filters.dateTo || undefined,
         category: undefined,
-      })
+      }, controller.signal)
       .then((response) => {
         setItems(response.items);
         setPageInfo(response.page_info);
       })
       .catch((err: unknown) => {
-        console.error('Failed to load stream library', err);
-        setError('Failed to load VODs.');
-        setItems([]);
-        setPageInfo(null);
+        if (!controller.signal.aborted) {
+          console.error('Failed to load stream library', err);
+          setError('Failed to load VODs.');
+          setItems([]);
+          setPageInfo(null);
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [filters.dateFrom, filters.dateTo, filters.q, offset]);
 
   const totalCount = pageInfo?.total_count ?? items.length;

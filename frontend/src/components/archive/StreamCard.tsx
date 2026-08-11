@@ -35,10 +35,10 @@ export default function StreamCard({ video, dateField }: StreamCardProps) {
           className="aspect-video w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
         />
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-3 py-2 text-xs text-white">
-          <span className="inline-flex items-center justify-center rounded-full bg-black/60 px-2 pb-[3px] pt-[7px] text-center font-medium leading-none backdrop-blur">
+          <span className="inline-flex items-center justify-center rounded-full bg-black/60 px-2 py-1 text-center font-medium leading-none backdrop-blur">
             {formatDuration(video.duration_seconds)}
           </span>
-          <span className="inline-flex items-center justify-center rounded-full bg-black/60 px-2 pb-[3px] pt-[7px] text-center font-medium leading-none backdrop-blur">
+          <span className="inline-flex items-center justify-center rounded-full bg-black/60 px-2 py-1 text-center font-medium leading-none backdrop-blur">
             {formatDate(dateValue ?? null)}
           </span>
         </div>

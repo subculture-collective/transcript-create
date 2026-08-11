@@ -1,5 +1,5 @@
 import type { Segment } from '../../types/api';
-import type { TranscriptTurn } from '../../features/videoTranscript/transcript';
+import type { TranscriptTurn, normalizeTranscriptText } from '../../features/videoTranscript/transcript';
 import {
   canonicalMomentId,
   formatTimestamp,
@@ -17,19 +17,8 @@ type Props = {
   onCopyQuote: (segment: Segment, text: string, segIndex: number) => void;
 };
 
-function msToHms(ms: number) {
-  const total = Math.floor(ms / 1000);
-  const hh = Math.floor(total / 3600)
-    .toString()
-    .padStart(2, '0');
-  const mm = Math.floor((total % 3600) / 60)
-    .toString()
-    .padStart(2, '0');
-  const ss = (total % 60).toString().padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
-}
-
-export default function PlainTranscriptTurns({
+onCopyQuote,
+}: Props) {
   turns,
   source,
   activeSegId,
@@ -76,12 +65,9 @@ export default function PlainTranscriptTurns({
                         data-end-ms={seg.end_ms}
                         onClick={() => onClickSegment(seg, id)}
                         className={`transcript-sentence mx-0.5 text-left ${activeSegId === id ? 'transcript-sentence-active' : ''} ${match ? 'transcript-sentence-match' : ''} ${saved ? 'underline decoration-warning decoration-2 underline-offset-4' : ''}`}
-                        aria-label={`Play ${turn.speaker ?? 'paragraph'} from ${msToHms(seg.start_ms)}`}
+                        aria-label={`Play ${turn.speaker ?? 'paragraph'} from ${formatTimestamp(seg.start_ms)}`}
                       >
-                        {seg.text
-                          .replace(/\s+/g, ' ')
-                          .replace(/\s+([,.!?;:])/g, '$1')
-                          .trim()}{' '}
+                        {normalizeTranscriptText(seg.text)}{' '}
                       </button>
                     </span>
                   );

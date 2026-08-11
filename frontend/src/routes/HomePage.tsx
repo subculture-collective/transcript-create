@@ -20,14 +20,18 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     api
-      .getArchiveSummary()
+      .getArchiveSummary({ signal: controller.signal })
       .then(setSummary)
       .catch((err: unknown) => {
-        console.error('Failed to load archive summary', err);
-        setSummary(null);
+        if (!controller.signal.aborted) {
+          console.error('Failed to load archive summary', err);
+          setSummary(null);
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, []);
 
   function onSubmit(event: React.FormEvent) {

@@ -1,4 +1,4 @@
-import { lazy, StrictMode } from 'react';
+import { Component, lazy, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
@@ -6,6 +6,35 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import AppLayout from './routes/AppLayout';
 import { AuthProvider, queryClient, ThemeProvider } from './services';
 import { NotFoundPage, PageSuspense as Page, RouteErrorPage } from './routes/RouteStates';
+
+function RouteErrorFallback() {
+  return (
+    <section className="mx-auto max-w-2xl p-8" role="alert">
+      <div className="archive-eyebrow">Render error</div>
+      <h1 className="mt-3 text-3xl font-semibold text-ink">Something went wrong</h1>
+      <p className="mt-3 text-muted">An unexpected error occurred. Try refreshing the page.</p>
+      <div className="mt-6 flex gap-3">
+        <button className="btn" onClick={() => window.location.reload()}>
+          Retry
+        </button>
+      </div>
+    </section>
+  );
+}
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }> {
+  state: { hasError: boolean } = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown, info: unknown) {
+    console.error('Root ErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) return <RouteErrorFallback />;
+    return this.props.children;
+  }
+}
 
 const HomePage = lazy(() => import('./routes/HomePage'));
 const SearchPage = lazy(() => import('./routes/SearchPage'));
@@ -195,7 +224,9 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RouterProvider router={router} />
+          <ErrorBoundary>
+            <RouterProvider router={router} />
+          </ErrorBoundary>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>

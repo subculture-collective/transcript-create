@@ -156,7 +156,7 @@ export default function FavoritesPage() {
       </section>
 
       {feedback && (
-        <div className="alert-warning" role="status">
+        <div className="alert-warning" role="alert">
           {feedback}
         </div>
       )}

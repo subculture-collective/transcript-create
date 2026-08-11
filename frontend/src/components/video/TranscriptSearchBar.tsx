@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react';
+import { type FormEvent, useState } from 'react';
 
 type Props = {
   initialQuery: string;
@@ -6,11 +6,11 @@ type Props = {
 };
 
 export default function TranscriptSearchBar({ initialQuery, onSearch }: Props) {
+  const [value, setValue] = useState(initialQuery);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    onSearch(String(data.get('transcript-search') ?? '').trim());
+    onSearch(value.trim());
   }
 
   return (
@@ -37,7 +37,8 @@ export default function TranscriptSearchBar({ initialQuery, onSearch }: Props) {
         id="transcript-search"
         name="transcript-search"
         type="search"
-        defaultValue={initialQuery}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
         placeholder="Find a phrase in this episode"
         className="h-12 w-full rounded-lg border border-border bg-canvas/60 pl-11 pr-28 text-ink placeholder:text-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
         aria-label="Search inside this VOD"

@@ -206,8 +206,8 @@ export const api = {
       .get('search/suggestions', { searchParams, signal })
       .json<SearchSuggestionsResponse>();
   },
-  async getArchiveSummary() {
-    return http.get('archive/summary').json<ArchiveSummary>();
+  async getArchiveSummary(signal?: AbortSignal) {
+    return http.get('archive/summary', { signal }).json<ArchiveSummary>();
   },
   async getTimeline() {
     const response = await http.get('archive/timeline').json<TimelineResponse | TimelineBucket[]>();
@@ -293,7 +293,7 @@ export const api = {
       .json<PaginatedVideos | VideoInfo[]>();
     return normalizeVideosResponse(response).items;
   },
-  async listStreamLibrary(filters: StreamLibraryFilters = {}) {
+  async listStreamLibrary(filters: StreamLibraryFilters = {}, signal?: AbortSignal) {
     const searchParams: Record<string, string> = {
       limit: String(filters.limit ?? 24),
       offset: String(filters.offset ?? 0),
@@ -306,7 +306,7 @@ export const api = {
     if (filters.date_to) searchParams.date_to = filters.date_to;
     if (filters.category) searchParams.category = filters.category;
     const response = await http
-      .get('videos', { searchParams })
+      .get('videos', { searchParams, signal })
       .json<PaginatedVideos | VideoInfo[]>();
     return normalizeVideosResponse(response);
   },

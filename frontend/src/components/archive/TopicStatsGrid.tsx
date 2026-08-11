@@ -47,7 +47,7 @@ export default function TopicStatsGrid({ mentionMap, topic, loading }: TopicStat
               <Link
                 key={term}
                 to={`/topics/${encodeURIComponent(term)}`}
-                className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-2 pb-[3px] pt-[7px] text-center leading-none hover:border-accent"
+                className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-2 py-1 text-center leading-none hover:border-accent"
               >
                 {term}
               </Link>

@@ -341,11 +341,9 @@ export default function VideoPage() {
     });
     return ids;
   }, [transcript, hits]);
-  const matchIndicesKey = useMemo(() => matchIndices.join(','), [matchIndices]);
-  const [matchCursor, setMatchCursor] = useState(0);
   useEffect(() => {
     setMatchCursor(0);
-  }, [matchIndicesKey]);
+  }, [matchIndices]);
 
   useEffect(() => {
     if (params.get('play') !== 'matches' || matchIndices.length === 0 || !transcript) return;

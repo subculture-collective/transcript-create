@@ -400,7 +400,7 @@ describe('FavoritesPage accessibility', () => {
     });
     resolveSave?.(saved);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Search saved and synchronized.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Search saved and synchronized.');
     expect(screen.getByRole('button', { name: 'Save search' })).toHaveFocus();
     expect(screen.getByText('rent')).toBeVisible();
   });
@@ -422,7 +422,7 @@ describe('FavoritesPage accessibility', () => {
     await user.type(screen.getByLabelText('Query'), 'rent');
     await user.click(screen.getByRole('button', { name: 'Save search' }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
+    expect(await screen.findByRole('alert')).toHaveTextContent(
       'The search could not be saved. Try again.'
     );
     expect(screen.getByText('No saved searches yet.')).toBeVisible();

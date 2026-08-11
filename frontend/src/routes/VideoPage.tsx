@@ -341,6 +341,7 @@ export default function VideoPage() {
     });
     return ids;
   }, [transcript, hits]);
+  const [matchCursor, setMatchCursor] = useState(0);
   useEffect(() => {
     setMatchCursor(0);
   }, [matchIndices]);
@@ -361,7 +362,7 @@ export default function VideoPage() {
         0
       );
     }
-  }, [matchIndicesKey, matchIndices, params, startSeconds, transcript]);
+  }, [matchIndices, params, startSeconds, transcript]);
   const formattedBlocks = useMemo(
     () => transcript?.blocks?.filter((block) => block.text.trim()) ?? [],
     [transcript?.blocks]

@@ -1,5 +1,8 @@
 import type { Segment } from '../../types/api';
-import type { TranscriptTurn, normalizeTranscriptText } from '../../features/videoTranscript/transcript';
+import {
+  normalizeTranscriptText,
+  type TranscriptTurn,
+} from '../../features/videoTranscript/transcript';
 import {
   canonicalMomentId,
   formatTimestamp,
@@ -17,8 +20,7 @@ type Props = {
   onCopyQuote: (segment: Segment, text: string, segIndex: number) => void;
 };
 
-onCopyQuote,
-}: Props) {
+export default function PlainTranscriptTurns({
   turns,
   source,
   activeSegId,

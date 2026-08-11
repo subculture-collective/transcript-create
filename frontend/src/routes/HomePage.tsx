@@ -22,7 +22,7 @@ export default function HomePage() {
   useEffect(() => {
     const controller = new AbortController();
     api
-      .getArchiveSummary({ signal: controller.signal })
+      .getArchiveSummary(controller.signal)
       .then(setSummary)
       .catch((err: unknown) => {
         if (!controller.signal.aborted) {
@@ -30,7 +30,9 @@ export default function HomePage() {
           setSummary(null);
         }
       })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, []);
 

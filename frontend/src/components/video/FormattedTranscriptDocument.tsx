@@ -73,7 +73,7 @@ function buildSentencePieces(
     const lastId = currentIds[currentIds.length - 1];
     const firstSegment = transcriptSegments[firstId];
     const lastSegment = transcriptSegments[lastId] ?? firstSegment;
-    const text = normalizeSentenceText(currentText.join(' '));
+    const text = normalizeTranscriptText(currentText.join(' '));
     if (firstSegment && text) {
       pieces.push({
         id: `${block.block_index}-${firstId}-${lastId}`,
@@ -92,7 +92,7 @@ function buildSentencePieces(
   for (const segId of block.segment_ids) {
     const segment = transcriptSegments[segId];
     if (!segment) continue;
-    const text = normalizeSentenceText(segment.text);
+    const text = normalizeTranscriptText(segment.text);
     if (!text) continue;
 
     const segmentSentences = splitIntoSentences(text);
@@ -129,7 +129,7 @@ function buildSentencePieces(
     : [
         {
           id: `${block.block_index}-fallback`,
-          text: normalizeSentenceText(block.text),
+          text: normalizeTranscriptText(block.text),
           startMs: block.start_ms,
           endMs: block.end_ms,
           segmentIds: block.segment_ids,

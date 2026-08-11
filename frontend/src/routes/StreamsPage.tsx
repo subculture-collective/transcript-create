@@ -32,16 +32,19 @@ export default function StreamsPage() {
     setError(null);
 
     api
-      .listStreamLibrary({
-        limit: DEFAULT_LIMIT,
-        offset,
-        completed_only: false,
-        q: filters.q || undefined,
-        date_field: 'uploaded_at',
-        date_from: filters.dateFrom || undefined,
-        date_to: filters.dateTo || undefined,
-        category: undefined,
-      }, controller.signal)
+      .listStreamLibrary(
+        {
+          limit: DEFAULT_LIMIT,
+          offset,
+          completed_only: false,
+          q: filters.q || undefined,
+          date_field: 'uploaded_at',
+          date_from: filters.dateFrom || undefined,
+          date_to: filters.dateTo || undefined,
+          category: undefined,
+        },
+        controller.signal
+      )
       .then((response) => {
         setItems(response.items);
         setPageInfo(response.page_info);
@@ -54,7 +57,9 @@ export default function StreamsPage() {
           setPageInfo(null);
         }
       })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, [filters.dateFrom, filters.dateTo, filters.q, offset]);
 

@@ -113,7 +113,8 @@ describe('StreamsPage', () => {
         offset: 0,
         completed_only: false,
         date_field: 'uploaded_at',
-      })
+      }),
+      expect.any(AbortSignal)
     );
 
     await user.click(screen.getByRole('button', { name: /next page/i }));
@@ -128,7 +129,8 @@ describe('StreamsPage', () => {
         offset: 24,
         completed_only: false,
         date_field: 'uploaded_at',
-      })
+      }),
+      expect.any(AbortSignal)
     );
     expect(screen.getByText('Second stream')).toBeInTheDocument();
   });
@@ -160,7 +162,8 @@ describe('StreamsPage', () => {
           date_field: 'uploaded_at',
           date_from: '2026-05-01',
           date_to: '2026-05-31',
-        })
+        }),
+        expect.any(AbortSignal)
       );
     });
 

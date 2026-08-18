@@ -110,6 +110,26 @@ class TestTranscribeChunkFasterWhisper:
 
     @patch("worker.whisper_runner._get_model")
     @patch("worker.whisper_runner.settings")
+    def test_transcription_prompt_biases_recurring_archive_terms(self, mock_settings, mock_get_model, tmp_path):
+        mock_settings.WHISPER_BACKEND = "faster-whisper"
+        mock_model = Mock()
+        mock_model.transcribe.return_value = ([], Mock())
+        mock_get_model.return_value = mock_model
+        wav_path = tmp_path / "test.wav"
+        wav_path.touch()
+
+        whisper_runner.transcribe_chunk(
+            wav_path,
+            **TRANSCRIBE_KWARGS,
+            initial_prompt="Hasan Piker, HasanAbi, Oliver Larkin, Melat Kiros, Enbies, pre-noon",
+        )
+
+        assert mock_model.transcribe.call_args.kwargs["initial_prompt"] == (
+            "Hasan Piker, HasanAbi, Oliver Larkin, Melat Kiros, Enbies, pre-noon"
+        )
+
+    @patch("worker.whisper_runner._get_model")
+    @patch("worker.whisper_runner.settings")
     def test_transcribe_chunk_faster_whisper_success(self, mock_settings, mock_get_model, tmp_path):
         """Test successful transcription with faster-whisper."""
         mock_settings.WHISPER_BACKEND = "faster-whisper"

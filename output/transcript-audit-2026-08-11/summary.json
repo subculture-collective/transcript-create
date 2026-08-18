@@ -1,0 +1,28 @@
+{
+  "sampled_videos": 40,
+  "sampled_sections": 200,
+  "flagged_sections": 37,
+  "flagged_share": 0.185,
+  "name_rows": 347,
+  "canonical_name_rows": 20,
+  "unverified_name_rows": 327,
+  "possible_name_mistranscriptions": 11,
+  "sample_positions": [
+    0.05,
+    0.27,
+    0.5,
+    0.73,
+    0.95
+  ],
+  "issue_counts": {
+    "caption disagreement": 12,
+    "lower caption agreement": 17,
+    "Whisper missed captioned speech": 5,
+    "strong caption disagreement": 1,
+    "known name variant": 2,
+    "heavy repetition": 1
+  },
+  "minimum_uploaded_date": "2021-04-19",
+  "maximum_uploaded_date": "2026-08-05",
+  "method_note": "Flags are screening signals. YouTube captions are a comparison source, not ground truth."
+}

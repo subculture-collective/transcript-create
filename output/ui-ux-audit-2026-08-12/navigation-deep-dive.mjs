@@ -1,0 +1,34 @@
+import playwright from '../../e2e/node_modules/@playwright/test/index.js';
+import fs from 'node:fs/promises';
+const { chromium } = playwright;
+const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true });
+const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+await context.route('**/api/**', async (route) => {
+  const target = new URL(route.request().url());
+  target.protocol='http:'; target.hostname='10.0.0.200'; target.port='41177'; target.pathname=target.pathname.replace(/^\/api(?=\/|$)/,'');
+  await route.fulfill({ response: await route.fetch({ url: target.href }) });
+});
+const page = await context.newPage();
+const result = {};
+await page.goto('http://10.0.0.200:5173/episodes', { waitUntil: 'networkidle' });
+const third = page.locator('section[aria-label="Stream results"] > a').nth(2);
+await third.scrollIntoViewIfNeeded();
+result.beforeCardClick = await page.evaluate(() => ({ scrollY, focus: document.activeElement?.tagName, title: document.title }));
+await third.tap();
+await page.waitForURL(/\/v\//);
+await page.waitForTimeout(500);
+result.afterCardClick = await page.evaluate(() => ({ scrollY, focus: document.activeElement?.tagName, focusText: document.activeElement?.textContent?.trim().slice(0,100), h1: document.querySelector('h1')?.textContent?.trim(), title: document.title }));
+await page.goBack({ waitUntil: 'networkidle' });
+await page.waitForTimeout(500);
+result.afterBack = await page.evaluate(() => ({ scrollY, focus: document.activeElement?.tagName, focusText: document.activeElement?.textContent?.trim().slice(0,100), title: document.title }));
+
+await page.goto('http://10.0.0.200:5173/', { waitUntil: 'networkidle' });
+const input = page.getByRole('searchbox', { name: /search the hasanabi archive/i });
+await input.fill('housing');
+await input.press('Enter');
+await page.waitForURL(/\/search/);
+await page.waitForTimeout(500);
+result.afterSearchSubmit = await page.evaluate(() => ({ scrollY, focus: document.activeElement?.tagName, focusText: document.activeElement?.textContent?.trim().slice(0,100), h1: document.querySelector('h1')?.textContent?.trim(), title: document.title }));
+await fs.writeFile(new URL('./navigation-deep-dive.json', import.meta.url), JSON.stringify(result, null, 2));
+console.log(JSON.stringify(result, null, 2));
+await browser.close();

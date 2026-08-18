@@ -174,7 +174,15 @@ def _get_ct2_fallback_model():
     return _fallback_ct2_model
 
 
-def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, word_timestamps=None, vad_filter=None):
+def transcribe_chunk(
+    wav_path,
+    language=None,
+    beam_size=None,
+    temperature=None,
+    word_timestamps=None,
+    vad_filter=None,
+    initial_prompt=None,
+):
     """Transcribe audio chunk with Whisper.
 
     Args:
@@ -184,6 +192,7 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
         temperature: Sampling temperature (default: from settings or 0.0)
         word_timestamps: Extract word-level timestamps (default: from settings)
         vad_filter: Voice Activity Detection filter (default: from settings, faster-whisper only)
+        initial_prompt: Vocabulary and style hint supplied to the decoder
 
     Returns:
         Tuple of (segments_list, language_info_dict)
@@ -201,6 +210,8 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
         language = getattr(settings, "WHISPER_LANGUAGE", None) or None
     if vad_filter is None:
         vad_filter = getattr(settings, "WHISPER_VAD_FILTER", False)
+    if initial_prompt is None:
+        initial_prompt = getattr(settings, "WHISPER_INITIAL_PROMPT", "") or None
 
     logger.info(
         "Transcribing %s (lang=%s, beam=%d, temp=%.1f, word_ts=%s, vad=%s)",
@@ -261,6 +272,8 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
                 transcribe_kwargs["language"] = language
             if word_timestamps:
                 transcribe_kwargs["word_timestamps"] = True
+            if initial_prompt:
+                transcribe_kwargs["initial_prompt"] = initial_prompt
 
             if sdp_ctx:
                 with sdp_ctx():
@@ -281,6 +294,8 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
                     ct2_kwargs["language"] = language
                 if word_timestamps:
                     ct2_kwargs["word_timestamps"] = True
+                if initial_prompt:
+                    ct2_kwargs["initial_prompt"] = initial_prompt
                 segments, info = ct2.transcribe(str(wav_path), **ct2_kwargs)
                 detected_language = info.language if hasattr(info, "language") else None
                 language_probability = info.language_probability if hasattr(info, "language_probability") else None
@@ -333,6 +348,8 @@ def transcribe_chunk(wav_path, language=None, beam_size=None, temperature=None, 
             ct2_kwargs["word_timestamps"] = True
         if vad_filter:
             ct2_kwargs["vad_filter"] = True
+        if initial_prompt:
+            ct2_kwargs["initial_prompt"] = initial_prompt
 
         segments, info = model.transcribe(str(wav_path), **ct2_kwargs)
         logger.debug("Transcribe info: %s", info)

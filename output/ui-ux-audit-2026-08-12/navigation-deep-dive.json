@@ -1,0 +1,27 @@
+{
+  "beforeCardClick": {
+    "scrollY": 1225,
+    "focus": "BODY",
+    "title": "HasanAra"
+  },
+  "afterCardClick": {
+    "scrollY": 447,
+    "focus": "BODY",
+    "focusText": "Skip to main contentHasanAraBroadcast archiveHomeSearchExploreTimelineVODsSavedGoogleTwitchArchive/E",
+    "h1": "HasanAbi broadcast — August 8, 2026",
+    "title": "HasanAbi broadcast — August 8, 2026 | HasanAra"
+  },
+  "afterBack": {
+    "scrollY": 1225,
+    "focus": "BODY",
+    "focusText": "Skip to main contentHasanAraBroadcast archiveHomeSearchExploreTimelineVODsSavedGoogleTwitchVOD libra",
+    "title": "HasanAbi broadcast — August 8, 2026 | HasanAra"
+  },
+  "afterSearchSubmit": {
+    "scrollY": 0,
+    "focus": "BODY",
+    "focusText": "Skip to main contentHasanAraBroadcast archiveHomeSearchExploreTimelineVODsSavedGoogleTwitchTranscrip",
+    "h1": "Search the record.",
+    "title": "HasanAra"
+  }
+}

@@ -1,0 +1,7 @@
+issue_type,flagged_sections,sampled_sections,share
+lower caption agreement,17,200,0.085
+caption disagreement,12,200,0.06
+Whisper missed captioned speech,5,200,0.025
+known name variant,2,200,0.01
+strong caption disagreement,1,200,0.005
+heavy repetition,1,200,0.005

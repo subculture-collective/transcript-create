@@ -1,4 +1,4 @@
-from worker.vocabulary import load_vocabularies
+from worker.vocabulary import apply_vocabulary_corrections, load_vocabularies
 
 
 class _Result:
@@ -53,3 +53,36 @@ def test_worker_fails_if_a_selected_vocabulary_disappeared():
         assert "unavailable" in str(error)
     else:
         raise AssertionError("missing selected vocabulary must fail the worker stage")
+
+
+def test_archive_vocabulary_corrects_recurring_hasanabi_intro_without_job_selection():
+    connection = _Connection()
+    segments = [
+        {
+            "start": 952.0,
+            "end": 960.0,
+            "text": (
+                "fantastic evening, afternoon, pre-new. I'm a Sompiker. "
+                "And this thoughts and I'm broadcast. All the boys, girls and MPs. "
+                "We condemn Hassan Hassan Habib Piker."
+            ),
+        }
+    ]
+
+    corrected = apply_vocabulary_corrections(connection, segments, None, [])
+
+    assert corrected[0]["text"] == (
+        "fantastic evening, afternoon, pre-noon. I'm Hasan Piker. "
+        "And this is the HasanAbi broadcast. All the boys, girls and Enbies. "
+        "We condemn Hasan HasanAbi Piker."
+    )
+    assert corrected[0]["start"] == 952.0
+    assert connection.calls == []
+
+
+def test_archive_vocabulary_corrects_recurring_guest_names():
+    segments = [{"text": "Oliver Largan spoke with Amela Keros."}]
+
+    corrected = apply_vocabulary_corrections(_Connection(), segments, None, [])
+
+    assert corrected[0]["text"] == "Oliver Larkin spoke with Melat Kiros."

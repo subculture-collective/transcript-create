@@ -51,9 +51,9 @@ release.
 
 - Owner: backend maintainers
 - Approved: 2026-08-07
-- Reassessed: 2026-08-09; Lightning 2.6.5 remains the latest PyPI release and
+- Reassessed: 2026-08-30; Lightning 2.6.5 remains the latest PyPI release and
   no patched wheel is available
-- Expires: 2026-08-23
+- Expires: 2026-09-06
 - Required action: upgrade to the first compatible patched Lightning release
   and remove the exact ignore immediately
 
@@ -61,18 +61,20 @@ release.
 diarization worker images. It requires local invocation of `torch.jit.script`.
 HasanAra accepts audio/video input, never user model artifacts, and does not
 call that compiler API; CI fails if the call appears. Model identifiers and
-runtime configuration remain operator-controlled. The advisory is scored low
-and has no patched release. A centralized UTC date and AST-based call check
+runtime configuration remain operator-controlled. The advisory is scored low.
+Torch 2.13.0 is patched, but the production ML image remains pinned to 2.11.0
+until the CUDA, pyannote, and GTX 1080 runtime matrix is qualified. A centralized
+UTC date and AST-based call check
 causes CI to fail when the exception expires or the compiler call is introduced
 through either qualified or imported-alias syntax.
 
 - Owner: backend maintainers
 - Approved: 2026-07-10
-- Reassessed: 2026-08-09; no patched release is available and the guarded API
-  remains unreachable in the application source
-- Expires: 2026-08-23
-- Required action: reassess upstream fixes and remove the exact ignore as
-  soon as a compatible patched wheel is published
+- Reassessed: 2026-08-30; Torch 2.13.0 is patched, the guarded API remains
+  unreachable, and the production GPU compatibility upgrade is not yet qualified
+- Expires: 2026-09-06
+- Required action: qualify Torch and TorchAudio 2.13.0 on every production ML
+  image and remove the exact ignore before expiry
 
 `1130588` and `1130589` / `GHSA-mh99-v99m-4gvg`, plus `1130736` and
 `1130737` / `GHSA-rgw5-rvv9-x895`, affect only the exact dev-only
@@ -85,11 +87,12 @@ does not blanket-ignore dev dependencies or other high/critical findings.
 
 - Owner: frontend maintainers
 - Approved: 2026-07-24
-- Reassessed: 2026-08-09; the lockfile paths remain dev-only and the recursive
-  audit graph and production-reachability checks remain green
-- Expires: 2026-08-23 UTC
-- Required action: update or remove the transitive dependency and delete this
-  exception and its exact dev-only lockfile check
+- Reassessed: 2026-08-30; the lockfile paths remain dev-only, the recursive
+  audit graph and production-reachability checks remain green, and patched
+  transitive versions are available
+- Expires: 2026-09-06 UTC
+- Required action: update the three transitive lockfile nodes and delete this
+  exception and its exact dev-only lockfile check before expiry
 
 A future exception must identify the advisory, affected package and path,
 reachability evidence, compensating control, owner, approval date, and an

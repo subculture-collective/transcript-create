@@ -123,7 +123,7 @@ tqdm==4.67.1
 triton==3.5.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
-tzdata==2025.2
+tzdata==2026.3
 urllib3==2.5.0
 uvicorn==0.38.0
 uvloop==0.22.1

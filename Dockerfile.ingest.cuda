@@ -8,18 +8,36 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-RUN apt-get update \
-    && apt-get install -y --only-upgrade --no-install-recommends \
+RUN printf '%s\n' \
+        'Acquire::Retries "2";' \
+        'Acquire::https::Timeout "60";' \
+        > /etc/apt/apt.conf.d/80-retries \
+    && printf '%s\n' \
+        '#!/bin/sh' \
+        'set -eu' \
+        'attempt=1' \
+        'while ! apt-get "$@"; do' \
+        '    if [ "$attempt" -ge 12 ]; then' \
+        '        exit 1' \
+        '    fi' \
+        '    attempt=$((attempt + 1))' \
+        '    sleep 2' \
+        'done' \
+        > /usr/local/bin/apt-get-retry \
+    && chmod +x /usr/local/bin/apt-get-retry
+
+RUN apt-get-retry update \
+    && apt-get-retry install -y --only-upgrade --no-install-recommends \
         cuda-compat-12-8
-RUN apt-get install -y --only-upgrade --no-install-recommends \
+RUN apt-get-retry install -y --only-upgrade --no-install-recommends \
         cuda-nvrtc-12-8
-RUN apt-get install -y --only-upgrade --no-install-recommends \
+RUN apt-get-retry install -y --only-upgrade --no-install-recommends \
         libcurand-12-8 \
         libnvjitlink-12-8
-RUN apt-get install -y --only-upgrade --no-install-recommends libcufft-12-8
-RUN apt-get install -y --only-upgrade --no-install-recommends libcusolver-12-8
-RUN apt-get install -y --only-upgrade --no-install-recommends libcusparse-12-8
-RUN apt-get install -y --only-upgrade --no-install-recommends \
+RUN apt-get-retry install -y --only-upgrade --no-install-recommends libcufft-12-8
+RUN apt-get-retry install -y --only-upgrade --no-install-recommends libcusolver-12-8
+RUN apt-get-retry install -y --only-upgrade --no-install-recommends libcusparse-12-8
+RUN apt-get-retry install -y --only-upgrade --no-install-recommends \
         libnpp-12-8 \
         cuda-cudart-12-8 \
         cuda-nvtx-12-8 \
@@ -30,8 +48,8 @@ RUN apt-get install -y --only-upgrade --no-install-recommends \
         libcufile-12-8 \
         libnvfatbin-12-8 \
         libnvjpeg-12-8
-RUN apt-get upgrade -y --no-install-recommends
-RUN apt-get install -y --no-install-recommends \
+RUN apt-get-retry upgrade -y --no-install-recommends
+RUN apt-get-retry install -y --no-install-recommends \
         ffmpeg \
         python3 \
         python3-pip \

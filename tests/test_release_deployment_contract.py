@@ -160,8 +160,17 @@ def test_patched_runtime_dependency_pins_match_all_release_inputs() -> None:
 
 def test_ingest_image_applies_available_base_security_updates() -> None:
     dockerfile = (ROOT / "Dockerfile.ingest.cuda").read_text(encoding="utf-8")
-    assert "apt-get update" in dockerfile
-    assert "apt-get upgrade -y --no-install-recommends" in dockerfile
+    assert "apt-get-retry update" in dockerfile
+    assert "apt-get-retry upgrade -y --no-install-recommends" in dockerfile
+
+
+def test_ingest_image_retries_transient_cuda_repository_fetches() -> None:
+    dockerfile = (ROOT / "Dockerfile.ingest.cuda").read_text(encoding="utf-8")
+    assert 'Acquire::Retries "2";' in dockerfile
+    assert 'Acquire::https::Timeout "60";' in dockerfile
+    assert 'while ! apt-get "$@"; do' in dockerfile
+    assert '[ "$attempt" -ge 12 ]' in dockerfile
+    assert dockerfile.count("apt-get-retry install") >= 8
 
 
 def test_ingest_image_splits_cuda_upgrades_for_registry_uploads() -> None:
@@ -963,6 +972,16 @@ def test_release_images_use_clean_python_packages_and_pinned_go_sources() -> Non
         assert value in postgres_walg
     assert "releases/download" not in postgres_walg
     assert "--ignore" not in postgres_walg
+
+
+def test_walg_build_overrides_and_verifies_patched_x_crypto() -> None:
+    dockerfile = (ROOT / "Dockerfile.postgres-walg").read_text(encoding="utf-8")
+    assert "ARG WALG_X_CRYPTO_VERSION=v0.55.0" in dockerfile
+    assert 'go mod edit -require="golang.org/x/crypto@${WALG_X_CRYPTO_VERSION}"' in dockerfile
+    assert "go mod tidy" in dockerfile
+    assert 'go list -mod=mod -m -f "{{.Version}}" golang.org/x/crypto' in dockerfile
+    assert '"${WALG_X_CRYPTO_VERSION}"' in dockerfile
+    assert "GOEXPERIMENT=jsonv2 CGO_ENABLED=0 go build -mod=readonly -trimpath" in dockerfile
 
 
 def test_cuda_constraints_override_networkx_for_python_310() -> None:

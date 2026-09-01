@@ -111,7 +111,7 @@ describe('StreamsPage', () => {
     expect(screen.getByText(/Guest One · Chadvice/)).toBeInTheDocument();
     expect(listMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        limit: 12,
+        limit: 24,
         cursor: undefined,
         date_field: 'uploaded_at',
       }),
@@ -126,7 +126,7 @@ describe('StreamsPage', () => {
 
     expect(listMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        limit: 12,
+        limit: 24,
         cursor: 'next-cursor',
         date_field: 'uploaded_at',
       }),

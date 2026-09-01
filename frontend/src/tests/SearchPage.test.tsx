@@ -346,7 +346,7 @@ describe('SearchPage', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Timestamp link copied.');
     expect(writeText).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('/v/video-1?t=12&source=whisper#moment-whisper-12000')
+      expect.stringContaining('/v/video-1?t=12#moment-12000')
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Copy quote' }));

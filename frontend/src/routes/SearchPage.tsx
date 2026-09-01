@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -102,7 +102,8 @@ function ResultHeader({
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams();
-  const filters = useMemo(() => readFilters(params), [params]);
+  const searchKey = params.toString();
+  const filters = useMemo(() => readFilters(new URLSearchParams(searchKey)), [searchKey]);
   const [q, setQ] = useState(filters.q);
   const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
   const [dateTo, setDateTo] = useState(filters.date_to ?? '');
@@ -129,13 +130,13 @@ export default function SearchPage() {
   } = useArchiveSearch(filters);
   const canSubmitSearch = Boolean(q.trim());
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setQ(filters.q);
     setDateFrom(filters.date_from ?? '');
     setDateTo(filters.date_to ?? '');
     setMatchMode(filters.match_mode ?? 'topic');
     setSortBy(filters.sort_by ?? 'relevance');
-  }, [filters]);
+  }, [filters.date_from, filters.date_to, filters.match_mode, filters.q, filters.sort_by]);
 
   const error = actionError ?? queryError;
 

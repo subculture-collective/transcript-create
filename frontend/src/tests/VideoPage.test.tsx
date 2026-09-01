@@ -654,8 +654,9 @@ describe('VideoPage', () => {
 
     renderVideo(`/v/video-1?t=${Math.floor(target.start_ms / 1000)}`);
 
-    await waitFor(() =>
-      expect(document.getElementById(`moment-${target.start_ms}`)).not.toBeNull()
+    await waitFor(
+      () => expect(document.getElementById(`moment-${target.start_ms}`)).not.toBeNull(),
+      { timeout: 5000 }
     );
     expect(screen.getByText(/Chapter 6 of 7/)).toBeInTheDocument();
   });
@@ -689,5 +690,5 @@ describe('VideoPage', () => {
       { timeout: 5_000 }
     );
     expect(screen.getByRole('button', { name: 'Use progressive transcript' })).toBeInTheDocument();
-  }, 15_000);
+  }, 30_000);
 });

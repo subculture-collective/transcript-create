@@ -104,13 +104,20 @@ export function canonicalMomentId(_source: TranscriptSource, startMs: number) {
 export function buildTimestampLink(
   videoId: string,
   startMs: number,
-  _sourceOrSegmentId?: TranscriptSource | number
+  sourceOrSegmentId?: TranscriptSource | number
 ) {
-  void _sourceOrSegmentId;
   const seconds = Math.max(0, Math.floor(startMs / 1000));
   const params = new URLSearchParams({ t: String(seconds) });
+  if (typeof sourceOrSegmentId === 'string') params.set('source', sourceOrSegmentId);
   if (startMs % 1000 !== 0) params.set('t_ms', String(Math.max(0, Math.floor(startMs))));
-  return `/v/${videoId}?${params.toString()}#moment-${Math.max(0, Math.floor(startMs))}`;
+  if (typeof sourceOrSegmentId === 'number') {
+    return `/v/${videoId}?${params.toString()}#seg-${sourceOrSegmentId}`;
+  }
+  const anchor =
+    typeof sourceOrSegmentId === 'string'
+      ? `moment-${sourceOrSegmentId}-${Math.max(0, Math.floor(startMs))}`
+      : `moment-${Math.max(0, Math.floor(startMs))}`;
+  return `/v/${videoId}?${params.toString()}#${anchor}`;
 }
 
 export function titleCase(value: string) {

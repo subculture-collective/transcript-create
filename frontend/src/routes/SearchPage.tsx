@@ -106,6 +106,9 @@ export default function SearchPage() {
   const [q, setQ] = useState(filters.q);
   const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
   const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+  const [matchMode, setMatchMode] = useState<NonNullable<ArchiveSearchFilters['match_mode']>>(
+    filters.match_mode ?? 'topic'
+  );
   const [sortBy, setSortBy] = useState<NonNullable<ArchiveSearchFilters['sort_by']>>(
     filters.sort_by ?? 'relevance'
   );
@@ -130,6 +133,7 @@ export default function SearchPage() {
     setQ(filters.q);
     setDateFrom(filters.date_from ?? '');
     setDateTo(filters.date_to ?? '');
+    setMatchMode(filters.match_mode ?? 'topic');
     setSortBy(filters.sort_by ?? 'relevance');
   }, [filters]);
 
@@ -140,6 +144,7 @@ export default function SearchPage() {
     setParams(
       serializeFilters({
         q,
+        match_mode: matchMode,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         sort_by: sortBy,
@@ -154,6 +159,7 @@ export default function SearchPage() {
     setQ('');
     setDateFrom('');
     setDateTo('');
+    setMatchMode('topic');
     setSortBy('relevance');
     setParams(new URLSearchParams());
   }
@@ -180,6 +186,7 @@ export default function SearchPage() {
           startMs: moment.start_ms,
           endMs: moment.end_ms,
           text,
+          source: moment.source,
         });
       setSavedKeys((current) => new Set([...current, key]));
       setOperationFeedback('Moment saved.');
@@ -193,7 +200,7 @@ export default function SearchPage() {
   async function copyMomentTimestamp(videoId: string, moment: SearchHit) {
     try {
       await copyText(
-        `${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.id)}`
+        `${window.location.origin}${buildTimestampLink(videoId, moment.start_ms, moment.source)}`
       );
       setOperationFeedback('Timestamp link copied.');
     } catch {
@@ -244,12 +251,14 @@ export default function SearchPage() {
             q={q}
             dateFrom={dateFrom}
             dateTo={dateTo}
+            matchMode={matchMode}
             sortBy={sortBy}
             loading={loading}
             canSubmitSearch={canSubmitSearch}
             onQChange={setQ}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
+            onMatchModeChange={setMatchMode}
             onSortByChange={setSortBy}
             onSubmit={submitFilters}
             onReset={resetFilters}
@@ -282,7 +291,7 @@ export default function SearchPage() {
                 <span>
                   {loading
                     ? 'Scanning transcripts…'
-                    : `${formatNumber(totalMoments)} moments in ${formatNumber(totalVideos)} VODs`}
+                    : `Showing ${formatNumber(totalMoments)} moments in ${formatNumber(totalVideos)} VODs`}
                 </span>
                 {!loading && (
                   <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
@@ -361,7 +370,7 @@ export default function SearchPage() {
             )}
           </div>
 
-          <aside className="space-y-4 xl:sticky xl:top-24">
+          <section aria-label="Search context" className="space-y-4 xl:sticky xl:top-24">
             <section className="archive-section space-y-4">
               <div className="archive-rule-title">Research tools</div>
               <div className="flex flex-wrap gap-2" aria-label="Every mention exports">
@@ -455,7 +464,7 @@ export default function SearchPage() {
                 </div>
               </section>
             )}
-          </aside>
+          </section>
         </div>
       ) : (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">

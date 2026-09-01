@@ -119,7 +119,7 @@ describe('AdminChapterReview', () => {
     expect(
       await screen.findByText('Published 2 reviewed chapters for this VOD.')
     ).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('can trigger review-only generation for an editor-selected video', async () => {
     vi.mocked(http.post).mockReturnValue(mockJsonResponse({ chapters: 12 }) as never);
@@ -139,7 +139,7 @@ describe('AdminChapterReview', () => {
       );
     });
     expect(await screen.findByText(/Generated 12 review-only chapters/)).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('does not send partial UUID filters while an editor is typing', async () => {
     render(

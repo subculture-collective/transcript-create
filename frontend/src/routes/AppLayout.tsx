@@ -105,7 +105,7 @@ function RouteTransitionManager() {
   }, [location.pathname, navigationType]);
 
   return (
-    <span className="sr-only" role="status" aria-live="polite">
+    <span className="sr-only" aria-live="polite">
       {announcement}
     </span>
   );

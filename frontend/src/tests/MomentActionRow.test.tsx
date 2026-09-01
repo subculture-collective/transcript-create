@@ -9,9 +9,9 @@ describe('MomentActionRow', () => {
       <MomentActionRow
         videoId="video-1"
         moment={{
-          id: 1,
+          id: 4_864_024,
           video_id: 'video-1',
-          start_ms: 1000,
+          start_ms: 1140,
           end_ms: 2000,
           snippet: 'Quote',
           source: 'whisper',
@@ -25,11 +25,14 @@ describe('MomentActionRow', () => {
       />
     );
 
-    expect(screen.getByRole('link', { name: 'Open moment' })).toHaveAttribute(
-      'href',
-      '/v/video-1?t=1#moment-1000'
-    );
     expect(screen.getByRole('button', { name: 'Copy quote' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open moment' })).toHaveAttribute(
+      'href',
+      '/v/video-1?t=1&source=whisper&t_ms=1140#moment-whisper-1140'
+    );
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Copy quote' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Full VOD' })).toHaveAttribute('href', '/v/video-1');
   });
 });

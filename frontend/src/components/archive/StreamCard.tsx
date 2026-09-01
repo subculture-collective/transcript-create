@@ -1,72 +1,75 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { DateField } from '../../features/streams/library';
 import { formatDate, formatDuration } from '../../features/streams/library';
 import type { VideoInfo } from '../../types/api';
-import VideoMetadataChips from './VideoMetadataChips';
 
-type StreamCardProps = {
-  video: VideoInfo;
-  dateField: DateField;
-};
+type StreamCardProps = { video: VideoInfo; dateField: DateField };
 
 export default function StreamCard({ video, dateField }: StreamCardProps) {
+  const [imageFailed, setImageFailed] = useState(false);
   const title = video.title || `Video ${video.youtube_id}`;
-  const dateValue = video[dateField];
   const metadata = [
-    ...(video.people ?? []).map((person) => ({
-      key: `person-${person.slug}`,
-      label: person.display_name,
-    })),
-    ...(video.tags ?? []).map((tag) => ({ key: `tag-${tag.slug}`, label: tag.label })),
-  ];
+    ...(video.people ?? []).map((person) => person.display_name),
+    ...(video.tags ?? []).map((tag) => tag.label),
+  ].slice(0, 3);
 
   return (
-    <Link
-      to={`/v/${video.id}`}
-      className="surface-card-compact group flex h-full flex-col overflow-hidden border border-border/80 transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-accent hover:shadow-lg"
-    >
-      <div className="relative overflow-hidden rounded-xl border border-border/60 bg-surface-muted">
-        <img
-          src={`https://i.ytimg.com/vi/${video.youtube_id}/hqdefault.jpg`}
-          alt={title}
-          loading="lazy"
-          width="480"
-          height="270"
-          className="aspect-video w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-        />
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-3 py-2 text-xs text-white">
-          <span className="inline-flex items-center justify-center rounded-full bg-black/60 px-2 py-1 text-center font-medium leading-none backdrop-blur">
-            {formatDuration(video.duration_seconds)}
-          </span>
-          <span className="inline-flex items-center justify-center rounded-full bg-black/60 px-2 py-1 text-center font-medium leading-none backdrop-blur">
-            {formatDate(dateValue ?? null)}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-4 p-4">
-        <div className="space-y-2">
-          <h2 className="line-clamp-2 text-lg font-semibold tracking-tight text-ink group-hover:text-accent">
-            {title}
-          </h2>
-          <div className="text-sm text-muted">
-            <div className="line-clamp-1">{video.channel_name || 'Unknown channel'}</div>
+    <article className="feed-card group">
+      <Link
+        to={`/v/${video.id}`}
+        className="feed-card-media"
+        aria-label={`Watch ${title} with transcript`}
+      >
+        {imageFailed ? (
+          <div className="feed-card-image-fallback" role="img" aria-label="Thumbnail unavailable">
+            <span aria-hidden="true">▶</span>
+            <span>Preview unavailable</span>
           </div>
-        </div>
-
-        {metadata.length > 0 && (
-          <div className="text-xs">
-            <VideoMetadataChips label="VOD metadata" items={metadata} limit={3} />
-          </div>
+        ) : (
+          <img
+            src={`https://i.ytimg.com/vi/${video.youtube_id}/hqdefault.jpg`}
+            alt=""
+            loading="lazy"
+            width="480"
+            height="270"
+            onError={() => setImageFailed(true)}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
+          />
         )}
-
-        <div className="mt-auto space-y-2 text-sm text-muted">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>{formatDate(dateValue ?? null)}</span>
-            {video.updated_at && <span>Updated {formatDate(video.updated_at)}</span>}
-          </div>
+        <div className="feed-card-overlay" aria-hidden="true">
+          <span>{formatDate(video[dateField] ?? null)}</span>
+          <span>{formatDuration(video.duration_seconds)}</span>
         </div>
+      </Link>
+
+      <div className="feed-card-body">
+        <div className="min-w-0 flex-1">
+          <Link to={`/v/${video.id}`} className="feed-card-title">
+            {title}
+          </Link>
+          <p className="feed-card-support">
+            {metadata.length > 0
+              ? metadata.join(' · ')
+              : video.channel_name || 'HasanAbi broadcast archive'}
+          </p>
+        </div>
+        <details className="feed-card-menu">
+          <summary aria-label={`More actions for ${title}`}>•••</summary>
+          <div>
+            <button type="button">Save</button>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(`${location.origin}/v/${video.id}`)}
+            >
+              Copy link
+            </button>
+          </div>
+        </details>
+        <Link to={`/v/${video.id}`} className="feed-card-action">
+          Watch with transcript <span aria-hidden="true">→</span>
+        </Link>
       </div>
-    </Link>
+    </article>
   );
 }

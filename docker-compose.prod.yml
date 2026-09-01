@@ -99,6 +99,23 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
       RETENTION_INTERVAL_SECONDS: ${RETENTION_INTERVAL_SECONDS:-86400}
 
+  archive-enrichment-queue:
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
   opensearch:
     ports: !reset []
     restart: unless-stopped

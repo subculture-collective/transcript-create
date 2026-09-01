@@ -268,6 +268,11 @@ class Settings(BaseSettings):
     ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS: float = Field(default=300.0, ge=30.0, le=900.0)
     ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO: float = Field(default=1.0, gt=0.0, le=10.0)
     ARCHIVE_ENRICHMENT_PUBLISH: bool = False
+    ARCHIVE_ENRICHMENT_QUEUE_SUCCESS_DELAY_SECONDS: int = Field(default=5, ge=0, le=300)
+    ARCHIVE_ENRICHMENT_QUEUE_FAILURE_DELAY_SECONDS: int = Field(default=30, ge=1, le=3600)
+    ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS: int = Field(default=300, ge=30, le=3600)
+    ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS: int = Field(default=86400, ge=300, le=604800)
+    ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS: int = Field(default=3600, ge=300, le=86400)
 
     # Transcript cleanup configuration
     CLEANUP_ENABLED: bool = True  # Enable transcript cleanup features

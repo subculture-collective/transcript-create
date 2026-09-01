@@ -158,6 +158,21 @@ services:
                 done
         restart: unless-stopped
 
+    archive-enrichment-queue:
+        image: hasanara-api:latest
+        env_file: .env
+        environment:
+            DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:-postgres}@db:5432/transcripts
+        depends_on:
+            migrations:
+                condition: service_completed_successfully
+        # This process has no HTTP listener; liveness is represented by the
+        # container process and queue-cycle JSON logs.
+        healthcheck:
+            disable: true
+        command: ['python3', '/app/scripts/run_archive_enrichment_queue.py']
+        restart: unless-stopped
+
     opensearch:
         image: opensearchproject/opensearch:2.12.0
         environment:

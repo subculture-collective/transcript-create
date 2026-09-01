@@ -200,24 +200,24 @@ def test_release_overlay_is_last_and_requires_immutable_images() -> None:
     overlay = (ROOT / "docker-compose.release.yml").read_text(encoding="utf-8")
     for variable in IMAGE_VARIABLES:
         assert f"${{{variable}:?{variable} is required}}" in overlay
-    assert overlay.count("build: !reset null") == 11
+    assert overlay.count("build: !reset null") == 12
     assert "POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}" in overlay
     assert (
         overlay.count(
             "DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts"
         )
-        == 7
+        == 8
     )
     assert "PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}" in overlay
     assert overlay.count("ENVIRONMENT: production") == len(preflight.APPLICATION_SERVICES) + 1
     assert overlay.count("LOG_LEVEL: INFO") == len(preflight.APPLICATION_SERVICES) + 1
     assert 'ALLOW_SESSION_TOKEN_CONTRACT_MIGRATION: "false"' in overlay
-    assert overlay.count('ALLOW_EVENT_TOKEN_CONTRACT_MIGRATION: "false"') == 8
+    assert overlay.count('ALLOW_EVENT_TOKEN_CONTRACT_MIGRATION: "false"') == 9
 
 
 def test_overlay_forces_env_file_and_diarization_is_opt_in() -> None:
     overlay = (ROOT / "docker-compose.release.yml").read_text(encoding="utf-8")
-    assert overlay.count('env_file: !override ["${HASANARA_ENV_FILE:?HASANARA_ENV_FILE is required}"]') == 7
+    assert overlay.count('env_file: !override ["${HASANARA_ENV_FILE:?HASANARA_ENV_FILE is required}"]') == 8
     assert (
         'env_file: !override ["${HASANARA_DIARIZATION_ENV_FILE:?HASANARA_DIARIZATION_ENV_FILE is required}"]' in overlay
     )
@@ -871,7 +871,7 @@ def test_config_safe_selectors_are_exact_and_maintenance_is_fixed() -> None:
     assert "${2:-} != --approved || $# -ne 2" not in helper
     assert "if (($# != 2)) || [[ ${2:-} != --approved ]]; then" in helper
     assert (
-        "run_compose stop api worker analytics-retention summary-refresher archive-intelligence-refresher diarization-worker"
+        "run_compose stop api worker analytics-retention summary-refresher archive-intelligence-refresher archive-enrichment-queue diarization-worker"
         in helper
     )
     assert "run_compose exec backup /scripts/walg_base_backup.sh" in helper
@@ -1676,6 +1676,7 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
         "analytics-retention",
         "summary-refresher",
         "archive-intelligence-refresher",
+        "archive-enrichment-queue",
         "diarization-worker",
         "backup",
     }

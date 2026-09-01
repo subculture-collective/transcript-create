@@ -122,7 +122,17 @@ OPENROUTER_API_KEY=...
 ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES=90
 ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO=1.00
 ARCHIVE_ENRICHMENT_PUBLISH=false
+ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS=300
+ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS=86400
+ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS=3600
 ```
+
+Production Compose runs `archive-enrichment-queue` continuously. It prioritizes
+the newest completed transcript-ready video that lacks candidates from the
+current model and prompt, never replaces moderated chapters, and cools down a
+failed video before retrying it. An OpenRouter HTTP 402 or explicit insufficient
+credits response pauses account-level work for the configured credit cooldown;
+the service remains alive so adding credits resumes generation automatically.
 
 Run an explicit pilot from the repository root, repeating `--video-id` when needed:
 

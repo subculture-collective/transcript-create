@@ -5619,6 +5619,31 @@
         "title": "SessionsResponse",
         "type": "object"
       },
+      "SupportConfig": {
+        "properties": {
+          "donations_enabled": {
+            "title": "Donations Enabled",
+            "type": "boolean"
+          },
+          "payment_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Url"
+          }
+        },
+        "required": [
+          "donations_enabled",
+          "payment_url"
+        ],
+        "title": "SupportConfig",
+        "type": "object"
+      },
       "TimelineBucket": {
         "properties": {
           "label": {
@@ -12283,6 +12308,28 @@
         ]
       }
     },
+    "/support": {
+      "get": {
+        "description": "Return the validated Stripe-hosted Payment Link when donations are enabled.",
+        "operationId": "support_config_support_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get public donation configuration",
+        "tags": [
+          "Support"
+        ]
+      }
+    },
     "/users/me/favorites": {
       "get": {
         "description": "Get all favorite transcript segments for the authenticated user.\n\n    Optionally filter by video_id to get favorites for a specific video.\n\n    **Authentication Required:** Yes",
@@ -13856,6 +13903,10 @@
     {
       "description": "Service health check",
       "name": "Health"
+    },
+    {
+      "description": "Public project funding configuration",
+      "name": "Support"
     },
     {
       "description": "Custom vocabulary management for improved accuracy",

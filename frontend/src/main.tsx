@@ -21,6 +21,14 @@ const VideoPage = lazy(() => import('./routes/VideoPage'));
 const LoginPage = lazy(() => import('./routes/LoginPage'));
 const AccountPage = lazy(() => import('./routes/AccountPage'));
 const FavoritesPage = lazy(() => import('./routes/FavoritesPage'));
+const SupportPage = lazy(() => import('./routes/SupportPage'));
+const AboutPage = lazy(() => import('./routes/AboutPage'));
+const PrivacyPage = lazy(() =>
+  import('./routes/PolicyPages').then((module) => ({ default: module.PrivacyPage }))
+);
+const TermsPage = lazy(() =>
+  import('./routes/PolicyPages').then((module) => ({ default: module.TermsPage }))
+);
 const AdminLayout = lazy(() => import('./routes/admin/AdminLayout'));
 const AdminDashboard = lazy(() => import('./routes/admin/AdminDashboard'));
 const AdminEvents = lazy(() => import('./routes/admin/AdminEvents'));
@@ -129,6 +137,38 @@ const router = createBrowserRouter([
         element: (
           <Page>
             <FavoritesPage />
+          </Page>
+        ),
+      },
+      {
+        path: 'support',
+        element: (
+          <Page>
+            <SupportPage />
+          </Page>
+        ),
+      },
+      {
+        path: 'about',
+        element: (
+          <Page>
+            <AboutPage />
+          </Page>
+        ),
+      },
+      {
+        path: 'privacy',
+        element: (
+          <Page>
+            <PrivacyPage />
+          </Page>
+        ),
+      },
+      {
+        path: 'terms',
+        element: (
+          <Page>
+            <TermsPage />
           </Page>
         ),
       },

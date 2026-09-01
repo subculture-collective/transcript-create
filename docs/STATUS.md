@@ -25,4 +25,4 @@ Release automation is hosted by Gitea Actions at
 `.gitea/workflows/release.yaml`. GitHub/GHCR release publication is not an
 authoritative HasanAra path.
 
-Billing and PWA/offline support are **disabled**. Billing is only **planned** as a possible future product decision. Review reports and implementation summaries are **historical** after their findings enter the remediation plan. Older deployment/provider guides are **superseded** by `docs/deployment/README.md` unless explicitly revalidated.
+Public donation support through a validated Stripe-hosted Payment Link is **shipped** without introducing product billing or card-data handling. Billing, subscriptions, payment webhooks, and PWA/offline support remain **disabled**. Review reports and implementation summaries are **historical** after their findings enter the remediation plan. Older deployment/provider guides are **superseded** by `docs/deployment/README.md` unless explicitly revalidated.

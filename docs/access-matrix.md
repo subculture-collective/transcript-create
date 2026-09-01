@@ -4,7 +4,8 @@
 
 | Surface | Access |
 | --- | --- |
-| Home, search, Explore, episodes, timeline, topics, video | public |
+| Home, search, Explore, episodes, timeline, topics, video, About, Support, Privacy, Terms | public |
+| Donation configuration (`GET /support`) | public; returns only an allow-listed Stripe-hosted Payment Link or a disabled state |
 | Saved and favorites | anonymous local-first; authenticated synchronization |
 | Login | anonymous |
 | Admin routes | authenticated plus `admin:access` capability |

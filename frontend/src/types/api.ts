@@ -3,6 +3,11 @@ export type UUID = string;
 export type OAuthProvider = 'google' | 'twitch';
 export type UserRole = 'user' | 'moderator' | 'admin';
 
+export interface SupportConfig {
+  donations_enabled: boolean;
+  payment_url: string | null;
+}
+
 export interface OffsetPageInfo {
   limit: number;
   offset: number;

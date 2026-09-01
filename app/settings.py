@@ -126,6 +126,9 @@ class Settings(BaseSettings):
 
     # Frontend origin for CORS/redirects
     FRONTEND_ORIGIN: str = "http://localhost:5173"
+    # Public Stripe-hosted Payment Link. HasanAra never accepts card details or
+    # creates charges directly; an empty value keeps donations disabled.
+    DONATION_PAYMENT_LINK_URL: str = ""
     # Session and OAuth
     SESSION_SECRET: str = "change-me"
     # Dedicated key for deriving pseudonymous analytics subjects. Production
@@ -333,6 +336,24 @@ class Settings(BaseSettings):
                 raise ValueError("BOOTSTRAP_ADMIN_IDENTITIES entries must use provider:subject syntax")
             identities.add(f"{provider}:{subject}")
         return frozenset(identities)
+
+    @field_validator("DONATION_PAYMENT_LINK_URL")
+    @classmethod
+    def validate_donation_payment_link_url(cls, value: str) -> str:
+        link = value.strip()
+        if not link:
+            return ""
+        parsed = urlparse(link)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "buy.stripe.com"
+            or not parsed.path.strip("/")
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.fragment
+        ):
+            raise ValueError("DONATION_PAYMENT_LINK_URL must be an https://buy.stripe.com/<id> Payment Link")
+        return link
 
     @field_validator("DIARIZATION_ALLOWED_VIDEO_IDS", mode="before")
     @classmethod

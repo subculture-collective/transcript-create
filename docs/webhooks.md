@@ -2,4 +2,4 @@
 
 **Status:** disabled (2026-07-12).
 
-HasanAra currently exposes no product webhook contract. Stripe billing and its webhook integration are retired. Any future webhook surface requires a new threat model, signed-delivery contract, replay protection, retention policy, OpenAPI contract, and tests.
+HasanAra exposes no product webhook contract. Donations use a Stripe-hosted Payment Link and do not depend on a HasanAra payment webhook. Any future webhook surface requires a new threat model, signed-delivery contract, replay protection, retention policy, OpenAPI contract, and tests.

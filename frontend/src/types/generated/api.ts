@@ -1729,6 +1729,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/support': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get public donation configuration
+     * @description Return the validated Stripe-hosted Payment Link when donations are enabled.
+     */
+    get: operations['support_config_support_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/users/me/favorites': {
     parameters: {
       query?: never;
@@ -5122,6 +5142,13 @@ export interface components {
     SessionsResponse: {
       /** Sessions */
       sessions: components['schemas']['SessionResponse'][];
+    };
+    /** SupportConfig */
+    SupportConfig: {
+      /** Donations Enabled */
+      donations_enabled: boolean;
+      /** Payment Url */
+      payment_url: string | null;
     };
     /** TimelineBucket */
     TimelineBucket: {
@@ -9024,6 +9051,26 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  support_config_support_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SupportConfig'];
         };
       };
     };

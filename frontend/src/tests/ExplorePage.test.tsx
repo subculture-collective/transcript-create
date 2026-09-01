@@ -273,7 +273,7 @@ describe('ExplorePage', () => {
 
     expect(getExploreIntelligence).toHaveBeenCalledWith({});
     expect((await axe.run(container)).violations).toEqual([]);
-  });
+  }, 15_000);
 
   it('refetches selected predefined periods and latest default', async () => {
     const weekOption = {

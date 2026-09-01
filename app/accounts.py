@@ -37,6 +37,15 @@ class LastIdentityError(AppError):
         super().__init__("last_identity", "An account must retain a login identity", 409)
 
 
+class IdentitySelectionRequiredError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "identity_selection_required",
+            "Choose which provider identity to unlink",
+            409,
+        )
+
+
 class FinalAdminError(AppError):
     """Deleting the last active administrator would strand administration."""
 
@@ -608,6 +617,27 @@ def unlink_identity(db, user_id: UUID | str, provider: str) -> None:
         DELETE FROM user_identities WHERE user_id=:user_id AND provider=:provider
     """),
         {"user_id": str(user_id), "provider": provider},
+    )
+
+
+def unlink_identity_by_id(db, user_id: UUID | str, identity_id: UUID | str) -> None:
+    identities = (
+        db.execute(
+            text("""
+        SELECT id FROM user_identities WHERE user_id=:user_id FOR UPDATE
+    """),
+            {"user_id": str(user_id)},
+        )
+        .scalars()
+        .all()
+    )
+    if len(identities) <= 1:
+        raise LastIdentityError()
+    db.execute(
+        text("""
+        DELETE FROM user_identities WHERE user_id=:user_id AND id=:identity_id
+    """),
+        {"user_id": str(user_id), "identity_id": str(identity_id)},
     )
 
 

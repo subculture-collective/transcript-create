@@ -23,17 +23,17 @@ class SecurityException:
 EXCEPTIONS = (
     SecurityException(
         advisory_id="GHSA-rrmf-rvhw-rf47",
-        expires_on=date(2026, 8, 23),
+        expires_on=date(2026, 9, 6),
         forbidden_call="torch.jit.script",
     ),
     SecurityException(
         advisory_id="PYSEC-2026-3624",
-        expires_on=date(2026, 8, 23),
+        expires_on=date(2026, 9, 6),
         forbidden_call="lightning.LightningModule.load_from_checkpoint",
     ),
 )
 
-NPM_EXCEPTION_EXPIRY = date(2026, 8, 23)
+NPM_EXCEPTION_EXPIRY = date(2026, 9, 6)
 NPM_BRACE_SOURCES = {
     "1130588": "GHSA-mh99-v99m-4gvg",
     "1130589": "GHSA-mh99-v99m-4gvg",

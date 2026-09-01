@@ -79,7 +79,7 @@ The command builds overlapping two-minute windows with a one-minute stride by de
 
 ## OpenRouter full-episode bake-off
 
-The OpenRouter bake-off evaluates complete enrichment behavior rather than reusing local semantic boundaries. Each model independently chooses chapter starts, titles, subjects, and keywords from the same timestamped transcript packet. The command performs no database writes and does not publish its results.
+The OpenRouter bake-off evaluates complete enrichment behavior rather than reusing local semantic boundaries. Each model independently chooses chapter starts, titles, subjects, keywords, and zero to three categories from the fixed archive taxonomy using the same timestamped transcript packet. The command performs no database writes and does not publish its results.
 
 Provide the key only in the command environment, then run:
 
@@ -95,9 +95,9 @@ The default contenders are pinned to:
 - `deepseek/deepseek-v4-pro`;
 - `deepseek/deepseek-v4-flash`.
 
-The runner uses the same prompt, strict JSON Schema, temperature zero, and disabled reasoning for all contenders. It rotates request order by episode to reduce timing bias, refuses data-collection providers, requires structured-output support, disables provider fallback by default, and stops scheduling new calls once `--max-observed-cost-usd` is reached. OpenRouter's reported provider, token counts, cost, and latency are retained with every episode result.
+The runner uses the same prompt, strict JSON Schema, temperature zero, and disabled reasoning for all contenders. The per-episode schema permits two chapters below or above the duration-derived target, preventing severe over-segmentation while leaving room for editorial structure. It rotates request order by episode to reduce timing bias, refuses data-collection providers, requires structured-output support, disables provider fallback by default, and stops scheduling new calls once `--max-observed-cost-usd` is reached. OpenRouter's reported provider, token counts, cost, and latency are retained with every episode result.
 
-If `OPENROUTER_API_KEY` is not already exported, the command loads it from the repository's ignored `.env` file without shell-sourcing unrelated settings. The parser expands a model's first meaningful chapter back to timestamp zero and records that normalization. Overlong summaries are safely truncated and counted. Evidence citations outside their proposed chapter remain visible as overlap violations in the comparison report; malformed timelines and unknown block citations still reject the result.
+If `OPENROUTER_API_KEY` is not already exported, the command loads it from the repository's ignored `.env` file without shell-sourcing unrelated settings. The parser expands a model's first meaningful chapter back to timestamp zero and records that normalization. Overlong summaries are safely truncated and counted. Well-typed subject and keyword lists are deduplicated and capped at the schema limits, with removed values counted; malformed label types and lengths still reject the response. Evidence citations outside their proposed chapter remain visible as overlap violations in the comparison report; malformed timelines and unknown block citations still reject the result.
 
 Partial runs are recoverable with `--resume`. Limit an initial smoke test by repeating `--video-id`. The output directory contains:
 
@@ -110,7 +110,7 @@ The blind worksheet is the quality decision. Automated grounding and shape metri
 
 ## Candidate generation with V4 Pro
 
-The production-facing enrichment path is deliberately review-only. It uses the pinned `deepseek/deepseek-v4-pro` model through OpenRouter, divides long episodes into balanced windows no longer than 90 minutes, and merges their chapter timelines and recurring labels. This avoids the oversized tail chapters found in the whole-episode bake-off.
+The production-facing enrichment path is deliberately review-only. It uses the pinned `deepseek/deepseek-v4-pro` model through OpenRouter, divides long episodes into balanced windows no longer than 90 minutes, and merges their chapter timelines and recurring labels. Categories are restricted to the existing archive allowlist, retain cited transcript evidence, and follow explicit definitions: named formats such as Chadvice and OKBuddy require that named segment, Gaming means video games rather than physical or table games, and broad categories must characterize a substantial portion of the episode. Unless supported by the video title, broad-category citations must span at least 20% of the episode timeline; filtered suggestions are counted in run metrics. This avoids the oversized tail chapters found in the whole-episode bake-off without allowing free-form category growth.
 
 Configure the ignored `.env` file:
 

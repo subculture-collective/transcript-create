@@ -8,6 +8,17 @@ const SORT_VALUES = new Set<NonNullable<ArchiveSearchFilters['sort_by']>>([
   'duration_asc',
   'duration_desc',
 ]);
+const MATCH_MODE_VALUES = new Set<NonNullable<ArchiveSearchFilters['match_mode']>>([
+  'topic',
+  'whole_word',
+  'exact_phrase',
+]);
+
+function readMatchMode(value: string | null): NonNullable<ArchiveSearchFilters['match_mode']> {
+  return value && MATCH_MODE_VALUES.has(value as NonNullable<ArchiveSearchFilters['match_mode']>)
+    ? (value as NonNullable<ArchiveSearchFilters['match_mode']>)
+    : 'topic';
+}
 
 function readSort(value: string | null): ArchiveSearchFilters['sort_by'] {
   return value && SORT_VALUES.has(value as NonNullable<ArchiveSearchFilters['sort_by']>)
@@ -18,7 +29,7 @@ function readSort(value: string | null): ArchiveSearchFilters['sort_by'] {
 export function readFilters(params: URLSearchParams): SearchFilters {
   return {
     q: params.get('q') ?? '',
-    match_mode: (params.get('match_mode') as ArchiveSearchFilters['match_mode']) ?? 'topic',
+    match_mode: readMatchMode(params.get('match_mode')),
     date_from: params.get('date_from') ?? undefined,
     date_to: params.get('date_to') ?? undefined,
     sort_by: readSort(params.get('sort_by')),

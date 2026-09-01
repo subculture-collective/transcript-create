@@ -18,6 +18,7 @@ from .labeling.repository import (
     upsert_label_candidate,
 )
 from .openrouter_enrichment import (
+    CATEGORY_LABELS,
     OpenRouterEpisodeResult,
     generate_hierarchical_openrouter_enrichment,
     generate_openrouter_episode_enrichment,
@@ -182,10 +183,54 @@ def persist_enrichment_candidates(
 
     metrics = {
         "chapters": len(result.candidate.chapters),
+        "categories": 0,
         "labels": 0,
         "assignments": 0,
         "skipped_ungrounded_labels": 0,
     }
+    block_by_index = {block.block_index: block for block in episode.blocks}
+    for category in result.candidate.categories:
+        evidence = [
+            {
+                "extractor": "llm_category",
+                "video_id": episode.video_id,
+                "block_index": block.block_index,
+                "start_ms": block.start_ms,
+                "end_ms": block.end_ms,
+                "text": block.text[:500],
+                "model": result.model,
+                "prompt_version": result.prompt_version,
+            }
+            for block_index in category.evidence_block_indexes
+            if (block := block_by_index.get(block_index)) is not None
+        ]
+        label_id = deps.upsert_label(
+            db,
+            label=CATEGORY_LABELS[category.slug],
+            kind="category",
+            aliases=[],
+            confidence_score=0.75,
+            source="automatic",
+            publish_tier="bronze",
+            status="candidate",
+            run_id=run_id,
+        )
+        deps.insert_assignment(
+            db,
+            label_id=label_id,
+            video_id=episode.video_id,
+            unit_type="vod",
+            status="candidate",
+            publish_tier="bronze",
+            confidence_score=0.75,
+            evidence=evidence,
+            source="llm",
+            run_id=run_id,
+            component_scores={"controlled_taxonomy": 1.0, "llm_grounded": 1.0},
+        )
+        metrics["categories"] += 1
+        metrics["labels"] += 1
+        metrics["assignments"] += 1
     labels = list(dict.fromkeys([*result.candidate.subjects, *result.candidate.keywords]))
     for label in labels:
         evidence = _grounded_label_evidence(label, episode, result)
@@ -303,6 +348,9 @@ def enrich_video_candidates(
                 "repairs": {
                     "first_boundary_normalized": result.first_boundary_normalized,
                     "summaries_truncated": result.summaries_truncated,
+                    "label_values_trimmed": result.label_values_trimmed,
+                    "evidence_citations_trimmed": result.evidence_citations_trimmed,
+                    "categories_dropped": result.categories_dropped,
                     "evidence_overlap_violations": result.evidence_overlap_violations,
                 },
             }

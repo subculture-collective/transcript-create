@@ -54,6 +54,9 @@ def _result_from_dict(payload: dict[str, Any]) -> OpenRouterEpisodeResult:
         elapsed_seconds=float(usage.get("elapsed_seconds") or 0.0),
         first_boundary_normalized=bool(normalizations.get("first_boundary_to_zero", False)),
         summaries_truncated=int(normalizations.get("summaries_truncated") or 0),
+        label_values_trimmed=int(normalizations.get("label_values_trimmed") or 0),
+        evidence_citations_trimmed=int(normalizations.get("evidence_citations_trimmed") or 0),
+        categories_dropped=int(normalizations.get("categories_dropped") or 0),
         evidence_overlap_violations=int(validation.get("evidence_overlap_violations") or 0),
     )
 
@@ -106,6 +109,7 @@ def _model_metrics(results: list[OpenRouterEpisodeResult], episodes: dict[str, E
     return {
         "episodes_completed": len(results),
         "chapters_total": sum(chapter_counts),
+        "categories_total": sum(len(result.candidate.categories) for result in results),
         "median_chapters_per_episode": statistics.median(chapter_counts) if chapter_counts else 0,
         "median_chapter_minutes": round(statistics.median(durations), 2) if durations else 0.0,
         "subject_lexical_grounding_rate": round(statistics.mean(subject_grounding), 4) if subject_grounding else 0.0,
@@ -117,6 +121,9 @@ def _model_metrics(results: list[OpenRouterEpisodeResult], episodes: dict[str, E
         "mean_latency_seconds": round(statistics.mean(elapsed), 2) if elapsed else 0.0,
         "first_boundary_normalizations": sum(result.first_boundary_normalized for result in results),
         "summaries_truncated": sum(result.summaries_truncated for result in results),
+        "label_values_trimmed": sum(result.label_values_trimmed for result in results),
+        "evidence_citations_trimmed": sum(result.evidence_citations_trimmed for result in results),
+        "categories_dropped": sum(result.categories_dropped for result in results),
         "evidence_overlap_violations": sum(result.evidence_overlap_violations for result in results),
     }
 
@@ -158,6 +165,8 @@ def _build_blind_review(
                     f"### {aliases[model]}",
                     "",
                     "Verdict: ____",
+                    "",
+                    f"Categories: {'; '.join(category.slug for category in result.candidate.categories)}",
                     "",
                     f"Subjects: {'; '.join(result.candidate.subjects)}",
                     "",

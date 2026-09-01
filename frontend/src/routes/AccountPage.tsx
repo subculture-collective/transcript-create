@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HTTPError } from 'ky';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
@@ -171,7 +171,7 @@ export default function AccountPage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [providerBusy, setProviderBusy] = useState<OAuthProvider | null>(null);
-  const [unlinkPending, setUnlinkPending] = useState<OAuthProvider | null>(null);
+  const [unlinkPending, setUnlinkPending] = useState<string | null>(null);
   const [mergePending, setMergePending] = useState<OAuthProvider | null>(null);
   const [sessionBusy, setSessionBusy] = useState<string | 'others' | 'all' | null>(null);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
@@ -234,11 +234,6 @@ export default function AccountPage() {
       active = false;
     };
   }, [navigate, status, user]);
-
-  const identityByProvider = useMemo(() => {
-    const identities = account?.identities ?? [];
-    return new Map(identities.map((identity) => [identity.provider, identity]));
-  }, [account?.identities]);
 
   if (status === 'loading' || (user && loading)) {
     return (
@@ -340,19 +335,20 @@ export default function AccountPage() {
     }
   }
 
-  async function unlinkProvider(provider: OAuthProvider) {
-    if (unlinkPending !== provider) {
-      setUnlinkPending(provider);
+  async function unlinkIdentity(identity: LinkedIdentity) {
+    if (unlinkPending !== identity.id) {
+      setUnlinkPending(identity.id);
       return;
     }
-    setProviderBusy(provider);
+    setProviderBusy(identity.provider);
     setUnlinkPending(null);
     setNotice(null);
     try {
-      await api.unlinkProvider(provider);
+      await api.unlinkIdentity(identity.id);
       const response = await api.getAccount();
       setAccount(response);
-      setNotice(`${provider[0]?.toUpperCase() ?? provider} identity unlinked.`);
+      const label = identity.provider === 'google' ? 'Google' : 'Twitch';
+      setNotice(`${label} identity unlinked.`);
     } catch (error: unknown) {
       const failure = await apiFailure(error, 'The identity could not be unlinked.');
       setNotice(
@@ -581,84 +577,97 @@ export default function AccountPage() {
           </p>
           <div className="mt-5 divide-y divide-border/70">
             {providers.map((provider) => {
-              const identity: LinkedIdentity | undefined = identityByProvider.get(provider.id);
-              const pending = unlinkPending === provider.id;
+              const identities = account.identities.filter(
+                (identity) => identity.provider === provider.id
+              );
               return (
-                <div
-                  className="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
-                  key={provider.id}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <ProviderMark provider={provider.id} />
-                    <div className="min-w-0">
-                      <p className="font-semibold text-ink">{provider.label}</p>
-                      {identity ? (
-                        <>
-                          <p className="mt-1 text-sm text-success">Connected</p>
-                          <p className="mt-1 truncate text-xs text-muted">
-                            {identity.email || identity.name || provider.description}
-                          </p>
-                          <p className="mt-1 text-xs text-subtle">
-                            Last used {formatDate(identity.last_login_at)}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="mt-1 text-sm text-muted">{provider.description}</p>
-                      )}
-                    </div>
+                <div className="space-y-4 py-4 first:pt-0 last:pb-0" key={provider.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm text-muted">
+                      {identities.length > 0
+                        ? `${identities.length} connected`
+                        : provider.description}
+                    </p>
+                    <button
+                      className="btn-secondary text-sm"
+                      type="button"
+                      disabled={providerBusy === provider.id}
+                      onClick={() => void startLink(provider.id)}
+                    >
+                      {providerBusy === provider.id
+                        ? 'Opening…'
+                        : identities.length > 0
+                          ? `Link another ${provider.label} account`
+                          : `Link ${provider.label}`}
+                    </button>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                    {identity ? (
-                      <>
-                        {pending && (
-                          <span className="self-center text-xs text-warning">
-                            Unlink {provider.label}?
-                          </span>
-                        )}
-                        {identityCount <= 1 && (
-                          <span
-                            id={`unlink-help-${provider.id}`}
-                            className="self-center max-w-52 text-xs text-subtle"
-                          >
-                            Keep at least one sign-in identity linked.
-                          </span>
-                        )}
-                        <button
-                          className={pending ? 'btn-secondary text-sm' : 'btn-ghost text-sm'}
-                          type="button"
-                          disabled={identityCount <= 1 || providerBusy === provider.id}
-                          onClick={() => void unlinkProvider(provider.id)}
-                          aria-describedby={
-                            identityCount <= 1 ? `unlink-help-${provider.id}` : undefined
-                          }
-                        >
-                          {providerBusy === provider.id
-                            ? 'Working…'
-                            : pending
-                              ? 'Confirm unlink'
-                              : 'Unlink'}
-                        </button>
-                        {pending && (
-                          <button
-                            className="btn-ghost text-sm"
-                            type="button"
-                            onClick={() => setUnlinkPending(null)}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <button
-                        className="btn-secondary text-sm"
-                        type="button"
-                        disabled={providerBusy === provider.id}
-                        onClick={() => void startLink(provider.id)}
+                  {identities.map((identity) => {
+                    const pending = unlinkPending === identity.id;
+                    const identityLabel = identity.email || identity.name || provider.label;
+                    return (
+                      <div
+                        key={identity.id}
+                        className="flex flex-col gap-4 rounded-xl border border-border/70 bg-surface-muted p-4 sm:flex-row sm:items-start sm:justify-between"
                       >
-                        {providerBusy === provider.id ? 'Opening…' : `Link ${provider.label}`}
-                      </button>
-                    )}
-                  </div>
+                        <div className="flex min-w-0 items-start gap-3">
+                          <ProviderMark provider={provider.id} />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-ink">{provider.label}</p>
+                            <p className="mt-1 truncate text-xs text-muted">{identityLabel}</p>
+                            <p className="mt-1 text-xs text-subtle">
+                              Last used {formatDate(identity.last_login_at)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                          {pending && (
+                            <span className="self-center text-xs text-warning">
+                              Unlink {identityLabel}?
+                            </span>
+                          )}
+                          {identityCount <= 1 && (
+                            <span
+                              id={`unlink-help-${identity.id}`}
+                              className="self-center max-w-52 text-xs text-subtle"
+                            >
+                              Keep at least one sign-in identity linked.
+                            </span>
+                          )}
+                          <button
+                            className={pending ? 'btn-secondary text-sm' : 'btn-ghost text-sm'}
+                            type="button"
+                            disabled={identityCount <= 1 || providerBusy === provider.id}
+                            onClick={() => void unlinkIdentity(identity)}
+                            aria-label={
+                              identities.length > 1
+                                ? pending
+                                  ? `Confirm unlink ${identityLabel}`
+                                  : `Unlink ${provider.label} identity ${identityLabel}`
+                                : undefined
+                            }
+                            aria-describedby={
+                              identityCount <= 1 ? `unlink-help-${identity.id}` : undefined
+                            }
+                          >
+                            {providerBusy === provider.id
+                              ? 'Working…'
+                              : pending
+                                ? 'Confirm unlink'
+                                : 'Unlink'}
+                          </button>
+                          {pending && (
+                            <button
+                              className="btn-ghost text-sm"
+                              type="button"
+                              onClick={() => setUnlinkPending(null)}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}

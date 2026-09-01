@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { HTTPError } from 'ky';
 import { api } from '../../services/api';
 import { useAuth } from '../../services/auth';
-import type { AdminUser, UserRole } from '../../types/api';
+import type { AdminUser, OffsetPageInfo, UserRole } from '../../types/api';
 
 const roles: Array<{ value: UserRole; label: string }> = [
   { value: 'user', label: 'User' },
@@ -51,14 +51,7 @@ export default function AdminUsers() {
   const [q, setQ] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [offset, setOffset] = useState(0);
-  const [pageInfo, setPageInfo] = useState<{
-    limit: number;
-    offset: number;
-    has_next_page: boolean;
-    has_previous_page: boolean;
-    next_offset: number | null;
-    previous_offset: number | null;
-  } | null>(null);
+  const [pageInfo, setPageInfo] = useState<OffsetPageInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [listError, setListError] = useState<string | null>(null);

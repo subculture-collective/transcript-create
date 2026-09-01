@@ -481,7 +481,7 @@ test("visitors can read, save, remove, and reopen a transcript moment", async ({
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Open moment" })).toHaveAttribute(
     "href",
-    `/v/${seededVideo.id}?t=12#seg-1`,
+    `/v/${seededVideo.id}?t=12#moment-12000`,
   );
 
   await page.getByRole("link", { name: "Open moment" }).click();
@@ -586,7 +586,9 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   const copyLink = page.getByRole("button", { name: "Copy link" });
   await copyLink.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("status")).toHaveText("Timestamp link copied.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Timestamp link copied." }),
+  ).toHaveText("Timestamp link copied.");
   await expect
     .poll(() =>
       page.evaluate(
@@ -600,7 +602,7 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   await openMoment.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(
-    new RegExp(`/v/${seededVideo.id}\\?t=12&source=whisper#moment-whisper-12000$`),
+    new RegExp(`/v/${seededVideo.id}\\?t=12#moment-12000$`),
   );
 
   const sentence = page.getByRole("button", {
@@ -630,7 +632,7 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   await transcriptSearch.focus();
   await page.keyboard.type("rights");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\?t=12&source=whisper&q=rights$/);
+  await expect(page).toHaveURL(/\?t=12&q=rights$/);
   await expect(
     page.getByRole("button", { name: "Go to next match" }),
   ).toBeVisible();

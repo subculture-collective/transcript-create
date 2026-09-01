@@ -12,12 +12,12 @@ from sqlalchemy import text
 
 from ..accounts import (
     FinalAdminError,
-    LastIdentityError,
+    IdentitySelectionRequiredError,
     delete_prepared_account,
     discard_prepared_account_deletion,
     list_identities,
     prepare_account_deletion,
-    unlink_identity,
+    unlink_identity_by_id,
     update_profile,
 )
 from ..audit import (
@@ -238,7 +238,7 @@ def delete_identity(provider: str, request: Request, db=Depends(get_db), user=De
     if not identities:
         raise NotFoundError("Identity not found")
     if len(identities) > 1:
-        raise LastIdentityError()
+        raise IdentitySelectionRequiredError()
     _unlink_identity(db, user, identities[0], provider, request)
     return {"ok": True}
 
@@ -256,7 +256,7 @@ def delete_identity_by_id(identity_id: UUID, request: Request, db=Depends(get_db
 
 
 def _unlink_identity(db, user: dict, identity_id: UUID, provider: str, request: Request) -> None:
-    unlink_identity(db, user["id"], str(identity_id))
+    unlink_identity_by_id(db, user["id"], identity_id)
     write_audit_event(
         db,
         ACTION_IDENTITY_UNLINKED,

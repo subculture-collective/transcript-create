@@ -10,6 +10,7 @@ import type {
   ProfileResponse,
   UserRole,
   ArchivePeriodOptionsResponse,
+  ArchiveDiscoveryResponse,
   ArchiveSummary,
   ExploreIntelligenceQuery,
   ExploreIntelligenceResponse,
@@ -149,6 +150,11 @@ export const api = {
   async unlinkProvider(provider: OAuthProvider) {
     return http.delete(`account/identities/${provider}`).json<{ ok: boolean }>();
   },
+  async unlinkIdentity(identityId: string) {
+    return http
+      .delete(`account/identities/by-id/${encodeURIComponent(identityId)}`)
+      .json<{ ok: boolean }>();
+  },
   async listSessions() {
     return http.get('account/sessions').json<{ sessions: ActiveSession[] }>();
   },
@@ -165,9 +171,20 @@ export const api = {
       .delete('account', { json: { confirmation: 'DELETE' } })
       .json<{ deleted: boolean }>();
   },
-  async listAdminUsers(query?: string, signal?: AbortSignal) {
-    const searchParams = query ? { q: query } : undefined;
-    return http.get('admin/users', { searchParams, signal }).json<{ items: AdminUser[] }>();
+  async listAdminUsers(query?: string, signal?: AbortSignal, offset = 0) {
+    const searchParams: Record<string, string> = { limit: '25', offset: String(offset) };
+    if (query) searchParams.q = query;
+    return http.get('admin/users', { searchParams, signal }).json<{
+      items: AdminUser[];
+      page_info?: {
+        limit: number;
+        offset: number;
+        has_next_page: boolean;
+        has_previous_page: boolean;
+        next_offset: number | null;
+        previous_offset: number | null;
+      };
+    }>();
   },
   async updateAdminUserRole(userId: string, role: UserRole) {
     return http
@@ -273,7 +290,7 @@ export const api = {
 
     return http.get('archive/intelligence/periods').json<ArchivePeriodOptionsResponse>();
   },
-  async getTranscript(videoId: string, source: 'best' | 'whisper' | 'youtube' = 'best') {
+  async getTranscript(videoId: string, source: 'best' | 'merged' | 'whisper' | 'youtube' = 'best') {
     return http
       .get(`videos/${videoId}/transcript`, {
         searchParams: { mode: 'formatted', source },
@@ -294,21 +311,38 @@ export const api = {
     return normalizeVideosResponse(response).items;
   },
   async listStreamLibrary(filters: StreamLibraryFilters = {}, signal?: AbortSignal) {
-    const searchParams: Record<string, string> = {
-      limit: String(filters.limit ?? 24),
-      offset: String(filters.offset ?? 0),
-    };
+    const searchParams = new URLSearchParams({ limit: String(filters.limit ?? 12) });
+    if (filters.offset != null) searchParams.set('offset', String(filters.offset));
+    if (filters.cursor) searchParams.set('cursor', filters.cursor);
+    if (filters.sort) searchParams.set('sort', filters.sort);
     if (filters.completed_only !== undefined)
-      searchParams.completed_only = String(filters.completed_only);
-    if (filters.q) searchParams.q = filters.q;
-    if (filters.date_field) searchParams.date_field = filters.date_field;
-    if (filters.date_from) searchParams.date_from = filters.date_from;
-    if (filters.date_to) searchParams.date_to = filters.date_to;
-    if (filters.category) searchParams.category = filters.category;
+      searchParams.set('completed_only', String(filters.completed_only));
+    if (filters.q) searchParams.set('q', filters.q);
+    if (filters.date_field) searchParams.set('date_field', filters.date_field);
+    if (filters.date_from) searchParams.set('date_from', filters.date_from);
+    if (filters.date_to) searchParams.set('date_to', filters.date_to);
+    if (filters.category) searchParams.set('category', filters.category);
+    for (const person of filters.people ?? []) searchParams.append('people', person);
+    for (const tag of filters.tags ?? []) searchParams.append('tags', tag);
+    if (filters.min_duration != null)
+      searchParams.set('min_duration', String(filters.min_duration));
+    if (filters.max_duration != null)
+      searchParams.set('max_duration', String(filters.max_duration));
+    if (filters.transcript_source) searchParams.set('transcript_source', filters.transcript_source);
     const response = await http
       .get('videos', { searchParams, signal })
       .json<PaginatedVideos | VideoInfo[]>();
     return normalizeVideosResponse(response);
+  },
+  async listDiscovery(
+    kind: 'topics' | 'moments',
+    limit = 12,
+    cursor?: string,
+    signal?: AbortSignal
+  ) {
+    const searchParams = new URLSearchParams({ kind, limit: String(limit) });
+    if (cursor) searchParams.set('cursor', cursor);
+    return http.get('archive/discovery', { searchParams, signal }).json<ArchiveDiscoveryResponse>();
   },
 };
 

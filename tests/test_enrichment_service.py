@@ -75,6 +75,7 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
         candidate=EpisodeEnrichmentCandidate(
             subjects=["labor organizing", "housing costs", "unsupported invention"],
             keywords=["union vote", "tenant protections"],
+            categories=[{"slug": "politics", "evidence_block_indexes": [0]}],
             chapters=[
                 {
                     "start_ms": 0,
@@ -131,6 +132,7 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
     assert all(call[1]["prompt_version"] == "prompt-v1" for call in chapter_inserts)
     assert json.loads(chapter_inserts[0][1]["evidence"])[0]["block_index"] == 0
     assert {label["label"] for label in labels} == {
+        "Politics",
         "labor organizing",
         "housing costs",
         "union vote",
@@ -139,7 +141,15 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
     assert all(label["status"] == "candidate" and label["publish_tier"] == "bronze" for label in labels)
     assert all(item["status"] == "candidate" and item["source"] == "llm" for item in assignments)
     assert all(item["evidence"] for item in assignments)
-    assert metrics == {"chapters": 2, "labels": 4, "assignments": 4, "skipped_ungrounded_labels": 1}
+    category = next(label for label in labels if label["kind"] == "category")
+    assert category["status"] == "candidate" and category["publish_tier"] == "bronze"
+    assert metrics == {
+        "chapters": 2,
+        "categories": 1,
+        "labels": 5,
+        "assignments": 5,
+        "skipped_ungrounded_labels": 1,
+    }
 
 
 def test_enrich_video_generates_v4_pro_candidates_and_records_run():
@@ -163,6 +173,7 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
         candidate=EpisodeEnrichmentCandidate(
             subjects=["labor organizing"],
             keywords=["union vote"],
+            categories=[{"slug": "politics", "evidence_block_indexes": [0]}],
             chapters=[
                 {
                     "start_ms": 0,
@@ -244,6 +255,7 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
         candidate=EpisodeEnrichmentCandidate(
             subjects=["labor organizing"],
             keywords=["union vote"],
+            categories=[{"slug": "politics", "evidence_block_indexes": [0]}],
             chapters=[
                 {
                     "start_ms": 0,

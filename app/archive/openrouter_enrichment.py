@@ -15,7 +15,32 @@ from .enrichment_runner import EpisodeInput, TranscriptBlockInput
 from .labeling.benchmark import EpisodePrediction, PredictedChapter
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
-PROMPT_VERSION = "archive-episode-enrichment-v2"
+PROMPT_VERSION = "archive-episode-enrichment-v7"
+
+CATEGORY_LABELS: dict[str, str] = {
+    "chadvice": "Chadvice",
+    "okbuddy": "OKBuddy",
+    "gaming": "Gaming",
+    "guests": "Guests",
+    "news": "News",
+    "politics": "Politics",
+    "react": "React",
+    "debate": "Debate",
+    "interview": "Interview",
+    "irl": "IRL",
+}
+CATEGORY_GUIDANCE: dict[str, str] = {
+    "chadvice": "Only the explicitly named recurring Chadvice advice segment; ordinary advice or relationship talk does not qualify.",
+    "okbuddy": "Only the explicitly named OKBuddy subreddit/reaction segment.",
+    "gaming": "Sustained video-game play or discussion; sports, billiards, and other physical/table games do not qualify.",
+    "guests": "One or more guests materially appear or participate in the stream; a person discussed but absent does not qualify.",
+    "news": "Sustained coverage of current news reporting or events, not a brief news tangent.",
+    "politics": "Sustained political analysis or political-event coverage, not a brief political tangent.",
+    "react": "Sustained viewing and commentary on external media, not ordinary conversation or chat responses.",
+    "debate": "A sustained adversarial debate between participants, not casual disagreement.",
+    "interview": "A sustained, structured interview with a guest, not ordinary guest conversation.",
+    "irl": "A substantial real-world, away-from-desk stream such as travel, events, venues, or street activity.",
+}
 
 EPISODE_ENRICHMENT_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -31,6 +56,25 @@ EPISODE_ENRICHMENT_SCHEMA: dict[str, Any] = {
             "minItems": 1,
             "maxItems": 24,
             "items": {"type": "string", "minLength": 2, "maxLength": 100},
+        },
+        "categories": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "enum": list(CATEGORY_LABELS)},
+                    "evidence_block_indexes": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 3,
+                        "items": {"type": "integer", "minimum": 0},
+                    },
+                },
+                "required": ["slug", "evidence_block_indexes"],
+                "additionalProperties": False,
+            },
         },
         "chapters": {
             "type": "array",
@@ -54,7 +98,7 @@ EPISODE_ENRICHMENT_SCHEMA: dict[str, Any] = {
             },
         },
     },
-    "required": ["subjects", "keywords", "chapters"],
+    "required": ["subjects", "keywords", "categories", "chapters"],
     "additionalProperties": False,
 }
 
@@ -68,11 +112,25 @@ class EpisodeChapterCandidate(BaseModel):
     evidence_block_indexes: list[int] = Field(min_length=1, max_length=3)
 
 
+class EpisodeCategoryCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    evidence_block_indexes: list[int] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_slug(self) -> EpisodeCategoryCandidate:
+        if self.slug not in CATEGORY_LABELS:
+            raise ValueError("unknown category slug")
+        return self
+
+
 class EpisodeEnrichmentCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     subjects: list[str] = Field(min_length=1, max_length=12)
     keywords: list[str] = Field(min_length=1, max_length=24)
+    categories: list[EpisodeCategoryCandidate] = Field(max_length=3)
     # Each bounded provider response is capped at 40 chapters by the request
     # schema. The merged episode may legitimately contain more than that.
     chapters: list[EpisodeChapterCandidate] = Field(min_length=2)
@@ -120,6 +178,9 @@ class OpenRouterEpisodeResult(BaseModel):
     elapsed_seconds: float
     first_boundary_normalized: bool = False
     summaries_truncated: int = 0
+    label_values_trimmed: int = 0
+    evidence_citations_trimmed: int = 0
+    categories_dropped: int = 0
     evidence_overlap_violations: int = 0
     window_count: int = 1
 
@@ -153,6 +214,9 @@ class OpenRouterEpisodeResult(BaseModel):
             "normalizations": {
                 "first_boundary_to_zero": self.first_boundary_normalized,
                 "summaries_truncated": self.summaries_truncated,
+                "label_values_trimmed": self.label_values_trimmed,
+                "evidence_citations_trimmed": self.evidence_citations_trimmed,
+                "categories_dropped": self.categories_dropped,
             },
             "validation": {"evidence_overlap_violations": self.evidence_overlap_violations},
             "window_count": self.window_count,
@@ -171,10 +235,17 @@ def build_openrouter_episode_request(
 ) -> dict[str, Any]:
     target_count = _target_chapter_count(episode.duration_ms)
     response_schema = deepcopy(EPISODE_ENRICHMENT_SCHEMA)
+    chapter_schema = response_schema["properties"]["chapters"]
+    chapter_schema["minItems"] = max(2, target_count - 2)
+    chapter_schema["maxItems"] = min(40, target_count + 2)
     evidence_schema = response_schema["properties"]["chapters"]["items"]["properties"]["evidence_block_indexes"][
         "items"
     ]
     evidence_schema["maximum"] = max(block.block_index for block in episode.blocks)
+    category_evidence_schema = response_schema["properties"]["categories"]["items"]["properties"][
+        "evidence_block_indexes"
+    ]["items"]
+    category_evidence_schema["maximum"] = max(block.block_index for block in episode.blocks)
     transcript = [
         {
             "block_index": block.block_index,
@@ -192,6 +263,10 @@ Prefer coherent editorial sections over brief conversational shifts. Merge adjac
 Titles must be specific, concise, safe to publish, and understandable without surrounding transcript text.
 Do not reproduce slurs, insults, profanity, sponsor copy, chat filler, or sentence fragments in titles.
 Subjects are the episode's sustained primary entities or issues. Keywords are specific phrases a user might search.
+Choose zero to three episode-defining categories only from the supplied controlled taxonomy and definitions.
+A category must characterize a substantial portion of the episode; do not classify from a short tangent.
+Return an empty category list when no controlled category fits instead of choosing a weak match.
+Cite blocks from distinct parts of the episode that directly support each category when possible.
 Every chapter must cite one to three block indexes whose text directly demonstrates its subject.
 Return only JSON matching the supplied schema."""
     user = {
@@ -202,6 +277,8 @@ Return only JSON matching the supplied schema."""
         "transcript_coverage": episode.transcript_coverage,
         "transcript_selection_reason": episode.transcript_selection_reason,
         "target_chapter_count": target_count,
+        "category_taxonomy": CATEGORY_LABELS,
+        "category_definitions": CATEGORY_GUIDANCE,
         "chapter_guidance": {
             "preferred_duration_minutes": "15-35",
             "first_start_ms": 0,
@@ -245,6 +322,47 @@ def _validation_summary(exc: ValidationError) -> str:
     return "; ".join(messages)
 
 
+def _category_has_sustained_evidence(category: dict[str, Any], episode: EpisodeInput) -> bool:
+    slug = category.get("slug")
+    indexes = category.get("evidence_block_indexes")
+    if not isinstance(slug, str) or not isinstance(indexes, list):
+        return False
+    block_by_index = {block.block_index: block for block in episode.blocks}
+    if any(isinstance(index, int) and index not in block_by_index for index in indexes):
+        return True
+    blocks = [block_by_index[index] for index in indexes if isinstance(index, int) and index in block_by_index]
+    title = (episode.title or "").casefold()
+    if slug in {"chadvice", "okbuddy"}:
+        marker = CATEGORY_LABELS[slug].casefold()
+        evidence_text = " ".join(block.text for block in blocks).casefold()
+        return marker in title or marker in evidence_text
+    if CATEGORY_LABELS.get(slug, "").casefold() in title:
+        return True
+    if len(blocks) < 2:
+        return False
+    evidence_span_ms = max(block.start_ms for block in blocks) - min(block.start_ms for block in blocks)
+    return evidence_span_ms >= episode.duration_ms * 0.2
+
+
+def _deduplicate_and_limit_labels(values: Any, limit: int, max_length: int) -> tuple[Any, int]:
+    """Repair only well-typed model label lists, preserving strict validation otherwise."""
+    if not isinstance(values, list) or not all(
+        isinstance(value, str) and 2 <= len(value) <= max_length for value in values
+    ):
+        return values, 0
+    retained: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = " ".join(value.casefold().split())
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        retained.append(value)
+        if len(retained) == limit:
+            break
+    return retained, len(values) - len(retained)
+
+
 def _parse_response(
     payload: dict[str, Any], episode: EpisodeInput, *, model: str, elapsed: float
 ) -> OpenRouterEpisodeResult:
@@ -277,7 +395,14 @@ def _parse_response(
         raise invalid("OpenRouter response was not JSON") from exc
     first_boundary_normalized = False
     summaries_truncated = 0
+    label_values_trimmed = 0
+    evidence_citations_trimmed = 0
+    categories_dropped = 0
     if isinstance(raw_candidate, dict):
+        for field, limit, max_length in (("subjects", 12, 80), ("keywords", 24, 100)):
+            repaired, trimmed = _deduplicate_and_limit_labels(raw_candidate.get(field), limit, max_length)
+            raw_candidate[field] = repaired
+            label_values_trimmed += trimmed
         chapters = raw_candidate.get("chapters")
         if isinstance(chapters, list) and chapters and isinstance(chapters[0], dict):
             first_start = chapters[0].get("start_ms")
@@ -291,6 +416,26 @@ def _parse_response(
                 if isinstance(summary, str) and len(summary) > 300:
                     chapter["summary"] = summary[:300].rsplit(" ", 1)[0].rstrip(" ,;:-")
                     summaries_truncated += 1
+                evidence = chapter.get("evidence_block_indexes")
+                if isinstance(evidence, list) and len(evidence) > 3:
+                    chapter["evidence_block_indexes"] = list(dict.fromkeys(evidence))[:3]
+                    evidence_citations_trimmed += len(evidence) - len(chapter["evidence_block_indexes"])
+        categories = raw_candidate.get("categories")
+        if isinstance(categories, list):
+            for category in categories:
+                if not isinstance(category, dict):
+                    continue
+                evidence = category.get("evidence_block_indexes")
+                if isinstance(evidence, list) and len(evidence) > 3:
+                    category["evidence_block_indexes"] = list(dict.fromkeys(evidence))[:3]
+                    evidence_citations_trimmed += len(evidence) - len(category["evidence_block_indexes"])
+            retained_categories = [
+                category
+                for category in categories
+                if isinstance(category, dict) and _category_has_sustained_evidence(category, episode)
+            ]
+            categories_dropped = len(categories) - len(retained_categories)
+            raw_candidate["categories"] = retained_categories
     try:
         candidate = EpisodeEnrichmentCandidate.model_validate(raw_candidate)
     except ValidationError as exc:
@@ -299,6 +444,9 @@ def _parse_response(
     if candidate.chapters[-1].start_ms >= episode.duration_ms:
         raise invalid("final chapter starts outside the episode")
     block_by_index = {block.block_index: block for block in episode.blocks}
+    for category in candidate.categories:
+        if any(block_index not in block_by_index for block_index in category.evidence_block_indexes):
+            raise invalid("category cites an unknown transcript block")
     evidence_overlap_violations = 0
     for index, chapter in enumerate(candidate.chapters):
         end_ms = candidate.chapters[index + 1].start_ms if index + 1 < len(candidate.chapters) else episode.duration_ms
@@ -324,6 +472,9 @@ def _parse_response(
         elapsed_seconds=elapsed,
         first_boundary_normalized=first_boundary_normalized,
         summaries_truncated=summaries_truncated,
+        label_values_trimmed=label_values_trimmed,
+        evidence_citations_trimmed=evidence_citations_trimmed,
+        categories_dropped=categories_dropped,
         evidence_overlap_violations=evidence_overlap_violations,
     )
 
@@ -460,9 +611,21 @@ def generate_hierarchical_openrouter_enrichment(
             chapter.model_copy(update={"start_ms": offset_ms + chapter.start_ms})
             for chapter in result.candidate.chapters
         )
+    category_counts: Counter[str] = Counter()
+    category_evidence: dict[str, list[int]] = {}
+    for _offset_ms, result in window_results:
+        for category in result.candidate.categories:
+            category_counts[category.slug] += 1
+            evidence = category_evidence.setdefault(category.slug, [])
+            evidence.extend(index for index in category.evidence_block_indexes if index not in evidence)
+    categories = [
+        EpisodeCategoryCandidate(slug=slug, evidence_block_indexes=category_evidence[slug][:3])
+        for slug, _count in category_counts.most_common(3)
+    ]
     candidate = EpisodeEnrichmentCandidate(
         subjects=_rank_window_labels([result.candidate.subjects for _offset, result in window_results], 12),
         keywords=_rank_window_labels([result.candidate.keywords for _offset, result in window_results], 24),
+        categories=categories,
         chapters=chapters,
     )
     providers = list(dict.fromkeys(result.provider for _offset, result in window_results))
@@ -479,6 +642,9 @@ def generate_hierarchical_openrouter_enrichment(
         elapsed_seconds=sum(result.elapsed_seconds for _offset, result in window_results),
         first_boundary_normalized=any(result.first_boundary_normalized for _offset, result in window_results),
         summaries_truncated=sum(result.summaries_truncated for _offset, result in window_results),
+        label_values_trimmed=sum(result.label_values_trimmed for _offset, result in window_results),
+        evidence_citations_trimmed=sum(result.evidence_citations_trimmed for _offset, result in window_results),
+        categories_dropped=sum(result.categories_dropped for _offset, result in window_results),
         evidence_overlap_violations=sum(result.evidence_overlap_violations for _offset, result in window_results),
         window_count=len(window_results),
     )
@@ -486,9 +652,12 @@ def generate_hierarchical_openrouter_enrichment(
 
 __all__ = [
     "EPISODE_ENRICHMENT_SCHEMA",
+    "CATEGORY_LABELS",
+    "CATEGORY_GUIDANCE",
     "OPENROUTER_CHAT_URL",
     "PROMPT_VERSION",
     "EpisodeChapterCandidate",
+    "EpisodeCategoryCandidate",
     "EpisodeEnrichmentCandidate",
     "OpenRouterEpisodeResult",
     "OpenRouterResponseValidationError",

@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import StreamsPage from '../routes/StreamsPage';
 import { render } from '@testing-library/react';
 import { api } from '../services';
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
+}
 
 describe('StreamsPage', () => {
   beforeEach(() => {
@@ -99,25 +104,21 @@ describe('StreamsPage', () => {
       expect(listMock).toHaveBeenCalledTimes(1);
     });
 
-    const renderedLinks = screen.getAllByRole('link', { name: /stream/i });
-    expect(renderedLinks[0]).toHaveAttribute('href', '/v/video-1');
-    expect(renderedLinks[1]).toHaveAttribute('href', '/v/video-2');
+    expect(
+      screen.getByRole('link', { name: 'Watch First stream with transcript' })
+    ).toHaveAttribute('href', '/v/video-1');
     expect(screen.getByText('First stream')).toBeInTheDocument();
-    expect(screen.getByText('Channel Alpha')).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'VOD metadata' })).toBeInTheDocument();
-    expect(screen.getByText('Guest One')).toBeInTheDocument();
-    expect(screen.getByText('Chadvice')).toBeInTheDocument();
+    expect(screen.getByText(/Guest One · Chadvice/)).toBeInTheDocument();
     expect(listMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        limit: 24,
-        offset: 0,
-        completed_only: false,
+        limit: 12,
+        cursor: undefined,
         date_field: 'uploaded_at',
       }),
       expect.any(AbortSignal)
     );
 
-    await user.click(screen.getByRole('button', { name: /next page/i }));
+    await user.click(screen.getByRole('button', { name: /load more/i }));
 
     await waitFor(() => {
       expect(listMock).toHaveBeenCalledTimes(2);
@@ -125,14 +126,14 @@ describe('StreamsPage', () => {
 
     expect(listMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        limit: 24,
-        offset: 24,
-        completed_only: false,
+        limit: 12,
+        cursor: 'next-cursor',
         date_field: 'uploaded_at',
       }),
-      expect.any(AbortSignal)
+      undefined
     );
-    expect(screen.getByText('Second stream')).toBeInTheDocument();
+    expect(screen.getByText('Older stream')).toBeInTheDocument();
+    expect(screen.queryByText('Second stream')).not.toBeInTheDocument();
   });
 
   it('submits search and filter state into the URL', async () => {
@@ -158,7 +159,6 @@ describe('StreamsPage', () => {
       expect(listMock).toHaveBeenCalledWith(
         expect.objectContaining({
           q: 'alpha',
-          completed_only: false,
           date_field: 'uploaded_at',
           date_from: '2026-05-01',
           date_to: '2026-05-31',
@@ -168,11 +168,46 @@ describe('StreamsPage', () => {
     });
 
     expect(screen.getByDisplayValue('alpha')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/minimum minutes/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/maximum minutes/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/transcript source/i)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /reset/i }));
+    await user.clear(screen.getByLabelText('Search VODs'));
+    await user.click(screen.getByRole('button', { name: 'Search' }));
 
     await waitFor(() => {
       expect(screen.getByLabelText('Search VODs')).toHaveValue('');
+    });
+  });
+
+  it('strips retired VOD filters from the URL and never sends them', async () => {
+    const listMock = vi.spyOn(api, 'listStreamLibrary').mockResolvedValue({
+      items: [],
+      page_info: { has_next_page: false, has_previous_page: false, total_count: 0 },
+    } as never);
+    render(
+      <MemoryRouter
+        initialEntries={[
+          '/episodes?date_from=2026-01-01&min_duration=60&max_duration=120&transcript_source=youtube&source=asr',
+        ]}
+      >
+        <StreamsPage />
+        <LocationProbe />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    expect(listMock.mock.calls.at(-1)?.[0]).toEqual(
+      expect.not.objectContaining({
+        min_duration: expect.anything(),
+        max_duration: expect.anything(),
+        transcript_source: expect.anything(),
+      })
+    );
+    expect(screen.getByLabelText('From')).toHaveValue('2026-01-01');
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/episodes?date_from=2026-01-01');
     });
   });
 
@@ -217,18 +252,9 @@ describe('StreamsPage', () => {
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent('VOD library unavailable');
-    expect(screen.queryByRole('region', { name: 'Stream results' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'latest feed' })).not.toBeInTheDocument();
     expect(screen.queryByText('No VODs match these filters.')).not.toBeInTheDocument();
-    expect(
-      screen
-        .getAllByRole('button', { name: /previous/i })
-        .every((button) => button.hasAttribute('disabled'))
-    ).toBe(true);
-    expect(
-      screen
-        .getAllByRole('button', { name: /next/i })
-        .every((button) => button.hasAttribute('disabled'))
-    ).toBe(true);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
   it('shows a stable initial skeleton while the VOD library is loading', () => {
@@ -240,13 +266,8 @@ describe('StreamsPage', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Loading VODs…')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Loading feed' })).toBeInTheDocument();
     expect(container.querySelectorAll('.animate-pulse')).toHaveLength(6);
-    expect(
-      screen
-        .getAllByRole('button', { name: /previous/i })
-        .every((item) => item.hasAttribute('disabled'))
-    ).toBe(true);
   });
 
   it('explains how to recover from a successful no-match result', async () => {
@@ -270,5 +291,40 @@ describe('StreamsPage', () => {
     expect(await screen.findByText('No VODs match these filters.')).toBeInTheDocument();
     expect(screen.getByText(/Try broadening the date range/)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('preserves each loaded tab while switching between discovery feeds', async () => {
+    const library = vi.spyOn(api, 'listStreamLibrary').mockResolvedValue({
+      items: [{ id: 'video-1', youtube_id: 'abc123xyz89', title: 'Latest stream' }],
+      page_info: { has_next_page: false, has_previous_page: false, total_count: 1 },
+    } as never);
+    vi.spyOn(api, 'listDiscovery').mockResolvedValue({
+      items: [
+        {
+          kind: 'topic',
+          topic: {
+            slug: 'labor',
+            label: 'Labor',
+            source: 'curated',
+            total_videos: 4,
+            total_moments: 12,
+          },
+        },
+      ],
+      page_info: { has_next_page: false, has_previous_page: false, total_count: 1 },
+    } as never);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/episodes']}>
+        <StreamsPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Latest stream')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Topics' }));
+    expect(await screen.findByText('Labor')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Latest' }));
+    expect(await screen.findByText('Latest stream')).toBeInTheDocument();
+    expect(library).toHaveBeenCalledTimes(1);
   });
 });

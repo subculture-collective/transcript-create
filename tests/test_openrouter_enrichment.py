@@ -39,6 +39,7 @@ def _response_payload() -> dict:
     content = {
         "subjects": ["Labor organizing", "Housing costs"],
         "keywords": ["union vote", "tenant protections"],
+        "categories": [{"slug": "politics", "evidence_block_indexes": [0, 1]}],
         "chapters": [
             {
                 "start_ms": 0,
@@ -85,6 +86,11 @@ def test_build_openrouter_request_uses_identical_strict_controls():
     assert response_schema["name"] == "hasanara_episode_enrichment"
     assert response_schema["strict"] is True
     assert response_schema["schema"] is not EPISODE_ENRICHMENT_SCHEMA
+    assert response_schema["schema"]["properties"]["chapters"]["minItems"] == 4
+    assert response_schema["schema"]["properties"]["chapters"]["maxItems"] == 8
+    assert EPISODE_ENRICHMENT_SCHEMA["properties"]["chapters"]["minItems"] == 2
+    assert EPISODE_ENRICHMENT_SCHEMA["properties"]["chapters"]["maxItems"] == 40
+    assert response_schema["schema"]["properties"]["categories"]["minItems"] == 0
     evidence_items = response_schema["schema"]["properties"]["chapters"]["items"]["properties"][
         "evidence_block_indexes"
     ]["items"]
@@ -102,6 +108,9 @@ def test_build_openrouter_request_uses_identical_strict_controls():
     }
     user = json.loads(body["messages"][1]["content"])
     assert user["target_chapter_count"] == 6
+    assert user["category_taxonomy"]["politics"] == "Politics"
+    assert "video-game" in user["category_definitions"]["gaming"]
+    assert "explicitly named" in user["category_definitions"]["chadvice"]
     assert user["transcript_blocks"][1]["block_index"] == 1
 
 
@@ -179,6 +188,78 @@ def test_generate_openrouter_enrichment_truncates_overlong_summaries(monkeypatch
     assert len(result.candidate.chapters[0].summary) <= 300
 
 
+def test_generate_openrouter_enrichment_deduplicates_and_caps_label_lists(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["subjects"] = ["Labor", " labor ", *[f"Subject {index}" for index in range(20)]]
+    parsed["keywords"] = ["Union Vote", "union   vote", *[f"Keyword {index}" for index in range(30)]]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    result = generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model")
+
+    assert len(result.candidate.subjects) == 12
+    assert result.candidate.subjects[:2] == ["Labor", "Subject 0"]
+    assert len(result.candidate.keywords) == 24
+    assert result.candidate.keywords[:2] == ["Union Vote", "Keyword 0"]
+    assert result.label_values_trimmed == 18
+    assert result.as_dict()["normalizations"]["label_values_trimmed"] == 18
+
+
+def test_generate_openrouter_enrichment_trims_excess_evidence_citations(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["chapters"][0]["evidence_block_indexes"] = [0, 1, 0, 1]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    result = generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model")
+
+    assert result.candidate.chapters[0].evidence_block_indexes == [0, 1]
+    assert result.evidence_citations_trimmed == 2
+    assert result.as_dict()["normalizations"]["evidence_citations_trimmed"] == 2
+
+
+def test_generate_openrouter_enrichment_rejects_unknown_category_evidence(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["categories"][0]["evidence_block_indexes"] = [99]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    with pytest.raises(ValueError, match="category cites an unknown transcript block"):
+        generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model")
+
+
+def test_generate_openrouter_enrichment_drops_category_without_sustained_evidence(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["categories"] = [
+        {"slug": "gaming", "evidence_block_indexes": [0]},
+        {"slug": "politics", "evidence_block_indexes": [0, 1]},
+    ]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    result = generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model")
+
+    assert [category.slug for category in result.candidate.categories] == ["politics"]
+    assert result.categories_dropped == 1
+    assert result.as_dict()["normalizations"]["categories_dropped"] == 1
+
+
 def test_generate_openrouter_enrichment_retries_transient_http_errors(monkeypatch):
     attempts = 0
 
@@ -238,6 +319,7 @@ def test_hierarchical_enrichment_bounds_windows_and_recombines_episode():
             candidate=EpisodeEnrichmentCandidate(
                 subjects=["Topic"],
                 keywords=["discussion topic"],
+                categories=[{"slug": "politics", "evidence_block_indexes": [window.blocks[0].block_index]}],
                 chapters=[
                     {
                         "start_ms": 0,

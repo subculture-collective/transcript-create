@@ -188,7 +188,7 @@ describe('TopicPage', () => {
     expect(screen.getAllByText('rent', { selector: 'mark' })).toHaveLength(5);
     fireEvent.click(screen.getAllByRole('button', { name: 'Copy quote' })[0]);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      expect.stringContaining('/v/video-1?t=1&source=whisper#moment-whisper-1000')
+      expect.stringContaining('/v/video-1?t=1#moment-1000')
     );
     expect(await screen.findByRole('status')).toHaveTextContent('Quote copied.');
 

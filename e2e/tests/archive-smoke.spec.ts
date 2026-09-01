@@ -652,7 +652,9 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
       .focus();
   }
   await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/search$/);
   const query = page.getByRole("searchbox", { name: "Search query" });
+  await expect(query).toBeVisible();
   await query.focus();
   await page.keyboard.type("no-such-archive-phrase");
   await page.keyboard.press("Enter");

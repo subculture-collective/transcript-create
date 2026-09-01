@@ -29,7 +29,7 @@ describe('MomentActionRow', () => {
     expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open moment' })).toHaveAttribute(
       'href',
-      '/v/video-1?t=1&source=whisper&t_ms=1140#moment-whisper-1140'
+      '/v/video-1?t=1&t_ms=1140#moment-1140'
     );
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Copy quote' })).toBeVisible();

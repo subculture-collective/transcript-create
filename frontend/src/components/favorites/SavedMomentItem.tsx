@@ -59,7 +59,7 @@ export default function SavedMomentItem(props: SavedMomentItemProps) {
         <div className="mb-2 line-clamp-2">{item.text}</div>
         <Link
           className="action-link"
-          to={buildTimestampLink(item.videoId, item.startMs, item.segIndex)}
+          to={buildTimestampLink(item.videoId, item.startMs, item.source ?? item.segIndex)}
         >
           Open moment
         </Link>

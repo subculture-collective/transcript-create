@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
 import AppLayout from '../routes/AppLayout';
@@ -90,6 +90,42 @@ describe('AppLayout navigation', () => {
         resolve();
       })
     );
+  });
+
+  it('does not steal focus when a user reaches a control during a route transition', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route
+              index
+              element={
+                <>
+                  <h1>Home</h1>
+                  <Link to="/search">Open search</Link>
+                </>
+              }
+            />
+            <Route
+              path="search"
+              element={
+                <>
+                  <h1>Search</h1>
+                  <input aria-label="Search query" />
+                </>
+              }
+            />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'Open search' }));
+    const query = screen.getByRole('textbox', { name: 'Search query' });
+    query.focus();
+
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(query).toHaveFocus();
   });
 
   it('marks the current destination in mobile navigation', () => {

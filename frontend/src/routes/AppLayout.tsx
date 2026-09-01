@@ -95,7 +95,12 @@ function RouteTransitionManager() {
       } else {
         window.scrollTo({ top: 0 });
         const target = document.querySelector<HTMLElement>('main h1');
-        if (target) {
+        const active = document.activeElement;
+        const userMovedFocus =
+          active instanceof HTMLElement &&
+          active !== document.body &&
+          active !== document.documentElement;
+        if (target && !userMovedFocus) {
           target.tabIndex = -1;
           target.focus({ preventScroll: true });
         }

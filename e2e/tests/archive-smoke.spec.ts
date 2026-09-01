@@ -656,7 +656,8 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   const query = page.getByRole("searchbox", { name: "Search query" });
   await expect(query).toBeVisible();
   await query.focus();
-  await page.keyboard.type("no-such-archive-phrase");
+  await query.pressSequentially("no-such-archive-phrase", { delay: 75 });
+  await expect(query).toHaveValue("no-such-archive-phrase");
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "No transcript matches" }),
@@ -664,7 +665,8 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
 
   await query.focus();
   await page.keyboard.press("ControlOrMeta+A");
-  await page.keyboard.type("labor");
+  await query.pressSequentially("labor", { delay: 75 });
+  await expect(query).toHaveValue("labor");
   await page.keyboard.press("Enter");
   await expect(page.getByText("labor rights").first()).toBeVisible();
 });

@@ -135,6 +135,9 @@ def test_archive_enrichment_defaults_to_disabled_v4_pro_candidates():
     assert config.ARCHIVE_ENRICHMENT_MODEL == "deepseek/deepseek-v4-pro"
     assert config.ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES == 90
     assert config.ARCHIVE_ENRICHMENT_PUBLISH is False
+    assert config.ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS == 300
+    assert config.ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS == 86400
+    assert config.ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS == 3600
 
 
 def test_production_archive_enrichment_requires_openrouter_key():

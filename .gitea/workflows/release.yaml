@@ -651,7 +651,7 @@ jobs:
                   raise SystemExit("invalid image fragment")
               images[item["role"]] = item["image"]
           if set(images) != set(roles) or not ref.fullmatch(os.environ["REDIS_IMAGE"]): raise SystemExit("missing release digest")
-          Path("release-images.json").write_text(json.dumps({"schema_version": 1, "source_commit": os.environ["SOURCE_COMMIT"], "images": {**dict(sorted(images.items())), "redis": os.environ["REDIS_IMAGE"]}, "services": {"db": "postgres-walg", "backup": "postgres-walg", "migrations": "api", "api": "api", "analytics-retention": "api", "summary-refresher": "api", "archive-intelligence-refresher": "api", "worker": "ingest-cuda", "diarization-worker": "ml-cuda", "frontend": "frontend", "redis": "redis"}}, indent=2) + "\n")
+          Path("release-images.json").write_text(json.dumps({"schema_version": 1, "source_commit": os.environ["SOURCE_COMMIT"], "images": {**dict(sorted(images.items())), "redis": os.environ["REDIS_IMAGE"]}, "services": {"db": "postgres-walg", "backup": "postgres-walg", "migrations": "api", "api": "api", "analytics-retention": "api", "summary-refresher": "api", "archive-intelligence-refresher": "api", "archive-enrichment-queue": "api", "worker": "ingest-cuda", "diarization-worker": "ml-cuda", "frontend": "frontend", "redis": "redis"}}, indent=2) + "\n")
           PY
       - name: Upload release evidence bundle
         uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3

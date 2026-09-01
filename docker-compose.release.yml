@@ -77,6 +77,17 @@ services:
             ALLOW_SESSION_TOKEN_CONTRACT_MIGRATION: "false"
             ALLOW_EVENT_TOKEN_CONTRACT_MIGRATION: "false"
 
+    archive-enrichment-queue:
+        build: !reset null
+        image: ${HASANARA_API_IMAGE:?HASANARA_API_IMAGE is required}
+        env_file: !override ["${HASANARA_ENV_FILE:?HASANARA_ENV_FILE is required}"]
+        environment:
+            DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
+            ENVIRONMENT: production
+            LOG_LEVEL: INFO
+            ALLOW_SESSION_TOKEN_CONTRACT_MIGRATION: "false"
+            ALLOW_EVENT_TOKEN_CONTRACT_MIGRATION: "false"
+
     diarization-worker:
         build: !reset null
         image: ${HASANARA_ML_IMAGE:?HASANARA_ML_IMAGE is required}

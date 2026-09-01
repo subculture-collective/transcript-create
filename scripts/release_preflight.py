@@ -25,6 +25,7 @@ SERVICE_ROLES = {
     "analytics-retention": "api",
     "summary-refresher": "api",
     "archive-intelligence-refresher": "api",
+    "archive-enrichment-queue": "api",
     "worker": "ingest-cuda",
     "diarization-worker": "ml-cuda",
     "frontend": "frontend",
@@ -39,6 +40,7 @@ DATABASE_CLIENTS = {
     "analytics-retention",
     "summary-refresher",
     "archive-intelligence-refresher",
+    "archive-enrichment-queue",
     "backup",
 }
 APPLICATION_SERVICES = DATABASE_CLIENTS - {"backup"}

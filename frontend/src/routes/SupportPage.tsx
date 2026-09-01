@@ -125,8 +125,8 @@ export default function SupportPage() {
             Card details never touch HasanAra.
           </h2>
           <p className="mt-3 text-sm leading-6 text-muted">
-            The donation button opens a Stripe-hosted checkout. HasanAra receives confirmation from
-            Stripe but does not collect or store your card number.
+            The donation button opens a Stripe-hosted checkout. Stripe handles payment confirmation;
+            HasanAra does not collect or store your card number.
           </p>
         </div>
         <div className="archive-section">

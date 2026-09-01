@@ -154,3 +154,9 @@ def test_compose_runs_enrichment_queue_as_a_guarded_api_service() -> None:
     assert "  archive-enrichment-queue:" in production
     assert "    archive-enrichment-queue:" in release
     assert '"archive-enrichment-queue": "api"' in preflight
+
+
+def test_api_image_packages_the_enrichment_queue_entrypoint() -> None:
+    dockerfile = (ROOT / "Dockerfile.api").read_text()
+
+    assert "COPY scripts/run_archive_enrichment_queue.py ./scripts/run_archive_enrichment_queue.py" in dockerfile

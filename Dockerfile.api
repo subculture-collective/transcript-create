@@ -35,6 +35,7 @@ COPY scripts/run_migrations.py ./scripts/run_migrations.py
 COPY scripts/maintain_event_retention.py ./scripts/maintain_event_retention.py
 COPY scripts/refresh_archive_summary_stats.py ./scripts/refresh_archive_summary_stats.py
 COPY scripts/refresh_archive_intelligence.py ./scripts/refresh_archive_intelligence.py
+COPY scripts/run_archive_enrichment_queue.py ./scripts/run_archive_enrichment_queue.py
 COPY scripts/recover_attention_backlog.py ./scripts/recover_attention_backlog.py
 COPY fonts ./fonts
 RUN python -m compileall -q app

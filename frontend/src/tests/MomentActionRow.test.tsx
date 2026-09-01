@@ -27,7 +27,7 @@ describe('MomentActionRow', () => {
 
     expect(screen.getByRole('link', { name: 'Open moment' })).toHaveAttribute(
       'href',
-      '/v/video-1?t=1&source=whisper#moment-whisper-1000'
+      '/v/video-1?t=1#moment-1000'
     );
     expect(screen.getByRole('button', { name: 'Copy quote' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save moment' })).toBeInTheDocument();

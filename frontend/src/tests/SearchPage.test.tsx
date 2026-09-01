@@ -122,16 +122,15 @@ describe('SearchPage', () => {
     await waitFor(() => {
       expect(searchGroupedMock).toHaveBeenCalledWith(
         'rent',
-        expect.objectContaining({
-          source: undefined,
-          category: undefined,
-          min_duration: undefined,
-          max_duration: undefined,
+        {
+          match_mode: 'topic',
+          date_from: undefined,
+          date_to: undefined,
           sort_by: 'date_desc',
           video_id: 'video-1',
-          limit: 25,
-          offset: 50,
-        }),
+          limit: 20,
+          offset: 0,
+        },
         expect.any(AbortSignal)
       );
     });
@@ -151,7 +150,7 @@ describe('SearchPage', () => {
     );
     expect(screen.getByRole('link', { name: 'Play all matches' })).toHaveAttribute(
       'href',
-      '/v/video-1?t=12&q=rent&play=matches#seg-1'
+      '/v/video-1?t=12&q=rent&play=matches#moment-12000'
     );
 
     expect(screen.getByRole('link', { name: 'gaza' })).toHaveAttribute('href', '/search?q=gaza');
@@ -178,13 +177,15 @@ describe('SearchPage', () => {
     await waitFor(() => {
       expect(searchGroupedMock).toHaveBeenCalledWith(
         'rent',
-        expect.objectContaining({
-          source: undefined,
-          category: undefined,
+        {
+          match_mode: 'topic',
+          date_from: undefined,
+          date_to: undefined,
+          sort_by: undefined,
           video_id: undefined,
-          limit: undefined,
-          offset: undefined,
-        }),
+          limit: 20,
+          offset: 0,
+        },
         expect.any(AbortSignal)
       );
     });
@@ -306,7 +307,10 @@ describe('SearchPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Copy link' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Timestamp link copied.');
-    expect(writeText).toHaveBeenNthCalledWith(1, expect.stringContaining('/v/video-1?t=12#seg-1'));
+    expect(writeText).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/v/video-1?t=12#moment-12000')
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Copy quote' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Quote copied.');

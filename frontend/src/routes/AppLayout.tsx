@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { useAuth, useTheme } from '../services';
 
 const navItems = [
@@ -10,6 +10,106 @@ const navItems = [
   { to: '/episodes', label: 'VODs' },
   { to: '/saved', label: 'Saved' },
 ];
+
+const routeMeta: Array<{ match: RegExp; title: string; description: string }> = [
+  {
+    match: /^\/$/,
+    title: 'HasanAra — Broadcast archive',
+    description: 'Search and watch the public HasanAbi broadcast archive.',
+  },
+  {
+    match: /^\/search/,
+    title: 'Search transcripts — HasanAra',
+    description: 'Find timestamped, citation-backed moments across the archive.',
+  },
+  {
+    match: /^\/explore/,
+    title: 'Explore topics — HasanAra',
+    description: 'Explore public archive topics, periods, and evidence.',
+  },
+  {
+    match: /^\/(episodes|streams)/,
+    title: 'Watch the archive — HasanAra',
+    description: 'Browse the latest VODs, topics, and cited transcript moments.',
+  },
+  {
+    match: /^\/timeline/,
+    title: 'Archive timeline — HasanAra',
+    description: 'Browse broadcasts chronologically.',
+  },
+  {
+    match: /^\/topics\//,
+    title: 'Topic evidence — HasanAra',
+    description: 'Review a topic through timestamped transcript evidence.',
+  },
+  {
+    match: /^\/v\//,
+    title: 'Episode transcript — HasanAra',
+    description: 'Watch a source VOD with its interactive transcript.',
+  },
+  {
+    match: /^\/saved/,
+    title: 'Saved moments — HasanAra',
+    description: 'Return to saved searches and transcript moments.',
+  },
+  {
+    match: /^\/account/,
+    title: 'Account — HasanAra',
+    description: 'Manage your HasanAra account.',
+  },
+  {
+    match: /^\/admin/,
+    title: 'Archive administration — HasanAra',
+    description: 'Operate the HasanAra archive.',
+  },
+];
+
+function RouteTransitionManager() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const previousPath = useRef(location.pathname);
+  const positions = useRef(new Map<string, number>());
+  const [announcement, setAnnouncement] = useState('');
+
+  useEffect(() => {
+    const meta = routeMeta.find((item) => item.match.test(location.pathname)) ?? {
+      title: 'HasanAra',
+      description: 'Public broadcast archive.',
+    };
+    document.title = meta.title;
+    let description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (!description) {
+      description = document.createElement('meta');
+      description.name = 'description';
+      document.head.appendChild(description);
+    }
+    description.content = meta.description;
+
+    const pathChanged = previousPath.current !== location.pathname;
+    if (!pathChanged) return;
+    positions.current.set(previousPath.current, window.scrollY);
+    previousPath.current = location.pathname;
+    window.requestAnimationFrame(() => {
+      if (navigationType === 'POP') {
+        window.scrollTo({ top: positions.current.get(location.pathname) ?? 0 });
+      } else {
+        window.scrollTo({ top: 0 });
+        const target = document.querySelector<HTMLElement>('main h1');
+        if (target) {
+          target.tabIndex = -1;
+          target.focus({ preventScroll: true });
+        }
+      }
+      setAnnouncement(meta.title.replace(' — HasanAra', ''));
+    });
+  }, [location.pathname, navigationType]);
+
+  return (
+    <span className="sr-only" role="status" aria-live="polite">
+      {announcement}
+    </span>
+  );
+}
 
 export default function AppLayout() {
   const { user, loading, error: authError, login, loginTwitch, logout } = useAuth();
@@ -36,8 +136,12 @@ export default function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink transition-colors">
+      <RouteTransitionManager />
       <a
         href="#main-content"
+        onClick={() =>
+          window.requestAnimationFrame(() => document.getElementById('main-content')?.focus())
+        }
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:min-h-[44px] focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-contrast"
       >
         Skip to main content
@@ -213,23 +317,28 @@ export default function AppLayout() {
             <div className="mx-auto flex max-w-[100rem] flex-col gap-2 py-4">
               <div className="archive-eyebrow mb-2 self-start">Navigation deck</div>
               {navItems.map((item) => (
-                <Link
+                <NavLink
                   key={item.to}
                   to={item.to}
-                  className="nav-link block"
+                  end={item.to === '/'}
+                  className={({ isActive }) =>
+                    `nav-link block ${isActive ? 'bg-surface-muted text-ink' : ''}`
+                  }
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {item.label}
-                </Link>
+                </NavLink>
               ))}
               {user && (
-                <Link
+                <NavLink
                   to="/account"
-                  className="nav-link block"
+                  className={({ isActive }) =>
+                    `nav-link block ${isActive ? 'bg-surface-muted text-ink' : ''}`
+                  }
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Account
-                </Link>
+                </NavLink>
               )}
 
               <div className="mt-3 border-t border-border pt-3">
@@ -346,6 +455,7 @@ export default function AppLayout() {
 
       <main
         id="main-content"
+        tabIndex={-1}
         className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-[100rem] flex-1 px-4 py-6 lg:px-6 lg:py-8"
         role="main"
       >

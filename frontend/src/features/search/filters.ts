@@ -16,9 +16,13 @@ function readSort(value: string | null): ArchiveSearchFilters['sort_by'] {
 }
 
 export function readFilters(params: URLSearchParams): SearchFilters {
+  const matchMode = params.get('match_mode');
   return {
     q: params.get('q') ?? '',
-    match_mode: (params.get('match_mode') as ArchiveSearchFilters['match_mode']) ?? 'topic',
+    match_mode:
+      matchMode === 'exact_phrase' || matchMode === 'whole_word' || matchMode === 'topic'
+        ? matchMode
+        : 'topic',
     date_from: params.get('date_from') ?? undefined,
     date_to: params.get('date_to') ?? undefined,
     sort_by: readSort(params.get('sort_by')),

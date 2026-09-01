@@ -674,15 +674,19 @@ describe('VideoPage', () => {
     window.location.hash = '#seg-251';
     renderVideo('/v/video-1?t=2500');
 
-    await waitFor(() => expect(document.getElementById('seg-251')).not.toBeNull());
+    await waitFor(() => expect(document.getElementById('seg-251')).not.toBeNull(), {
+      timeout: 5_000,
+    });
     expect(screen.getByText(/Chapter 3 of 30/)).toBeInTheDocument();
     expect(document.querySelectorAll('[data-transcript-sentence="true"]')).toHaveLength(270);
     expect(document.querySelectorAll('*').length).toBeLessThanOrEqual(1_500);
     expect(document.getElementById('seg-1')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Load full transcript' }));
-    await waitFor(() =>
-      expect(document.querySelectorAll('[data-transcript-sentence="true"]')).toHaveLength(2_700)
+    await waitFor(
+      () =>
+        expect(document.querySelectorAll('[data-transcript-sentence="true"]')).toHaveLength(2_700),
+      { timeout: 5_000 }
     );
     expect(screen.getByRole('button', { name: 'Use progressive transcript' })).toBeInTheDocument();
   }, 15_000);

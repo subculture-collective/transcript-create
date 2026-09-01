@@ -1,6 +1,6 @@
 import type { StreamLibraryFilters, VideoInfo } from '../../types/api';
 
-export const DEFAULT_LIMIT = 12;
+export const DEFAULT_LIMIT = 24;
 
 export const DATE_FIELD_OPTIONS = [
   { value: 'uploaded_at', label: 'Uploaded date' },

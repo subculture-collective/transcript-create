@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from scripts.run_archive_enrichment_queue import QueueDependencies, main, run_queue_cycle, select_next_video
@@ -160,3 +163,22 @@ def test_api_image_packages_the_enrichment_queue_entrypoint() -> None:
     dockerfile = (ROOT / "Dockerfile.api").read_text()
 
     assert "COPY scripts/run_archive_enrichment_queue.py ./scripts/run_archive_enrichment_queue.py" in dockerfile
+
+
+def test_queue_entrypoint_runs_standalone_outside_the_repository() -> None:
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment["ARCHIVE_ENRICHMENT_ENABLED"] = "false"
+
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/run_archive_enrichment_queue.py"), "--once"],
+        cwd="/tmp",
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == '{"status": "disabled"}'

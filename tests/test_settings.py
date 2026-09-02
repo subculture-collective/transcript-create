@@ -131,10 +131,12 @@ def test_donation_payment_link_defaults_to_disabled():
     assert config.DONATION_PAYMENT_LINK_URL == ""
 
 
-def test_donation_payment_link_accepts_stripe_https_url():
-    config = _isolated_settings(DONATION_PAYMENT_LINK_URL="https://buy.stripe.com/test_example")
+@pytest.mark.parametrize("hostname", ["buy.stripe.com", "donate.stripe.com"])
+def test_donation_payment_link_accepts_stripe_https_url(hostname):
+    payment_url = f"https://{hostname}/test_example"
+    config = _isolated_settings(DONATION_PAYMENT_LINK_URL=payment_url)
 
-    assert config.DONATION_PAYMENT_LINK_URL == "https://buy.stripe.com/test_example"
+    assert config.DONATION_PAYMENT_LINK_URL == payment_url
 
 
 @pytest.mark.parametrize(
@@ -142,6 +144,7 @@ def test_donation_payment_link_accepts_stripe_https_url():
     [
         "http://buy.stripe.com/example",
         "https://example.com/pretending-to-be-stripe",
+        "https://donate.stripe.com.evil.example/example",
         "https://buy.stripe.com",
         "https://user:password@buy.stripe.com/example",
         "https://buy.stripe.com/example#fragment",

@@ -157,6 +157,26 @@ def test_generate_openrouter_enrichment_normalizes_first_boundary_to_origin(monk
     assert result.candidate.chapters[0].start_ms == 0
 
 
+def test_generate_openrouter_enrichment_orders_and_deduplicates_chapter_boundaries(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    duplicate = dict(parsed["chapters"][1])
+    duplicate["title"] = "Duplicate Boundary Is Removed"
+    parsed["chapters"] = [parsed["chapters"][1], duplicate, parsed["chapters"][0]]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    result = generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model")
+
+    assert [chapter.start_ms for chapter in result.candidate.chapters] == [0, 600_000]
+    assert result.chapter_boundaries_reordered is True
+    assert result.chapter_boundaries_deduplicated == 1
+    assert result.as_dict()["normalizations"]["chapter_boundaries_deduplicated"] == 1
+
+
 def test_generate_openrouter_enrichment_records_nonoverlapping_evidence(monkeypatch):
     payload = _response_payload()
     parsed = json.loads(payload["choices"][0]["message"]["content"])

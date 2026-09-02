@@ -26,10 +26,90 @@ class QueueDependencies:
     select_video: Callable[[Any, str, str, int], str | None]
     enrich_video: Callable[[Any, str], dict[str, Any]]
     on_credit_exhausted: Callable[[Any, str, str], None] | None = None
+    load_guardrail_snapshot: Callable[[Any, str, int], "QueueGuardrailSnapshot"] | None = None
+
+
+@dataclass(frozen=True)
+class QueueGuardrailSnapshot:
+    attempts_24h: int
+    recorded_cost_usd_24h: float
+    recent_finished: int
+    recent_failures: int
+
+    def as_dict(self) -> dict[str, int | float]:
+        return {
+            "attempts_24h": self.attempts_24h,
+            "recorded_cost_usd_24h": round(self.recorded_cost_usd_24h, 6),
+            "recent_finished": self.recent_finished,
+            "recent_failures": self.recent_failures,
+        }
+
+
+def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> QueueGuardrailSnapshot:
+    row = (
+        db.execute(
+            text("""
+            WITH attempts_24h AS (
+                SELECT status, metrics, started_at
+                FROM archive_extraction_runs
+                WHERE model_name = :model
+                  AND started_at >= now() - interval '24 hours'
+            ),
+            recent_finished AS (
+                SELECT status
+                FROM attempts_24h
+                WHERE status IN ('completed', 'failed')
+                ORDER BY started_at DESC
+                LIMIT :failure_window
+            )
+            SELECT
+                (SELECT COUNT(*) FROM attempts_24h) AS attempts_24h,
+                (SELECT COALESCE(SUM(
+                    CASE
+                        WHEN jsonb_typeof(metrics -> 'cost_usd') = 'number'
+                        THEN (metrics ->> 'cost_usd')::numeric
+                        ELSE 0
+                    END
+                ), 0) FROM attempts_24h) AS recorded_cost_usd_24h,
+                (SELECT COUNT(*) FROM recent_finished) AS recent_finished,
+                (SELECT COUNT(*) FROM recent_finished WHERE status = 'failed') AS recent_failures
+        """),
+            {"model": model, "failure_window": failure_window},
+        )
+        .mappings()
+        .one()
+    )
+    return QueueGuardrailSnapshot(
+        attempts_24h=int(row["attempts_24h"]),
+        recorded_cost_usd_24h=float(row["recorded_cost_usd_24h"]),
+        recent_finished=int(row["recent_finished"]),
+        recent_failures=int(row["recent_failures"]),
+    )
+
+
+def evaluate_queue_guardrails(
+    snapshot: QueueGuardrailSnapshot,
+    *,
+    max_attempts_24h: int,
+    max_cost_usd_24h: float,
+    failure_window: int,
+    max_failure_rate: float,
+) -> dict[str, Any] | None:
+    details = snapshot.as_dict()
+    if snapshot.attempts_24h >= max_attempts_24h:
+        return {"status": "guardrail_halted", "reason": "attempt_limit_24h", "guardrails": details}
+    if snapshot.recorded_cost_usd_24h >= max_cost_usd_24h:
+        return {"status": "guardrail_halted", "reason": "cost_limit_24h", "guardrails": details}
+    if snapshot.recent_finished >= failure_window:
+        failure_rate = snapshot.recent_failures / snapshot.recent_finished
+        details["recent_failure_rate"] = round(failure_rate, 6)
+        if failure_rate >= max_failure_rate:
+            return {"status": "guardrail_halted", "reason": "failure_rate", "guardrails": details}
+    return None
 
 
 def select_next_video(db: Any, model: str, prompt_version: str, failure_cooldown_seconds: int) -> str | None:
-    return db.execute(
+    selected = db.execute(
         text("""
             SELECT CAST(v.id AS text)
             FROM videos AS v
@@ -75,6 +155,7 @@ def select_next_video(db: Any, model: str, prompt_version: str, failure_cooldown
             "failure_cooldown_seconds": failure_cooldown_seconds,
         },
     ).scalar_one_or_none()
+    return str(selected) if selected is not None else None
 
 
 def mark_credit_exhausted_run(db: Any, video_id: str, model: str) -> None:
@@ -146,6 +227,7 @@ def main(
         select_video=select_next_video,
         enrich_video=enrich_video_candidates,
         on_credit_exhausted=mark_credit_exhausted_run,
+        load_guardrail_snapshot=load_queue_guardrail_snapshot,
     )
 
     while True:
@@ -154,15 +236,28 @@ def main(
         else:
             db = SessionLocal()
             try:
-                result = run_queue_cycle(
-                    db,
-                    model=config.ARCHIVE_ENRICHMENT_MODEL,
-                    prompt_version=PROMPT_VERSION,
-                    failure_cooldown_seconds=config.ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS,
-                    dependencies=deps,
-                )
+                result = None
+                if deps.load_guardrail_snapshot is not None:
+                    failure_window = int(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_FAILURE_WINDOW", 20))
+                    snapshot = deps.load_guardrail_snapshot(db, config.ARCHIVE_ENRICHMENT_MODEL, failure_window)
+                    result = evaluate_queue_guardrails(
+                        snapshot,
+                        max_attempts_24h=int(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_MAX_ATTEMPTS_PER_24H", 20)),
+                        max_cost_usd_24h=float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_MAX_COST_USD_PER_24H", 5.0)),
+                        failure_window=failure_window,
+                        max_failure_rate=float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_MAX_FAILURE_RATE", 0.25)),
+                    )
+                if result is None:
+                    result = run_queue_cycle(
+                        db,
+                        model=config.ARCHIVE_ENRICHMENT_MODEL,
+                        prompt_version=PROMPT_VERSION,
+                        failure_cooldown_seconds=config.ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS,
+                        dependencies=deps,
+                    )
             finally:
                 db.close()
+        assert result is not None
         print(json.dumps(result, sort_keys=True), flush=True)
         if args.once:
             return 0
@@ -173,6 +268,7 @@ def main(
             "idle": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS", 300)),
             "disabled": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS", 300)),
             "credit_exhausted": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS", 3600)),
+            "guardrail_halted": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS", 300)),
         }
         sleeper(delay_by_status[result["status"]])
 
@@ -183,7 +279,10 @@ if __name__ == "__main__":
 
 __all__ = [
     "QueueDependencies",
+    "QueueGuardrailSnapshot",
+    "evaluate_queue_guardrails",
     "is_credit_exhaustion_error",
+    "load_queue_guardrail_snapshot",
     "main",
     "mark_credit_exhausted_run",
     "run_queue_cycle",

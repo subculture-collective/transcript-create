@@ -167,6 +167,10 @@ def test_archive_enrichment_defaults_to_disabled_v4_pro_candidates():
     assert config.ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS == 300
     assert config.ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS == 86400
     assert config.ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS == 3600
+    assert config.ARCHIVE_ENRICHMENT_QUEUE_MAX_ATTEMPTS_PER_24H == 20
+    assert config.ARCHIVE_ENRICHMENT_QUEUE_MAX_COST_USD_PER_24H == 5.0
+    assert config.ARCHIVE_ENRICHMENT_QUEUE_FAILURE_WINDOW == 20
+    assert config.ARCHIVE_ENRICHMENT_QUEUE_MAX_FAILURE_RATE == 0.25
 
 
 def test_production_archive_enrichment_requires_openrouter_key():

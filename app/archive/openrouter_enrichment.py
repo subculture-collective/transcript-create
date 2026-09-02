@@ -180,6 +180,8 @@ class OpenRouterEpisodeResult(BaseModel):
     summaries_truncated: int = 0
     label_values_trimmed: int = 0
     evidence_citations_trimmed: int = 0
+    chapter_boundaries_reordered: bool = False
+    chapter_boundaries_deduplicated: int = 0
     categories_dropped: int = 0
     evidence_overlap_violations: int = 0
     window_count: int = 1
@@ -216,6 +218,8 @@ class OpenRouterEpisodeResult(BaseModel):
                 "summaries_truncated": self.summaries_truncated,
                 "label_values_trimmed": self.label_values_trimmed,
                 "evidence_citations_trimmed": self.evidence_citations_trimmed,
+                "chapter_boundaries_reordered": self.chapter_boundaries_reordered,
+                "chapter_boundaries_deduplicated": self.chapter_boundaries_deduplicated,
                 "categories_dropped": self.categories_dropped,
             },
             "validation": {"evidence_overlap_violations": self.evidence_overlap_violations},
@@ -397,6 +401,8 @@ def _parse_response(
     summaries_truncated = 0
     label_values_trimmed = 0
     evidence_citations_trimmed = 0
+    chapter_boundaries_reordered = False
+    chapter_boundaries_deduplicated = 0
     categories_dropped = 0
     if isinstance(raw_candidate, dict):
         for field, limit, max_length in (("subjects", 12, 80), ("keywords", 24, 100)):
@@ -404,7 +410,21 @@ def _parse_response(
             raw_candidate[field] = repaired
             label_values_trimmed += trimmed
         chapters = raw_candidate.get("chapters")
-        if isinstance(chapters, list) and chapters and isinstance(chapters[0], dict):
+        if isinstance(chapters, list) and chapters and all(isinstance(chapter, dict) for chapter in chapters):
+            starts = [chapter.get("start_ms") for chapter in chapters]
+            if all(isinstance(start, int) for start in starts):
+                ordered = sorted(chapters, key=lambda chapter: chapter["start_ms"])
+                chapter_boundaries_reordered = ordered != chapters
+                chapters = []
+                seen_starts: set[int] = set()
+                for chapter in ordered:
+                    start_ms = chapter["start_ms"]
+                    if start_ms in seen_starts:
+                        chapter_boundaries_deduplicated += 1
+                        continue
+                    seen_starts.add(start_ms)
+                    chapters.append(chapter)
+                raw_candidate["chapters"] = chapters
             first_start = chapters[0].get("start_ms")
             if isinstance(first_start, int) and first_start > 0:
                 chapters[0]["start_ms"] = 0
@@ -474,6 +494,8 @@ def _parse_response(
         summaries_truncated=summaries_truncated,
         label_values_trimmed=label_values_trimmed,
         evidence_citations_trimmed=evidence_citations_trimmed,
+        chapter_boundaries_reordered=chapter_boundaries_reordered,
+        chapter_boundaries_deduplicated=chapter_boundaries_deduplicated,
         categories_dropped=categories_dropped,
         evidence_overlap_violations=evidence_overlap_violations,
     )
@@ -644,6 +666,10 @@ def generate_hierarchical_openrouter_enrichment(
         summaries_truncated=sum(result.summaries_truncated for _offset, result in window_results),
         label_values_trimmed=sum(result.label_values_trimmed for _offset, result in window_results),
         evidence_citations_trimmed=sum(result.evidence_citations_trimmed for _offset, result in window_results),
+        chapter_boundaries_reordered=any(result.chapter_boundaries_reordered for _offset, result in window_results),
+        chapter_boundaries_deduplicated=sum(
+            result.chapter_boundaries_deduplicated for _offset, result in window_results
+        ),
         categories_dropped=sum(result.categories_dropped for _offset, result in window_results),
         evidence_overlap_violations=sum(result.evidence_overlap_violations for _offset, result in window_results),
         window_count=len(window_results),

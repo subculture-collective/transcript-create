@@ -5,7 +5,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.run_archive_enrichment_queue import QueueDependencies, main, run_queue_cycle, select_next_video
+from scripts.run_archive_enrichment_queue import (
+    QueueDependencies,
+    QueueGuardrailSnapshot,
+    evaluate_queue_guardrails,
+    main,
+    run_queue_cycle,
+    select_next_video,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,8 +22,7 @@ def test_queue_cycle_enriches_one_selected_video() -> None:
     db = object()
     dependencies = QueueDependencies(
         select_video=lambda session, model, prompt, cooldown: "video-1",
-        enrich_video=lambda session, video_id: calls.append((session, video_id))
-        or {"chapters": 12, "cost_usd": 0.23},
+        enrich_video=lambda session, video_id: calls.append((session, video_id)) or {"chapters": 12, "cost_usd": 0.23},
     )
 
     result = run_queue_cycle(
@@ -101,6 +107,66 @@ def test_selector_binds_current_provenance_and_failure_cooldown() -> None:
     }
 
 
+def test_queue_guardrails_fail_closed_on_attempt_cost_and_failure_limits() -> None:
+    base = dict(max_attempts_24h=20, max_cost_usd_24h=5.0, failure_window=20, max_failure_rate=0.25)
+
+    assert evaluate_queue_guardrails(QueueGuardrailSnapshot(20, 1.0, 10, 0), **base)["reason"] == "attempt_limit_24h"
+    assert evaluate_queue_guardrails(QueueGuardrailSnapshot(10, 5.0, 10, 0), **base)["reason"] == "cost_limit_24h"
+    failure_result = evaluate_queue_guardrails(QueueGuardrailSnapshot(10, 1.0, 20, 5), **base)
+    assert failure_result == {
+        "status": "guardrail_halted",
+        "reason": "failure_rate",
+        "guardrails": {
+            "attempts_24h": 10,
+            "recorded_cost_usd_24h": 1.0,
+            "recent_finished": 20,
+            "recent_failures": 5,
+            "recent_failure_rate": 0.25,
+        },
+    }
+    assert evaluate_queue_guardrails(QueueGuardrailSnapshot(10, 1.0, 19, 10), **base) is None
+
+
+def test_once_cli_halts_before_selecting_video_when_guardrail_trips(monkeypatch, capsys) -> None:
+    class _Db:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    class _Config:
+        ARCHIVE_ENRICHMENT_ENABLED = True
+        ARCHIVE_ENRICHMENT_MODEL = "model-v1"
+        ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS = 7200
+        ARCHIVE_ENRICHMENT_QUEUE_MAX_ATTEMPTS_PER_24H = 20
+        ARCHIVE_ENRICHMENT_QUEUE_MAX_COST_USD_PER_24H = 5.0
+        ARCHIVE_ENRICHMENT_QUEUE_FAILURE_WINDOW = 20
+        ARCHIVE_ENRICHMENT_QUEUE_MAX_FAILURE_RATE = 0.25
+
+    db = _Db()
+    selected: list[str] = []
+    monkeypatch.setattr("scripts.run_archive_enrichment_queue.SessionLocal", lambda: db)
+
+    assert (
+        main(
+            ["--once"],
+            config=_Config(),
+            dependencies=QueueDependencies(
+                select_video=lambda *_args: selected.append("selected") or "video-1",
+                enrich_video=lambda *_args: {},
+                load_guardrail_snapshot=lambda *_args: QueueGuardrailSnapshot(20, 1.0, 10, 0),
+            ),
+        )
+        == 0
+    )
+
+    assert selected == []
+    assert db.closed
+    output = capsys.readouterr().out.strip()
+    assert '"status": "guardrail_halted"' in output
+    assert '"reason": "attempt_limit_24h"' in output
+
+
 def test_once_cli_reports_idle_and_closes_the_database(monkeypatch, capsys) -> None:
     class _Db:
         closed = False
@@ -116,14 +182,17 @@ def test_once_cli_reports_idle_and_closes_the_database(monkeypatch, capsys) -> N
     db = _Db()
     monkeypatch.setattr("scripts.run_archive_enrichment_queue.SessionLocal", lambda: db)
 
-    assert main(
-        ["--once"],
-        config=_Config(),
-        dependencies=QueueDependencies(
-            select_video=lambda session, model, prompt, cooldown: None,
-            enrich_video=lambda session, video_id: {},
-        ),
-    ) == 0
+    assert (
+        main(
+            ["--once"],
+            config=_Config(),
+            dependencies=QueueDependencies(
+                select_video=lambda session, model, prompt, cooldown: None,
+                enrich_video=lambda session, video_id: {},
+            ),
+        )
+        == 0
+    )
 
     assert db.closed
     assert capsys.readouterr().out.strip() == '{"status": "idle"}'

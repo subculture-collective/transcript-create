@@ -19,6 +19,7 @@ from .labeling.repository import (
 )
 from .openrouter_enrichment import (
     CATEGORY_LABELS,
+    PROMPT_VERSION,
     OpenRouterEpisodeResult,
     generate_hierarchical_openrouter_enrichment,
     generate_openrouter_episode_enrichment,
@@ -324,6 +325,7 @@ def enrich_video_candidates(
         extraction_tier="premium",
         video_id=video_id,
         model_name=config.ARCHIVE_ENRICHMENT_MODEL,
+        prompt_version=PROMPT_VERSION,
     )
     db.commit()
 
@@ -350,6 +352,8 @@ def enrich_video_candidates(
                     "summaries_truncated": result.summaries_truncated,
                     "label_values_trimmed": result.label_values_trimmed,
                     "evidence_citations_trimmed": result.evidence_citations_trimmed,
+                    "chapter_boundaries_reordered": result.chapter_boundaries_reordered,
+                    "chapter_boundaries_deduplicated": result.chapter_boundaries_deduplicated,
                     "categories_dropped": result.categories_dropped,
                     "evidence_overlap_violations": result.evidence_overlap_violations,
                 },
@@ -360,11 +364,17 @@ def enrich_video_candidates(
         return metrics
     except Exception as exc:
         db.rollback()
+        failure_metrics: dict[str, Any] = {"model": config.ARCHIVE_ENRICHMENT_MODEL, "prompt_version": PROMPT_VERSION}
+        usage_source: Any = result if "result" in locals() else exc
+        for field in ("provider", "prompt_tokens", "completion_tokens", "cost_usd", "elapsed_seconds"):
+            value = getattr(usage_source, field, None)
+            if value is not None:
+                failure_metrics[field] = value
         deps.finish_run(
             db,
             run_id,
             "failed",
-            {"model": config.ARCHIVE_ENRICHMENT_MODEL},
+            failure_metrics,
             error=str(exc)[:1_000],
         )
         db.commit()

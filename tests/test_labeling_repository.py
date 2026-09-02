@@ -61,6 +61,7 @@ def test_create_and_finish_run_use_text_clause_and_json_metrics():
         "extraction_tier": "cheap",
         "video_id": "video-1",
         "model_name": "whisper",
+        "prompt_version": None,
     }
     assert json.loads(update_params["metrics"]) == metrics
 

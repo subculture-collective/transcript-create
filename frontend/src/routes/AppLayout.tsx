@@ -9,6 +9,7 @@ const navItems = [
   { to: '/timeline', label: 'Timeline' },
   { to: '/episodes', label: 'VODs' },
   { to: '/saved', label: 'Saved' },
+  { to: '/support', label: 'Support' },
 ];
 
 const routeMeta: Array<{ match: RegExp; title: string; description: string }> = [
@@ -56,6 +57,21 @@ const routeMeta: Array<{ match: RegExp; title: string; description: string }> = 
     match: /^\/account/,
     title: 'Account — HasanAra',
     description: 'Manage your HasanAra account.',
+  },
+  {
+    match: /^\/support/,
+    title: 'Support the archive — HasanAra',
+    description: 'Help keep HasanAra public, searchable, and independently maintained.',
+  },
+  {
+    match: /^\/about/,
+    title: 'About the archive — HasanAra',
+    description: 'How HasanAra turns public broadcasts into a searchable, cited record.',
+  },
+  {
+    match: /^\/(privacy|terms)/,
+    title: 'Project policies — HasanAra',
+    description: 'Privacy and terms for the HasanAra public archive.',
   },
   {
     match: /^\/admin/,
@@ -471,7 +487,7 @@ export default function AppLayout() {
         className="border-t border-border/80 bg-canvas/80 backdrop-blur-xl"
         role="contentinfo"
       >
-        <div className="mx-auto flex max-w-[100rem] flex-col gap-2 px-4 py-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between lg:px-6">
+        <div className="mx-auto grid max-w-[100rem] gap-5 px-4 py-7 text-sm text-muted sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:px-6">
           <p>
             &copy; {new Date().getFullYear()} HasanAra. A{' '}
             <a href="https://subcult.tv" className="action-link underline underline-offset-2">
@@ -479,11 +495,23 @@ export default function AppLayout() {
             </a>{' '}
             project.
           </p>
-          <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-subtle">
-            <a href="https://www.patreon.com/cw/subcult" className="action-link">
-              Support Subcult on Patreon
-            </a>
-          </p>
+          <nav
+            aria-label="Project and legal"
+            className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-[0.18em] text-subtle sm:justify-end"
+          >
+            <Link to="/about" className="action-link">
+              About
+            </Link>
+            <Link to="/privacy" className="action-link">
+              Privacy
+            </Link>
+            <Link to="/terms" className="action-link">
+              Terms
+            </Link>
+            <Link to="/support" className="action-link text-accent">
+              Support
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>

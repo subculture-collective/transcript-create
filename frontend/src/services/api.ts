@@ -23,6 +23,7 @@ import type {
   SearchResponse,
   SearchSuggestionsResponse,
   StreamLibraryFilters,
+  SupportConfig,
   TimelineBucket,
   TimelineResponse,
   TopicTimelineResponse,
@@ -132,6 +133,9 @@ function normalizeTimelineResponse(
 }
 
 export const api = {
+  async getSupportConfig() {
+    return http.get('support').json<SupportConfig>();
+  },
   async getAccount() {
     return http.get('account').json<AccountResponse>();
   },

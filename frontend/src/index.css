@@ -371,6 +371,18 @@ body {
     @apply rounded-2xl border border-border bg-surface/90 p-4 shadow-[0_18px_55px_rgba(0,0,0,0.2)] sm:p-6;
   }
 
+  .policy-copy {
+    @apply text-base leading-7 text-muted;
+  }
+
+  .policy-copy h2 {
+    @apply mt-9 text-2xl font-semibold tracking-[-0.035em] text-ink first:mt-0;
+  }
+
+  .policy-copy p {
+    @apply mt-3 max-w-3xl;
+  }
+
   .archive-rule-title {
     @apply flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.22em] text-subtle;
   }

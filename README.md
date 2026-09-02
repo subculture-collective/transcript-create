@@ -16,8 +16,8 @@ deployed, branded successor to the earlier Transcript Create project.
 ## Current status
 
 - **Shipped:** React 19 frontend, FastAPI API, PostgreSQL source of truth, Redis DTO caches, optional OpenSearch acceleration with PostgreSQL fallback, durable ingestion jobs, scoped API keys, pseudonymous analytics, and archive intelligence.
-- **Disabled:** billing and PWA/offline installation. There are no Stripe routes or service workers.
-- **Planned:** billing may be reconsidered as a future product decision; it has no current contract.
+- **Shipped:** public Support/About/Privacy/Terms pages and a validated, Stripe-hosted donation Payment Link that never handles card data in HasanAra.
+- **Disabled:** product billing, subscriptions, payment webhooks, and PWA/offline installation. There are no charge-creation routes or service workers.
 - **Historical:** documents marked historical describe earlier implementations and are not operational guidance.
 
 See [documentation status](docs/STATUS.md) for the authoritative document map.

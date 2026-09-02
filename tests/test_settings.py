@@ -125,6 +125,35 @@ def test_validate_production_settings_allows_safe_config():
     validate_production_settings(config)
 
 
+def test_donation_payment_link_defaults_to_disabled():
+    config = _isolated_settings()
+
+    assert config.DONATION_PAYMENT_LINK_URL == ""
+
+
+def test_donation_payment_link_accepts_stripe_https_url():
+    config = _isolated_settings(DONATION_PAYMENT_LINK_URL="https://buy.stripe.com/test_example")
+
+    assert config.DONATION_PAYMENT_LINK_URL == "https://buy.stripe.com/test_example"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "http://buy.stripe.com/example",
+        "https://example.com/pretending-to-be-stripe",
+        "https://buy.stripe.com",
+        "https://user:password@buy.stripe.com/example",
+        "https://buy.stripe.com/example#fragment",
+    ],
+)
+def test_donation_payment_link_rejects_unsafe_urls(value):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="DONATION_PAYMENT_LINK_URL"):
+        _isolated_settings(DONATION_PAYMENT_LINK_URL=value)
+
+
 def test_archive_enrichment_defaults_to_disabled_v4_pro_candidates():
     config = _isolated_settings()
 

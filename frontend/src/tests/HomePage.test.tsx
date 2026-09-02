@@ -83,6 +83,10 @@ describe('HomePage', () => {
       'href',
       '/episodes'
     );
+    expect(screen.getByRole('link', { name: 'Support the archive' })).toHaveAttribute(
+      'href',
+      '/support'
+    );
     expect(screen.getAllByRole('link', { name: /Newest VOD/ })).toSatisfy((links: HTMLElement[]) =>
       links.some((link) => link.getAttribute('href') === '/v/video-1')
     );

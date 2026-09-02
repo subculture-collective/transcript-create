@@ -83,6 +83,9 @@ export default function HomePage() {
               <Link to="/episodes" className="text-muted transition-colors hover:text-ink">
                 Browse every VOD
               </Link>
+              <Link to="/support" className="text-muted transition-colors hover:text-ink">
+                Support the archive
+              </Link>
             </div>
           </div>
 

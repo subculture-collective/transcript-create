@@ -30,6 +30,7 @@ describe('AppLayout navigation', () => {
   });
   it('includes Timeline in primary navigation', () => {
     const { container } = render(<AppLayout />, { wrapper: MemoryRouter });
+    const navigation = within(screen.getByRole('navigation', { name: 'Main navigation' }));
     for (const [name, href] of [
       ['Home', '/'],
       ['Search', '/search'],
@@ -37,10 +38,27 @@ describe('AppLayout navigation', () => {
       ['Timeline', '/timeline'],
       ['VODs', '/episodes'],
       ['Saved', '/saved'],
+      ['Support', '/support'],
     ]) {
-      expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
+      expect(navigation.getByRole('link', { name })).toHaveAttribute('href', href);
     }
     return axe.run(container).then((result) => expect(result.violations).toEqual([]));
+  });
+
+  it('links the public project and legal pages from the footer', () => {
+    render(<AppLayout />, { wrapper: MemoryRouter });
+
+    for (const [name, href] of [
+      ['About', '/about'],
+      ['Privacy', '/privacy'],
+      ['Terms', '/terms'],
+      ['Support', '/support'],
+    ]) {
+      expect(within(screen.getByRole('contentinfo')).getByRole('link', { name })).toHaveAttribute(
+        'href',
+        href
+      );
+    }
   });
 
   it('only renders the mobile menu while open and restores focus on Escape', () => {

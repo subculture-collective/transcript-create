@@ -306,5 +306,7 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
     assert persisted == []
     assert finished[0]["status"] == "failed"
     assert "per-video limit" in finished[0]["error"]
+    assert finished[0]["metrics"]["cost_usd"] == 0.01
+    assert finished[0]["metrics"]["prompt_version"] == "archive-episode-enrichment-v7"
     assert [call[0] for call in db.calls].count("ROLLBACK") == 1
     assert [call[0] for call in db.calls].count("COMMIT") == 2

@@ -36,11 +36,14 @@ def create_extraction_run(
     extraction_tier: str,
     video_id: str | None = None,
     model_name: str | None = None,
+    prompt_version: str | None = None,
 ) -> str:
     row = db.execute(
         text("""
-            INSERT INTO archive_extraction_runs (scope, extraction_tier, video_id, model_name, status, started_at)
-            VALUES (:scope, :extraction_tier, :video_id, :model_name, 'running', now())
+            INSERT INTO archive_extraction_runs (
+                scope, extraction_tier, video_id, model_name, prompt_version, status, started_at
+            )
+            VALUES (:scope, :extraction_tier, :video_id, :model_name, :prompt_version, 'running', now())
             RETURNING id
             """),
         {
@@ -48,6 +51,7 @@ def create_extraction_run(
             "extraction_tier": extraction_tier,
             "video_id": video_id,
             "model_name": model_name,
+            "prompt_version": prompt_version,
         },
     ).first()
     return _extract_id(row)

@@ -276,6 +276,10 @@ class Settings(BaseSettings):
     ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS: int = Field(default=300, ge=30, le=3600)
     ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS: int = Field(default=86400, ge=300, le=604800)
     ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS: int = Field(default=3600, ge=300, le=86400)
+    ARCHIVE_ENRICHMENT_QUEUE_MAX_ATTEMPTS_PER_24H: int = Field(default=20, ge=1, le=10_000)
+    ARCHIVE_ENRICHMENT_QUEUE_MAX_COST_USD_PER_24H: float = Field(default=5.0, gt=0.0, le=1_000.0)
+    ARCHIVE_ENRICHMENT_QUEUE_FAILURE_WINDOW: int = Field(default=20, ge=5, le=1_000)
+    ARCHIVE_ENRICHMENT_QUEUE_MAX_FAILURE_RATE: float = Field(default=0.25, ge=0.0, le=1.0)
 
     # Transcript cleanup configuration
     CLEANUP_ENABLED: bool = True  # Enable transcript cleanup features

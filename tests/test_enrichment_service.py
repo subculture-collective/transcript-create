@@ -229,6 +229,7 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
 
     assert metrics["model"] == "deepseek/deepseek-v4-pro"
     assert metrics["cost_usd"] == 0.01
+    assert metrics["run_id"] == "run-1"
     assert persisted == [{"run_id": "run-1"}]
     assert finished[0]["status"] == "completed"
     assert [call[0] for call in db.calls].count("COMMIT") == 2
@@ -300,13 +301,15 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
     )
     db = _Db()
 
-    with pytest.raises(RuntimeError, match="per-video limit"):
+    with pytest.raises(RuntimeError, match="per-video limit") as raised:
         enrich_video_candidates(db, "video-1", config=Config(), dependencies=dependencies)
 
     assert persisted == []
     assert finished[0]["status"] == "failed"
     assert "per-video limit" in finished[0]["error"]
     assert finished[0]["metrics"]["cost_usd"] == 0.01
+    assert finished[0]["metrics"]["run_id"] == "run-1"
+    assert raised.value.archive_enrichment_failure_metrics["run_id"] == "run-1"
     assert finished[0]["metrics"]["prompt_version"] == "archive-episode-enrichment-v7"
     assert [call[0] for call in db.calls].count("ROLLBACK") == 1
     assert [call[0] for call in db.calls].count("COMMIT") == 2

@@ -8,7 +8,7 @@ psycopg[binary]==3.2.10
 alembic==1.14.0
 
 # YouTube and media processing
-yt-dlp==2026.3.17
+yt-dlp==2026.7.4
 
 # Whisper transcription backends
 faster-whisper==1.2.0
@@ -21,13 +21,13 @@ pyannote.audio==4.0.1
 # Core dependencies
 # Pin to latest available on PyPI for Python 3.10/Ubuntu 22.04; 2.3.x not published yet
 numpy==2.2.6
-python-dotenv==1.1.1
+python-dotenv==1.2.2
 pydantic==2.12.3
 pydantic-settings==2.11.0
-requests==2.32.5
+requests==2.33.0
 
 # Authentication
-Authlib==1.6.5
+Authlib==1.6.12
 itsdangerous==2.2.0  # Required for session middleware
 
 # Billing

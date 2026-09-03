@@ -187,3 +187,35 @@ def test_enrichment_canary_contract_has_timeout_identity_and_acceptance_checks()
     assert "run_archive_enrichment_queue.py --once --video-id" in canary
     assert "compose start" not in canary
     assert "compose restart" not in canary
+
+
+def test_parameterized_psql_uses_stdin_for_variable_interpolation(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"""
+source {SCRIPT}
+psql_admin() {{ printf 'args:%s\\n' "$*"; cat; }}
+psql_admin_sql "SELECT :'probe_value';" -At -v probe_value=safe-probe
+""",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "args:-At -v probe_value=safe-probe -f -" in result.stdout
+    assert "SELECT :'probe_value';" in result.stdout
+    helper = SCRIPT.read_text(encoding="utf-8")
+    for function_name in (
+        "check_enrichment_canary_target",
+        "check_enrichment_canary_guardrails",
+        "enrichment_canary_assignment_fingerprint",
+        "fence_enrichment_canary_run",
+        "verify_enrichment_canary_result",
+    ):
+        function = helper.split(f"{function_name}() {{", 1)[1].split("\n}", 1)[0]
+        assert "psql_admin_sql" in function

@@ -30,6 +30,7 @@ check_diarization_role() {
 # Canary state is global so EXIT/INT/TERM handlers never interpolate locals.
 canary_video_id= canary_token= canary_container_name= canary_container_id= canary_acquisition_possible=false canary_acquired=false canary_done=false
 psql_diarization() { compose exec -T db psql -X -v ON_ERROR_STOP=1 -U hasanara_diarization -d transcripts "$@"; }
+psql_diarization_sql() { local sql=$1; shift; psql_diarization "$@" -f - <<<"$sql"; }
 canary_lease() { printf 'canary-lease:%s' "$1"; }
 canary_finalizing() { printf 'canary-finalizing:%s' "$1"; }
 canary_failed() { printf 'canary-failed:%s' "$1"; }
@@ -38,7 +39,7 @@ acquire_canary() {
     # Set this before opening psql: a signal can arrive after COMMIT but before
     # Bash receives control to set canary_acquired.
     canary_acquisition_possible=true
-    psql_diarization -v video_id="$canary_video_id" -v token="$canary_token" -c "BEGIN;
+    psql_diarization_sql "BEGIN;
       SELECT pg_advisory_xact_lock(hashtext('hasanara-diarization-canary'));
       SELECT 1 / CASE WHEN NOT EXISTS (SELECT 1 FROM videos WHERE diarization_error LIKE 'canary-%') THEN 1 ELSE 0 END;
       UPDATE videos SET diarization_state='running', diarization_error='canary-lease:' || :'token', updated_at=now()
@@ -47,7 +48,7 @@ acquire_canary() {
          AND EXISTS (SELECT 1 FROM segments WHERE video_id=:'video_id'::uuid)
          AND NOT EXISTS (SELECT 1 FROM videos WHERE diarization_error LIKE 'canary-%');
       SELECT 1 / CASE WHEN EXISTS (SELECT 1 FROM videos WHERE id=:'video_id'::uuid AND diarization_state='running' AND diarization_error='canary-lease:' || :'token') THEN 1 ELSE 0 END;
-      COMMIT;" >/dev/null
+      COMMIT;" -v video_id="$canary_video_id" -v token="$canary_token" >/dev/null
     canary_acquired=true
 }
 
@@ -55,25 +56,25 @@ acquire_canary() {
 # marker on the target is safe before acquisition; any other token fails closed.
 fence_canary_failure() {
     local result
-    result=$(psql_diarization -At -v video_id="$canary_video_id" -v token="$canary_token" -c "WITH fenced AS (
+    result=$(psql_diarization_sql "WITH fenced AS (
       UPDATE videos SET diarization_state='failed', diarization_error='canary-failed:' || :'token', updated_at=now()
        WHERE id=:'video_id'::uuid
          AND ((diarization_state='running' AND diarization_error='canary-lease:' || :'token')
            OR (diarization_state='completed' AND diarization_error='canary-finalizing:' || :'token'))
        RETURNING 1
-    ) SELECT CASE WHEN EXISTS (SELECT 1 FROM fenced) OR EXISTS (SELECT 1 FROM videos WHERE id=:'video_id'::uuid AND diarization_state='failed' AND diarization_error='canary-failed:' || :'token') THEN 'fenced' WHEN EXISTS (SELECT 1 FROM videos WHERE id=:'video_id'::uuid AND (diarization_error IS NULL OR diarization_error NOT LIKE 'canary-%')) THEN 'absent' ELSE 'uncertain' END;") || return 1
+    ) SELECT CASE WHEN EXISTS (SELECT 1 FROM fenced) OR EXISTS (SELECT 1 FROM videos WHERE id=:'video_id'::uuid AND diarization_state='failed' AND diarization_error='canary-failed:' || :'token') THEN 'fenced' WHEN EXISTS (SELECT 1 FROM videos WHERE id=:'video_id'::uuid AND (diarization_error IS NULL OR diarization_error NOT LIKE 'canary-%')) THEN 'absent' ELSE 'uncertain' END;" -At -v video_id="$canary_video_id" -v token="$canary_token") || return 1
     [[ $result == fenced || $result == absent ]] || return 1
     printf '%s\n' "$result"
 }
 
 finalize_canary_success() {
     local result
-    result=$(psql_diarization -At -v video_id="$canary_video_id" -v token="$canary_token" -c "WITH finalized AS (
+    result=$(psql_diarization_sql "WITH finalized AS (
       UPDATE videos SET diarization_error=NULL, updated_at=now()
        WHERE id=:'video_id'::uuid AND diarization_state='completed' AND diarization_error='canary-finalizing:' || :'token'
          AND (SELECT count(DISTINCT speaker_label) FROM segments WHERE video_id=:'video_id'::uuid AND speaker_label IS NOT NULL) BETWEEN 1 AND 20
        RETURNING 1
-    ) SELECT count(*) FROM finalized;") || return 1
+    ) SELECT count(*) FROM finalized;" -At -v video_id="$canary_video_id" -v token="$canary_token") || return 1
     [[ $result == 1 ]]
 }
 
@@ -161,10 +162,10 @@ assert_exact_token_container_absent() {
 recover_diarization_canary() {
     canary_video_id=$1; canary_token=$2; canary_container_name="hasanara-diarization-canary-${canary_video_id}-${canary_token}"
     assert_exact_token_container_absent || return 1
-    psql_diarization -v video_id="$canary_video_id" -v token="$canary_token" -c "BEGIN;
+    psql_diarization_sql "BEGIN;
       SELECT pg_advisory_xact_lock(hashtext('hasanara-diarization-canary'));
       WITH target AS (SELECT id, diarization_state, diarization_error FROM videos WHERE id=:'video_id'::uuid FOR UPDATE), recovered AS (UPDATE videos v SET diarization_error=NULL, updated_at=now() FROM target t WHERE v.id=t.id AND t.diarization_state='completed' AND t.diarization_error='canary-finalizing:' || :'token' AND (SELECT count(DISTINCT speaker_label) FROM segments WHERE video_id=t.id AND speaker_label IS NOT NULL) BETWEEN 1 AND 20 RETURNING 1), cleared AS (UPDATE segments s SET speaker_label=NULL FROM target t WHERE s.video_id=t.id AND t.diarization_state IN ('running','failed') AND t.diarization_error IN ('canary-lease:' || :'token', 'canary-failed:' || :'token') RETURNING s.id), reset AS (UPDATE videos v SET diarization_state='pending', diarization_error=NULL, updated_at=now() FROM target t WHERE v.id=t.id AND t.diarization_state IN ('running','failed') AND t.diarization_error IN ('canary-lease:' || :'token', 'canary-failed:' || :'token') RETURNING 1) SELECT 1 / CASE WHEN EXISTS (SELECT 1 FROM recovered) OR EXISTS (SELECT 1 FROM reset) THEN 1 ELSE 0 END;
-      COMMIT;" >/dev/null
+      COMMIT;" -v video_id="$canary_video_id" -v token="$canary_token" >/dev/null
 }
 
 # The enrichment canary is deliberately separate from the sustained queue and
@@ -179,6 +180,7 @@ enrichment_canary_evidence_root=deploy-backups/archive-enrichment-canaries
 enrichment_canary_preexisting_fingerprint=''
 
 psql_admin() { compose exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d transcripts "$@"; }
+psql_admin_sql() { local sql=$1; shift; psql_admin "$@" -f - <<<"$sql"; }
 
 assert_container_healthy() {
     local container=$1 details
@@ -198,8 +200,7 @@ assert_enrichment_queue_inert() {
 }
 
 check_enrichment_canary_target() {
-    psql_admin -v video_id="$enrichment_canary_video_id" -v model="$enrichment_canary_model" \
-      -v prompt="$enrichment_canary_prompt" -c "SELECT 1 / CASE WHEN EXISTS (
+    psql_admin_sql "SELECT 1 / CASE WHEN EXISTS (
         SELECT 1 FROM videos v
         WHERE v.id = :'video_id'::uuid
           AND v.state = 'completed'
@@ -219,11 +220,12 @@ check_enrichment_canary_target() {
             WHERE r.video_id = v.id AND r.model_name = :'model' AND r.prompt_version = :'prompt'
               AND r.status IN ('running', 'failed') AND r.started_at > now() - interval '24 hours'
           )
-      ) THEN 1 ELSE 0 END AS target_is_eligible;" >/dev/null
+      ) THEN 1 ELSE 0 END AS target_is_eligible;" -v video_id="$enrichment_canary_video_id" \
+      -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt" >/dev/null
 }
 
 check_enrichment_canary_guardrails() {
-    psql_admin -v model="$enrichment_canary_model" -c "WITH attempts AS (
+    psql_admin_sql "WITH attempts AS (
         SELECT status, metrics, started_at FROM archive_extraction_runs
         WHERE model_name = :'model' AND started_at >= now() - interval '24 hours'
       ), recent AS (
@@ -238,13 +240,15 @@ check_enrichment_canary_guardrails() {
       )
       SELECT 1 / CASE WHEN attempts < 20 AND cost < 5.0
         AND (finished < 20 OR failures::numeric / finished < 0.25)
-        THEN 1 ELSE 0 END AS guardrails_allow_one_attempt FROM snapshot;" >/dev/null
+        THEN 1 ELSE 0 END AS guardrails_allow_one_attempt FROM snapshot;" \
+      -v model="$enrichment_canary_model" >/dev/null
 }
 
 enrichment_canary_assignment_fingerprint() {
-    psql_admin -At -v video_id="$enrichment_canary_video_id" -c "SELECT md5(COALESCE(
+    psql_admin_sql "SELECT md5(COALESCE(
       (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id)::text FROM archive_label_assignments a
-       WHERE a.video_id = :'video_id'::uuid AND a.source <> 'llm'), '[]')) AS preexisting_assignment_fingerprint;"
+       WHERE a.video_id = :'video_id'::uuid AND a.source <> 'llm'), '[]')) AS preexisting_assignment_fingerprint;" \
+      -At -v video_id="$enrichment_canary_video_id"
 }
 
 enrichment_container_details_match() {
@@ -283,9 +287,7 @@ cleanup_enrichment_canary_container() {
 fence_enrichment_canary_run() {
     local fenced
     [[ -n $enrichment_canary_started_at ]] || return 0
-    fenced=$(psql_admin -At -v video_id="$enrichment_canary_video_id" -v token="$enrichment_canary_token" \
-      -v started_at="$enrichment_canary_started_at" -v model="$enrichment_canary_model" \
-      -v prompt="$enrichment_canary_prompt" -c "WITH fenced AS (
+    fenced=$(psql_admin_sql "WITH fenced AS (
         UPDATE archive_extraction_runs
         SET status = 'cancelled',
             metrics = COALESCE(metrics, '{}'::jsonb) || jsonb_build_object(
@@ -295,7 +297,9 @@ fence_enrichment_canary_run() {
         WHERE video_id = :'video_id'::uuid AND model_name = :'model' AND prompt_version = :'prompt'
           AND status = 'running' AND started_at >= :'started_at'::timestamptz
         RETURNING 1
-      ) SELECT count(*) FROM fenced;") || return 1
+      ) SELECT count(*) FROM fenced;" -At -v video_id="$enrichment_canary_video_id" \
+      -v token="$enrichment_canary_token" -v started_at="$enrichment_canary_started_at" \
+      -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt") || return 1
     [[ $fenced == 0 || $fenced == 1 ]]
 }
 
@@ -307,8 +311,7 @@ assert_enrichment_canary_container_absent() {
 }
 
 verify_enrichment_canary_result() {
-    psql_admin -v video_id="$enrichment_canary_video_id" -v started_at="$enrichment_canary_started_at" \
-      -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt" -c "WITH target_run AS (
+    psql_admin_sql "WITH target_run AS (
         SELECT id, metrics FROM archive_extraction_runs
         WHERE video_id = :'video_id'::uuid AND model_name = :'model' AND prompt_version = :'prompt'
           AND started_at >= :'started_at'::timestamptz
@@ -340,6 +343,8 @@ verify_enrichment_canary_result() {
       ) SELECT 1 / CASE WHEN one_run AND completed AND metrics_valid AND candidate_chapters
           AND chapter_coverage AND chapters_review_only AND labels_review_only AND daily_cost_valid
         THEN 1 ELSE 0 END AS canary_acceptance_passed FROM checks;" \
+      -v video_id="$enrichment_canary_video_id" -v started_at="$enrichment_canary_started_at" \
+      -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt" \
       | tee "$enrichment_canary_evidence_dir/database-verification.txt"
 }
 

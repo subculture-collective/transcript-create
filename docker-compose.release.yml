@@ -81,6 +81,9 @@ services:
         build: !reset null
         image: ${HASANARA_API_IMAGE:?HASANARA_API_IMAGE is required}
         env_file: !override ["${HASANARA_ENV_FILE:?HASANARA_ENV_FILE is required}"]
+        # Production enrichment is opt-in. A deployment must never revive the
+        # sustained queue while the guarded one-video canary is being evaluated.
+        restart: "no"
         environment:
             DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
             ENVIRONMENT: production

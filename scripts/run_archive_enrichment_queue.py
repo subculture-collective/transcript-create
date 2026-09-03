@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
@@ -27,6 +28,7 @@ class QueueDependencies:
     enrich_video: Callable[[Any, str], dict[str, Any]]
     on_credit_exhausted: Callable[[Any, str, str], None] | None = None
     load_guardrail_snapshot: Callable[[Any, str, int], "QueueGuardrailSnapshot"] | None = None
+    select_requested_video: Callable[[Any, str, str, int, str], str | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,16 @@ class QueueGuardrailSnapshot:
             "recent_finished": self.recent_finished,
             "recent_failures": self.recent_failures,
         }
+
+
+def _uuid_argument(value: str) -> str:
+    try:
+        parsed = uuid.UUID(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a valid UUID") from exc
+    if str(parsed) != value.casefold():
+        raise argparse.ArgumentTypeError("must be a canonical UUID")
+    return str(parsed)
 
 
 def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> QueueGuardrailSnapshot:
@@ -158,12 +170,66 @@ def select_next_video(db: Any, model: str, prompt_version: str, failure_cooldown
     return str(selected) if selected is not None else None
 
 
+def select_requested_video(
+    db: Any,
+    model: str,
+    prompt_version: str,
+    failure_cooldown_seconds: int,
+    video_id: str,
+) -> str | None:
+    """Select one pristine, explicitly requested video without replacing prior review work."""
+    selected = db.execute(
+        text("""
+            SELECT CAST(v.id AS text)
+            FROM videos AS v
+            WHERE v.id = CAST(:video_id AS uuid)
+              AND v.state = 'completed'
+              AND COALESCE(v.duration_seconds, 0) > 0
+              AND EXISTS (
+                  SELECT 1 FROM transcript_blocks AS tb WHERE tb.video_id = v.id
+                  UNION ALL
+                  SELECT 1 FROM segments AS s WHERE s.video_id = v.id
+                  UNION ALL
+                  SELECT 1
+                  FROM youtube_transcripts AS yt
+                  JOIN youtube_segments AS ys ON ys.youtube_transcript_id = yt.id
+                  WHERE yt.video_id = v.id
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM archive_video_chapters AS chapter WHERE chapter.video_id = v.id
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM archive_label_assignments AS assignment
+                  WHERE assignment.video_id = v.id AND assignment.source = 'llm'
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM archive_extraction_runs AS recent
+                  WHERE recent.video_id = v.id
+                    AND recent.model_name = :model
+                    AND recent.prompt_version = :prompt
+                    AND recent.status IN ('running', 'failed')
+                    AND recent.started_at > now() - make_interval(secs => :failure_cooldown_seconds)
+              )
+            LIMIT 1
+        """),
+        {
+            "video_id": video_id,
+            "model": model,
+            "prompt": prompt_version,
+            "failure_cooldown_seconds": failure_cooldown_seconds,
+        },
+    ).scalar_one_or_none()
+    return str(selected) if selected is not None else None
+
+
 def mark_credit_exhausted_run(db: Any, video_id: str, model: str) -> None:
     db.execute(
         text("""
             UPDATE archive_extraction_runs
             SET status = 'cancelled',
-                metrics = jsonb_build_object('reason', 'credit_exhausted'),
+                metrics = COALESCE(metrics, '{}'::jsonb) || jsonb_build_object('reason', 'credit_exhausted'),
                 error = 'OpenRouter credits exhausted',
                 finished_at = COALESCE(finished_at, now())
             WHERE id = (
@@ -198,18 +264,39 @@ def run_queue_cycle(
     prompt_version: str,
     failure_cooldown_seconds: int,
     dependencies: QueueDependencies,
+    requested_video_id: str | None = None,
 ) -> dict[str, Any]:
-    video_id = dependencies.select_video(db, model, prompt_version, failure_cooldown_seconds)
+    if requested_video_id is None:
+        video_id = dependencies.select_video(db, model, prompt_version, failure_cooldown_seconds)
+    else:
+        if dependencies.select_requested_video is None:
+            raise RuntimeError("requested-video selector is unavailable")
+        video_id = dependencies.select_requested_video(
+            db,
+            model,
+            prompt_version,
+            failure_cooldown_seconds,
+            requested_video_id,
+        )
     if video_id is None:
+        if requested_video_id is not None:
+            return {"status": "ineligible", "video_id": requested_video_id}
         return {"status": "idle"}
     try:
         metrics = dependencies.enrich_video(db, video_id)
     except Exception as exc:
+        failure_metrics = getattr(exc, "archive_enrichment_failure_metrics", None)
         if is_credit_exhaustion_error(exc):
             if dependencies.on_credit_exhausted is not None:
                 dependencies.on_credit_exhausted(db, video_id, model)
-            return {"status": "credit_exhausted", "video_id": video_id}
-        return {"status": "failed", "video_id": video_id, "error": str(exc)[:500]}
+            result: dict[str, Any] = {"status": "credit_exhausted", "video_id": video_id}
+            if isinstance(failure_metrics, dict):
+                result["metrics"] = failure_metrics
+            return result
+        result = {"status": "failed", "video_id": video_id, "error": str(exc)[:500]}
+        if isinstance(failure_metrics, dict):
+            result["metrics"] = failure_metrics
+        return result
     return {"status": "completed", "video_id": video_id, "metrics": metrics}
 
 
@@ -222,12 +309,16 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(description="Continuously generate review-only archive enrichment candidates.")
     parser.add_argument("--once", action="store_true", help="Process at most one queue item and exit.")
+    parser.add_argument("--video-id", type=_uuid_argument, help="Process exactly one eligible video UUID.")
     args = parser.parse_args(argv)
+    if args.video_id is not None and not args.once:
+        parser.error("--video-id requires --once")
     deps = dependencies or QueueDependencies(
         select_video=select_next_video,
         enrich_video=enrich_video_candidates,
         on_credit_exhausted=mark_credit_exhausted_run,
         load_guardrail_snapshot=load_queue_guardrail_snapshot,
+        select_requested_video=select_requested_video,
     )
 
     while True:
@@ -254,12 +345,15 @@ def main(
                         prompt_version=PROMPT_VERSION,
                         failure_cooldown_seconds=config.ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS,
                         dependencies=deps,
+                        requested_video_id=args.video_id,
                     )
             finally:
                 db.close()
         assert result is not None
         print(json.dumps(result, sort_keys=True), flush=True)
         if args.once:
+            if args.video_id is not None and result["status"] != "completed":
+                return 1
             return 0
 
         delay_by_status = {
@@ -287,4 +381,5 @@ __all__ = [
     "mark_credit_exhausted_run",
     "run_queue_cycle",
     "select_next_video",
+    "select_requested_video",
 ]

@@ -7,7 +7,9 @@ from app.archive.enrichment_runner import EpisodeInput, TranscriptBlockInput
 from app.archive.openrouter_enrichment import (
     EPISODE_ENRICHMENT_SCHEMA,
     EpisodeEnrichmentCandidate,
+    OpenRouterBudgetExceededError,
     OpenRouterEpisodeResult,
+    OpenRouterHierarchicalGenerationError,
     build_openrouter_episode_request,
     generate_hierarchical_openrouter_enrichment,
     generate_openrouter_episode_enrichment,
@@ -378,3 +380,137 @@ def test_hierarchical_enrichment_bounds_windows_and_recombines_episode():
     )
     assert result.window_count == 3
     assert result.cost_usd == pytest.approx(0.03)
+
+
+def test_hierarchical_enrichment_stops_before_next_window_at_cost_limit():
+    duration_ms = 200 * 60_000
+    episode = EpisodeInput(
+        video_id="long-video",
+        duration_ms=duration_ms,
+        blocks=[
+            TranscriptBlockInput(
+                block_index=index,
+                start_ms=index * 10 * 60_000,
+                end_ms=(index + 1) * 10 * 60_000,
+                text=f"Discussion block {index} about sustained political coverage.",
+            )
+            for index in range(20)
+        ],
+    )
+    calls = 0
+
+    def generate_window(window: EpisodeInput) -> OpenRouterEpisodeResult:
+        nonlocal calls
+        calls += 1
+        return OpenRouterEpisodeResult(
+            video_id=window.video_id,
+            model="deepseek/deepseek-v4-pro",
+            provider="provider",
+            prompt_version="prompt-v1",
+            candidate=EpisodeEnrichmentCandidate(
+                subjects=["political coverage"],
+                keywords=["sustained political coverage"],
+                categories=[],
+                chapters=[
+                    {
+                        "start_ms": 0,
+                        "title": "Opening Political Coverage Discussion",
+                        "summary": "The opening portion discusses sustained political coverage.",
+                        "evidence_block_indexes": [window.blocks[0].block_index],
+                    },
+                    {
+                        "start_ms": window.duration_ms // 2,
+                        "title": "Continuing Political Coverage Discussion",
+                        "summary": "The later portion continues the political coverage discussion.",
+                        "evidence_block_indexes": [window.blocks[-1].block_index],
+                    },
+                ],
+            ),
+            prompt_tokens=100,
+            completion_tokens=20,
+            cost_usd=0.5,
+            elapsed_seconds=2.0,
+        )
+
+    with pytest.raises(OpenRouterBudgetExceededError) as raised:
+        generate_hierarchical_openrouter_enrichment(
+            episode,
+            generate_window=generate_window,
+            max_window_ms=90 * 60_000,
+            max_cost_usd=0.5,
+        )
+
+    assert calls == 1
+    assert raised.value.cost_usd == 0.5
+    assert raised.value.prompt_tokens == 100
+    assert raised.value.completion_tokens == 20
+    assert raised.value.elapsed_seconds == 2.0
+    assert raised.value.window_count == 1
+    assert raised.value.attempted_window_count == 1
+
+
+def test_hierarchical_enrichment_preserves_usage_when_later_window_fails():
+    episode = EpisodeInput(
+        video_id="provider-failure",
+        duration_ms=100 * 60_000,
+        blocks=[
+            TranscriptBlockInput(
+                block_index=index,
+                start_ms=index * 10 * 60_000,
+                end_ms=(index + 1) * 10 * 60_000,
+                text=f"Discussion block {index} about the provider failure test.",
+            )
+            for index in range(10)
+        ],
+    )
+    calls = 0
+
+    def generate_window(window: EpisodeInput) -> OpenRouterEpisodeResult:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("provider unavailable")
+        return OpenRouterEpisodeResult(
+            video_id=window.video_id,
+            model="deepseek/deepseek-v4-pro",
+            provider="provider",
+            prompt_version="prompt-v1",
+            candidate=EpisodeEnrichmentCandidate(
+                subjects=["provider test"],
+                keywords=["provider failure test"],
+                categories=[],
+                chapters=[
+                    {
+                        "start_ms": 0,
+                        "title": "Provider Failure Test Opening",
+                        "summary": "The episode opens with the provider failure test discussion.",
+                        "evidence_block_indexes": [window.blocks[0].block_index],
+                    },
+                    {
+                        "start_ms": window.duration_ms // 2,
+                        "title": "Provider Failure Test Continuation",
+                        "summary": "The episode continues the provider failure test discussion.",
+                        "evidence_block_indexes": [window.blocks[-1].block_index],
+                    },
+                ],
+            ),
+            prompt_tokens=80,
+            completion_tokens=20,
+            cost_usd=0.25,
+            elapsed_seconds=1.5,
+        )
+
+    with pytest.raises(OpenRouterHierarchicalGenerationError, match="provider unavailable") as raised:
+        generate_hierarchical_openrouter_enrichment(
+            episode,
+            generate_window=generate_window,
+            max_window_ms=90 * 60_000,
+            max_cost_usd=1.0,
+        )
+
+    assert calls == 2
+    assert raised.value.window_count == 1
+    assert raised.value.attempted_window_count == 2
+    assert raised.value.prompt_tokens == 80
+    assert raised.value.completion_tokens == 20
+    assert raised.value.cost_usd == 0.25

@@ -164,6 +164,59 @@ class OpenRouterResponseValidationError(ValueError):
         self.elapsed_seconds = elapsed_seconds
 
 
+class OpenRouterBudgetExceededError(RuntimeError):
+    """Report cumulative usage when a hierarchical run reaches its budget."""
+
+    def __init__(
+        self,
+        *,
+        provider: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cost_usd: float,
+        elapsed_seconds: float,
+        max_cost_usd: float,
+        window_count: int,
+        attempted_window_count: int,
+    ) -> None:
+        super().__init__(
+            "archive enrichment cost reached the configured per-video limit " f"({cost_usd:.6f} >= {max_cost_usd:.6f})"
+        )
+        self.provider = provider
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.cost_usd = cost_usd
+        self.elapsed_seconds = elapsed_seconds
+        self.max_cost_usd = max_cost_usd
+        self.window_count = window_count
+        self.attempted_window_count = attempted_window_count
+
+
+class OpenRouterHierarchicalGenerationError(RuntimeError):
+    """Preserve measured usage when a later provider window fails."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cost_usd: float,
+        elapsed_seconds: float,
+        window_count: int,
+        attempted_window_count: int,
+    ) -> None:
+        super().__init__(message)
+        self.provider = provider
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.cost_usd = cost_usd
+        self.elapsed_seconds = elapsed_seconds
+        self.window_count = window_count
+        self.attempted_window_count = attempted_window_count
+
+
 class OpenRouterEpisodeResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -616,11 +669,51 @@ def generate_hierarchical_openrouter_enrichment(
     *,
     generate_window: Callable[[EpisodeInput], OpenRouterEpisodeResult],
     max_window_ms: int = 90 * 60 * 1000,
+    max_cost_usd: float | None = None,
 ) -> OpenRouterEpisodeResult:
     """Generate bounded window outlines and merge them into one complete candidate."""
+    if max_cost_usd is not None and max_cost_usd <= 0:
+        raise ValueError("max enrichment cost must be positive")
+    windows = _balanced_episode_windows(episode, max_window_ms)
     window_results: list[tuple[int, OpenRouterEpisodeResult]] = []
-    for offset_ms, window in _balanced_episode_windows(episode, max_window_ms):
-        window_results.append((offset_ms, generate_window(window)))
+    for index, (offset_ms, window) in enumerate(windows):
+        try:
+            window_result = generate_window(window)
+        except Exception as exc:
+            providers = [result.provider for _offset, result in window_results]
+            failed_provider = getattr(exc, "provider", None)
+            if failed_provider:
+                providers.append(str(failed_provider))
+            raise OpenRouterHierarchicalGenerationError(
+                str(exc),
+                provider=", ".join(dict.fromkeys(providers)),
+                prompt_tokens=sum(result.prompt_tokens for _offset, result in window_results)
+                + int(getattr(exc, "prompt_tokens", 0) or 0),
+                completion_tokens=sum(result.completion_tokens for _offset, result in window_results)
+                + int(getattr(exc, "completion_tokens", 0) or 0),
+                cost_usd=sum(result.cost_usd for _offset, result in window_results)
+                + float(getattr(exc, "cost_usd", 0.0) or 0.0),
+                elapsed_seconds=sum(result.elapsed_seconds for _offset, result in window_results)
+                + float(getattr(exc, "elapsed_seconds", 0.0) or 0.0),
+                window_count=len(window_results),
+                attempted_window_count=index + 1,
+            ) from exc
+        window_results.append((offset_ms, window_result))
+        cumulative_cost = sum(result.cost_usd for _offset, result in window_results)
+        if max_cost_usd is not None and (
+            cumulative_cost > max_cost_usd or (cumulative_cost >= max_cost_usd and index + 1 < len(windows))
+        ):
+            providers = list(dict.fromkeys(result.provider for _offset, result in window_results))
+            raise OpenRouterBudgetExceededError(
+                provider=", ".join(providers),
+                prompt_tokens=sum(result.prompt_tokens for _offset, result in window_results),
+                completion_tokens=sum(result.completion_tokens for _offset, result in window_results),
+                cost_usd=cumulative_cost,
+                elapsed_seconds=sum(result.elapsed_seconds for _offset, result in window_results),
+                max_cost_usd=max_cost_usd,
+                window_count=len(window_results),
+                attempted_window_count=index + 1,
+            )
 
     models = {result.model for _offset, result in window_results}
     prompt_versions = {result.prompt_version for _offset, result in window_results}
@@ -685,6 +778,8 @@ __all__ = [
     "EpisodeChapterCandidate",
     "EpisodeCategoryCandidate",
     "EpisodeEnrichmentCandidate",
+    "OpenRouterBudgetExceededError",
+    "OpenRouterHierarchicalGenerationError",
     "OpenRouterEpisodeResult",
     "OpenRouterResponseValidationError",
     "build_openrouter_episode_request",

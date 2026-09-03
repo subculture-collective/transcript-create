@@ -167,6 +167,260 @@ recover_diarization_canary() {
       COMMIT;" >/dev/null
 }
 
+# The enrichment canary is deliberately separate from the sustained queue and
+# from the diarization canary state above. A fixed container name makes
+# concurrent invocations fail atomically at Docker create time.
+readonly enrichment_canary_model=deepseek/deepseek-v4-pro
+readonly enrichment_canary_prompt=archive-episode-enrichment-v7
+readonly enrichment_canary_container_name=hasanara-archive-enrichment-canary
+enrichment_canary_video_id=''; enrichment_canary_token=''; enrichment_canary_container_id=''; enrichment_canary_started_at=''
+enrichment_canary_evidence_dir=''; enrichment_canary_started=false; enrichment_canary_done=false
+enrichment_canary_evidence_root=deploy-backups/archive-enrichment-canaries
+enrichment_canary_preexisting_fingerprint=''
+
+psql_admin() { compose exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d transcripts "$@"; }
+
+assert_container_healthy() {
+    local container=$1 details
+    details=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container inspect \
+      --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container") || return 1
+    [[ $details == running\|healthy ]]
+}
+
+assert_enrichment_queue_inert() {
+    local details
+    grep -Eq '^ARCHIVE_ENRICHMENT_ENABLED=(false|False|FALSE|0)$' .env.prod || return 1
+    grep -Eq '^ARCHIVE_ENRICHMENT_PUBLISH=(false|False|FALSE|0)$' .env.prod || return 1
+    details=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container inspect \
+      --format '{{.State.Status}}|{{.HostConfig.RestartPolicy.Name}}' hasanara-archive-enrichment-queue-1) || return 1
+    [[ $details == exited\|no ]]
+    [[ $(psql_admin -At -c "SELECT count(*) FROM archive_extraction_runs WHERE status = 'running';") == 0 ]]
+}
+
+check_enrichment_canary_target() {
+    psql_admin -v video_id="$enrichment_canary_video_id" -v model="$enrichment_canary_model" \
+      -v prompt="$enrichment_canary_prompt" -c "SELECT 1 / CASE WHEN EXISTS (
+        SELECT 1 FROM videos v
+        WHERE v.id = :'video_id'::uuid
+          AND v.state = 'completed'
+          AND v.duration_seconds > 5400 AND v.duration_seconds <= 10800
+          AND EXISTS (
+            SELECT 1 FROM transcript_blocks tb WHERE tb.video_id = v.id
+            UNION ALL SELECT 1 FROM segments s WHERE s.video_id = v.id
+            UNION ALL SELECT 1 FROM youtube_transcripts yt
+              JOIN youtube_segments ys ON ys.youtube_transcript_id = yt.id WHERE yt.video_id = v.id
+          )
+          AND NOT EXISTS (SELECT 1 FROM archive_video_chapters c WHERE c.video_id = v.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM archive_label_assignments a WHERE a.video_id = v.id AND a.source = 'llm'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM archive_extraction_runs r
+            WHERE r.video_id = v.id AND r.model_name = :'model' AND r.prompt_version = :'prompt'
+              AND r.status IN ('running', 'failed') AND r.started_at > now() - interval '24 hours'
+          )
+      ) THEN 1 ELSE 0 END AS target_is_eligible;" >/dev/null
+}
+
+check_enrichment_canary_guardrails() {
+    psql_admin -v model="$enrichment_canary_model" -c "WITH attempts AS (
+        SELECT status, metrics, started_at FROM archive_extraction_runs
+        WHERE model_name = :'model' AND started_at >= now() - interval '24 hours'
+      ), recent AS (
+        SELECT status FROM attempts WHERE status IN ('completed', 'failed') ORDER BY started_at DESC LIMIT 20
+      ), snapshot AS (
+        SELECT
+          (SELECT count(*) FROM attempts) AS attempts,
+          (SELECT COALESCE(sum(CASE WHEN jsonb_typeof(metrics -> 'cost_usd') = 'number'
+            THEN (metrics ->> 'cost_usd')::numeric ELSE 0 END), 0) FROM attempts) AS cost,
+          (SELECT count(*) FROM recent) AS finished,
+          (SELECT count(*) FROM recent WHERE status = 'failed') AS failures
+      )
+      SELECT 1 / CASE WHEN attempts < 20 AND cost < 5.0
+        AND (finished < 20 OR failures::numeric / finished < 0.25)
+        THEN 1 ELSE 0 END AS guardrails_allow_one_attempt FROM snapshot;" >/dev/null
+}
+
+enrichment_canary_assignment_fingerprint() {
+    psql_admin -At -v video_id="$enrichment_canary_video_id" -c "SELECT md5(COALESCE(
+      (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id)::text FROM archive_label_assignments a
+       WHERE a.video_id = :'video_id'::uuid AND a.source <> 'llm'), '[]')) AS preexisting_assignment_fingerprint;"
+}
+
+enrichment_container_details_match() {
+    local details id name token
+    details=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container inspect \
+      --format '{{.Id}}|{{.Name}}|{{index .Config.Labels "hasanara.enrichment-canary-token"}}' \
+      "$enrichment_canary_container_id") || return 1
+    IFS='|' read -r id name token <<<"$details"
+    [[ $id == "$enrichment_canary_container_id" && $name == "/$enrichment_canary_container_name" && $token == "$enrichment_canary_token" ]]
+}
+
+cleanup_enrichment_canary_container() {
+    local ids count line
+    [[ -n $enrichment_canary_token ]] || return 1
+    if [[ -z $enrichment_canary_container_id ]]; then
+        ids=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container ls --all --no-trunc \
+          --filter "label=hasanara.enrichment-canary-token=$enrichment_canary_token" \
+          --filter "name=^/${enrichment_canary_container_name}$" --format '{{.ID}}') || return 1
+        count=0
+        while IFS= read -r line; do [[ -n $line ]] && ((count += 1)); done <<<"$ids"
+        [[ $count == 0 ]] && return 0
+        [[ $count == 1 ]] || return 1
+        enrichment_canary_container_id=$ids
+        [[ $enrichment_canary_container_id =~ ^[0-9a-f]{64}$ ]] || return 1
+    fi
+    enrichment_container_details_match || return 1
+    timeout --kill-after=5s 30s "${CLEAN_ENV[@]}" docker container stop --time 20 \
+      "$enrichment_canary_container_id" >/dev/null 2>&1 || true
+    timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container rm --force \
+      "$enrichment_canary_container_id" >/dev/null || return 1
+    ids=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container ls --all --no-trunc \
+      --filter "name=^/${enrichment_canary_container_name}$" --format '{{.ID}}') || return 1
+    [[ -z $ids ]]
+}
+
+fence_enrichment_canary_run() {
+    local fenced
+    [[ -n $enrichment_canary_started_at ]] || return 0
+    fenced=$(psql_admin -At -v video_id="$enrichment_canary_video_id" -v token="$enrichment_canary_token" \
+      -v started_at="$enrichment_canary_started_at" -v model="$enrichment_canary_model" \
+      -v prompt="$enrichment_canary_prompt" -c "WITH fenced AS (
+        UPDATE archive_extraction_runs
+        SET status = 'cancelled',
+            metrics = COALESCE(metrics, '{}'::jsonb) || jsonb_build_object(
+              'reason', 'canary_interrupted', 'invocation_id', :'token'
+            ),
+            error = 'guarded enrichment canary interrupted', finished_at = now()
+        WHERE video_id = :'video_id'::uuid AND model_name = :'model' AND prompt_version = :'prompt'
+          AND status = 'running' AND started_at >= :'started_at'::timestamptz
+        RETURNING 1
+      ) SELECT count(*) FROM fenced;") || return 1
+    [[ $fenced == 0 || $fenced == 1 ]]
+}
+
+assert_enrichment_canary_container_absent() {
+    local ids
+    ids=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container ls --all --no-trunc \
+      --filter "name=^/${enrichment_canary_container_name}$" --format '{{.ID}}') || return 1
+    [[ -z $ids ]]
+}
+
+verify_enrichment_canary_result() {
+    psql_admin -v video_id="$enrichment_canary_video_id" -v started_at="$enrichment_canary_started_at" \
+      -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt" -c "WITH target_run AS (
+        SELECT id, metrics FROM archive_extraction_runs
+        WHERE video_id = :'video_id'::uuid AND model_name = :'model' AND prompt_version = :'prompt'
+          AND started_at >= :'started_at'::timestamptz
+      ), checks AS (
+        SELECT
+          (SELECT count(*) FROM target_run) = 1 AS one_run,
+          (SELECT count(*) FROM archive_extraction_runs r JOIN target_run t ON t.id = r.id
+            WHERE r.status = 'completed') = 1 AS completed,
+          (SELECT count(*) FROM target_run
+            WHERE (metrics ->> 'window_count')::integer = 2
+              AND (metrics ->> 'cost_usd')::numeric <= 1.0
+              AND (metrics -> 'repairs' ->> 'evidence_overlap_violations')::integer = 0
+              AND (metrics ->> 'categories')::integer >= 1) = 1 AS metrics_valid,
+          (SELECT count(*) FROM archive_video_chapters c JOIN target_run t ON t.id = c.run_id
+            WHERE c.status = 'candidate' AND c.source = 'automatic') >= 4 AS candidate_chapters,
+          (SELECT min(c.start_ms) = 0 AND max(c.end_ms) = v.duration_seconds * 1000
+              AND count(*) = count(DISTINCT c.start_ms)
+              AND count(*) FILTER (WHERE c.start_ms = round(v.duration_seconds * 1000 / 2.0)) >= 1
+            FROM archive_video_chapters c JOIN target_run t ON t.id = c.run_id
+            JOIN videos v ON v.id = c.video_id GROUP BY v.duration_seconds) AS chapter_coverage,
+          NOT EXISTS (SELECT 1 FROM archive_video_chapters c JOIN target_run t ON t.id = c.run_id
+            WHERE c.status <> 'candidate' OR c.source <> 'automatic') AS chapters_review_only,
+          NOT EXISTS (SELECT 1 FROM archive_label_assignments a JOIN target_run t ON t.id = a.run_id
+            WHERE a.status <> 'candidate' OR a.publish_tier <> 'bronze' OR a.source <> 'llm') AS labels_review_only,
+          (SELECT COALESCE(sum(CASE WHEN jsonb_typeof(metrics -> 'cost_usd') = 'number'
+            THEN (metrics ->> 'cost_usd')::numeric ELSE 0 END), 0)
+            FROM archive_extraction_runs WHERE model_name = :'model'
+              AND started_at >= now() - interval '24 hours') < 5.0 AS daily_cost_valid
+      ) SELECT 1 / CASE WHEN one_run AND completed AND metrics_valid AND candidate_chapters
+          AND chapter_coverage AND chapters_review_only AND labels_review_only AND daily_cost_valid
+        THEN 1 ELSE 0 END AS canary_acceptance_passed FROM checks;" \
+      | tee "$enrichment_canary_evidence_dir/database-verification.txt"
+}
+
+on_enrichment_canary_exit() {
+    local status=$?
+    trap - EXIT INT TERM
+    if [[ $enrichment_canary_started == true && $enrichment_canary_done != true ]]; then
+        cleanup_enrichment_canary_container || exit 1
+        fence_enrichment_canary_run || exit 1
+    fi
+    exit "$status"
+}
+
+on_enrichment_canary_signal() {
+    trap - EXIT INT TERM
+    if [[ $enrichment_canary_started != true ]]; then exit 1; fi
+    cleanup_enrichment_canary_container || exit 1
+    fence_enrichment_canary_run || exit 1
+    exit "$1"
+}
+
+run_enrichment_canary() {
+    enrichment_canary_video_id=$1
+    enrichment_canary_token=$(</proc/sys/kernel/random/uuid) || return 1
+    is_uuid "$enrichment_canary_token" || return 1
+    enrichment_canary_container_id=''; enrichment_canary_started_at=''
+    enrichment_canary_started=false; enrichment_canary_done=false
+    run_preflight
+    assert_container_healthy hasanara-api
+    assert_container_healthy hasanara-db
+    assert_container_healthy hasanara-redis
+    assert_container_healthy hasanara-summary-refresher
+    assert_container_healthy hasanara-archive-intelligence-refresher
+    assert_enrichment_queue_inert
+    assert_enrichment_canary_container_absent
+    check_enrichment_canary_target
+    check_enrichment_canary_guardrails
+    enrichment_canary_started_at=$(psql_admin -At -c 'SELECT clock_timestamp();') || return 1
+    [[ -n $enrichment_canary_started_at ]] || return 1
+    enrichment_canary_evidence_dir="${enrichment_canary_evidence_root}/$(date -u +%Y%m%dT%H%M%SZ)-${enrichment_canary_video_id}-${enrichment_canary_token}"
+    mkdir -p -- "$enrichment_canary_evidence_dir"
+    chmod 700 "$enrichment_canary_evidence_dir"
+    enrichment_canary_preexisting_fingerprint=$(enrichment_canary_assignment_fingerprint) || return 1
+    [[ $enrichment_canary_preexisting_fingerprint =~ ^[0-9a-f]{32}$ ]] || return 1
+    printf '{"preexisting_assignment_fingerprint":"%s"}\n' "$enrichment_canary_preexisting_fingerprint" \
+      >"$enrichment_canary_evidence_dir/preflight.json"
+    chmod 600 "$enrichment_canary_evidence_dir/preflight.json"
+    trap on_enrichment_canary_exit EXIT
+    trap 'on_enrichment_canary_signal 130' INT
+    trap 'on_enrichment_canary_signal 143' TERM
+    enrichment_canary_started=true
+    compose run -d --no-deps --name "$enrichment_canary_container_name" \
+      --label "hasanara.enrichment-canary-token=$enrichment_canary_token" \
+      -e ARCHIVE_ENRICHMENT_ENABLED=true -e ARCHIVE_ENRICHMENT_PUBLISH=false \
+      -e "ARCHIVE_ENRICHMENT_MODEL=$enrichment_canary_model" -e ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES=90 \
+      -e ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO=1.00 archive-enrichment-queue \
+      python3 /app/scripts/run_archive_enrichment_queue.py --once --video-id "$enrichment_canary_video_id" >/dev/null
+    enrichment_canary_container_id=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container inspect \
+      --format '{{.Id}}' "$enrichment_canary_container_name") || return 1
+    [[ $enrichment_canary_container_id =~ ^[0-9a-f]{64}$ ]] || return 1
+    enrichment_container_details_match || return 1
+    local worker_status
+    worker_status=$(timeout --signal=TERM --kill-after=30s 20m "${CLEAN_ENV[@]}" docker container wait \
+      "$enrichment_canary_container_id") || return 1
+    timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container logs "$enrichment_canary_container_id" \
+      | tee "$enrichment_canary_evidence_dir/result.json"
+    chmod 600 "$enrichment_canary_evidence_dir/result.json"
+    [[ $worker_status == 0 ]] || return 1
+    grep -q '"status": "completed"' "$enrichment_canary_evidence_dir/result.json" || return 1
+    cleanup_enrichment_canary_container
+    assert_enrichment_canary_container_absent
+    verify_enrichment_canary_result
+    [[ $(enrichment_canary_assignment_fingerprint) == "$enrichment_canary_preexisting_fingerprint" ]]
+    assert_enrichment_queue_inert
+    assert_container_healthy hasanara-api
+    assert_container_healthy hasanara-db
+    enrichment_canary_done=true
+    trap - EXIT INT TERM
+    printf 'evidence_dir=%s\n' "$enrichment_canary_evidence_dir"
+}
+
 [[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
 
 command=${1:-}
@@ -183,6 +437,13 @@ case "$command" in
         ;;
     maintenance)
         shift
+        if [[ ${1:-} == archive-enrichment-canary ]]; then
+            if (($# != 3)) || ! is_uuid "${2:-}" || [[ ${3:-} != --approved ]]; then
+                printf '%s\n' 'archive-enrichment-canary requires exactly one UUID and --approved' >&2
+                exit 64
+            fi
+            run_enrichment_canary "$2"; exit $?
+        fi
         if [[ ${1:-} == recover-attention-backlog ]]; then
             if (($# != 3 && $# != 5)) || [[ ${2:-} != alignment && ${2:-} != yt-dlp ]] || [[ ! ${3:-} =~ ^[1-5]$ ]]; then
                 printf '%s\n' 'recover-attention-backlog requires cohort alignment|yt-dlp, limit 1..5, and optional --confirm RECOVER' >&2

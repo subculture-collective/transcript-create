@@ -281,6 +281,7 @@ def _generate_configured_episode(episode: EpisodeInput, config: Any) -> OpenRout
         episode,
         generate_window=generate_window,
         max_window_ms=int(config.ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES * 60_000),
+        max_cost_usd=float(config.ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO),
     )
 
 
@@ -339,6 +340,7 @@ def enrich_video_candidates(
         metrics: dict[str, Any] = persist_candidates(db, episode, result, run_id=run_id)
         metrics.update(
             {
+                "run_id": run_id,
                 "model": result.model,
                 "provider": result.provider,
                 "prompt_version": result.prompt_version,
@@ -364,9 +366,21 @@ def enrich_video_candidates(
         return metrics
     except Exception as exc:
         db.rollback()
-        failure_metrics: dict[str, Any] = {"model": config.ARCHIVE_ENRICHMENT_MODEL, "prompt_version": PROMPT_VERSION}
+        failure_metrics: dict[str, Any] = {
+            "run_id": run_id,
+            "model": config.ARCHIVE_ENRICHMENT_MODEL,
+            "prompt_version": PROMPT_VERSION,
+        }
         usage_source: Any = result if "result" in locals() else exc
-        for field in ("provider", "prompt_tokens", "completion_tokens", "cost_usd", "elapsed_seconds"):
+        for field in (
+            "provider",
+            "prompt_tokens",
+            "completion_tokens",
+            "cost_usd",
+            "elapsed_seconds",
+            "window_count",
+            "attempted_window_count",
+        ):
             value = getattr(usage_source, field, None)
             if value is not None:
                 failure_metrics[field] = value
@@ -378,6 +392,7 @@ def enrich_video_candidates(
             error=str(exc)[:1_000],
         )
         db.commit()
+        exc.__dict__["archive_enrichment_failure_metrics"] = failure_metrics
         raise
 
 

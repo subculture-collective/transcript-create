@@ -83,6 +83,7 @@ services:
         env_file: !override ["${HASANARA_ENV_FILE:?HASANARA_ENV_FILE is required}"]
         # Production enrichment is opt-in. A deployment must never revive the
         # sustained queue while the guarded one-video canary is being evaluated.
+        command: ['python3', '/app/scripts/run_archive_enrichment_queue.py', '--once']
         restart: "no"
         environment:
             DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts

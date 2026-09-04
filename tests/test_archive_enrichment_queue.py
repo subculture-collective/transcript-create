@@ -332,6 +332,7 @@ def test_compose_runs_enrichment_queue_as_a_guarded_api_service() -> None:
     assert "restart: unless-stopped" in service
     assert "  archive-enrichment-queue:" in production
     assert "    archive-enrichment-queue:" in release
+    assert "run_archive_enrichment_queue.py', '--once'" in release
     assert '"archive-enrichment-queue": "api"' in preflight
 
 

@@ -255,6 +255,8 @@ def validate_rendered_services(rendered: dict[str, Any], services: set[str], man
             environment.get("ENVIRONMENT") != "production" or environment.get("LOG_LEVEL") != "INFO"
         ):
             fail("Compose application environment contract is invalid")
+        if service == "archive-enrichment-queue" and details.get("restart") not in ("no", False):
+            fail("Compose archive enrichment queue restart contract is invalid")
         if service == "api" and (
             environment.get("REDIS_URL") != "redis://redis:6379/0"
             or environment.get("RATE_LIMIT_REQUESTS") != "100"

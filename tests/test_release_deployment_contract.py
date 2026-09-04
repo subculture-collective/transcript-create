@@ -86,6 +86,8 @@ def rendered_service(service: str, image: str) -> dict[str, Any]:
             }
         )
     rendered: dict[str, Any] = {"image": image, "environment": environment}
+    if service == "archive-enrichment-queue":
+        rendered["restart"] = "no"
     if service == "diarization-worker":
         environment.update(
             {
@@ -228,6 +230,7 @@ def test_overlay_forces_env_file_and_diarization_is_opt_in() -> None:
     assert "RATE_LIMIT_REQUESTS: '100'" in host
     assert "RATE_LIMIT_WINDOW_SECONDS: '60'" in host
     assert "OPENSEARCH_TLS_VERIFY: 'true'" in host
+    assert 'restart: "no"' in overlay.split("archive-enrichment-queue:", 1)[1].split("diarization-worker:", 1)[0]
 
 
 def test_example_documents_required_url_safe_production_database_password() -> None:
@@ -318,6 +321,18 @@ def test_rendered_production_contract_fails_closed(service: str, key: str, value
     }
     rendered["services"][service]["environment"][key] = value
     with pytest.raises(preflight.PreflightError):
+        preflight.validate_rendered_services(rendered, set(preflight.SERVICE_ROLES), data)
+
+
+def test_archive_enrichment_queue_restart_contract_is_fail_closed() -> None:
+    data = manifest()
+    rendered = {
+        "services": {
+            name: rendered_service(name, data["images"][role]) for name, role in preflight.SERVICE_ROLES.items()
+        }
+    }
+    rendered["services"]["archive-enrichment-queue"]["restart"] = "unless-stopped"
+    with pytest.raises(preflight.PreflightError, match="archive enrichment queue restart"):
         preflight.validate_rendered_services(rendered, set(preflight.SERVICE_ROLES), data)
 
 

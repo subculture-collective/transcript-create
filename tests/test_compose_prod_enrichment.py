@@ -1,13 +1,50 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
+
+import pytest
+from sqlalchemy import text
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "compose_prod.sh"
 VIDEO_ID = "9e0922f1-ff96-49f5-8279-beee25d7a8b0"
 CONTAINER_ID = "a" * 64
+
+
+@pytest.mark.parametrize("mutation", ["confidence", "timestamp", "alias", "unprotect"])
+def test_protected_fingerprint_detects_database_mutations(db_session, mutation):
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source {SCRIPT}; psql_admin_sql() {{ printf "%s" "$1"; }}; '
+            "enrichment_canary_protected_label_fingerprint",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    fingerprint_sql = text(result.stdout)
+    label_id = db_session.execute(text("""
+        INSERT INTO archive_labels (slug, label, kind, status, source, publish_tier, confidence_score, updated_at)
+        VALUES ('fingerprint-regression', 'Fingerprint', 'topic', 'published', 'automatic', 'gold', 0.42,
+                '2020-01-01'::timestamptz) RETURNING id
+    """)).scalar_one()
+    before = db_session.execute(fingerprint_sql).scalar_one()
+    assert db_session.execute(fingerprint_sql).scalar_one() == before
+    statements = {
+        "confidence": "UPDATE archive_labels SET confidence_score = 0.99 WHERE id = :id",
+        "timestamp": "UPDATE archive_labels SET updated_at = now() WHERE id = :id",
+        "unprotect": "UPDATE archive_labels SET status = 'candidate' WHERE id = :id",
+        "alias": "INSERT INTO archive_label_aliases (label_id, alias, normalized_alias, source) "
+        "VALUES (:id, 'Alias', 'alias', 'automatic')",
+    }
+    db_session.execute(text(statements[mutation]), {"id": label_id})
+    assert db_session.execute(fingerprint_sql).scalar_one() != before
 
 
 def _fake_docker(tmp_path: Path, *, worker_status: int = 0) -> Path:
@@ -60,6 +97,7 @@ psql_admin() {{
   if [[ "$*" == *"clock_timestamp"* ]]; then printf '2026-09-03 12:00:00+00\\n'; else printf '0\\n'; fi
 }}
 enrichment_canary_assignment_fingerprint() {{ printf '0123456789abcdef0123456789abcdef\\n'; }}
+enrichment_canary_protected_label_fingerprint() {{ printf 'abcdef0123456789abcdef0123456789\\n'; }}
 compose() {{ printf 'compose:%s\\n' "$*" >> {marker}; }}
 enrichment_container_details_match() {{ return 0; }}
 verify_enrichment_canary_result() {{ printf 'verified\\n' >> {marker}; }}
@@ -127,6 +165,41 @@ def test_enrichment_canary_wrapper_runs_one_exact_review_only_container(tmp_path
     preflight = list((tmp_path / "evidence").glob("*/preflight.json"))
     assert len(preflight) == 1
     assert "preexisting_assignment_fingerprint" in preflight[0].read_text(encoding="utf-8")
+    assert "protected_label_fingerprint" in preflight[0].read_text(encoding="utf-8")
+    verification = next((tmp_path / "evidence").glob("*/protected-label-verification.json"))
+    assert json.loads(verification.read_text())["protected_labels"] == "passed"
+
+
+def test_enrichment_canary_rejects_protected_label_mutation(tmp_path: Path) -> None:
+    body = f"""
+enrichment_canary_protected_label_fingerprint() {{
+  if [[ -f {tmp_path / 'snapshot-taken'} ]]; then
+    printf 'ffffffffffffffffffffffffffffffff\\n'
+  else
+    touch {tmp_path / 'snapshot-taken'}
+    printf '00000000000000000000000000000000\\n'
+  fi
+}}
+run_enrichment_canary {VIDEO_ID}
+"""
+    result = _run_sourced(tmp_path, body)
+    assert result.returncode != 0
+    assert '"protected_labels":"failed"' in result.stdout
+    assert "verified" not in (tmp_path / "marker").read_text()
+    verification = next((tmp_path / "evidence").glob("*/protected-label-verification.json"))
+    assert json.loads(verification.read_text())["protected_labels"] == "failed"
+
+
+def test_enrichment_canary_invalid_protected_snapshot_prevents_provider_start(tmp_path: Path) -> None:
+    result = _run_sourced(
+        tmp_path,
+        f"""
+enrichment_canary_protected_label_fingerprint() {{ printf 'invalid\\n'; }}
+run_enrichment_canary {VIDEO_ID}
+""",
+    )
+    assert result.returncode != 0
+    assert "compose:" not in (tmp_path / "marker").read_text()
 
 
 def test_enrichment_canary_nonzero_worker_is_cleaned_and_fenced(tmp_path: Path) -> None:
@@ -141,6 +214,8 @@ run_enrichment_canary {VIDEO_ID}
     marker = (tmp_path / "marker").read_text(encoding="utf-8")
     assert "cleanup" in marker
     assert "fence" in marker
+    verification = next((tmp_path / "evidence").glob("*/protected-label-verification.json"))
+    assert json.loads(verification.read_text())["protected_labels"] == "passed"
 
 
 def test_enrichment_canary_wait_timeout_is_cleaned_and_fenced(tmp_path: Path) -> None:
@@ -175,6 +250,8 @@ run_enrichment_canary {VIDEO_ID}
 def test_enrichment_canary_signal_handler_cleans_then_fences(tmp_path: Path) -> None:
     body = f"""
 enrichment_canary_started=true
+enrichment_canary_evidence_dir={tmp_path}
+enrichment_canary_protected_fingerprint=abcdef0123456789abcdef0123456789
 cleanup_enrichment_canary_container() {{ printf 'cleanup\\n' >> {tmp_path / 'marker'}; }}
 fence_enrichment_canary_run() {{ printf 'fence\\n' >> {tmp_path / 'marker'}; }}
 on_enrichment_canary_signal 143

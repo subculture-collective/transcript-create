@@ -23,12 +23,12 @@ class SecurityException:
 EXCEPTIONS = (
     SecurityException(
         advisory_id="GHSA-rrmf-rvhw-rf47",
-        expires_on=date(2026, 9, 6),
+        expires_on=date(2026, 9, 13),
         forbidden_call="torch.jit.script",
     ),
     SecurityException(
         advisory_id="PYSEC-2026-3624",
-        expires_on=date(2026, 9, 6),
+        expires_on=date(2026, 9, 13),
         forbidden_call="lightning.LightningModule.load_from_checkpoint",
     ),
 )

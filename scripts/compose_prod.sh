@@ -178,6 +178,7 @@ enrichment_canary_video_id=''; enrichment_canary_token=''; enrichment_canary_con
 enrichment_canary_evidence_dir=''; enrichment_canary_started=false; enrichment_canary_done=false
 enrichment_canary_evidence_root=deploy-backups/archive-enrichment-canaries
 enrichment_canary_preexisting_fingerprint=''
+enrichment_canary_protected_fingerprint=''
 
 psql_admin() { compose exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d transcripts "$@"; }
 psql_admin_sql() { local sql=$1; shift; psql_admin "$@" -f - <<<"$sql"; }
@@ -249,6 +250,29 @@ enrichment_canary_assignment_fingerprint() {
       (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id)::text FROM archive_label_assignments a
        WHERE a.video_id = :'video_id'::uuid AND a.source <> 'llm'), '[]')) AS preexisting_assignment_fingerprint;" \
       -At -v video_id="$enrichment_canary_video_id"
+}
+
+enrichment_canary_protected_label_fingerprint() {
+    psql_admin_sql "WITH protected AS (
+      SELECT * FROM archive_labels
+      WHERE status IN ('published', 'rejected', 'merged', 'hidden') OR source IN ('admin', 'seed', 'hybrid')
+    ) SELECT md5(jsonb_build_object(
+      'labels', COALESCE((SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM protected l), '[]'::jsonb),
+      'aliases', COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM archive_label_aliases a
+        JOIN protected l ON l.id = a.label_id), '[]'::jsonb))::text);" -At
+}
+
+verify_enrichment_canary_protected_labels() {
+    local after
+    after=$(enrichment_canary_protected_label_fingerprint) || return 1
+    [[ $after =~ ^[0-9a-f]{32}$ ]] || return 1
+    local outcome=failed
+    [[ $after != "$enrichment_canary_protected_fingerprint" ]] || outcome=passed
+    printf '{"protected_labels":"%s","before":"%s","after":"%s"}\n' \
+      "$outcome" "$enrichment_canary_protected_fingerprint" "$after" \
+      | tee "$enrichment_canary_evidence_dir/protected-label-verification.json"
+    chmod 600 "$enrichment_canary_evidence_dir/protected-label-verification.json"
+    [[ $outcome == passed ]]
 }
 
 enrichment_container_details_match() {
@@ -361,6 +385,7 @@ on_enrichment_canary_exit() {
     if [[ $enrichment_canary_started == true && $enrichment_canary_done != true ]]; then
         cleanup_enrichment_canary_container || exit 1
         fence_enrichment_canary_run || exit 1
+        verify_enrichment_canary_protected_labels || exit 1
     fi
     exit "$status"
 }
@@ -370,6 +395,7 @@ on_enrichment_canary_signal() {
     if [[ $enrichment_canary_started != true ]]; then exit 1; fi
     cleanup_enrichment_canary_container || exit 1
     fence_enrichment_canary_run || exit 1
+    verify_enrichment_canary_protected_labels || exit 1
     exit "$1"
 }
 
@@ -396,7 +422,10 @@ run_enrichment_canary() {
     chmod 700 "$enrichment_canary_evidence_dir"
     enrichment_canary_preexisting_fingerprint=$(enrichment_canary_assignment_fingerprint) || return 1
     [[ $enrichment_canary_preexisting_fingerprint =~ ^[0-9a-f]{32}$ ]] || return 1
-    printf '{"preexisting_assignment_fingerprint":"%s"}\n' "$enrichment_canary_preexisting_fingerprint" \
+    enrichment_canary_protected_fingerprint=$(enrichment_canary_protected_label_fingerprint) || return 1
+    [[ $enrichment_canary_protected_fingerprint =~ ^[0-9a-f]{32}$ ]] || return 1
+    printf '{"preexisting_assignment_fingerprint":"%s","protected_label_fingerprint":"%s"}\n' \
+      "$enrichment_canary_preexisting_fingerprint" "$enrichment_canary_protected_fingerprint" \
       >"$enrichment_canary_evidence_dir/preflight.json"
     chmod 600 "$enrichment_canary_evidence_dir/preflight.json"
     trap on_enrichment_canary_exit EXIT
@@ -424,6 +453,7 @@ run_enrichment_canary() {
     cleanup_enrichment_canary_container
     assert_enrichment_canary_container_absent
     enrichment_canary_started=false
+    verify_enrichment_canary_protected_labels
     verify_enrichment_canary_result
     [[ $(enrichment_canary_assignment_fingerprint) == "$enrichment_canary_preexisting_fingerprint" ]]
     assert_enrichment_queue_inert

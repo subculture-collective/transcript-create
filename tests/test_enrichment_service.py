@@ -149,6 +149,7 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
         "labels": 5,
         "assignments": 5,
         "skipped_ungrounded_labels": 1,
+        "skipped_duplicate_labels": 0,
     }
 
 

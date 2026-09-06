@@ -11,6 +11,7 @@ from app.settings import settings
 
 from .enrichment_exporter import export_enrichment_input
 from .enrichment_runner import EpisodeInput
+from .labeling.normalization import slugify_label
 from .labeling.repository import (
     create_extraction_run,
     finish_extraction_run,
@@ -188,7 +189,9 @@ def persist_enrichment_candidates(
         "labels": 0,
         "assignments": 0,
         "skipped_ungrounded_labels": 0,
+        "skipped_duplicate_labels": 0,
     }
+    assigned_slugs: set[str] = set()
     block_by_index = {block.block_index: block for block in episode.blocks}
     for category in result.candidate.categories:
         evidence = [
@@ -232,8 +235,16 @@ def persist_enrichment_candidates(
         metrics["categories"] += 1
         metrics["labels"] += 1
         metrics["assignments"] += 1
-    labels = list(dict.fromkeys([*result.candidate.subjects, *result.candidate.keywords]))
+        assigned_slugs.add(slugify_label(CATEGORY_LABELS[category.slug]))
+    labels = [*result.candidate.subjects, *result.candidate.keywords]
     for label in labels:
+        slug = slugify_label(label)
+        if slug in assigned_slugs:
+            # Categories own their assignment identity. Do not even upsert the
+            # label: that could demote an automatic category to kind='topic'.
+            # Use the repository's slug normalization, not display-string equality.
+            metrics["skipped_duplicate_labels"] += 1
+            continue
         evidence = _grounded_label_evidence(label, episode, result)
         if not evidence:
             metrics["skipped_ungrounded_labels"] += 1
@@ -264,6 +275,7 @@ def persist_enrichment_candidates(
         )
         metrics["labels"] += 1
         metrics["assignments"] += 1
+        assigned_slugs.add(slug)
     return metrics
 
 

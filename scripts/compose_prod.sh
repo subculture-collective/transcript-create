@@ -341,6 +341,19 @@ verify_enrichment_canary_result() {
         SELECT id, metrics FROM archive_extraction_runs
         WHERE video_id = :'video_id'::uuid AND model_name = :'model' AND prompt_version = :'prompt'
           AND started_at >= :'started_at'::timestamptz
+      ), stored AS (
+        SELECT t.id,
+          (SELECT count(*) FROM archive_video_chapters c
+            WHERE c.video_id = :'video_id'::uuid AND c.run_id = t.id) AS chapters,
+          (SELECT count(*) FROM archive_label_assignments a
+            WHERE a.video_id = :'video_id'::uuid AND a.run_id = t.id) AS assignments,
+          (SELECT count(DISTINCT a.label_id) FROM archive_label_assignments a
+            WHERE a.video_id = :'video_id'::uuid AND a.run_id = t.id) AS labels,
+          (SELECT count(*) FROM archive_label_assignments a
+            WHERE a.video_id = :'video_id'::uuid AND a.run_id = t.id
+              AND a.evidence -> 0 ->> 'extractor' = 'llm_category'
+              AND a.component_scores ->> 'controlled_taxonomy' = '1.0') AS categories
+        FROM target_run t
       ), checks AS (
         SELECT
           (SELECT count(*) FROM target_run) = 1 AS one_run,
@@ -351,6 +364,12 @@ verify_enrichment_canary_result() {
               AND (metrics ->> 'cost_usd')::numeric <= 1.0
               AND (metrics -> 'repairs' ->> 'evidence_overlap_violations')::integer = 0
               AND (metrics ->> 'categories')::integer >= 1) = 1 AS metrics_valid,
+          (SELECT count(*) FROM target_run t JOIN stored s ON s.id = t.id
+            WHERE s.chapters = (t.metrics ->> 'chapters')::integer
+              AND s.assignments = (t.metrics ->> 'assignments')::integer
+              AND s.labels = (t.metrics ->> 'labels')::integer
+              AND s.categories = (t.metrics ->> 'categories')::integer
+              AND s.categories >= 1) = 1 AS stored_counts_match,
           (SELECT count(*) FROM archive_video_chapters c JOIN target_run t ON t.id = c.run_id
             WHERE c.status = 'candidate' AND c.source = 'automatic') >= 4 AS candidate_chapters,
           (SELECT min(c.start_ms) = 0 AND max(c.end_ms) = v.duration_seconds * 1000
@@ -367,7 +386,7 @@ verify_enrichment_canary_result() {
             FROM archive_extraction_runs WHERE model_name = :'model'
               AND started_at >= now() - interval '24 hours') < 5.0 AS daily_cost_valid
       ) SELECT CASE WHEN one_run AND completed AND metrics_valid AND candidate_chapters
-          AND chapter_coverage AND chapters_review_only AND labels_review_only AND daily_cost_valid
+          AND stored_counts_match AND chapter_coverage AND chapters_review_only AND labels_review_only AND daily_cost_valid
         THEN 'passed' ELSE 'failed' END AS canary_acceptance FROM checks;" \
       -v video_id="$enrichment_canary_video_id" -v started_at="$enrichment_canary_started_at" \
       -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt" -At) || return 1

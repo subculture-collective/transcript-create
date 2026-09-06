@@ -162,6 +162,31 @@ def _acceptance_sql():
     return text(sql.replace(":'model'", ":model").replace(":'prompt'", ":prompt"))
 
 
+def test_supersession_does_not_block_source_video_deletion(db_session, persisted_collision):
+    video_id, run_id, metrics = persisted_collision
+    finish_extraction_run(db_session, run_id, "completed", {**metrics, "repairs": {"evidence_overlap_violations": 1}})
+    requeue_run(db_session, "deepseek/deepseek-v4-pro", run_id)
+    db_session.execute(text("DELETE FROM videos WHERE id=:video"), {"video": video_id})
+    assert (
+        db_session.execute(
+            text("SELECT count(*) FROM archive_enrichment_supersessions WHERE run_id=:run"), {"run": run_id}
+        ).scalar_one()
+        == 0
+    )
+    assert (
+        db_session.execute(
+            text("SELECT count(*) FROM archive_enrichment_jobs WHERE video_id=:video"), {"video": video_id}
+        ).scalar_one()
+        == 0
+    )
+    assert (
+        db_session.execute(
+            text("SELECT video_id FROM archive_extraction_runs WHERE id=:run"), {"run": run_id}
+        ).scalar_one()
+        is None
+    )
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

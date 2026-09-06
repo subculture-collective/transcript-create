@@ -32,15 +32,15 @@ def upgrade() -> None:
             available_at timestamptz NOT NULL DEFAULT now(),
             created_at timestamptz NOT NULL DEFAULT now(),
             updated_at timestamptz NOT NULL DEFAULT now(),
-            last_run_id uuid REFERENCES archive_extraction_runs(id),
+            last_run_id uuid REFERENCES archive_extraction_runs(id) ON DELETE SET NULL,
             reason text,
             PRIMARY KEY (video_id, model, prompt)
         );
         CREATE INDEX archive_enrichment_jobs_ready_idx
             ON archive_enrichment_jobs(model, prompt, status, available_at);
         CREATE TABLE archive_enrichment_supersessions (
-            run_id uuid PRIMARY KEY REFERENCES archive_extraction_runs(id),
-            video_id uuid NOT NULL REFERENCES videos(id),
+            run_id uuid PRIMARY KEY REFERENCES archive_extraction_runs(id) ON DELETE CASCADE,
+            video_id uuid NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
             reason text NOT NULL,
             candidates jsonb NOT NULL,
             created_at timestamptz NOT NULL DEFAULT now()

@@ -51,9 +51,12 @@ release.
 
 - Owner: backend maintainers
 - Approved: 2026-08-07
-- Reassessed: 2026-08-30; Lightning 2.6.5 remains the latest PyPI release and
-  no patched wheel is available
-- Expires: 2026-09-06
+- Renewal approved by the operator: 2026-09-06 UTC, for seven days
+- Reassessed: 2026-09-06; Lightning 2.6.5 remains the latest PyPI release and
+  no patched wheel is available. The deployed API contains neither Lightning
+  nor PyTorch. The source check found no direct forbidden calls; this does not
+  establish transitive unreachability in the ML workers.
+- Expires: 2026-09-13 UTC
 - Required action: upgrade to the first compatible patched Lightning release
   and remove the exact ignore immediately
 
@@ -70,9 +73,12 @@ through either qualified or imported-alias syntax.
 
 - Owner: backend maintainers
 - Approved: 2026-07-10
-- Reassessed: 2026-08-30; Torch 2.13.0 is patched, the guarded API remains
-  unreachable, and the production GPU compatibility upgrade is not yet qualified
-- Expires: 2026-09-06
+- Renewal approved by the operator: 2026-09-06 UTC, for seven days
+- Reassessed: 2026-09-06; Torch 2.13.0 is patched and 2.14.0 is the latest
+  PyPI release. The source check found no direct forbidden compiler calls;
+  production GPU compatibility for the upgrade is not yet qualified. The API
+  deployment reuses unchanged ML image digests and preserves existing controls.
+- Expires: 2026-09-13 UTC
 - Required action: qualify Torch and TorchAudio 2.13.0 on every production ML
   image and remove the exact ignore before expiry
 

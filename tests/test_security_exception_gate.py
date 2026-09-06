@@ -21,14 +21,14 @@ def test_reachability_finds_qualified_and_aliased_calls(tmp_path: Path) -> None:
 
 
 def test_exception_fails_on_utc_expiry(tmp_path: Path) -> None:
-    with pytest.raises(SystemExit, match="expired 2026-09-06"):
-        validate(today=date(2026, 9, 6), roots=(tmp_path,))
+    with pytest.raises(SystemExit, match="expired 2026-09-13"):
+        validate(today=date(2026, 9, 13), roots=(tmp_path,))
 
 
 def test_exception_is_valid_before_expiry_when_unreachable(tmp_path: Path) -> None:
     (tmp_path / "safe.py").write_text("import torch\nprint(torch.__version__)\n")
 
-    validate(today=date(2026, 9, 5), roots=(tmp_path,))
+    validate(today=date(2026, 9, 12), roots=(tmp_path,))
 
 
 def _npm_package(tmp_path: Path) -> Path:

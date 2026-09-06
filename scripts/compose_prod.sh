@@ -281,7 +281,8 @@ cleanup_enrichment_canary_container() {
       "$enrichment_canary_container_id" >/dev/null || return 1
     ids=$(timeout --kill-after=5s 10s "${CLEAN_ENV[@]}" docker container ls --all --no-trunc \
       --filter "name=^/${enrichment_canary_container_name}$" --format '{{.ID}}') || return 1
-    [[ -z $ids ]]
+    [[ -z $ids ]] || return 1
+    enrichment_canary_container_id=''
 }
 
 fence_enrichment_canary_run() {
@@ -311,7 +312,8 @@ assert_enrichment_canary_container_absent() {
 }
 
 verify_enrichment_canary_result() {
-    psql_admin_sql "WITH target_run AS (
+    local acceptance
+    acceptance=$(psql_admin_sql "WITH target_run AS (
         SELECT id, metrics FROM archive_extraction_runs
         WHERE video_id = :'video_id'::uuid AND model_name = :'model' AND prompt_version = :'prompt'
           AND started_at >= :'started_at'::timestamptz
@@ -340,12 +342,17 @@ verify_enrichment_canary_result() {
             THEN (metrics ->> 'cost_usd')::numeric ELSE 0 END), 0)
             FROM archive_extraction_runs WHERE model_name = :'model'
               AND started_at >= now() - interval '24 hours') < 5.0 AS daily_cost_valid
-      ) SELECT 1 / CASE WHEN one_run AND completed AND metrics_valid AND candidate_chapters
+      ) SELECT CASE WHEN one_run AND completed AND metrics_valid AND candidate_chapters
           AND chapter_coverage AND chapters_review_only AND labels_review_only AND daily_cost_valid
-        THEN 1 ELSE 0 END AS canary_acceptance_passed FROM checks;" \
+        THEN 'passed' ELSE 'failed' END AS canary_acceptance FROM checks;" \
       -v video_id="$enrichment_canary_video_id" -v started_at="$enrichment_canary_started_at" \
-      -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt" \
-      | tee "$enrichment_canary_evidence_dir/database-verification.txt"
+      -v model="$enrichment_canary_model" -v prompt="$enrichment_canary_prompt" -At) || return 1
+    printf '{"canary_acceptance":"%s"}\n' "$acceptance" \
+      | tee "$enrichment_canary_evidence_dir/database-verification.json"
+    if [[ $acceptance != passed ]]; then
+        printf '%s\n' 'archive enrichment canary acceptance failed; evidence preserved' >&2
+        return 1
+    fi
 }
 
 on_enrichment_canary_exit() {
@@ -416,6 +423,7 @@ run_enrichment_canary() {
     grep -q '"status": "completed"' "$enrichment_canary_evidence_dir/result.json" || return 1
     cleanup_enrichment_canary_container
     assert_enrichment_canary_container_absent
+    enrichment_canary_started=false
     verify_enrichment_canary_result
     [[ $(enrichment_canary_assignment_fingerprint) == "$enrichment_canary_preexisting_fingerprint" ]]
     assert_enrichment_queue_inert

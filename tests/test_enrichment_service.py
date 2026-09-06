@@ -194,6 +194,7 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
         cost_usd=0.01,
         elapsed_seconds=1.0,
         window_count=1,
+        category_rejections=[{"slug": "gaming", "reason": "insufficient_evidence_span"}],
     )
     finished = []
     persisted = []
@@ -230,6 +231,7 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
     assert metrics["model"] == "deepseek/deepseek-v4-pro"
     assert metrics["cost_usd"] == 0.01
     assert metrics["run_id"] == "run-1"
+    assert metrics["repairs"]["category_rejections"] == [{"slug": "gaming", "reason": "insufficient_evidence_span"}]
     assert persisted == [{"run_id": "run-1"}]
     assert finished[0]["status"] == "completed"
     assert [call[0] for call in db.calls].count("COMMIT") == 2

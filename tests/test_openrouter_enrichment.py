@@ -279,7 +279,31 @@ def test_generate_openrouter_enrichment_drops_category_without_sustained_evidenc
 
     assert [category.slug for category in result.candidate.categories] == ["politics"]
     assert result.categories_dropped == 1
+    assert result.category_rejections == [{"slug": "gaming", "reason": "insufficient_evidence_blocks"}]
     assert result.as_dict()["normalizations"]["categories_dropped"] == 1
+    assert result.as_dict()["normalizations"]["category_rejections"] == result.category_rejections
+
+
+def test_generate_openrouter_enrichment_can_defer_category_sustained_validation(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["categories"] = [{"slug": "gaming", "evidence_block_indexes": [0]}]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    result = generate_openrouter_episode_enrichment(
+        _episode(),
+        api_key="key",
+        model="model",
+        defer_category_sustained_validation=True,
+    )
+
+    assert [category.slug for category in result.candidate.categories] == ["gaming"]
+    assert result.categories_dropped == 0
+    assert result.category_rejections == []
 
 
 def test_generate_openrouter_enrichment_retries_transient_http_errors(monkeypatch):
@@ -380,6 +404,71 @@ def test_hierarchical_enrichment_bounds_windows_and_recombines_episode():
     )
     assert result.window_count == 3
     assert result.cost_usd == pytest.approx(0.03)
+    assert [category.slug for category in result.candidate.categories] == ["politics"]
+    assert result.candidate.categories[0].evidence_block_indexes == [0, 6, 13]
+    assert result.category_rejections == []
+
+
+def test_hierarchical_enrichment_records_category_rejection_reason():
+    episode = EpisodeInput(
+        video_id="category-rejection",
+        duration_ms=100 * 60_000,
+        blocks=[
+            TranscriptBlockInput(
+                block_index=index,
+                start_ms=index * 10 * 60_000,
+                end_ms=(index + 1) * 10 * 60_000,
+                text=f"Gameplay discussion block {index}.",
+            )
+            for index in range(10)
+        ],
+    )
+
+    def generate_window(window: EpisodeInput) -> OpenRouterEpisodeResult:
+        categories = (
+            [{"slug": "gaming", "evidence_block_indexes": [window.blocks[0].block_index]}]
+            if window.blocks[0].block_index == 0
+            else []
+        )
+        return OpenRouterEpisodeResult(
+            video_id=window.video_id,
+            model="deepseek/deepseek-v4-pro",
+            provider="provider",
+            prompt_version="prompt-v1",
+            candidate=EpisodeEnrichmentCandidate(
+                subjects=["Gameplay"],
+                keywords=["gameplay discussion"],
+                categories=categories,
+                chapters=[
+                    {
+                        "start_ms": 0,
+                        "title": "Gameplay Begins in This Window",
+                        "summary": "The player begins this portion of the gameplay session.",
+                        "evidence_block_indexes": [window.blocks[0].block_index],
+                    },
+                    {
+                        "start_ms": window.duration_ms // 2,
+                        "title": "Gameplay Continues in This Window",
+                        "summary": "The player continues through this portion of the game.",
+                        "evidence_block_indexes": [window.blocks[-1].block_index],
+                    },
+                ],
+            ),
+            prompt_tokens=10,
+            completion_tokens=5,
+            cost_usd=0.001,
+            elapsed_seconds=0.1,
+        )
+
+    result = generate_hierarchical_openrouter_enrichment(
+        episode,
+        generate_window=generate_window,
+        max_window_ms=90 * 60_000,
+    )
+
+    assert result.candidate.categories == []
+    assert result.categories_dropped == 1
+    assert result.category_rejections == [{"slug": "gaming", "reason": "insufficient_evidence_blocks"}]
 
 
 def test_hierarchical_enrichment_stops_before_next_window_at_cost_limit():

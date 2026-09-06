@@ -275,6 +275,7 @@ def _generate_configured_episode(episode: EpisodeInput, config: Any) -> OpenRout
             model=config.ARCHIVE_ENRICHMENT_MODEL,
             timeout_seconds=config.ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS,
             allow_provider_fallbacks=False,
+            defer_category_sustained_validation=True,
         )
 
     return generate_hierarchical_openrouter_enrichment(
@@ -357,6 +358,7 @@ def enrich_video_candidates(
                     "chapter_boundaries_reordered": result.chapter_boundaries_reordered,
                     "chapter_boundaries_deduplicated": result.chapter_boundaries_deduplicated,
                     "categories_dropped": result.categories_dropped,
+                    "category_rejections": result.category_rejections,
                     "evidence_overlap_violations": result.evidence_overlap_violations,
                 },
             }

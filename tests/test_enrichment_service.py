@@ -124,8 +124,8 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
     candidate_delete = next(sql for sql, _params in db.calls if "DELETE FROM archive_video_chapters" in sql)
     assert len(chapter_inserts) == 2
     assert "source <> 'automatic'" in conflict_query
-    assert "status IN ('published', 'hidden')" in conflict_query
-    assert "status IN ('candidate', 'rejected')" in candidate_delete
+    assert "status IN ('published', 'hidden', 'rejected')" in conflict_query
+    assert "status = 'candidate'" in candidate_delete
     assert all(call[1]["status"] == "candidate" for call in chapter_inserts)
     assert all(call[1]["source"] == "automatic" for call in chapter_inserts)
     assert all(call[1]["model_name"] == "deepseek/deepseek-v4-pro" for call in chapter_inserts)
@@ -238,7 +238,16 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
     assert [call[0] for call in db.calls].count("COMMIT") == 2
 
 
-@pytest.mark.parametrize("overlap_violations,error_message", [(0, "per-video limit"), (1, "does not overlap")])
+@pytest.mark.parametrize(
+    "overlap_violations,error_message",
+    [
+        (0, "per-video limit"),
+        (1, "does not overlap"),
+        (0, "no sustained categories"),
+        (0, "incomplete chapter coverage"),
+        (0, "unsupported chapter evidence"),
+    ],
+)
 def test_enrich_video_rejects_invalid_results_before_persistence(overlap_violations, error_message):
     episode = EpisodeInput(
         video_id="video-1",
@@ -284,6 +293,16 @@ def test_enrich_video_rejects_invalid_results_before_persistence(overlap_violati
     finished = []
     persisted = []
     result = result.model_copy(update={"evidence_overlap_violations": overlap_violations})
+    if error_message == "no sustained categories":
+        result = result.model_copy(update={"candidate": result.candidate.model_copy(update={"categories": []})})
+    if error_message == "incomplete chapter coverage":
+        result = result.model_copy(update={"window_count": 2})
+    if error_message == "unsupported chapter evidence":
+        chapters = [
+            result.candidate.chapters[0].model_copy(update={"evidence_block_indexes": [999]}),
+            result.candidate.chapters[1],
+        ]
+        result = result.model_copy(update={"candidate": result.candidate.model_copy(update={"chapters": chapters})})
 
     class Config:
         ARCHIVE_ENRICHMENT_ENABLED = True

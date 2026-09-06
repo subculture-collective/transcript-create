@@ -81,10 +81,11 @@ services:
         build: !reset null
         image: ${HASANARA_API_IMAGE:?HASANARA_API_IMAGE is required}
         env_file: !override ["${HASANARA_ENV_FILE:?HASANARA_ENV_FILE is required}"]
-        # Production enrichment is opt-in. A deployment must never revive the
-        # sustained queue while the guarded one-video canary is being evaluated.
-        command: ['python3', '/app/scripts/run_archive_enrichment_queue.py', '--once']
-        restart: "no"
+        # Inert by default. Continuous activation requires all three explicit
+        # settings; release_preflight rejects partially enabled combinations.
+        command: ['python3', '/app/scripts/run_archive_enrichment_queue.py', '${ARCHIVE_ENRICHMENT_QUEUE_MODE:---once}']
+        restart: '${ARCHIVE_ENRICHMENT_QUEUE_RESTART_POLICY:-no}'
+        stop_grace_period: 20m
         environment:
             DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/transcripts
             ENVIRONMENT: production

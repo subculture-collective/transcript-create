@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -10,6 +11,7 @@ from sqlalchemy import text
 from app.settings import settings
 
 from .enrichment_exporter import export_enrichment_input
+from .enrichment_queue import OWNER_LOCK
 from .enrichment_runner import EpisodeInput
 from .labeling.normalization import slugify_label
 from .labeling.repository import (
@@ -40,6 +42,79 @@ class EnrichmentRuntimeDependencies:
     finish_run: Callable[..., None] = finish_extraction_run
     generate_episode: Callable[[EpisodeInput, Any], OpenRouterEpisodeResult] | None = None
     persist_candidates: Callable[..., dict[str, int]] | None = None
+
+
+def validate_generated_candidates(episode: EpisodeInput, result: OpenRouterEpisodeResult, config: Any) -> None:
+    """Acceptance is a transaction gate, not an optional wrapper audit."""
+    if result.evidence_overlap_violations:
+        raise RuntimeError("archive enrichment chapter evidence does not overlap its chapter")
+    if not result.candidate.categories:
+        raise RuntimeError("archive enrichment quality gate: no sustained categories")
+    chapters = result.candidate.chapters
+    starts = [chapter.start_ms for chapter in chapters]
+    windows = max(
+        1, math.ceil(episode.duration_ms / (getattr(config, "ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES", 90) * 60_000))
+    )
+    expected = {round(index * episode.duration_ms / windows) for index in range(windows)}
+    if result.window_count != windows or not expected <= set(starts) or starts != sorted(set(starts)):
+        raise RuntimeError("archive enrichment quality gate: incomplete chapter coverage")
+    blocks = {block.block_index: block for block in episode.blocks}
+    for index, chapter in enumerate(chapters):
+        end = starts[index + 1] if index + 1 < len(starts) else episode.duration_ms
+        citations = chapter.evidence_block_indexes
+        if not 0 <= chapter.start_ms < end <= episode.duration_ms or not citations:
+            raise RuntimeError("archive enrichment quality gate: invalid chapter interval or evidence")
+        if any(citation not in blocks for citation in citations) or not any(
+            blocks[citation].end_ms > chapter.start_ms and blocks[citation].start_ms < end for citation in citations
+        ):
+            raise RuntimeError("archive enrichment quality gate: unsupported chapter evidence")
+    if not math.isfinite(result.cost_usd) or result.cost_usd < 0:
+        raise RuntimeError("archive enrichment quality gate: invalid measured cost")
+
+
+def require_pristine_video(db: Any, video_id: str) -> None:
+    # The chapter-review API also locks this video row. Recheck under that lock
+    # after HTTP generation, so a review action during a paid request wins.
+    db.execute(text("SELECT id FROM videos WHERE id=:video_id FOR UPDATE"), {"video_id": video_id})
+    conflict = db.execute(
+        text("""
+        SELECT EXISTS (SELECT 1 FROM archive_video_chapters WHERE video_id=:video_id)
+            OR EXISTS (SELECT 1 FROM archive_label_assignments WHERE video_id=:video_id AND source='llm')
+            OR EXISTS (SELECT 1 FROM archive_chapter_feedback WHERE video_id=:video_id)
+    """),
+        {"video_id": video_id},
+    ).scalar_one()
+    if conflict:
+        raise ValueError("video is no longer pristine; existing review work is protected")
+
+
+def validate_stored_candidates(db: Any, video_id: str, run_id: str, metrics: dict[str, Any]) -> None:
+    stored = (
+        db.execute(
+            text("""
+        SELECT
+          (SELECT count(*) FROM archive_video_chapters WHERE video_id=:video AND run_id=:run) chapters,
+          (SELECT count(*) FROM archive_label_assignments WHERE video_id=:video AND run_id=:run) assignments,
+          (SELECT count(DISTINCT label_id) FROM archive_label_assignments WHERE video_id=:video AND run_id=:run) labels,
+          (SELECT count(*) FROM archive_label_assignments WHERE video_id=:video AND run_id=:run
+            AND evidence->0->>'extractor'='llm_category'
+            AND (component_scores->>'controlled_taxonomy')::numeric=1) categories,
+          NOT EXISTS (SELECT 1 FROM archive_video_chapters WHERE video_id=:video AND run_id=:run
+                       AND (status<>'candidate' OR source<>'automatic'))
+          AND NOT EXISTS (SELECT 1 FROM archive_label_assignments WHERE video_id=:video AND run_id=:run
+                       AND (status<>'candidate' OR source<>'llm' OR publish_tier<>'bronze')) review_only
+    """),
+            {"video": video_id, "run": run_id},
+        )
+        .mappings()
+        .one()
+    )
+    if (
+        not stored["review_only"]
+        or not stored["categories"]
+        or any(stored[key] != metrics[key] for key in ("chapters", "assignments", "labels", "categories"))
+    ):
+        raise RuntimeError("archive enrichment quality gate: stored candidates do not match generation metrics")
 
 
 _LABEL_STOPWORDS = {"a", "an", "and", "for", "from", "in", "of", "on", "the", "to", "with"}
@@ -109,12 +184,13 @@ def persist_enrichment_candidates(
         text("SELECT pg_advisory_xact_lock(hashtext(:video_id))"),
         {"video_id": episode.video_id},
     )
+    db.execute(text("SELECT id FROM videos WHERE id=:video_id FOR UPDATE"), {"video_id": episode.video_id})
     conflicts = db.execute(
         text("""
             SELECT COUNT(*)
             FROM archive_video_chapters
             WHERE video_id = :video_id
-              AND (source <> 'automatic' OR status IN ('published', 'hidden'))
+              AND (source <> 'automatic' OR status IN ('published', 'hidden', 'rejected'))
             """),
         {"video_id": episode.video_id},
     ).scalar_one()
@@ -126,7 +202,7 @@ def persist_enrichment_candidates(
             DELETE FROM archive_video_chapters
             WHERE video_id = :video_id
               AND source = 'automatic'
-              AND status IN ('candidate', 'rejected')
+              AND status = 'candidate'
             """),
         {"video_id": episode.video_id},
     )
@@ -323,6 +399,18 @@ def enrich_video_candidates(
     deps = dependencies or EnrichmentRuntimeDependencies()
     generate_episode = deps.generate_episode or _generate_configured_episode
     persist_candidates = deps.persist_candidates or persist_enrichment_candidates
+    if dependencies is None:
+        owner = db.execute(
+            text("SELECT pg_try_advisory_xact_lock(hashtext(:owner))"), {"owner": OWNER_LOCK}
+        ).scalar_one()
+        running = db.execute(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM archive_extraction_runs WHERE status='running' AND model_name IS NOT NULL)"
+            )
+        ).scalar_one()
+        if not owner or running:
+            raise ValueError("another enrichment owner or extraction run is active")
+        require_pristine_video(db, video_id)
     packet = deps.export_input(
         db,
         pipeline_version=f"openrouter:{config.ARCHIVE_ENRICHMENT_MODEL}",
@@ -345,14 +433,17 @@ def enrich_video_candidates(
 
     try:
         result = generate_episode(episode, config)
-        if result.evidence_overlap_violations:
-            raise RuntimeError("archive enrichment chapter evidence does not overlap its chapter")
+        validate_generated_candidates(episode, result, config)
         if result.cost_usd > config.ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO:
             raise RuntimeError(
                 "archive enrichment cost exceeded the configured per-video limit "
                 f"({result.cost_usd:.6f} > {config.ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO:.6f})"
             )
+        if dependencies is None:
+            require_pristine_video(db, video_id)
         metrics: dict[str, Any] = persist_candidates(db, episode, result, run_id=run_id)
+        if dependencies is None:
+            validate_stored_candidates(db, video_id, run_id, metrics)
         metrics.update(
             {
                 "run_id": run_id,

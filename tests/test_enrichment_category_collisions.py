@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
+from app.archive.enrichment_queue import requeue_run
 from app.archive.enrichment_runner import EpisodeInput
-from app.archive.enrichment_service import persist_enrichment_candidates
+from app.archive.enrichment_service import persist_enrichment_candidates, validate_stored_candidates
 from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
 from app.archive.openrouter_enrichment import PROMPT_VERSION, EpisodeEnrichmentCandidate, OpenRouterEpisodeResult
 
@@ -104,6 +105,53 @@ def test_categories_survive_exact_case_and_punctuation_collisions(db_session, pe
     assert category["component_scores"]["controlled_taxonomy"] == 1.0
     assert all(item["extractor"] == "llm_category" for item in category["evidence"])
     assert [item["block_index"] for item in category["evidence"]] == [0, 2, 3]
+
+
+def test_worker_reconciles_persisted_counts(db_session, persisted_collision):
+    video_id, run_id, metrics = persisted_collision
+    validate_stored_candidates(db_session, video_id, run_id, metrics)
+    with pytest.raises(RuntimeError, match="stored candidates"):
+        validate_stored_candidates(db_session, video_id, run_id, {**metrics, "categories": 4})
+
+
+@pytest.mark.parametrize("protected", [False, True])
+def test_technical_requeue_preserves_snapshot_and_refuses_editorial_work(db_session, persisted_collision, protected):
+    video_id, run_id, metrics = persisted_collision
+    finish_extraction_run(db_session, run_id, "completed", {**metrics, "repairs": {"evidence_overlap_violations": 1}})
+    if protected:
+        db_session.execute(
+            text("INSERT INTO archive_chapter_feedback(video_id,action) VALUES (:video,'reject')"), {"video": video_id}
+        )
+        with pytest.raises(ValueError, match="editorial feedback"):
+            requeue_run(db_session, "deepseek/deepseek-v4-pro", run_id)
+        assert (
+            db_session.execute(
+                text("SELECT count(*) FROM archive_video_chapters WHERE video_id=:video"), {"video": video_id}
+            ).scalar_one()
+            == metrics["chapters"]
+        )
+        return
+    result = requeue_run(db_session, "deepseek/deepseek-v4-pro", run_id)
+    assert result["preserved_chapters"] == metrics["chapters"]
+    assert result["preserved_assignments"] == metrics["assignments"]
+    snapshot = db_session.execute(
+        text("SELECT candidates FROM archive_enrichment_supersessions WHERE run_id=:run"), {"run": run_id}
+    ).scalar_one()
+    assert len(snapshot["chapters"]) == metrics["chapters"]
+    assert all(row["run_id"] == run_id for row in snapshot["assignments"])
+    assert (
+        db_session.execute(
+            text("SELECT count(*) FROM archive_video_chapters WHERE video_id=:video"), {"video": video_id}
+        ).scalar_one()
+        == 0
+    )
+    assert requeue_run(db_session, "deepseek/deepseek-v4-pro", run_id)["status"] == "already_requeued"
+    assert (
+        db_session.execute(
+            text("SELECT attempts FROM archive_enrichment_jobs WHERE video_id=:video"), {"video": video_id}
+        ).scalar_one()
+        == 1
+    )
 
 
 def _acceptance_sql():

@@ -238,7 +238,8 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
     assert [call[0] for call in db.calls].count("COMMIT") == 2
 
 
-def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
+@pytest.mark.parametrize("overlap_violations,error_message", [(0, "per-video limit"), (1, "does not overlap")])
+def test_enrich_video_rejects_invalid_results_before_persistence(overlap_violations, error_message):
     episode = EpisodeInput(
         video_id="video-1",
         duration_ms=600_000,
@@ -282,6 +283,7 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
     )
     finished = []
     persisted = []
+    result = result.model_copy(update={"evidence_overlap_violations": overlap_violations})
 
     class Config:
         ARCHIVE_ENRICHMENT_ENABLED = True
@@ -304,12 +306,13 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
     )
     db = _Db()
 
-    with pytest.raises(RuntimeError, match="per-video limit") as raised:
+    with pytest.raises(RuntimeError, match=error_message) as raised:
         enrich_video_candidates(db, "video-1", config=Config(), dependencies=dependencies)
 
     assert persisted == []
     assert finished[0]["status"] == "failed"
-    assert "per-video limit" in finished[0]["error"]
+    assert error_message in finished[0]["error"]
+    assert finished[0]["metrics"]["evidence_overlap_violations"] == overlap_violations
     assert finished[0]["metrics"]["cost_usd"] == 0.01
     assert finished[0]["metrics"]["run_id"] == "run-1"
     assert raised.value.archive_enrichment_failure_metrics["run_id"] == "run-1"

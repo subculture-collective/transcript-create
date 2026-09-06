@@ -156,6 +156,22 @@ run_enrichment_canary {VIDEO_ID}
     assert marker.splitlines()[-2:] == ["cleanup", "fence"]
 
 
+def test_enrichment_canary_acceptance_failure_does_not_double_cleanup_or_fence_completed_run(tmp_path: Path) -> None:
+    body = f"""
+cleanup_enrichment_canary_container() {{ printf 'cleanup\\n' >> {tmp_path / 'marker'}; }}
+fence_enrichment_canary_run() {{ printf 'fence\\n' >> {tmp_path / 'marker'}; }}
+verify_enrichment_canary_result() {{ printf 'acceptance-failed\\n' >> {tmp_path / 'marker'}; return 1; }}
+run_enrichment_canary {VIDEO_ID}
+"""
+    result = _run_sourced(tmp_path, body)
+
+    assert result.returncode != 0
+    marker = (tmp_path / "marker").read_text(encoding="utf-8").splitlines()
+    assert marker.count("cleanup") == 1
+    assert "acceptance-failed" in marker
+    assert "fence" not in marker
+
+
 def test_enrichment_canary_signal_handler_cleans_then_fences(tmp_path: Path) -> None:
     body = f"""
 enrichment_canary_started=true
@@ -180,6 +196,9 @@ def test_enrichment_canary_contract_has_timeout_identity_and_acceptance_checks()
     assert "duration_seconds > 5400 AND v.duration_seconds <= 10800" in helper
     assert "metrics ->> 'window_count'" in helper
     assert "metrics ->> 'categories'" in helper
+    assert "archive enrichment canary acceptance failed; evidence preserved" in helper
+    acceptance = helper.split("verify_enrichment_canary_result() {", 1)[1].split("\n}", 1)[0]
+    assert "1 / CASE" not in acceptance
     assert "evidence_overlap_violations" in helper
     assert "chapter_coverage" in helper
     assert "ARCHIVE_ENRICHMENT_ENABLED=true" in canary

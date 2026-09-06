@@ -236,6 +236,7 @@ class OpenRouterEpisodeResult(BaseModel):
     chapter_boundaries_reordered: bool = False
     chapter_boundaries_deduplicated: int = 0
     categories_dropped: int = 0
+    category_rejections: list[dict[str, str]] = Field(default_factory=list)
     evidence_overlap_violations: int = 0
     window_count: int = 1
 
@@ -274,6 +275,7 @@ class OpenRouterEpisodeResult(BaseModel):
                 "chapter_boundaries_reordered": self.chapter_boundaries_reordered,
                 "chapter_boundaries_deduplicated": self.chapter_boundaries_deduplicated,
                 "categories_dropped": self.categories_dropped,
+                "category_rejections": self.category_rejections,
             },
             "validation": {"evidence_overlap_violations": self.evidence_overlap_violations},
             "window_count": self.window_count,
@@ -379,26 +381,35 @@ def _validation_summary(exc: ValidationError) -> str:
     return "; ".join(messages)
 
 
-def _category_has_sustained_evidence(category: dict[str, Any], episode: EpisodeInput) -> bool:
+def _category_rejection_reason(category: dict[str, Any], episode: EpisodeInput) -> str | None:
     slug = category.get("slug")
     indexes = category.get("evidence_block_indexes")
     if not isinstance(slug, str) or not isinstance(indexes, list):
-        return False
+        return "invalid_category_payload"
     block_by_index = {block.block_index: block for block in episode.blocks}
     if any(isinstance(index, int) and index not in block_by_index for index in indexes):
-        return True
+        # Preserve the category so the strict unknown-evidence check below can
+        # reject the complete provider response instead of silently repairing it.
+        return None
     blocks = [block_by_index[index] for index in indexes if isinstance(index, int) and index in block_by_index]
     title = (episode.title or "").casefold()
     if slug in {"chadvice", "okbuddy"}:
         marker = CATEGORY_LABELS[slug].casefold()
         evidence_text = " ".join(block.text for block in blocks).casefold()
-        return marker in title or marker in evidence_text
+        return None if marker in title or marker in evidence_text else "required_segment_marker_missing"
     if CATEGORY_LABELS.get(slug, "").casefold() in title:
-        return True
+        return None
     if len(blocks) < 2:
-        return False
+        return "insufficient_evidence_blocks"
     evidence_span_ms = max(block.start_ms for block in blocks) - min(block.start_ms for block in blocks)
-    return evidence_span_ms >= episode.duration_ms * 0.2
+    if evidence_span_ms < episode.duration_ms * 0.2:
+        return "insufficient_evidence_span"
+    return None
+
+
+def _category_rejection(category: dict[str, Any], reason: str) -> dict[str, str]:
+    slug = category.get("slug")
+    return {"slug": slug if isinstance(slug, str) else "unknown", "reason": reason}
 
 
 def _deduplicate_and_limit_labels(values: Any, limit: int, max_length: int) -> tuple[Any, int]:
@@ -421,7 +432,12 @@ def _deduplicate_and_limit_labels(values: Any, limit: int, max_length: int) -> t
 
 
 def _parse_response(
-    payload: dict[str, Any], episode: EpisodeInput, *, model: str, elapsed: float
+    payload: dict[str, Any],
+    episode: EpisodeInput,
+    *,
+    model: str,
+    elapsed: float,
+    defer_category_sustained_validation: bool = False,
 ) -> OpenRouterEpisodeResult:
     raw_usage = payload.get("usage")
     usage: dict[str, Any] = raw_usage if isinstance(raw_usage, dict) else {}
@@ -457,6 +473,7 @@ def _parse_response(
     chapter_boundaries_reordered = False
     chapter_boundaries_deduplicated = 0
     categories_dropped = 0
+    category_rejections: list[dict[str, str]] = []
     if isinstance(raw_candidate, dict):
         for field, limit, max_length in (("subjects", 12, 80), ("keywords", 24, 100)):
             repaired, trimmed = _deduplicate_and_limit_labels(raw_candidate.get(field), limit, max_length)
@@ -502,13 +519,20 @@ def _parse_response(
                 if isinstance(evidence, list) and len(evidence) > 3:
                     category["evidence_block_indexes"] = list(dict.fromkeys(evidence))[:3]
                     evidence_citations_trimmed += len(evidence) - len(category["evidence_block_indexes"])
-            retained_categories = [
-                category
-                for category in categories
-                if isinstance(category, dict) and _category_has_sustained_evidence(category, episode)
-            ]
-            categories_dropped = len(categories) - len(retained_categories)
-            raw_candidate["categories"] = retained_categories
+            if not defer_category_sustained_validation:
+                retained_categories = []
+                for category in categories:
+                    if not isinstance(category, dict):
+                        categories_dropped += 1
+                        category_rejections.append({"slug": "unknown", "reason": "invalid_category_payload"})
+                        continue
+                    reason = _category_rejection_reason(category, episode)
+                    if reason is None:
+                        retained_categories.append(category)
+                    else:
+                        categories_dropped += 1
+                        category_rejections.append(_category_rejection(category, reason))
+                raw_candidate["categories"] = retained_categories
     try:
         candidate = EpisodeEnrichmentCandidate.model_validate(raw_candidate)
     except ValidationError as exc:
@@ -550,6 +574,7 @@ def _parse_response(
         chapter_boundaries_reordered=chapter_boundaries_reordered,
         chapter_boundaries_deduplicated=chapter_boundaries_deduplicated,
         categories_dropped=categories_dropped,
+        category_rejections=category_rejections,
         evidence_overlap_violations=evidence_overlap_violations,
     )
 
@@ -563,6 +588,7 @@ def generate_openrouter_episode_enrichment(
     allow_provider_fallbacks: bool = False,
     max_retries: int = 2,
     app_url: str = "https://hasanara.tv",
+    defer_category_sustained_validation: bool = False,
 ) -> OpenRouterEpisodeResult:
     if not api_key.strip():
         raise ValueError("OpenRouter API key is required")
@@ -587,7 +613,13 @@ def generate_openrouter_episode_enrichment(
         try:
             with request.urlopen(req, timeout=timeout_seconds) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-            return _parse_response(payload, episode, model=model, elapsed=time.monotonic() - started)
+            return _parse_response(
+                payload,
+                episode,
+                model=model,
+                elapsed=time.monotonic() - started,
+                defer_category_sustained_validation=defer_category_sustained_validation,
+            )
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:1_000]
             retryable = exc.code == 429 or 500 <= exc.code < 600
@@ -619,6 +651,26 @@ def _rank_window_labels(values: list[list[str]], limit: int) -> list[str]:
             position += 1
     ranked = sorted(counts, key=lambda value: (-counts[value], first_seen[value], value))
     return [display[value] for value in ranked[:limit]]
+
+
+def _spread_category_evidence(indexes: list[int], episode: EpisodeInput, limit: int = 3) -> list[int]:
+    """Retain citations spread across the full episode instead of the first window."""
+    block_by_index = {block.block_index: block for block in episode.blocks}
+    unique = list(dict.fromkeys(indexes))
+    if any(index not in block_by_index for index in unique):
+        return unique[:limit]
+    ordered = sorted(unique, key=lambda index: (block_by_index[index].start_ms, index))
+    if len(ordered) <= limit:
+        return ordered
+    selected = [ordered[0], ordered[-1]]
+    if limit > 2:
+        midpoint_ms = episode.duration_ms / 2
+        middle = min(
+            ordered[1:-1],
+            key=lambda index: (abs(block_by_index[index].start_ms - midpoint_ms), block_by_index[index].start_ms),
+        )
+        selected.append(middle)
+    return sorted(selected[:limit], key=lambda index: (block_by_index[index].start_ms, index))
 
 
 def _balanced_episode_windows(episode: EpisodeInput, max_window_ms: int) -> list[tuple[int, EpisodeInput]]:
@@ -733,10 +785,23 @@ def generate_hierarchical_openrouter_enrichment(
             category_counts[category.slug] += 1
             evidence = category_evidence.setdefault(category.slug, [])
             evidence.extend(index for index in category.evidence_block_indexes if index not in evidence)
-    categories = [
-        EpisodeCategoryCandidate(slug=slug, evidence_block_indexes=category_evidence[slug][:3])
-        for slug, _count in category_counts.most_common(3)
-    ]
+    ranked_categories = category_counts.most_common()
+    category_rejections = [rejection for _offset, result in window_results for rejection in result.category_rejections]
+    window_rejection_count = len(category_rejections)
+    categories: list[EpisodeCategoryCandidate] = []
+    for slug, _count in ranked_categories[:3]:
+        raw_category = {
+            "slug": slug,
+            "evidence_block_indexes": _spread_category_evidence(category_evidence[slug], episode),
+        }
+        reason = _category_rejection_reason(raw_category, episode)
+        if reason is None:
+            categories.append(EpisodeCategoryCandidate.model_validate(raw_category))
+        else:
+            category_rejections.append(_category_rejection(raw_category, reason))
+    category_rejections.extend(
+        {"slug": slug, "reason": "hierarchical_rank_limit"} for slug, _count in ranked_categories[3:]
+    )
     candidate = EpisodeEnrichmentCandidate(
         subjects=_rank_window_labels([result.candidate.subjects for _offset, result in window_results], 12),
         keywords=_rank_window_labels([result.candidate.keywords for _offset, result in window_results], 24),
@@ -763,7 +828,10 @@ def generate_hierarchical_openrouter_enrichment(
         chapter_boundaries_deduplicated=sum(
             result.chapter_boundaries_deduplicated for _offset, result in window_results
         ),
-        categories_dropped=sum(result.categories_dropped for _offset, result in window_results),
+        categories_dropped=sum(result.categories_dropped for _offset, result in window_results)
+        + len(category_rejections)
+        - window_rejection_count,
+        category_rejections=category_rejections,
         evidence_overlap_violations=sum(result.evidence_overlap_violations for _offset, result in window_results),
         window_count=len(window_results),
     )

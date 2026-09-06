@@ -194,6 +194,40 @@ def test_generate_openrouter_enrichment_records_nonoverlapping_evidence(monkeypa
     assert result.evidence_overlap_violations == 1
 
 
+@pytest.mark.parametrize(
+    "start_ms,previous_evidence,expected_start,repairs,violations",
+    [
+        (900_000, [0], 600_000, 1, 0),
+        (900_001, [0], 900_001, 0, 1),
+        (900_000, [1], 900_000, 0, 1),
+    ],
+)
+def test_chapter_end_boundary_repair_preserves_previous_evidence(
+    monkeypatch, start_ms, previous_evidence, expected_start, repairs, violations
+):
+    episode = _episode().model_copy(
+        update={
+            "blocks": [
+                TranscriptBlockInput(block_index=0, start_ms=0, end_ms=600_000, text="Labor discussion."),
+                TranscriptBlockInput(block_index=1, start_ms=600_000, end_ms=900_000, text="Housing discussion."),
+                TranscriptBlockInput(block_index=2, start_ms=900_000, end_ms=1_200_000, text="Closing discussion."),
+            ]
+        }
+    )
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["chapters"][0]["evidence_block_indexes"] = previous_evidence
+    parsed["chapters"][1]["start_ms"] = start_ms
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", lambda _req, timeout: _Response(payload))
+    result = generate_openrouter_episode_enrichment(episode, api_key="key", model="model", max_retries=0)
+    assert result.candidate.chapters[1].start_ms == expected_start
+    assert result.candidate.chapters[1].evidence_block_indexes == [1]
+    assert result.chapter_boundaries_realigned == repairs
+    assert result.as_dict()["normalizations"]["chapter_boundaries_realigned"] == repairs
+    assert result.evidence_overlap_violations == violations
+
+
 def test_generate_openrouter_enrichment_truncates_overlong_summaries(monkeypatch):
     payload = _response_payload()
     parsed = json.loads(payload["choices"][0]["message"]["content"])
@@ -385,6 +419,7 @@ def test_hierarchical_enrichment_bounds_windows_and_recombines_episode():
             completion_tokens=20,
             cost_usd=0.01,
             elapsed_seconds=1.0,
+            chapter_boundaries_realigned=1,
         )
 
     result = generate_hierarchical_openrouter_enrichment(
@@ -403,6 +438,7 @@ def test_hierarchical_enrichment_bounds_windows_and_recombines_episode():
         for index, chapter in enumerate(prediction.chapters[:-1])
     )
     assert result.window_count == 3
+    assert result.chapter_boundaries_realigned == 3
     assert result.cost_usd == pytest.approx(0.03)
     assert [category.slug for category in result.candidate.categories] == ["politics"]
     assert result.candidate.categories[0].evidence_block_indexes == [0, 6, 13]

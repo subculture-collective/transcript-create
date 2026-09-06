@@ -235,6 +235,7 @@ class OpenRouterEpisodeResult(BaseModel):
     evidence_citations_trimmed: int = 0
     chapter_boundaries_reordered: bool = False
     chapter_boundaries_deduplicated: int = 0
+    chapter_boundaries_realigned: int = 0
     categories_dropped: int = 0
     category_rejections: list[dict[str, str]] = Field(default_factory=list)
     evidence_overlap_violations: int = 0
@@ -274,6 +275,7 @@ class OpenRouterEpisodeResult(BaseModel):
                 "evidence_citations_trimmed": self.evidence_citations_trimmed,
                 "chapter_boundaries_reordered": self.chapter_boundaries_reordered,
                 "chapter_boundaries_deduplicated": self.chapter_boundaries_deduplicated,
+                "chapter_boundaries_realigned": self.chapter_boundaries_realigned,
                 "categories_dropped": self.categories_dropped,
                 "category_rejections": self.category_rejections,
             },
@@ -545,16 +547,37 @@ def _parse_response(
         if any(block_index not in block_by_index for block_index in category.evidence_block_indexes):
             raise invalid("category cites an unknown transcript block")
     evidence_overlap_violations = 0
+    chapter_boundaries_realigned = 0
     for index, chapter in enumerate(candidate.chapters):
         end_ms = candidate.chapters[index + 1].start_ms if index + 1 < len(candidate.chapters) else episode.duration_ms
         if chapter.start_ms >= episode.duration_ms:
             raise invalid("chapter starts outside the episode")
         if any(block_index not in block_by_index for block_index in chapter.evidence_block_indexes):
             raise invalid("chapter cites an unknown transcript block")
-        if not any(
+        overlaps = any(
             block_by_index[block_index].end_ms > chapter.start_ms and block_by_index[block_index].start_ms < end_ms
             for block_index in chapter.evidence_block_indexes
-        ):
+        )
+        if not overlaps and index > 0 and len(chapter.evidence_block_indexes) == 1:
+            cited = block_by_index[chapter.evidence_block_indexes[0]]
+            previous = candidate.chapters[index - 1]
+            # Some responses use the cited block's END as the chapter start.
+            # Use its actual start, never manufacture a one-millisecond overlap
+            # or substitute an uncited block. Preserve the preceding chapter's
+            # ordering and evidence before applying this narrow repair.
+            if (
+                cited.end_ms == chapter.start_ms
+                and previous.start_ms < cited.start_ms < chapter.start_ms
+                and any(
+                    block_by_index[block_index].end_ms > previous.start_ms
+                    and block_by_index[block_index].start_ms < cited.start_ms
+                    for block_index in previous.evidence_block_indexes
+                )
+            ):
+                candidate.chapters[index] = chapter.model_copy(update={"start_ms": cited.start_ms})
+                chapter_boundaries_realigned += 1
+                overlaps = True
+        if not overlaps:
             evidence_overlap_violations += 1
 
     return OpenRouterEpisodeResult(
@@ -576,6 +599,7 @@ def _parse_response(
         categories_dropped=categories_dropped,
         category_rejections=category_rejections,
         evidence_overlap_violations=evidence_overlap_violations,
+        chapter_boundaries_realigned=chapter_boundaries_realigned,
     )
 
 
@@ -833,6 +857,7 @@ def generate_hierarchical_openrouter_enrichment(
         - window_rejection_count,
         category_rejections=category_rejections,
         evidence_overlap_violations=sum(result.evidence_overlap_violations for _offset, result in window_results),
+        chapter_boundaries_realigned=sum(result.chapter_boundaries_realigned for _offset, result in window_results),
         window_count=len(window_results),
     )
 

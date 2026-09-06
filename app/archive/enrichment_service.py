@@ -345,6 +345,8 @@ def enrich_video_candidates(
 
     try:
         result = generate_episode(episode, config)
+        if result.evidence_overlap_violations:
+            raise RuntimeError("archive enrichment chapter evidence does not overlap its chapter")
         if result.cost_usd > config.ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO:
             raise RuntimeError(
                 "archive enrichment cost exceeded the configured per-video limit "
@@ -369,6 +371,7 @@ def enrich_video_candidates(
                     "evidence_citations_trimmed": result.evidence_citations_trimmed,
                     "chapter_boundaries_reordered": result.chapter_boundaries_reordered,
                     "chapter_boundaries_deduplicated": result.chapter_boundaries_deduplicated,
+                    "chapter_boundaries_realigned": result.chapter_boundaries_realigned,
                     "categories_dropped": result.categories_dropped,
                     "category_rejections": result.category_rejections,
                     "evidence_overlap_violations": result.evidence_overlap_violations,
@@ -394,6 +397,8 @@ def enrich_video_candidates(
             "elapsed_seconds",
             "window_count",
             "attempted_window_count",
+            "evidence_overlap_violations",
+            "chapter_boundaries_realigned",
         ):
             value = getattr(usage_source, field, None)
             if value is not None:

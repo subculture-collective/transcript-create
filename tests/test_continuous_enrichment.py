@@ -109,6 +109,23 @@ def test_editorial_feedback_parks_discovered_video(queue):
     )
 
 
+def test_systemic_pre_provider_failures_pause_before_consuming_the_backlog(queue):
+    db, model, video = queue
+    for day in range(5):
+        video(day)
+    discover_jobs(db, model)
+    for _ in range(3):
+        job = next_job(db, model)
+        finish_job(db, model, job["video_id"], {"status": "failed"})
+    assert next_job(db, model) == {"status": "paused", "reason": "consecutive_failures"}
+    assert (
+        db.execute(
+            text("SELECT count(*) FROM archive_enrichment_jobs WHERE model=:model AND attempts=0"), {"model": model}
+        ).scalar_one()
+        == 2
+    )
+
+
 def test_historical_failure_counts_toward_retry_limit(queue):
     db, model, video = queue
     target = video()

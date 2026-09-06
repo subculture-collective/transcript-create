@@ -21,6 +21,8 @@ processing on 2026-09-06, conditional on passing the safeguards below.
   or uncertain paid attempts pause for inspection rather than blind replay.
 - Provider credit exhaustion and systemic errors persist a pause across restarts.
   A single video quality failure is delayed/parked, not a whole-backfill failure.
+  Three consecutive failed jobs also pause, including failures before a provider
+  attempt record exists; the existing rolling failure-rate breaker still applies.
 - All per-video acceptance checks run before committing candidates. Failures
   retain measured usage, with no partial candidate writes.
 - Production remains disabled during implementation and deployment validation.

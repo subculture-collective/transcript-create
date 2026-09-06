@@ -187,6 +187,35 @@ def test_supersession_does_not_block_source_video_deletion(db_session, persisted
     )
 
 
+@pytest.mark.parametrize("attempts", [1, 3])
+def test_explicit_requeue_respects_durable_attempts(db_session, persisted_collision, attempts):
+    video_id, run_id, metrics = persisted_collision
+    finish_extraction_run(db_session, run_id, "completed", {**metrics, "repairs": {"evidence_overlap_violations": 1}})
+    db_session.execute(
+        text("""
+        INSERT INTO archive_enrichment_jobs(video_id,model,prompt,status,attempts,available_at)
+        VALUES (:video,'deepseek/deepseek-v4-pro',:prompt,'parked',:attempts,now()+interval '1 day')
+    """),
+        {"video": video_id, "prompt": PROMPT_VERSION, "attempts": attempts},
+    )
+    if attempts == 3:
+        with pytest.raises(ValueError, match="exhausted queue"):
+            requeue_run(db_session, "deepseek/deepseek-v4-pro", run_id)
+        assert (
+            db_session.execute(
+                text("SELECT count(*) FROM archive_video_chapters WHERE video_id=:video"), {"video": video_id}
+            ).scalar_one()
+            == metrics["chapters"]
+        )
+    else:
+        requeue_run(db_session, "deepseek/deepseek-v4-pro", run_id)
+        row = db_session.execute(
+            text("SELECT attempts,status,available_at<=now() due FROM archive_enrichment_jobs WHERE video_id=:video"),
+            {"video": video_id},
+        ).one()
+        assert tuple(row) == (1, "retry", True)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

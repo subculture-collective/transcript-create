@@ -223,6 +223,24 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
         # between recording exhausted credit and persisting its stop condition.
         pause_queue(db, model, "credit_exhausted")
     else:
+        # Export/configuration failures can happen before an extraction run is
+        # created. Include them in a durable systemic breaker rather than
+        # silently consuming every video's retry allowance.
+        recent = (
+            db.execute(
+                text("""
+            SELECT status FROM archive_enrichment_jobs WHERE model=:model AND prompt=:prompt
+            AND (status='completed' OR (status IN ('retry','parked') AND reason='failed'))
+            ORDER BY updated_at DESC,video_id LIMIT 3
+        """),
+                params(model),
+            )
+            .scalars()
+            .all()
+        )
+        if len(recent) == 3 and all(outcome != "completed" for outcome in recent):
+            pause_queue(db, model, "consecutive_failures")
+            return
         db.commit()
 
 
@@ -264,11 +282,13 @@ def requeue_run(db: Any, model: str, run_id: str) -> dict[str, Any]:
         text("""
         SELECT EXISTS (SELECT 1 FROM archive_extraction_runs WHERE video_id=:video_id AND status='running')
             OR EXISTS (SELECT 1 FROM archive_enrichment_jobs WHERE video_id=:video_id AND status IN ('running','completed'))
+            OR EXISTS (SELECT 1 FROM archive_enrichment_jobs WHERE video_id=:video_id
+                       AND model=:model AND prompt=:prompt AND attempts>=:max_attempts)
     """),
         values,
     ).scalar_one()
     if active:
-        raise ValueError("active or completed queue work prevents requeue")
+        raise ValueError("active, completed, or exhausted queue work prevents requeue")
     attempts = db.execute(
         text("""
         SELECT count(*) FROM archive_extraction_runs WHERE video_id=:video_id
@@ -331,7 +351,10 @@ def requeue_run(db: Any, model: str, run_id: str) -> dict[str, Any]:
                count(*)::integer,'explicit_technical_requeue'
         FROM archive_extraction_runs WHERE video_id=:video_id AND model_name=:model
           AND prompt_version=:prompt AND status IN ('completed','failed')
-        ON CONFLICT (video_id,model,prompt) DO NOTHING
+        ON CONFLICT (video_id,model,prompt) DO UPDATE
+            SET status='retry',available_at=now(),reason='explicit_technical_requeue',updated_at=now()
+            WHERE archive_enrichment_jobs.status IN ('pending','retry','parked')
+              AND archive_enrichment_jobs.attempts<:max_attempts
     """),
         values,
     )

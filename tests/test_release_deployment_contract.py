@@ -238,8 +238,8 @@ def test_overlay_forces_env_file_and_diarization_is_opt_in() -> None:
     assert "RATE_LIMIT_WINDOW_SECONDS: '60'" in host
     assert "OPENSEARCH_TLS_VERIFY: 'true'" in host
     enrichment = overlay.split("archive-enrichment-queue:", 1)[1].split("diarization-worker:", 1)[0]
-    assert "run_archive_enrichment_queue.py', '--once'" in enrichment
-    assert 'restart: "no"' in enrichment
+    assert "run_archive_enrichment_queue.py', '${ARCHIVE_ENRICHMENT_QUEUE_MODE:---once}'" in enrichment
+    assert "restart: '${ARCHIVE_ENRICHMENT_QUEUE_RESTART_POLICY:-no}'" in enrichment
 
 
 def test_example_documents_required_url_safe_production_database_password() -> None:
@@ -369,8 +369,43 @@ def test_archive_enrichment_queue_safety_flags_are_fail_closed(key: str) -> None
         }
     }
     rendered["services"]["archive-enrichment-queue"]["environment"][key] = "true"
-    with pytest.raises(preflight.PreflightError, match="archive enrichment queue safety flags"):
+    with pytest.raises(preflight.PreflightError, match="archive enrichment queue"):
         preflight.validate_rendered_services(rendered, set(preflight.SERVICE_ROLES), data)
+
+
+@pytest.mark.parametrize("unsafe", [None, "publish", "model", "budget", "window", "restart", "command"])
+def test_explicit_continuous_enrichment_contract(unsafe):
+    release = manifest()
+    rendered = {
+        "services": {
+            name: rendered_service(name, release["images"][role]) for name, role in release["services"].items()
+        }
+    }
+    queue = rendered["services"]["archive-enrichment-queue"]
+    queue.update(command=[*preflight.ENRICHMENT_QUEUE_COMMAND[:2], "--continuous"], restart="unless-stopped")
+    queue["environment"].update(
+        ARCHIVE_ENRICHMENT_ENABLED="true",
+        ARCHIVE_ENRICHMENT_MODEL="deepseek/deepseek-v4-pro",
+        ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES="90",
+        ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO="1.00",
+    )
+    if unsafe in {"publish", "model", "budget", "window"}:
+        key = {
+            "publish": "PUBLISH",
+            "model": "MODEL",
+            "budget": "MAX_COST_USD_PER_VIDEO",
+            "window": "MAX_WINDOW_MINUTES",
+        }[unsafe]
+        queue["environment"][f"ARCHIVE_ENRICHMENT_{key}"] = "unsafe"
+    elif unsafe == "restart":
+        queue["restart"] = "no"
+    elif unsafe == "command":
+        queue["command"] = preflight.ENRICHMENT_QUEUE_COMMAND
+    if unsafe:
+        with pytest.raises(preflight.PreflightError, match="archive enrichment queue"):
+            preflight.validate_rendered_services(rendered, set(release["services"]), release)
+    else:
+        preflight.validate_rendered_services(rendered, set(release["services"]), release)
 
 
 def test_diarization_profile_contract_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1098,14 +1133,17 @@ def test_release_workflow_contracts() -> None:
     workflow = release_path.read_text(encoding="utf-8")
     verify_script = (ROOT / "scripts" / "verify.sh").read_text(encoding="utf-8")
     assert 'export TEST_SERVICE_HOST="${TEST_SERVICE_HOST:-localhost}"' in verify_script
-    assert 'VERIFY_RUN_TOKEN="${HASANARA_TEST_RUN_TOKEN:-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-$$}"' in verify_script
+    assert (
+        'VERIFY_RUN_TOKEN="${HASANARA_TEST_RUN_TOKEN:-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-$$}"'
+        in verify_script
+    )
     assert 'COMPOSE_PROJECT="hasanara-test-${VERIFY_RUN_TOKEN}"' in verify_script
     assert 'docker compose -p "${COMPOSE_PROJECT}"' in verify_script
     assert 'export TEST_POSTGRES_PORT="${TEST_POSTGRES_PORT:-0}"' in verify_script
     assert '"${COMPOSE[@]}" port "${service}" "${container_port}"' in verify_script
-    assert 'published_port postgres 5432' in verify_script
-    assert 'published_port redis 6379' in verify_script
-    assert 'published_port opensearch 9200' in verify_script
+    assert "published_port postgres 5432" in verify_script
+    assert "published_port redis 6379" in verify_script
+    assert "published_port opensearch 9200" in verify_script
     assert "@${TEST_SERVICE_HOST}:${TEST_POSTGRES_PORT}/hasanara_test" in verify_script
     assert "redis://${TEST_SERVICE_HOST}:${TEST_REDIS_PORT}/0" in verify_script
     assert "http://${TEST_SERVICE_HOST}:${TEST_OPENSEARCH_PORT}" in verify_script
@@ -1243,8 +1281,8 @@ def test_release_workflow_contracts() -> None:
     assert '--data-urlencode "scope=repository:${repository}:pull,push"' in publish
     assert 'repository="${IMAGE#git.subcult.tv/}"' in publish
     assert 'destination="docker://${IMAGE}:${TAG}"' in publish
-    assert 'destination_tls_verify=true' in publish
-    assert 'if docker container inspect gitea >/dev/null 2>&1; then' in publish
+    assert "destination_tls_verify=true" in publish
+    assert "if docker container inspect gitea >/dev/null 2>&1; then" in publish
     assert 'docker network create --internal "$network"' in publish
     assert 'docker network connect --alias registry-origin "$network" gitea' in publish
     assert "-v /var/run/docker.sock:/var/run/docker.sock" in publish

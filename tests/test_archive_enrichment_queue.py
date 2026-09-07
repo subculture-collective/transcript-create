@@ -20,6 +20,62 @@ from scripts.run_archive_enrichment_queue import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("phase", ["selected", "idle", "paused"])
+def test_continuous_signal_stops_before_next_video(monkeypatch, phase):
+    from types import SimpleNamespace
+
+    from scripts import run_archive_enrichment_queue as cli
+
+    handlers = {}
+    finished = []
+    selected = []
+    monkeypatch.setattr(cli.signal, "signal", lambda number, handler: handlers.setdefault(number, handler))
+    monkeypatch.setattr(cli, "SessionLocal", lambda: SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(cli, "discover_jobs", lambda *_args: None)
+    monkeypatch.setattr(
+        cli, "next_job", lambda *_args: selected.append(phase) or {"status": phase, "video_id": "video-1"}
+    )
+    monkeypatch.setattr(cli, "finish_job", lambda *_args: finished.append(True))
+
+    def stop(*_args):
+        handlers[cli.signal.SIGTERM](cli.signal.SIGTERM, None)
+        return {"chapters": 2}
+
+    config = SimpleNamespace(ARCHIVE_ENRICHMENT_ENABLED=True, ARCHIVE_ENRICHMENT_MODEL="test")
+    assert (
+        cli.main(
+            ["--continuous"],
+            config=config,
+            sleeper=stop,
+            dependencies=QueueDependencies(select_video=lambda *_args: None, enrich_video=stop),
+        )
+        == 0
+    )
+    assert selected == [phase]
+    assert len(finished) == (1 if phase == "selected" else 0)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--continuous", "--once"],
+        ["--resume-queue"],
+        ["--queue-status"],
+        ["--once", "--queue-status", "--resume-queue"],
+    ],
+)
+def test_queue_maintenance_rejects_ambiguous_arguments(arguments):
+    from types import SimpleNamespace
+
+    with pytest.raises(SystemExit) as exc:
+        main(
+            arguments,
+            config=SimpleNamespace(ARCHIVE_ENRICHMENT_ENABLED=False),
+            dependencies=QueueDependencies(select_video=lambda *_args: None, enrich_video=lambda *_args: {}),
+        )
+    assert exc.value.code == 2
+
+
 def test_queue_cycle_enriches_one_selected_video() -> None:
     calls: list[tuple[object, str]] = []
     db = object()
@@ -332,7 +388,7 @@ def test_compose_runs_enrichment_queue_as_a_guarded_api_service() -> None:
     assert "restart: unless-stopped" in service
     assert "  archive-enrichment-queue:" in production
     assert "    archive-enrichment-queue:" in release
-    assert "run_archive_enrichment_queue.py', '--once'" in release
+    assert "run_archive_enrichment_queue.py', '${ARCHIVE_ENRICHMENT_QUEUE_MODE:---once}'" in release
     assert '"archive-enrichment-queue": "api"' in preflight
 
 

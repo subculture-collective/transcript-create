@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 import time
 import uuid
@@ -11,14 +12,25 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from app.archive.enrichment_queue import (
+    OWNER_LOCK,
+    discover_jobs,
+    finish_job,
+    next_job,
+    pause_queue,
+    queue_status,
+    requeue_run,
+    resume_queue,
+)
 from app.archive.enrichment_service import enrich_video_candidates
 from app.archive.openrouter_enrichment import PROMPT_VERSION
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.settings import settings
 
 
@@ -307,12 +319,72 @@ def main(
     dependencies: QueueDependencies | None = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
+    # Retain an actual checked-out connection: a pooled Session alone would
+    # release/reassign a session advisory lock at commit boundaries.
+    arguments = list(argv) if argv is not None else sys.argv[1:]
+    if (
+        dependencies is None
+        and "--queue-status" not in arguments
+        and (config.ARCHIVE_ENRICHMENT_ENABLED or "--requeue-run" in arguments or "--resume-queue" in arguments)
+    ):
+        with engine.connect() as connection:
+            acquired = connection.execute(
+                text("SELECT pg_try_advisory_lock(hashtext(:owner))"), {"owner": OWNER_LOCK}
+            ).scalar_one()
+            connection.commit()
+            if not acquired:
+                print(json.dumps({"status": "guardrail_halted", "reason": "queue_owner_busy"}))
+                return 1
+            try:
+                return _main(argv, config=config, sleeper=sleeper, session_factory=lambda: Session(bind=connection))
+            finally:
+                connection.rollback()
+                connection.execute(text("SELECT pg_advisory_unlock(hashtext(:owner))"), {"owner": OWNER_LOCK})
+                connection.commit()
+    return _main(argv, config=config, dependencies=dependencies, sleeper=sleeper)
+
+
+def _main(
+    argv: Sequence[str] | None = None,
+    *,
+    config: Any = settings,
+    dependencies: QueueDependencies | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
+    session_factory: Callable[[], Any] | None = None,
+) -> int:
     parser = argparse.ArgumentParser(description="Continuously generate review-only archive enrichment candidates.")
     parser.add_argument("--once", action="store_true", help="Process at most one queue item and exit.")
+    parser.add_argument("--continuous", action="store_true", help="Use the durable priority/retry queue.")
+    parser.add_argument(
+        "--requeue-run", type=_uuid_argument, help="Preserve and requeue a technical rejection; no provider call."
+    )
+    parser.add_argument("--queue-status", action="store_true", help="Read durable queue state without claiming work.")
+    parser.add_argument(
+        "--resume-queue", action="store_true", help="Clear an operator-reviewed pause; no provider call."
+    )
     parser.add_argument("--video-id", type=_uuid_argument, help="Process exactly one eligible video UUID.")
     args = parser.parse_args(argv)
     if args.video_id is not None and not args.once:
         parser.error("--video-id requires --once")
+    if args.continuous and (args.once or args.video_id):
+        parser.error("--continuous cannot be combined with --once or --video-id")
+    if args.requeue_run or args.queue_status or args.resume_queue:
+        if not args.once or args.continuous or args.video_id:
+            parser.error("queue maintenance requires --once and cannot select a video or continuous mode")
+        if sum(bool(value) for value in (args.requeue_run, args.queue_status, args.resume_queue)) != 1:
+            parser.error("select exactly one queue maintenance operation")
+        db = (session_factory or SessionLocal)()
+        try:
+            if args.requeue_run:
+                maintenance = requeue_run(db, config.ARCHIVE_ENRICHMENT_MODEL, args.requeue_run)
+            elif args.resume_queue:
+                maintenance = resume_queue(db, config.ARCHIVE_ENRICHMENT_MODEL)
+            else:
+                maintenance = queue_status(db, config.ARCHIVE_ENRICHMENT_MODEL)
+            print(json.dumps(maintenance, sort_keys=True))
+            return 0
+        finally:
+            db.close()
     deps = dependencies or QueueDependencies(
         select_video=select_next_video,
         enrich_video=enrich_video_candidates,
@@ -321,13 +393,25 @@ def main(
         select_requested_video=select_requested_video,
     )
 
-    while True:
+    stopping = False
+
+    def request_stop(_signum: int, _frame: Any) -> None:
+        nonlocal stopping
+        stopping = True
+
+    if args.continuous:
+        signal.signal(signal.SIGTERM, request_stop)
+        signal.signal(signal.SIGINT, request_stop)
+
+    while not stopping:
         if not config.ARCHIVE_ENRICHMENT_ENABLED:
             result = {"status": "disabled"}
         else:
-            db = SessionLocal()
+            db = (session_factory or SessionLocal)()
             try:
                 result = None
+                if args.continuous:
+                    discover_jobs(db, config.ARCHIVE_ENRICHMENT_MODEL)
                 if deps.load_guardrail_snapshot is not None:
                     failure_window = int(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_FAILURE_WINDOW", 20))
                     snapshot = deps.load_guardrail_snapshot(db, config.ARCHIVE_ENRICHMENT_MODEL, failure_window)
@@ -338,7 +422,26 @@ def main(
                         failure_window=failure_window,
                         max_failure_rate=float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_MAX_FAILURE_RATE", 0.25)),
                     )
-                if result is None:
+                if result is not None and args.continuous and result.get("reason") == "failure_rate":
+                    pause_queue(db, config.ARCHIVE_ENRICHMENT_MODEL, "failure_rate")
+                if result is None and args.continuous:
+                    result = next_job(db, config.ARCHIVE_ENRICHMENT_MODEL)
+                    if result["status"] == "selected":
+                        selected = str(result["video_id"])
+                        continuous_deps = QueueDependencies(
+                            select_video=lambda *_args, selected=selected: selected,
+                            enrich_video=deps.enrich_video,
+                            on_credit_exhausted=deps.on_credit_exhausted,
+                        )
+                        result = run_queue_cycle(
+                            db,
+                            model=config.ARCHIVE_ENRICHMENT_MODEL,
+                            prompt_version=PROMPT_VERSION,
+                            failure_cooldown_seconds=0,
+                            dependencies=continuous_deps,
+                        )
+                        finish_job(db, config.ARCHIVE_ENRICHMENT_MODEL, selected, result)
+                elif result is None:
                     result = run_queue_cycle(
                         db,
                         model=config.ARCHIVE_ENRICHMENT_MODEL,
@@ -351,6 +454,8 @@ def main(
                 db.close()
         assert result is not None
         print(json.dumps(result, sort_keys=True), flush=True)
+        if stopping:
+            return 0
         if args.once:
             if args.video_id is not None and result["status"] != "completed":
                 return 1
@@ -363,8 +468,10 @@ def main(
             "disabled": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS", 300)),
             "credit_exhausted": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS", 3600)),
             "guardrail_halted": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS", 300)),
+            "paused": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS", 300)),
         }
         sleeper(delay_by_status[result["status"]])
+    return 0
 
 
 if __name__ == "__main__":

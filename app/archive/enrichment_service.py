@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.settings import settings
 
 from .enrichment_exporter import export_enrichment_input
+from .enrichment_preflight import validate_enrichment_input
 from .enrichment_queue import OWNER_LOCK
 from .enrichment_runner import EpisodeInput
 from .labeling.normalization import slugify_label
@@ -421,6 +422,7 @@ def enrich_video_candidates(
     if len(packet.episodes) != 1:
         raise ValueError("expected exactly one enrichment episode")
     episode = packet.episodes[0]
+    validate_enrichment_input(episode, int(getattr(config, "ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES", 90) * 60_000))
     run_id = deps.create_run(
         db,
         scope="video",

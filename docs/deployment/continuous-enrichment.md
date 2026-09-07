@@ -46,6 +46,32 @@ activation evidence must be recorded before calling this work complete.
 
 ## Operations
 
+Input preflight now uses the selected/exported transcript and the same balanced
+window splitter as generation before a continuous job is claimed. Each window
+must contain text, and at least two distinct block starts must span 20% of the
+episode. This input floor applies even when a category title/marker could bypass
+the ordinary output evidence-spread rule. It avoids paying for effectively empty
+inputs without relaxing any output evidence or category requirement.
+
+Known input defects return `input_parked` and retain a durable
+`transcript_input:*` reason. No attempt is consumed, no extraction is created,
+and existing attempt counts/run references remain intact. Unknown export or
+configuration failures are not silently classified as source-data defects.
+Exact-video enrichment repeats the preflight before creating an extraction.
+Parked input jobs are not automatically replayed; repair the transcript and
+explicitly reconcile the job before retrying. This code change does not erase
+historical failures, clear the production pause, or bypass the rolling breaker.
+
+For a historical failed run with the exact empty-window error and no provider
+usage fields, stop the worker and use `--once --reconcile-input-run <run_uuid>`.
+This requires the current transcript to reproduce the defect, pristine review
+state, and the run to remain the job's latest inactive attempt. It retains the
+failed status, original metrics and attempts; adds an idempotent timestamped
+`input_preflight_reconciliation` annotation; and parks the job. Annotated unpaid
+input failures no longer enter the provider failure-rate sample. Daily attempts
+and cost accounting remain unchanged. Paid/unknown failures cannot be reconciled
+this way. Re-evaluate all guardrails before explicit resume.
+
 The release overlay defaults to `--once` / restart `no`. Enabling continuous
 processing requires `ARCHIVE_ENRICHMENT_ENABLED=true`, publication `false`,
 `ARCHIVE_ENRICHMENT_QUEUE_MODE=--continuous`, and

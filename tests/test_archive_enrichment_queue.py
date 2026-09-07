@@ -20,7 +20,7 @@ from scripts.run_archive_enrichment_queue import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("phase", ["selected", "idle", "paused"])
+@pytest.mark.parametrize("phase", ["selected", "idle", "paused", "input_parked"])
 def test_continuous_signal_stops_before_next_video(monkeypatch, phase):
     from types import SimpleNamespace
 

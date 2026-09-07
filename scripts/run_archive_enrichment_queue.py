@@ -25,6 +25,7 @@ from app.archive.enrichment_queue import (
     next_job,
     pause_queue,
     queue_status,
+    reconcile_input_run,
     requeue_run,
     resume_queue,
 )
@@ -74,7 +75,7 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
         db.execute(
             text("""
             WITH attempts_24h AS (
-                SELECT status, metrics, started_at
+                SELECT status, metrics, started_at, error
                 FROM archive_extraction_runs
                 WHERE model_name = :model
                   AND started_at >= now() - interval '24 hours'
@@ -83,6 +84,10 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
                 SELECT status
                 FROM attempts_24h
                 WHERE status IN ('completed', 'failed')
+                  AND NOT ((status='failed' AND error='enrichment window contains no transcript blocks'
+                    AND metrics->'input_preflight_reconciliation'->>'reason'='empty_balanced_window'
+                    AND metrics->'input_preflight_reconciliation'->>'version'='1'
+                    AND NOT (metrics ?| ARRAY['provider','cost_usd','prompt_tokens','completion_tokens'])) IS TRUE)
                 ORDER BY started_at DESC
                 LIMIT :failure_window
             )
@@ -325,7 +330,12 @@ def main(
     if (
         dependencies is None
         and "--queue-status" not in arguments
-        and (config.ARCHIVE_ENRICHMENT_ENABLED or "--requeue-run" in arguments or "--resume-queue" in arguments)
+        and (
+            config.ARCHIVE_ENRICHMENT_ENABLED
+            or "--requeue-run" in arguments
+            or "--resume-queue" in arguments
+            or "--reconcile-input-run" in arguments
+        )
     ):
         with engine.connect() as connection:
             acquired = connection.execute(
@@ -360,6 +370,9 @@ def _main(
     )
     parser.add_argument("--queue-status", action="store_true", help="Read durable queue state without claiming work.")
     parser.add_argument(
+        "--reconcile-input-run", type=_uuid_argument, help="Audit a proven unpaid empty-window failure."
+    )
+    parser.add_argument(
         "--resume-queue", action="store_true", help="Clear an operator-reviewed pause; no provider call."
     )
     parser.add_argument("--video-id", type=_uuid_argument, help="Process exactly one eligible video UUID.")
@@ -368,14 +381,22 @@ def _main(
         parser.error("--video-id requires --once")
     if args.continuous and (args.once or args.video_id):
         parser.error("--continuous cannot be combined with --once or --video-id")
-    if args.requeue_run or args.queue_status or args.resume_queue:
+    if args.requeue_run or args.queue_status or args.resume_queue or args.reconcile_input_run:
         if not args.once or args.continuous or args.video_id:
             parser.error("queue maintenance requires --once and cannot select a video or continuous mode")
-        if sum(bool(value) for value in (args.requeue_run, args.queue_status, args.resume_queue)) != 1:
+        if (
+            sum(
+                bool(value)
+                for value in (args.requeue_run, args.queue_status, args.resume_queue, args.reconcile_input_run)
+            )
+            != 1
+        ):
             parser.error("select exactly one queue maintenance operation")
         db = (session_factory or SessionLocal)()
         try:
-            if args.requeue_run:
+            if args.reconcile_input_run:
+                maintenance = reconcile_input_run(db, config.ARCHIVE_ENRICHMENT_MODEL, args.reconcile_input_run)
+            elif args.requeue_run:
                 maintenance = requeue_run(db, config.ARCHIVE_ENRICHMENT_MODEL, args.requeue_run)
             elif args.resume_queue:
                 maintenance = resume_queue(db, config.ARCHIVE_ENRICHMENT_MODEL)
@@ -425,7 +446,11 @@ def _main(
                 if result is not None and args.continuous and result.get("reason") == "failure_rate":
                     pause_queue(db, config.ARCHIVE_ENRICHMENT_MODEL, "failure_rate")
                 if result is None and args.continuous:
-                    result = next_job(db, config.ARCHIVE_ENRICHMENT_MODEL)
+                    result = next_job(
+                        db,
+                        config.ARCHIVE_ENRICHMENT_MODEL,
+                        int(getattr(config, "ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES", 90) * 60_000),
+                    )
                     if result["status"] == "selected":
                         selected = str(result["video_id"])
                         continuous_deps = QueueDependencies(
@@ -462,6 +487,7 @@ def _main(
             return 0
 
         delay_by_status = {
+            "input_parked": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_SUCCESS_DELAY_SECONDS", 5)),
             "completed": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_SUCCESS_DELAY_SECONDS", 5)),
             "failed": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_FAILURE_DELAY_SECONDS", 30)),
             "idle": float(getattr(config, "ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS", 300)),

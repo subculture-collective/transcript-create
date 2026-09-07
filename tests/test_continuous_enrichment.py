@@ -10,6 +10,49 @@ from app.archive.enrichment_queue import OWNER_LOCK, discover_jobs, finish_job, 
 from app.archive.openrouter_enrichment import PROMPT_VERSION
 
 
+@pytest.mark.parametrize("paid", [False, True])
+def test_historical_input_reconciliation_preserves_attempts_and_spend(queue, paid):
+    from app.archive.enrichment_queue import reconcile_input_run
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+    from scripts.run_archive_enrichment_queue import load_queue_guardrail_snapshot
+
+    db, model, video = queue
+    target = video()
+    discover_jobs(db, model)
+    next_job(db, model)
+    run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+    metrics = {"run_id": run, "model": model, "prompt_version": PROMPT_VERSION}
+    if paid:
+        metrics["cost_usd"] = 0.01
+    finish_extraction_run(db, run, "failed", metrics, "enrichment window contains no transcript blocks")
+    finish_job(db, model, target, {"status": "failed", "metrics": metrics})
+    db.execute(text("DELETE FROM transcript_blocks WHERE video_id=:id AND block_index=1"), {"id": target})
+    before = load_queue_guardrail_snapshot(db, model, 20)
+    assert before.recent_failures == 1
+    if paid:
+        with pytest.raises(ValueError, match="usage"):
+            reconcile_input_run(db, model, run)
+        assert load_queue_guardrail_snapshot(db, model, 20) == before
+        return
+    assert reconcile_input_run(db, model, run)["status"] == "input_reconciled"
+    original = db.execute(text("SELECT status,metrics FROM archive_extraction_runs WHERE id=:id"), {"id": run}).one()
+    assert original.status == "failed"
+    assert {k: v for k, v in original.metrics.items() if k != "input_preflight_reconciliation"} == metrics
+    reconcile_input_run(db, model, run)
+    assert (
+        db.execute(text("SELECT metrics FROM archive_extraction_runs WHERE id=:id"), {"id": run}).scalar_one()
+        == original.metrics
+    )
+    after = load_queue_guardrail_snapshot(db, model, 20)
+    assert after.recent_failures == after.recent_finished == 0
+    assert after.attempts_24h == before.attempts_24h == 1
+    assert after.recorded_cost_usd_24h == before.recorded_cost_usd_24h
+    assert (
+        db.execute(text("SELECT attempts FROM archive_enrichment_jobs WHERE video_id=:id"), {"id": target}).scalar_one()
+        == 1
+    )
+
+
 @pytest.fixture
 def queue(db_session):
     model = f"test-{uuid.uuid4()}"
@@ -31,7 +74,8 @@ def queue(db_session):
         db_session.execute(
             text("""
             INSERT INTO transcript_blocks(video_id,block_index,start_ms,end_ms,text,kind)
-            VALUES (:id,0,0,5446000,'News and politics.','paragraph')
+            VALUES (:id,0,0,2723000,'News and politics.','paragraph'),
+                   (:id,1,2723000,5446000,'More news and politics.','paragraph')
         """),
             {"id": video_id},
         )
@@ -55,6 +99,37 @@ def test_new_arrival_precedes_newest_backfill_and_retry(queue):
     assert next_job(db, model)["status"] == "idle"
     db.execute(text("UPDATE archive_enrichment_jobs SET available_at=now() WHERE model=:model"), {"model": model})
     assert next_job(db, model)["video_id"] == newest
+
+
+@pytest.mark.parametrize("defect", ["empty_balanced_window", "insufficient_category_evidence"])
+def test_input_defects_park_without_attempt_or_extraction(queue, defect):
+    db, model, video = queue
+    valid, invalid = video(1), video(2)
+    if defect == "empty_balanced_window":
+        db.execute(text("DELETE FROM transcript_blocks WHERE video_id=:id AND block_index=1"), {"id": invalid})
+    else:
+        db.execute(text("UPDATE videos SET duration_seconds=301 WHERE id=:id"), {"id": invalid})
+        db.execute(text("DELETE FROM transcript_blocks WHERE video_id=:id AND block_index=1"), {"id": invalid})
+        db.execute(text("UPDATE transcript_blocks SET end_ms=9640 WHERE video_id=:id"), {"id": invalid})
+    discover_jobs(db, model)
+    assert next_job(db, model) == {
+        "status": "input_parked",
+        "video_id": invalid,
+        "reason": f"transcript_input:{defect}",
+    }
+    row = db.execute(
+        text("SELECT status,attempts,last_run_id FROM archive_enrichment_jobs WHERE video_id=:id AND model=:model"),
+        {"id": invalid, "model": model},
+    ).one()
+    assert tuple(row) == ("parked", 0, None)
+    assert (
+        db.execute(
+            text("SELECT count(*) FROM archive_extraction_runs WHERE video_id=:id"), {"id": invalid}
+        ).scalar_one()
+        == 0
+    )
+    discover_jobs(db, model)
+    assert next_job(db, model)["video_id"] == valid
 
 
 def test_three_attempts_park_without_blocking_other_work(queue):
@@ -180,7 +255,10 @@ def test_real_worker_transaction_reconciles_or_rolls_back_candidates(queue, monk
     episode = EpisodeInput(
         video_id=target,
         duration_ms=5_446_000,
-        blocks=[dict(block_index=0, start_ms=0, end_ms=5_446_000, text="News and politics")],
+        blocks=[
+            dict(block_index=0, start_ms=0, end_ms=5_446_000, text="News and politics"),
+            dict(block_index=1, start_ms=2_723_000, end_ms=5_446_000, text="Further political discussion"),
+        ],
     )
     result = OpenRouterEpisodeResult(
         video_id=target,

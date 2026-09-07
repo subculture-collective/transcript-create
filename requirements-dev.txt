@@ -15,7 +15,7 @@ openapi-spec-validator==0.7.1
 # Linting and formatting
 ruff==0.9.1
 black==25.1.0
-isort==6.1.0
+isort==9.0.1
 mypy==1.14.1
 
 # Security scanning

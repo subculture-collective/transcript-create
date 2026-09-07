@@ -84,6 +84,8 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
                 SELECT status
                 FROM attempts_24h
                 WHERE status IN ('completed', 'failed')
+                  AND started_at >= COALESCE((SELECT max(created_at) FROM archive_enrichment_recoveries
+                    WHERE model=:model AND prompt=:prompt),'-infinity'::timestamptz)
                   AND NOT ((status='failed' AND error='enrichment window contains no transcript blocks'
                     AND metrics->'input_preflight_reconciliation'->>'reason'='empty_balanced_window'
                     AND metrics->'input_preflight_reconciliation'->>'version'='1'
@@ -103,7 +105,7 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
                 (SELECT COUNT(*) FROM recent_finished) AS recent_finished,
                 (SELECT COUNT(*) FROM recent_finished WHERE status = 'failed') AS recent_failures
         """),
-            {"model": model, "failure_window": failure_window},
+            {"model": model, "prompt": PROMPT_VERSION, "failure_window": failure_window},
         )
         .mappings()
         .one()
@@ -311,6 +313,10 @@ def run_queue_cycle(
                 result["metrics"] = failure_metrics
             return result
         result = {"status": "failed", "video_id": video_id, "error": str(exc)[:500]}
+        if str(exc).startswith(
+            ("OpenRouter request failed:", "OpenRouter request outcome uncertain:", "OpenRouter rate limit requires")
+        ):
+            result["reason"] = "provider_failure"
         if isinstance(failure_metrics, dict):
             result["metrics"] = failure_metrics
         return result

@@ -1,4 +1,5 @@
 import json
+import io
 from urllib import error
 
 import pytest
@@ -340,14 +341,14 @@ def test_generate_openrouter_enrichment_can_defer_category_sustained_validation(
     assert result.category_rejections == []
 
 
-def test_generate_openrouter_enrichment_retries_transient_http_errors(monkeypatch):
+def test_generate_openrouter_enrichment_retries_explicit_rate_limit(monkeypatch):
     attempts = 0
 
     def fake_urlopen(_req, timeout):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise error.HTTPError("https://example.test", 503, "busy", {}, None)
+            raise error.HTTPError("https://example.test", 429, "busy", {}, None)
         return _Response(_response_payload())
 
     monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", fake_urlopen)
@@ -356,6 +357,62 @@ def test_generate_openrouter_enrichment_retries_transient_http_errors(monkeypatc
     generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model", max_retries=1)
 
     assert attempts == 2
+
+
+@pytest.mark.parametrize(
+    "code,body,header,retries,delay",
+    [
+        (413, b"request rate limit exceeded", "25", 2, 25),
+        (413, b"payload too large", None, 1, None),
+        (429, b"busy", "120", 1, None),
+        (429, b"busy", "malformed", 2, 15),
+        (400, b"json_schema unsupported", None, 1, None),
+        (503, b"upstream failure", None, 1, None),
+    ],
+)
+def test_provider_retry_policy(monkeypatch, code, body, header, retries, delay):
+    calls, sleeps = [], []
+
+    def send(req, timeout):
+        calls.append(json.loads(req.data))
+        if len(calls) == 1:
+            raise error.HTTPError(
+                "https://example.test",
+                code,
+                "provider error",
+                {"Retry-After": header} if header else {},
+                io.BytesIO(body),
+            )
+        return _Response(_response_payload())
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    monkeypatch.setattr("app.archive.openrouter_enrichment.time.sleep", sleeps.append)
+    if retries == 1:
+        with pytest.raises(RuntimeError):
+            generate_openrouter_episode_enrichment(
+                _episode(), api_key="test", model="model", provider_only=["deepinfra"]
+            )
+    else:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model", provider_only=["deepinfra"])
+    assert len(calls) == retries
+    assert sleeps == ([] if delay is None else [delay])
+    assert calls[0]["provider"] == dict(
+        only=["deepinfra"], allow_fallbacks=False, data_collection="deny", require_parameters=True
+    )
+    assert calls[0]["response_format"]["json_schema"]["strict"] is True
+
+
+def test_timeout_is_not_replayed(monkeypatch):
+    calls = []
+
+    def send(*args, **kwargs):
+        calls.append(True)
+        raise TimeoutError("response lost")
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(RuntimeError, match="outcome uncertain"):
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert len(calls) == 1
 
 
 def test_generate_openrouter_enrichment_requires_key():

@@ -166,6 +166,21 @@ def resume_queue(db: Any, model: str) -> dict[str, Any]:
             OR EXISTS (SELECT 1 FROM archive_extraction_runs WHERE status='running' AND model_name IS NOT NULL)
     """)).scalar_one():
         raise ValueError("uncertain running work must be reconciled before resuming")
+    previous = db.execute(
+        text(
+            "SELECT paused_reason FROM archive_enrichment_queue_state WHERE model=:model AND prompt=:prompt FOR UPDATE"
+        ),
+        params(model),
+    ).scalar_one_or_none()
+    if not previous:
+        raise ValueError("queue must be paused before explicit recovery")
+    recovery = db.execute(
+        text("""
+        INSERT INTO archive_enrichment_recoveries(model,prompt,previous_reason)
+        VALUES (:model,:prompt,:reason) RETURNING id
+    """),
+        {**params(model), "reason": previous},
+    ).scalar_one()
     row = db.execute(
         text("""
         UPDATE archive_enrichment_queue_state SET paused_reason=NULL
@@ -176,7 +191,7 @@ def resume_queue(db: Any, model: str) -> dict[str, Any]:
     if row is None:
         raise ValueError("queue has not been initialized")
     db.commit()
-    return {"status": "resumed", "model": model, "prompt": PROMPT_VERSION}
+    return {"status": "resumed", "model": model, "prompt": PROMPT_VERSION, "recovery_id": str(recovery)}
 
 
 def queue_status(db: Any, model: str) -> dict[str, Any]:
@@ -287,7 +302,7 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
                                WHEN attempts>=:max_attempts THEN 'parked' ELSE 'retry' END,
                    attempts=attempts-CASE WHEN :outcome='credit_exhausted' THEN 1 ELSE 0 END,
                    available_at=now()+CASE WHEN attempts<=1 THEN interval '15 minutes' ELSE interval '1 hour' END,
-                   last_run_id=CAST(:run_id AS uuid),reason=:reason,updated_at=now()
+                   last_run_id=CAST(:run_id AS uuid),reason=:reason,updated_at=clock_timestamp()
              WHERE video_id=:video_id AND model=:model AND prompt=:prompt AND status='running'
         """),
         {
@@ -302,7 +317,9 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
         db.rollback()
         pause_queue(db, model, "queue_state_conflict")
         raise RuntimeError("queue attempt state changed unexpectedly")
-    if status == "credit_exhausted":
+    if outcome.get("reason") == "provider_failure":
+        pause_queue(db, model, "provider_failure")
+    elif status == "credit_exhausted":
         # Commit the outcome and pause atomically. A restart must not slip
         # between recording exhausted credit and persisting its stop condition.
         pause_queue(db, model, "credit_exhausted")
@@ -315,6 +332,8 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
                 text("""
             SELECT status FROM archive_enrichment_jobs WHERE model=:model AND prompt=:prompt
             AND (status='completed' OR (status IN ('retry','parked') AND reason='failed'))
+            AND updated_at >= COALESCE((SELECT max(created_at) FROM archive_enrichment_recoveries
+                WHERE model=:model AND prompt=:prompt),'-infinity'::timestamptz)
             ORDER BY updated_at DESC,video_id LIMIT 3
         """),
                 params(model),

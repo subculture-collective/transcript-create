@@ -3,7 +3,7 @@ fastapi==0.119.0
 uvicorn[standard]==0.38.0
 
 # Database
-sqlalchemy==2.0.44
+sqlalchemy==2.0.52
 psycopg[binary]==3.2.10
 alembic==1.14.0
 
@@ -11,12 +11,12 @@ alembic==1.14.0
 yt-dlp==2026.3.17
 
 # Whisper transcription backends
-faster-whisper==1.2.0
+faster-whisper==1.2.1
 # Using 20240930 - latest working PyPI version
 openai-whisper==20240930
 
 # Speaker diarization (optional, requires HF_TOKEN)
-pyannote.audio==4.0.1
+pyannote.audio==4.0.7
 
 # Core dependencies
 # Pin to latest available on PyPI for Python 3.10/Ubuntu 22.04; 2.3.x not published yet
@@ -40,7 +40,7 @@ reportlab==4.4.4
 prometheus-client==0.21.0
 
 # Rate limiting
-slowapi==0.1.9
+slowapi==0.1.10
 
 # Redis caching
 redis==5.2.1

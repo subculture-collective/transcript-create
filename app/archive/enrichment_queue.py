@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import text
 
+from .enrichment_preflight import IneligibleEnrichmentInputError, preflight_video
 from .openrouter_enrichment import PROMPT_VERSION
 
 # A single owner across prompts/models and one-shot CLI invocations. A dedicated
@@ -88,6 +89,76 @@ def pause_queue(db: Any, model: str, reason: str) -> None:
     db.commit()
 
 
+def reconcile_input_run(db: Any, model: str, run_id: str) -> dict[str, Any]:
+    """Operator-only classification of proven pre-provider input failures.
+
+    Keep failed status, all original metrics, attempt count and run reference.
+    The marker affects only the provider failure-rate sample, never spend totals.
+    Caller must hold OWNER_LOCK and stop the worker before invoking this.
+    """
+    values = {**params(model), "run_id": run_id}
+    if db.execute(text("SELECT EXISTS(SELECT 1 FROM archive_enrichment_jobs WHERE status='running')")).scalar_one():
+        raise ValueError("stop and reconcile running work first")
+    row = (
+        db.execute(
+            text("""
+        SELECT r.video_id,r.status,r.error,r.metrics FROM archive_extraction_runs r
+        WHERE r.id=:run_id AND r.model_name=:model AND r.prompt_version=:prompt FOR UPDATE
+    """),
+            values,
+        )
+        .mappings()
+        .one()
+    )
+    metrics = row["metrics"] or {}
+    if row["status"] != "failed" or row["error"] != "enrichment window contains no transcript blocks":
+        raise ValueError("only proven empty-window failures may be reconciled")
+    if set(metrics) - {"model", "run_id", "prompt_version", "input_preflight_reconciliation"}:
+        raise ValueError("provider usage or unknown metrics prohibit input reconciliation")
+    values["video_id"] = row["video_id"]
+    job = (
+        db.execute(
+            text("""
+        SELECT status,last_run_id FROM archive_enrichment_jobs
+        WHERE video_id=:video_id AND model=:model AND prompt=:prompt FOR UPDATE
+    """),
+            values,
+        )
+        .mappings()
+        .one()
+    )
+    if job["status"] not in ("retry", "parked") or str(job["last_run_id"]) != run_id:
+        raise ValueError("run is not the latest inactive queue attempt")
+    if not db.execute(text(f"SELECT ({PRISTINE_SQL}) FROM videos v WHERE id=:video_id"), values).scalar_one():
+        raise ValueError("existing review work is protected")
+    try:
+        preflight_video(db, str(row["video_id"]), 5_400_000)
+    except IneligibleEnrichmentInputError as exc:
+        if str(exc) != "empty_balanced_window":
+            raise ValueError("historical input defect no longer reproduces") from exc
+    else:
+        raise ValueError("historical input defect no longer reproduces")
+    db.execute(
+        text("""
+        UPDATE archive_extraction_runs
+        SET metrics=COALESCE(metrics,'{}'::jsonb) || jsonb_build_object(
+            'input_preflight_reconciliation', COALESCE(metrics->'input_preflight_reconciliation',
+            jsonb_build_object('reason','empty_balanced_window','version',1,'reconciled_at',now())))
+        WHERE id=:run_id
+    """),
+        values,
+    )
+    db.execute(
+        text("""
+        UPDATE archive_enrichment_jobs SET status='parked',reason='transcript_input:empty_balanced_window',updated_at=now()
+        WHERE video_id=:video_id AND model=:model AND prompt=:prompt
+    """),
+        values,
+    )
+    db.commit()
+    return {"status": "input_reconciled", "run_id": run_id, "video_id": str(row["video_id"])}
+
+
 def resume_queue(db: Any, model: str) -> dict[str, Any]:
     """Explicit operator action, under OWNER_LOCK, after fixing the pause cause."""
     if db.execute(text("""
@@ -135,7 +206,7 @@ def queue_status(db: Any, model: str) -> dict[str, Any]:
     }
 
 
-def next_job(db: Any, model: str) -> dict[str, Any]:
+def next_job(db: Any, model: str, max_window_ms: int = 5_400_000) -> dict[str, Any]:
     values = params(model)
     paused = db.execute(
         text("SELECT paused_reason FROM archive_enrichment_queue_state WHERE model=:model AND prompt=:prompt"),
@@ -180,6 +251,19 @@ def next_job(db: Any, model: str) -> dict[str, Any]:
         db.commit()
         return {"status": "idle"}
     video_id = str(row["video_id"])
+    try:
+        preflight_video(db, video_id, max_window_ms)
+    except IneligibleEnrichmentInputError as exc:
+        reason = f"transcript_input:{exc}"
+        db.execute(
+            text("""
+                UPDATE archive_enrichment_jobs SET status='parked',reason=:reason,updated_at=now()
+                 WHERE video_id=:video_id AND model=:model AND prompt=:prompt
+            """),
+            {**values, "video_id": video_id, "reason": reason},
+        )
+        db.commit()
+        return {"status": "input_parked", "video_id": video_id, "reason": reason}
     db.execute(
         text("""
             UPDATE archive_enrichment_jobs SET status='running',attempts=attempts+1,updated_at=now()

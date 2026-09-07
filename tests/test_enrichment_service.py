@@ -163,7 +163,8 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
                 "start_ms": 0,
                 "end_ms": 600_000,
                 "text": "Workers discuss labor organizing and a union vote.",
-            }
+            },
+            {"block_index": 1, "start_ms": 300_000, "end_ms": 600_000, "text": "Further organizing discussion."},
         ],
     )
     result = OpenRouterEpisodeResult(
@@ -258,7 +259,8 @@ def test_enrich_video_rejects_invalid_results_before_persistence(overlap_violati
                 "start_ms": 0,
                 "end_ms": 600_000,
                 "text": "Workers discuss labor organizing and a union vote.",
-            }
+            },
+            {"block_index": 1, "start_ms": 300_000, "end_ms": 600_000, "text": "Further organizing discussion."},
         ],
     )
     result = OpenRouterEpisodeResult(

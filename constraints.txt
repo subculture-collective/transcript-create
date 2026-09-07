@@ -84,7 +84,7 @@ pyannote-database==6.1.0
 pyannote-metrics==4.0.0
 pyannote-pipeline==4.0.0
 pyannoteai-sdk==0.3.0
-pycparser==2.23
+pycparser==3.0
 pydantic==2.12.3
 pydantic-settings==2.11.0
 pydantic_core==2.41.4

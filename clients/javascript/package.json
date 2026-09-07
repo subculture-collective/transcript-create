@@ -51,7 +51,7 @@
   },
   "homepage": "https://github.com/subculture-collective/transcript-create/tree/main/clients/javascript",
   "dependencies": {
-    "ky": "^1.7.3"
+    "ky": "^2.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.6",

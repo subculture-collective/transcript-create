@@ -266,6 +266,7 @@ class Settings(BaseSettings):
     ARCHIVE_ENRICHMENT_ENABLED: bool = False
     ARCHIVE_ENRICHMENT_PROVIDER: str = "openrouter"
     ARCHIVE_ENRICHMENT_MODEL: str = "deepseek/deepseek-v4-pro"
+    ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY: str = Field(default="parasail", pattern=r"^[a-z][a-z0-9/-]*$")
     OPENROUTER_API_KEY: str = ""
     ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES: int = Field(default=90, ge=30, le=120)
     ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS: float = Field(default=300.0, ge=30.0, le=900.0)

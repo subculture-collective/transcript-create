@@ -364,6 +364,7 @@ def _generate_configured_episode(episode: EpisodeInput, config: Any) -> OpenRout
             model=config.ARCHIVE_ENRICHMENT_MODEL,
             timeout_seconds=config.ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS,
             allow_provider_fallbacks=False,
+            provider_only=[getattr(config, "ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY", "parasail")],
             defer_category_sustained_validation=True,
         )
 

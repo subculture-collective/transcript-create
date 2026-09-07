@@ -244,6 +244,42 @@ def test_resume_refuses_uncertain_running_job(queue):
         resume_queue(db, model)
 
 
+def test_explicit_recovery_keeps_paid_history_and_daily_limits(queue):
+    from app.archive.enrichment_queue import queue_status
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+    from scripts.run_archive_enrichment_queue import load_queue_guardrail_snapshot
+
+    db, model, video = queue
+    target = video()
+    discover_jobs(db, model)
+    next_job(db, model)
+    run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+    metrics = {"run_id": run, "cost_usd": 0.02}
+    finish_extraction_run(db, run, "failed", metrics, "OpenRouter request failed: HTTP 400")
+    finish_job(db, model, target, {"status": "failed", "reason": "provider_failure", "metrics": metrics})
+    assert queue_status(db, model)["reason"] == "provider_failure"
+    before = load_queue_guardrail_snapshot(db, model, 20)
+    assert before.recent_failures == 1
+    result = resume_queue(db, model)
+    assert result["recovery_id"]
+    after = load_queue_guardrail_snapshot(db, model, 20)
+    assert after.recent_finished == after.recent_failures == 0
+    assert after.attempts_24h == before.attempts_24h == 1
+    assert after.recorded_cost_usd_24h == before.recorded_cost_usd_24h == 0.02
+    assert (
+        db.execute(text("SELECT status FROM archive_extraction_runs WHERE id=:run"), dict(run=run)).scalar_one()
+        == "failed"
+    )
+    with pytest.raises(ValueError, match="must be paused"):
+        resume_queue(db, model)
+    for day in range(3):
+        fresh = video(day + 2)
+        discover_jobs(db, model)
+        assert next_job(db, model)["video_id"] == fresh
+        finish_job(db, model, fresh, {"status": "failed"})
+    assert queue_status(db, model)["status"] == "paused"
+
+
 @pytest.mark.parametrize("corrupt_counts", [False, True])
 def test_real_worker_transaction_reconciles_or_rolls_back_candidates(queue, monkeypatch, corrupt_counts):
     from app.archive import enrichment_service as service

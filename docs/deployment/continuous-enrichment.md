@@ -46,6 +46,26 @@ activation evidence must be recorded before calling this work complete.
 
 ## Operations
 
+Provider recovery: production now pins a single provider with
+`ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY=parasail`. DeepSeek V4 Pro, strict
+JSON schema, required parameters, denied data collection and no fallback remain
+unchanged. Parasail passed a synthetic strict-JSON probe after DeepInfra returned
+rate limits. It may cost more than StreamLake; the per-video and daily cost
+breakers still apply. Explicit rate-limit HTTP 429 or rate-limit-message HTTP
+413 responses retry at most twice with 15/30-second backoff and Retry-After
+support. A requested wait over 60 seconds stops instead of retrying early.
+Uncertain network outcomes, HTTP 5xx, schema incompatibility and exhausted rate
+retries are not replayed blindly; unrecovered request errors pause the queue
+immediately, retaining measured completed-window usage and no partial candidates.
+
+After operator investigation and stopping the worker, explicit `--resume-queue`
+now records an append-only `archive_enrichment_recoveries` checkpoint with the
+previous pause reason. Rolling failure samples and consecutive-failure checks
+start at that recovery boundary. Original failed runs, retry attempts and
+24-hour attempt/cost accounting are unchanged. Calling resume on an unpaused
+queue is refused. This is an explicit recovery operation, not an automatic
+reset or a way to evade daily spending limits.
+
 Input preflight now uses the selected/exported transcript and the same balanced
 window splitter as generation before a continuous job is claimed. Each window
 must contain text, and at least two distinct block starts must span 20% of the

@@ -6,6 +6,8 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from copy import deepcopy
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib import error, request
 
@@ -293,6 +295,7 @@ def build_openrouter_episode_request(
     *,
     model: str,
     allow_provider_fallbacks: bool = False,
+    provider_only: list[str] | None = None,
 ) -> dict[str, Any]:
     target_count = _target_chapter_count(episode.duration_ms)
     response_schema = deepcopy(EPISODE_ENRICHMENT_SCHEMA)
@@ -367,6 +370,7 @@ Return only JSON matching the supplied schema."""
             },
         },
         "provider": {
+            **({"only": provider_only} if provider_only else {}),
             "allow_fallbacks": allow_provider_fallbacks,
             "data_collection": "deny",
             "require_parameters": True,
@@ -610,6 +614,7 @@ def generate_openrouter_episode_enrichment(
     model: str,
     timeout_seconds: float = 300.0,
     allow_provider_fallbacks: bool = False,
+    provider_only: list[str] | None = None,
     max_retries: int = 2,
     app_url: str = "https://hasanara.tv",
     defer_category_sustained_validation: bool = False,
@@ -620,6 +625,7 @@ def generate_openrouter_episode_enrichment(
         episode,
         model=model,
         allow_provider_fallbacks=allow_provider_fallbacks,
+        provider_only=provider_only,
     )
     req = request.Request(
         OPENROUTER_CHAT_URL,
@@ -646,16 +652,31 @@ def generate_openrouter_episode_enrichment(
             )
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:1_000]
-            retryable = exc.code == 429 or 500 <= exc.code < 600
+            retryable = exc.code == 429 or (exc.code == 413 and "rate limit" in detail.casefold())
             if not retryable or attempt >= max_retries:
                 raise RuntimeError(f"OpenRouter request failed: HTTP {exc.code}: {detail}") from exc
-            retry_after = exc.headers.get("Retry-After")
-            delay = min(30.0, float(retry_after)) if retry_after else min(8.0, 2.0**attempt)
-            time.sleep(delay)
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            delay = 15.0 * 2**attempt
+            if retry_after:
+                try:
+                    requested_delay = float(retry_after)
+                except ValueError:
+                    try:
+                        requested_delay = (
+                            parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)
+                        ).total_seconds()
+                    except (ValueError, TypeError, OverflowError):
+                        requested_delay = delay
+                if not math.isfinite(requested_delay) or requested_delay > 60:
+                    raise RuntimeError(
+                        "OpenRouter rate limit requires a longer cooldown; stop before another request"
+                    ) from exc
+                delay = max(delay, requested_delay)
+            time.sleep(min(60.0, delay))
         except (error.URLError, TimeoutError) as exc:
-            if attempt >= max_retries:
-                raise RuntimeError(f"OpenRouter request failed: {exc}") from exc
-            time.sleep(min(8.0, 2.0**attempt))
+            # A lost response may already have incurred provider usage. Never
+            # automatically replay an uncertain paid request.
+            raise RuntimeError(f"OpenRouter request outcome uncertain: {exc}") from exc
     raise RuntimeError("OpenRouter request failed after retries")
 
 

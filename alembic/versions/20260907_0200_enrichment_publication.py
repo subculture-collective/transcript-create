@@ -34,10 +34,19 @@ def upgrade() -> None:
         CREATE INDEX archive_enrichment_maintenance_video_lookup
             ON archive_enrichment_maintenance_rows((row_data->>'video_id'))
             WHERE table_name IN ('archive_video_chapters','archive_label_assignments');
+        CREATE INDEX archive_enrichment_assignment_chapter_lookup
+            ON archive_label_assignments(chapter_id) WHERE chapter_id IS NOT NULL;
+        CREATE INDEX archive_enrichment_chapter_feedback_lookup
+            ON archive_chapter_feedback(chapter_id) WHERE chapter_id IS NOT NULL;
+        CREATE INDEX archive_enrichment_assignment_feedback_lookup
+            ON archive_label_feedback(assignment_id) WHERE assignment_id IS NOT NULL;
     """)
 
 
 def downgrade() -> None:
+    op.execute("DROP INDEX IF EXISTS archive_enrichment_assignment_feedback_lookup")
+    op.execute("DROP INDEX IF EXISTS archive_enrichment_chapter_feedback_lookup")
+    op.execute("DROP INDEX IF EXISTS archive_enrichment_assignment_chapter_lookup")
     op.execute("DROP TABLE archive_enrichment_approvals")
     op.execute("DROP TABLE archive_enrichment_maintenance_rows")
     op.execute("DROP TABLE archive_enrichment_maintenance")

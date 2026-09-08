@@ -58,6 +58,8 @@ work, but subsequent feedback does. Out-of-scope dependent assignments halt clea
 instead of being cascade-deleted. Original run records, retry budgets and costs are
 never reset. Shared labels and aliases are not deleted. Re-eligible source videos
 are discovered by the queue after processing is separately recovered.
+The additive migration includes partial indexes for chapter/assignment foreign-key
+lookups, avoiding repeated full-table scans during bounded legacy deletion.
 
 Initial inventory: 21,979 older chapters (12 already published), 19,608 older LLM
 assignments (including 10 previously approved), 1,084 newer candidate chapters across

@@ -15,6 +15,62 @@ from app.archive.enrichment_service import (
 from app.archive.openrouter_enrichment import EpisodeEnrichmentCandidate, OpenRouterEpisodeResult
 
 
+@pytest.mark.parametrize("provider", [None, "", "alibaba", "deepinfra/fp8"])
+def test_configured_routing_preserves_request_and_budget_contract(monkeypatch, provider):
+    from app.archive import enrichment_service as service
+    from app.archive.openrouter_enrichment import build_openrouter_episode_request
+
+    episode = EpisodeInput(
+        video_id="video-1",
+        duration_ms=1200000,
+        blocks=[{"block_index": 0, "start_ms": 0, "end_ms": 1200000, "text": "News and politics."}],
+    )
+    config = SimpleNamespace(
+        OPENROUTER_API_KEY="test",
+        ARCHIVE_ENRICHMENT_MODEL="deepseek/deepseek-v4-pro",
+        ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS=300,
+        ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES=90,
+        ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO=1,
+    )
+    if provider is not None:
+        config.ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY = provider
+    requests = []
+    sentinel = object()
+
+    def generate(window, **kwargs):
+        assert kwargs["defer_category_sustained_validation"] is True
+        body = build_openrouter_episode_request(
+            window,
+            model=kwargs["model"],
+            provider_only=kwargs["provider_only"],
+            allow_provider_fallbacks=kwargs["allow_provider_fallbacks"],
+        )
+        requests.append(body)
+        return sentinel
+
+    def hierarchical(value, *, generate_window, max_window_ms, max_cost_usd):
+        assert value is episode
+        assert max_window_ms == 5400000 and max_cost_usd == 1
+        assert generate_window(value) is sentinel
+        return generate_window(value)
+
+    monkeypatch.setattr(service, "generate_openrouter_episode_enrichment", generate)
+    monkeypatch.setattr(service, "generate_hierarchical_openrouter_enrichment", hierarchical)
+    assert service._generate_configured_episode(episode, config) is sentinel
+    assert len(requests) == 2
+    for body in requests:
+        assert body["model"] == "deepseek/deepseek-v4-pro"
+        assert body["provider"] == {
+            **({"only": [provider]} if provider else {}),
+            "allow_fallbacks": not bool(provider),
+            "require_parameters": True,
+            "data_collection": "deny",
+        }
+        assert body["response_format"]["json_schema"]["strict"] is True
+        assert body["reasoning"] == {"enabled": False, "exclude": True}
+        assert body["temperature"] == 0 and body["max_tokens"] == 8000
+
+
 class _Result:
     def __init__(self, *, scalar=0, first=None):
         self._scalar = scalar

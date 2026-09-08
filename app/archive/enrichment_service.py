@@ -359,14 +359,16 @@ def persist_enrichment_candidates(
 
 
 def _generate_configured_episode(episode: EpisodeInput, config: Any) -> OpenRouterEpisodeResult:
+    provider = getattr(config, "ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY", "")
+
     def generate_window(window: EpisodeInput) -> OpenRouterEpisodeResult:
         return generate_openrouter_episode_enrichment(
             window,
             api_key=config.OPENROUTER_API_KEY,
             model=config.ARCHIVE_ENRICHMENT_MODEL,
             timeout_seconds=config.ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS,
-            allow_provider_fallbacks=False,
-            provider_only=[getattr(config, "ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY", "parasail")],
+            allow_provider_fallbacks=not bool(provider),
+            provider_only=[provider] if provider else None,
             defer_category_sustained_validation=True,
         )
 

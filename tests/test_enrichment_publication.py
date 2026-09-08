@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import text
 
 from app.archive.enrichment_cleanup import cleanup_legacy
-from app.archive.enrichment_publication import approve_run
+from app.archive.enrichment_publication import approve_run, invalidate_enrichment_views
 from app.archive.openrouter_enrichment import PROMPT_VERSION
 from app.exceptions import ValidationError
 from scripts.approve_archive_enrichment import main, run_maintenance
@@ -246,6 +246,21 @@ def test_cleanup_refuses_out_of_scope_cascade(cohort):
 def test_cli_requires_explicit_apply_and_approval(args):
     with pytest.raises(SystemExit):
         main(args)
+
+
+def test_post_commit_cache_failure_does_not_raise(monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("unavailable cache")
+
+    monkeypatch.setattr("app.cache.invalidate_video_data", unavailable)
+    assert invalidate_enrichment_views(str(uuid.uuid4())) is False
+
+
+def test_bulk_invalidation_is_limited_to_enrichment_views(monkeypatch):
+    prefixes = []
+    monkeypatch.setattr("app.cache.invalidate_cache_pattern", prefixes.append)
+    assert invalidate_enrichment_views() is True
+    assert prefixes == ["video:*", "search:*", "archive:*", "aggregate:*"]
 
 
 def test_maintenance_rehearsal_is_reversible_and_apply_is_atomic(cohort):

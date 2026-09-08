@@ -27,6 +27,29 @@ def test_settings_load():
     assert hasattr(settings, "DATABASE_URL")
 
 
+@pytest.mark.parametrize("provider", ["", "alibaba", "deepinfra/fp8"])
+def test_enrichment_provider_routing_configuration(provider):
+    assert (
+        _isolated_settings(
+            ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY=provider
+        ).ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY
+        == provider
+    )
+
+
+def test_enrichment_routing_defaults_to_openrouter(monkeypatch):
+    monkeypatch.delenv("ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY", raising=False)
+    assert _isolated_settings().ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY == ""
+
+
+@pytest.mark.parametrize("provider", [" ", "alibaba,deepinfra", "ALIBABA", "*"])
+def test_enrichment_provider_rejects_ambiguous_pins(provider):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _isolated_settings(ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY=provider)
+
+
 def test_bootstrap_admin_identities_are_parsed_as_immutable_entries():
     config = _isolated_settings(BOOTSTRAP_ADMIN_IDENTITIES="google:123, twitch:456,google:123")
 

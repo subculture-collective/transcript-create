@@ -51,12 +51,14 @@ activation evidence must be recorded before calling this work complete.
 
 ## Operations
 
-Provider recovery: production now pins a single provider with
-`ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY=parasail`. DeepSeek V4 Pro, strict
-JSON schema, required parameters, denied data collection and no fallback remain
-unchanged. Parasail passed a synthetic strict-JSON probe after DeepInfra returned
-rate limits. It may cost more than StreamLake; the per-video and daily cost
-breakers still apply. Explicit rate-limit HTTP 429 or rate-limit-message HTTP
+Provider routing: leave `ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY=` empty
+to let OpenRouter select and fail over between providers of the same DeepSeek
+V4 Pro model. A nonempty provider slug retains explicit pinning without fallback.
+Strict JSON schema, required parameters and denied data collection remain
+mandatory. Provider pricing can vary; per-video and daily cost breakers, including
+unknown-billing reservations, still apply. Provider fallback does not authorize
+model fallback, application-level replay of uncertain requests, or pause resets.
+Explicit rate-limit HTTP 429 or rate-limit-message HTTP
 413 responses retry at most twice with 15/30-second backoff and Retry-After
 support. A requested wait over 60 seconds stops instead of retrying early.
 Explicit HTTP 502/503 and recognized response-body 502/503 failures enter a
@@ -81,8 +83,11 @@ local guardrail accounting, not additional provider charges.
 
 Existing `provider_failure` pauses are intentionally not reclassified or resumed
 on deployment. Diagnose and explicitly recover those under the procedure below.
-The historical provider examples above are not authority to overwrite the live
-Almaz override (`alibaba` at the September 8 checkpoint).
+For the approved automatic-routing rollout, explicitly clear the historical
+Almaz `alibaba` override after image qualification; changing the code default
+alone does not remove an existing environment pin. Verify the actual request
+omits `provider.only` and enables `allow_fallbacks`, while retaining the model,
+schema, privacy and cost constraints. Record bounded recovery before resuming.
 
 After operator investigation and stopping the worker, explicit `--resume-queue`
 now records an append-only `archive_enrichment_recoveries` checkpoint with the

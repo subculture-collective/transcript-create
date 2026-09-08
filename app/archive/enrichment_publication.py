@@ -88,6 +88,8 @@ def approve_run(db: Any, run_id: str) -> dict[str, Any]:
         for label in labels
     ):
         raise ValueError("Approval refuses rejected or merged labels")
+    if any(label["status"] == "candidate" and label["source"] != "automatic" for label in labels):
+        raise ValueError("Approval refuses unpublished editorial labels")
     hidden_ids = {label["id"] for label in labels if label["status"] == "hidden"}
     visible_category_ids = {
         label["id"] for label in labels if label["kind"] == "category" and label["id"] not in hidden_ids

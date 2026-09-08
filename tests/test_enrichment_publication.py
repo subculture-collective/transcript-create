@@ -132,6 +132,9 @@ def test_approval_preserves_hidden_topic_assignments(cohort):
         "short_chapter",
         "feedback",
         "shared_visible_assignment",
+        "admin_label",
+        "seed_label",
+        "hybrid_label",
     ],
 )
 def test_approval_refuses_unqualified_or_editorial_work(cohort, defect):
@@ -152,6 +155,10 @@ def test_approval_refuses_unqualified_or_editorial_work(cohort, defect):
         )
     if defect == "hidden_label":
         db.execute(text("UPDATE archive_labels SET status='hidden' WHERE id=:label"), ids)
+    if defect in {"admin_label", "seed_label", "hybrid_label"}:
+        db.execute(
+            text("UPDATE archive_labels SET source=:source WHERE id=:label"), {**ids, "source": defect.split("_")[0]}
+        )
     if defect == "short_chapter":
         db.execute(
             text("UPDATE archive_video_chapters SET start_ms=590000 WHERE video_id=:video AND chapter_index=1"), ids

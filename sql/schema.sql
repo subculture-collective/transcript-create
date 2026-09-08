@@ -634,6 +634,8 @@ CREATE INDEX IF NOT EXISTS archive_enrichment_chapter_feedback_lookup
     ON archive_chapter_feedback(chapter_id) WHERE chapter_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS archive_enrichment_assignment_feedback_lookup
     ON archive_label_feedback(assignment_id) WHERE assignment_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS archive_enrichment_assignment_run_lookup
+    ON archive_label_assignments(run_id, id) WHERE source = 'llm';
 
 -- ---
 -- Citation-backed archive opinion history

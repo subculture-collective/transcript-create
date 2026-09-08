@@ -10,6 +10,88 @@ from app.archive.enrichment_queue import OWNER_LOCK, discover_jobs, finish_job, 
 from app.archive.openrouter_enrichment import PROMPT_VERSION
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_managed_quality_rejections_do_not_trip_systemic_breakers(queue, legacy):
+    from app.archive.enrichment_queue import HANDLED_QUALITY_ERRORS
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+    from scripts.run_archive_enrichment_queue import load_queue_guardrail_snapshot
+
+    db, model, video = queue
+    for day in range(5):
+        video(day)
+    discover_jobs(db, model)
+    for error in HANDLED_QUALITY_ERRORS:
+        target = next_job(db, model)["video_id"]
+        run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+        metrics = {"run_id": run, "cost_usd": 0.1, "cost_reservation_usd": 0.2}
+        finish_extraction_run(db, run, "failed", metrics, error)
+        finish_job(db, model, target, {"status": "failed", "metrics": metrics})
+        reason = db.execute(
+            text("SELECT reason FROM archive_enrichment_jobs WHERE model=:model AND video_id=:video"),
+            {"model": model, "video": target},
+        ).scalar_one()
+        assert reason == "quality_rejected"
+        if legacy:
+            db.execute(text("UPDATE archive_enrichment_jobs SET reason='failed' WHERE model=:model"), {"model": model})
+            db.commit()
+    strict = load_queue_guardrail_snapshot(db, model, 20)
+    managed = load_queue_guardrail_snapshot(db, model, 20, continuous=True)
+    assert strict.recent_failures == len(HANDLED_QUALITY_ERRORS)
+    assert managed.recent_finished == managed.recent_failures == 0
+    assert managed.attempts_24h == strict.attempts_24h == len(HANDLED_QUALITY_ERRORS)
+    assert managed.recorded_cost_usd_24h == strict.recorded_cost_usd_24h == pytest.approx(0.4)
+    assert managed.reserved_cost_usd_24h == strict.reserved_cost_usd_24h == pytest.approx(0.8)
+    assert next_job(db, model)["status"] == "selected"
+
+
+@pytest.mark.parametrize("error", [None, "unknown fault", "OpenRouter request failed: response error code 502"])
+def test_unhandled_failures_remain_in_continuous_breaker(queue, error):
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+    from scripts.run_archive_enrichment_queue import load_queue_guardrail_snapshot
+
+    db, model, video = queue
+    target = video()
+    discover_jobs(db, model)
+    next_job(db, model)
+    run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+    finish_extraction_run(db, run, "failed", {"run_id": run}, error)
+    finish_job(db, model, target, {"status": "failed", "metrics": {"run_id": run}})
+    snapshot = load_queue_guardrail_snapshot(db, model, 20, continuous=True)
+    assert snapshot.recent_finished == snapshot.recent_failures == 1
+
+
+def test_quality_rejection_without_durable_job_is_not_exempt(queue):
+    from app.archive.enrichment_queue import HANDLED_QUALITY_ERRORS
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+    from scripts.run_archive_enrichment_queue import load_queue_guardrail_snapshot
+
+    db, model, video = queue
+    run = create_extraction_run(db, "video", "premium", video(), model, PROMPT_VERSION)
+    finish_extraction_run(db, run, "failed", {"cost_usd": 0.1}, HANDLED_QUALITY_ERRORS[0])
+    assert load_queue_guardrail_snapshot(db, model, 20, continuous=True).recent_failures == 1
+
+
+def test_quality_retry_allowance_still_parks_after_three_paid_attempts(queue):
+    from app.archive.enrichment_queue import HANDLED_QUALITY_ERRORS
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+
+    db, model, video = queue
+    target = video()
+    discover_jobs(db, model)
+    for attempt in range(1, 4):
+        db.execute(text("UPDATE archive_enrichment_jobs SET available_at=now() WHERE model=:model"), {"model": model})
+        assert next_job(db, model)["attempt"] == attempt
+        run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+        metrics = {"run_id": run, "cost_usd": 0.1}
+        finish_extraction_run(db, run, "failed", metrics, HANDLED_QUALITY_ERRORS[0])
+        finish_job(db, model, target, {"status": "failed", "metrics": metrics})
+    state = db.execute(
+        text("SELECT status,attempts,reason FROM archive_enrichment_jobs WHERE model=:model"), {"model": model}
+    ).one()
+    assert tuple(state) == ("parked", 3, "quality_rejected")
+    assert next_job(db, model)["status"] == "idle"
+
+
 @pytest.mark.parametrize("paid", [False, True])
 def test_historical_input_reconciliation_preserves_attempts_and_spend(queue, paid):
     from app.archive.enrichment_queue import reconcile_input_run

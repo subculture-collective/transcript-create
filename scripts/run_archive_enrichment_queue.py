@@ -19,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.archive.enrichment_queue import (
+    HANDLED_QUALITY_ERRORS,
     OWNER_LOCK,
     discover_jobs,
     finish_job,
@@ -72,12 +73,14 @@ def _uuid_argument(value: str) -> str:
     return str(parsed)
 
 
-def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> QueueGuardrailSnapshot:
+def load_queue_guardrail_snapshot(
+    db: Any, model: str, failure_window: int, *, continuous: bool = False
+) -> QueueGuardrailSnapshot:
     row = (
         db.execute(
             text("""
             WITH attempts_24h AS (
-                SELECT status, metrics, started_at, error
+                SELECT status, metrics, started_at, error, video_id, prompt_version
                 FROM archive_extraction_runs
                 WHERE model_name = :model
                   AND started_at >= now() - interval '24 hours'
@@ -86,6 +89,11 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
                 SELECT status
                 FROM attempts_24h
                 WHERE status IN ('completed', 'failed')
+                  AND NOT ((:continuous AND status='failed' AND error=ANY(:quality_errors)
+                    AND EXISTS (SELECT 1 FROM archive_enrichment_jobs j
+                        WHERE j.video_id=attempts_24h.video_id AND j.model=:model
+                          AND j.prompt=attempts_24h.prompt_version AND j.attempts>0
+                          AND j.status IN ('retry','parked','running','completed'))) IS TRUE)
                   AND started_at >= COALESCE((SELECT max(created_at) FROM archive_enrichment_recoveries
                     WHERE model=:model AND prompt=:prompt),'-infinity'::timestamptz)
                   AND NOT ((status='failed' AND error='enrichment window contains no transcript blocks'
@@ -113,7 +121,13 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
                 (SELECT COUNT(*) FROM recent_finished) AS recent_finished,
                 (SELECT COUNT(*) FROM recent_finished WHERE status = 'failed') AS recent_failures
         """),
-            {"model": model, "prompt": PROMPT_VERSION, "failure_window": failure_window},
+            {
+                "model": model,
+                "prompt": PROMPT_VERSION,
+                "failure_window": failure_window,
+                "continuous": continuous,
+                "quality_errors": list(HANDLED_QUALITY_ERRORS),
+            },
         )
         .mappings()
         .one()
@@ -425,7 +439,9 @@ def _main(
         select_video=select_next_video,
         enrich_video=enrich_video_candidates,
         on_credit_exhausted=mark_credit_exhausted_run,
-        load_guardrail_snapshot=load_queue_guardrail_snapshot,
+        load_guardrail_snapshot=lambda db, model, window: load_queue_guardrail_snapshot(
+            db, model, window, continuous=args.continuous
+        ),
         select_requested_video=select_requested_video,
     )
 

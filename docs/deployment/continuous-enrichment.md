@@ -26,8 +26,16 @@ The amendment does not authorize clearing a provider/failure pause.
   or uncertain paid attempts pause for inspection rather than blind replay.
 - Provider credit exhaustion and systemic errors persist a pause across restarts.
   A single video quality failure is delayed/parked, not a whole-backfill failure.
-  Three consecutive failed jobs also pause, including failures before a provider
-  attempt record exists; the existing rolling failure-rate breaker still applies.
+  Three consecutive unhandled failed jobs also pause, including failures before
+  a provider attempt record exists. The rolling systemic failure-rate breaker
+  excludes only exact recognized quality rejections owned by a durable retry job:
+  chapter evidence overlap/unsupported evidence, no sustained categories, and
+  the 30-second publication minimum. These rejections remain failed runs, consume
+  the same three-attempt allowance and measured/reserved spending, and eventually
+  park. They are removed from both numerator and denominator before selecting
+  the systemic sample, so they cannot dilute unknown or provider failures.
+  One-shot runs retain the strict failure sample. Existing pauses require explicit
+  verified recovery; deployment does not clear them or reset any attempt history.
 - All per-video acceptance checks run before committing candidates. Failures
   retain measured usage, with no partial candidate writes.
 - Production remains disabled during implementation and deployment validation.

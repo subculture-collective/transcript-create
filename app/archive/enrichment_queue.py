@@ -19,6 +19,15 @@ from .openrouter_enrichment import PROMPT_VERSION
 OWNER_LOCK = "hasanara-archive-enrichment-owner-v1"
 MAX_ATTEMPTS = 3
 
+# Exact local validation failures, never provider messages or arbitrary prefixes.
+# These still consume paid attempt budgets and must pass validation on retry.
+HANDLED_QUALITY_ERRORS = (
+    "archive enrichment chapter evidence does not overlap its chapter",
+    "archive enrichment quality gate: unsupported chapter evidence",
+    "archive enrichment quality gate: no sustained categories",
+    "Published chapters must be at least 30 seconds long",
+)
+
 PRISTINE_SQL = """
     v.state = 'completed' AND COALESCE(v.duration_seconds, 0) > 0
     AND COALESCE(v.title,'') NOT ILIKE '%NO STREAM TODAY%'
@@ -332,6 +341,23 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
     """A quality failure retries; credit exhaustion persists a global pause."""
     status = outcome["status"]
     reason = None if status == "completed" else outcome.get("reason", status)
+    if status == "failed" and reason == "failed" and outcome.get("metrics", {}).get("run_id"):
+        quality_rejection = db.execute(
+            text("""
+                SELECT EXISTS (SELECT 1 FROM archive_extraction_runs
+                WHERE id=CAST(:run_id AS uuid) AND video_id=:video_id
+                  AND model_name=:model AND prompt_version=:prompt AND status='failed'
+                  AND error=ANY(:quality_errors))
+            """),
+            {
+                **params(model),
+                "video_id": video_id,
+                "run_id": outcome["metrics"]["run_id"],
+                "quality_errors": list(HANDLED_QUALITY_ERRORS),
+            },
+        ).scalar_one()
+        if quality_rejection:
+            reason = "quality_rejected"
     updated = db.execute(
         text("""
             UPDATE archive_enrichment_jobs
@@ -385,13 +411,17 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
         recent = (
             db.execute(
                 text("""
-            SELECT status FROM archive_enrichment_jobs WHERE model=:model AND prompt=:prompt
+            SELECT status FROM archive_enrichment_jobs j WHERE model=:model AND prompt=:prompt
             AND (status='completed' OR (status IN ('retry','parked') AND reason='failed'))
+            AND NOT EXISTS (SELECT 1 FROM archive_extraction_runs r
+                WHERE r.id=j.last_run_id AND r.video_id=j.video_id
+                  AND r.model_name=j.model AND r.prompt_version=j.prompt
+                  AND r.status='failed' AND r.error=ANY(:quality_errors))
             AND updated_at >= COALESCE((SELECT max(created_at) FROM archive_enrichment_recoveries
                 WHERE model=:model AND prompt=:prompt),'-infinity'::timestamptz)
             ORDER BY updated_at DESC,video_id LIMIT 3
         """),
-                params(model),
+                {**params(model), "quality_errors": list(HANDLED_QUALITY_ERRORS)},
             )
             .scalars()
             .all()

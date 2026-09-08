@@ -157,6 +157,7 @@ class OpenRouterResponseValidationError(ValueError):
         completion_tokens: int,
         cost_usd: float,
         elapsed_seconds: float,
+        failure_details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.provider = provider
@@ -164,6 +165,7 @@ class OpenRouterResponseValidationError(ValueError):
         self.completion_tokens = completion_tokens
         self.cost_usd = cost_usd
         self.elapsed_seconds = elapsed_seconds
+        self.failure_details = failure_details or {}
 
 
 class OpenRouterBudgetExceededError(RuntimeError):
@@ -196,6 +198,8 @@ class OpenRouterBudgetExceededError(RuntimeError):
 
 class OpenRouterHierarchicalGenerationError(RuntimeError):
     """Preserve measured usage when a later provider window fails."""
+
+    failure_details: dict[str, Any]
 
     def __init__(
         self,
@@ -452,7 +456,7 @@ def _parse_response(
     completion_tokens = int(usage.get("completion_tokens") or 0)
     cost_usd = float(usage.get("cost") or 0.0)
 
-    def invalid(message: str) -> OpenRouterResponseValidationError:
+    def invalid(message: str, details: dict[str, Any] | None = None) -> OpenRouterResponseValidationError:
         return OpenRouterResponseValidationError(
             message,
             provider=provider,
@@ -460,6 +464,7 @@ def _parse_response(
             completion_tokens=completion_tokens,
             cost_usd=cost_usd,
             elapsed_seconds=elapsed,
+            failure_details=details,
         )
 
     provider_error = payload.get("error")
@@ -467,7 +472,24 @@ def _parse_response(
         # Never persist raw provider text/metadata: it may echo request contents.
         code = provider_error.get("code")
         safe_code = str(code) if isinstance(code, int) and 100 <= code <= 599 else "unknown"
-        raise invalid(f"OpenRouter request failed: response error code {safe_code}")
+        metadata = provider_error.get("metadata")
+        error_type = metadata.get("error_type") if isinstance(metadata, dict) else None
+        generation_id = payload.get("id")
+        details = {
+            "error_code": safe_code,
+            "usage_reported": isinstance(usage.get("cost"), (int, float)) and not isinstance(usage.get("cost"), bool),
+            "transient": code in (502, 503) and error_type in (None, "server", "overloaded", "provider_unavailable"),
+        }
+        if error_type in ("server", "overloaded", "provider_unavailable", "rate_limit_exceeded"):
+            details["error_type"] = error_type
+        if (
+            isinstance(generation_id, str)
+            and generation_id.startswith("gen-")
+            and len(generation_id) <= 128
+            and all(char.isalnum() or char in "-_" for char in generation_id)
+        ):
+            details["generation_id"] = generation_id
+        raise invalid(f"OpenRouter request failed: response error code {safe_code}", details)
     try:
         content = payload["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
@@ -663,6 +685,29 @@ def generate_openrouter_episode_enrichment(
             )
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:1_000]
+            if exc.code in (502, 503):
+                failure = RuntimeError(f"OpenRouter request failed: HTTP {exc.code}")
+                transient = True
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                if retry_after:
+                    try:
+                        try:
+                            requested_delay = float(retry_after)
+                        except ValueError:
+                            requested_delay = (
+                                parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)
+                            ).total_seconds()
+                        transient = math.isfinite(requested_delay) and requested_delay <= 900
+                    except (ValueError, TypeError, OverflowError):
+                        transient = False
+                failure.__dict__["failure_details"] = {
+                    "error_code": str(exc.code),
+                    "http_status": exc.code,
+                    "usage_reported": False,
+                    "transient": transient,
+                }
+                failure.__dict__["elapsed_seconds"] = time.monotonic() - started
+                raise failure from exc
             retryable = exc.code == 429 or (exc.code == 413 and "rate limit" in detail.casefold())
             if not retryable or attempt >= max_retries:
                 raise RuntimeError(f"OpenRouter request failed: HTTP {exc.code}: {detail}") from exc
@@ -792,7 +837,7 @@ def generate_hierarchical_openrouter_enrichment(
             failed_provider = getattr(exc, "provider", None)
             if failed_provider:
                 providers.append(str(failed_provider))
-            raise OpenRouterHierarchicalGenerationError(
+            failure = OpenRouterHierarchicalGenerationError(
                 str(exc),
                 provider=", ".join(dict.fromkeys(providers)),
                 prompt_tokens=sum(result.prompt_tokens for _offset, result in window_results)
@@ -805,7 +850,9 @@ def generate_hierarchical_openrouter_enrichment(
                 + float(getattr(exc, "elapsed_seconds", 0.0) or 0.0),
                 window_count=len(window_results),
                 attempted_window_count=index + 1,
-            ) from exc
+            )
+            failure.failure_details = getattr(exc, "failure_details", {})
+            raise failure from exc
         window_results.append((offset_ms, window_result))
         cumulative_cost = sum(result.cost_usd for _offset, result in window_results)
         if max_cost_usd is not None and (

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -46,6 +47,59 @@ class _Db:
 
     def rollback(self):
         self.calls.append(("ROLLBACK", None))
+
+
+@pytest.mark.parametrize("reported", [False, True])
+def test_provider_failure_persists_usage_provenance_and_separate_reservation(reported):
+    from app.archive.openrouter_enrichment import OpenRouterResponseValidationError
+
+    episode = EpisodeInput(
+        video_id="video-1",
+        duration_ms=1200000,
+        blocks=[
+            {"block_index": 0, "start_ms": 0, "end_ms": 600000, "text": "News and politics discussion."},
+            {"block_index": 1, "start_ms": 600000, "end_ms": 1200000, "text": "More news and politics."},
+        ],
+    )
+    config = SimpleNamespace(
+        ARCHIVE_ENRICHMENT_ENABLED=True,
+        ARCHIVE_ENRICHMENT_PROVIDER="openrouter",
+        ARCHIVE_ENRICHMENT_MODEL="deepseek/deepseek-v4-pro",
+        ARCHIVE_ENRICHMENT_PUBLISH=False,
+        ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO=1.0,
+        OPENROUTER_API_KEY="test",
+    )
+    failure = OpenRouterResponseValidationError(
+        "OpenRouter request failed: response error code 502",
+        provider="Alibaba",
+        prompt_tokens=10,
+        completion_tokens=0,
+        cost_usd=0.01,
+        elapsed_seconds=10,
+        failure_details={"error_code": "502", "transient": True, "usage_reported": reported},
+    )
+    finished = []
+    persisted = []
+
+    def generate(*args):
+        raise failure
+
+    deps = EnrichmentRuntimeDependencies(
+        export_input=lambda db, **kwargs: EnrichmentInput(
+            schema_version="1", pipeline_version="test", episodes=[episode]
+        ),
+        create_run=lambda *args, **kwargs: "run-1",
+        finish_run=lambda db, run_id, status, metrics, error=None: finished.append((status, metrics)),
+        generate_episode=generate,
+        persist_candidates=lambda *args, **kwargs: persisted.append(True),
+    )
+    with pytest.raises(OpenRouterResponseValidationError):
+        enrich_video_candidates(_Db(), "video-1", config=config, dependencies=deps)
+    assert not persisted
+    status, metrics = finished[0]
+    assert status == "failed" and metrics["cost_usd"] == 0.01
+    assert metrics["provider_failure"]["usage_reported"] is reported
+    assert metrics.get("cost_reservation_usd", 0) == (0 if reported else 1.0)
 
 
 def test_persist_enrichment_writes_review_candidates_with_grounded_labels():

@@ -84,6 +84,61 @@ def queue(db_session):
     return db_session, model, video
 
 
+@pytest.mark.parametrize("probe_success", [False, True])
+def test_transient_cooldown_runs_one_counted_probe_before_backlog(queue, probe_success):
+    from app.archive.enrichment_queue import queue_status
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+    from scripts.run_archive_enrichment_queue import load_queue_guardrail_snapshot
+
+    db, model, video = queue
+    target = video()
+    discover_jobs(db, model)
+    assert next_job(db, model)["video_id"] == target
+    run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+    metrics = {
+        "run_id": run,
+        "cost_usd": 0.02,
+        "cost_reservation_usd": 1.0,
+        "provider_failure": {"transient": True, "usage_reported": False, "error_code": "502"},
+    }
+    finish_extraction_run(db, run, "failed", metrics, "OpenRouter request failed: response error code 502")
+    finish_job(db, model, target, {"status": "failed", "reason": "provider_failure", "metrics": metrics})
+    assert queue_status(db, model)["reason"] == "provider_cooldown"
+    assert next_job(db, model) == {"status": "paused", "reason": "provider_cooldown"}
+    arrival = video(5)
+    discover_jobs(db, model)
+    db.execute(text("UPDATE archive_enrichment_jobs SET available_at=now() WHERE video_id=:id"), {"id": target})
+    db.commit()
+    # Recovery survives commits/restarts and may not consume another video.
+    assert next_job(db, model) == {"status": "selected", "video_id": target, "attempt": 2}
+    before = load_queue_guardrail_snapshot(db, model, 20)
+    assert before.recorded_cost_usd_24h == pytest.approx(0.02)
+    assert before.reserved_cost_usd_24h == 1.0
+    probe = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+    probe_metrics = {"run_id": probe, "cost_usd": 0.03, "provider_failure": {"transient": True}}
+    finish_extraction_run(db, probe, "completed" if probe_success else "failed", probe_metrics)
+    finish_job(
+        db,
+        model,
+        target,
+        (
+            {"status": "completed", "metrics": probe_metrics}
+            if probe_success
+            else {"status": "failed", "reason": "provider_failure", "metrics": probe_metrics}
+        ),
+    )
+    after = load_queue_guardrail_snapshot(db, model, 20)
+    assert after.attempts_24h == before.attempts_24h + 1
+    assert after.recorded_cost_usd_24h == pytest.approx(0.05)
+    assert after.reserved_cost_usd_24h == 1.0
+    assert after.recent_failures == (1 if probe_success else 2)
+    if probe_success:
+        assert queue_status(db, model)["reason"] is None
+        assert next_job(db, model)["video_id"] == arrival
+    else:
+        assert next_job(db, model) == {"status": "paused", "reason": "provider_failure"}
+
+
 def test_new_arrival_precedes_newest_backfill_and_retry(queue):
     db, model, video = queue
     oldest, newest = video(1), video(3)

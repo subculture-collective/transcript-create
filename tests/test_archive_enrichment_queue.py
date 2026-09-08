@@ -199,6 +199,8 @@ def test_queue_guardrails_fail_closed_on_attempt_cost_and_failure_limits() -> No
 
     assert evaluate_queue_guardrails(QueueGuardrailSnapshot(20, 1.0, 10, 0), **base)["reason"] == "attempt_limit_24h"
     assert evaluate_queue_guardrails(QueueGuardrailSnapshot(10, 5.0, 10, 0), **base)["reason"] == "cost_limit_24h"
+    reserved = QueueGuardrailSnapshot(10, 4.0, 10, 0, reserved_cost_usd_24h=1.0)
+    assert evaluate_queue_guardrails(reserved, **base)["reason"] == "cost_limit_24h"
     failure_result = evaluate_queue_guardrails(QueueGuardrailSnapshot(10, 1.0, 20, 5), **base)
     assert failure_result == {
         "status": "guardrail_halted",
@@ -206,6 +208,7 @@ def test_queue_guardrails_fail_closed_on_attempt_cost_and_failure_limits() -> No
         "guardrails": {
             "attempts_24h": 10,
             "recorded_cost_usd_24h": 1.0,
+            "reserved_cost_usd_24h": 0.0,
             "recent_finished": 20,
             "recent_failures": 5,
             "recent_failure_rate": 0.25,

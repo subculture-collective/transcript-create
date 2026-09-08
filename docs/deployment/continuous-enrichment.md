@@ -59,9 +59,30 @@ rate limits. It may cost more than StreamLake; the per-video and daily cost
 breakers still apply. Explicit rate-limit HTTP 429 or rate-limit-message HTTP
 413 responses retry at most twice with 15/30-second backoff and Retry-After
 support. A requested wait over 60 seconds stops instead of retrying early.
-Uncertain network outcomes, HTTP 5xx, schema incompatibility and exhausted rate
-retries are not replayed blindly; unrecovered request errors pause the queue
-immediately, retaining measured completed-window usage and no partial candidates.
+Explicit HTTP 502/503 and recognized response-body 502/503 failures enter a
+durable `provider_cooldown`. No other video starts during that cooldown. At the
+existing retry deadline (15 minutes on the first attempt, one hour on later
+attempts), the same eligible video receives one recovery probe. This is a normal
+counted extraction with all eligibility, owner, attempt, failure-rate and cost
+guards still active. Success clears only the cooldown; failure leaves a durable
+operator-reviewed pause. An interrupted probe is never automatically replayed.
+No recovery checkpoint is inserted and no failure history is reset automatically.
+
+Uncertain network outcomes, unrecognized errors, schema incompatibility,
+authentication/credit failures and exhausted rate retries retain hard-stop
+behavior. Measured completed-window usage survives failures; partial candidates
+never persist. Sanitized `provider_failure` metrics retain the error code,
+allowlisted error type, safe generation ID when present and `usage_reported`.
+Missing billing information is not confirmed zero: a separate
+`cost_reservation_usd` reserves one configured per-video budget in addition to
+known measured usage. Daily cost guards include both, reported separately as
+`recorded_cost_usd_24h` and `reserved_cost_usd_24h`. Reservations are conservative
+local guardrail accounting, not additional provider charges.
+
+Existing `provider_failure` pauses are intentionally not reclassified or resumed
+on deployment. Diagnose and explicitly recover those under the procedure below.
+The historical provider examples above are not authority to overwrite the live
+Almaz override (`alibaba` at the September 8 checkpoint).
 
 After operator investigation and stopping the worker, explicit `--resume-queue`
 now records an append-only `archive_enrichment_recoveries` checkpoint with the

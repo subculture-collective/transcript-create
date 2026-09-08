@@ -492,6 +492,12 @@ def enrich_video_candidates(
             "prompt_version": PROMPT_VERSION,
         }
         usage_source: Any = result if "result" in locals() else exc
+        details = getattr(exc, "failure_details", {})
+        if details:
+            failure_metrics["provider_failure"] = details
+            if details.get("usage_reported") is False:
+                # Reserve headroom for unreported billing; measured cost remains separate.
+                failure_metrics["cost_reservation_usd"] = config.ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO
         for field in (
             "provider",
             "prompt_tokens",

@@ -62,7 +62,10 @@ def approve_run(db: Any, run_id: str) -> dict[str, Any]:
             or c["created_at"] != c["updated_at"]
             for c in chapters
         )
-        or any(a["status"] != "candidate" or a["created_at"] != a["updated_at"] for a in assignments)
+        or any(
+            str(a["video_id"]) != video_id or a["status"] != "candidate" or a["created_at"] != a["updated_at"]
+            for a in assignments
+        )
     ):
         raise ValueError("Approval refuses edited, conflicting or unvalidated candidates")
     if db.execute(

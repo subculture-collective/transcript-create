@@ -135,11 +135,18 @@ def test_approval_preserves_hidden_topic_assignments(cohort):
         "admin_label",
         "seed_label",
         "hybrid_label",
+        "cross_video_assignment",
     ],
 )
 def test_approval_refuses_unqualified_or_editorial_work(cohort, defect):
     db, make = cohort
     ids = make(old=defect == "old", status="failed" if defect == "failed" else "completed")
+    if defect == "cross_video_assignment":
+        other = make()
+        db.execute(
+            text("UPDATE archive_label_assignments SET video_id=:other WHERE id=:assignment"),
+            {**ids, "other": other["video"]},
+        )
     if defect == "edited":
         db.execute(
             text("UPDATE archive_video_chapters SET updated_at=created_at+interval '1 second' WHERE video_id=:video"),

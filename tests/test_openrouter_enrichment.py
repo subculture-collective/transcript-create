@@ -1,5 +1,5 @@
-import json
 import io
+import json
 from urllib import error
 
 import pytest
@@ -106,6 +106,30 @@ def test_provider_failure_in_success_response_preserves_usage_without_replay(mon
     assert failure.value.completion_tokens == 50
     assert "sensitive" not in str(failure.value)
     assert is_credit_exhaustion_error(failure.value) is (defect == "error")
+
+
+@pytest.mark.parametrize("code,transient", [(502, True), (503, True), (402, False), (401, False), (400, False)])
+def test_structured_provider_failure_metadata_no_immediate_replay(monkeypatch, code, transient):
+    from app.archive.openrouter_enrichment import OpenRouterResponseValidationError
+
+    calls = []
+    payload = {"id": "gen-safe-123", "error": {"code": code, "message": "secret text"}}
+
+    def send(*args, **kwargs):
+        calls.append(1)
+        return _Response(payload)
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(OpenRouterResponseValidationError) as raised:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert len(calls) == 1
+    assert raised.value.failure_details == {
+        "error_code": str(code),
+        "transient": transient,
+        "generation_id": "gen-safe-123",
+        "usage_reported": False,
+    }
+    assert "secret" not in str(raised.value)
 
 
 def test_build_openrouter_request_uses_identical_strict_controls():
@@ -444,6 +468,25 @@ def test_timeout_is_not_replayed(monkeypatch):
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize("retry_after,transient", [(None, True), ("60", True), ("3600", False), ("bad", False)])
+def test_gateway_failure_respects_longer_retry_after(monkeypatch, retry_after, transient):
+    def send(*args, **kwargs):
+        raise error.HTTPError(
+            "https://example.test",
+            503,
+            "unavailable",
+            {"Retry-After": retry_after} if retry_after else {},
+            io.BytesIO(b"private upstream data"),
+        )
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(RuntimeError) as raised:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert raised.value.failure_details["transient"] is transient
+    assert raised.value.failure_details["usage_reported"] is False
+    assert "private" not in str(raised.value)
+
+
 def test_generate_openrouter_enrichment_requires_key():
     with pytest.raises(ValueError, match="API key"):
         generate_openrouter_episode_enrichment(_episode(), api_key="", model="model")
@@ -680,7 +723,9 @@ def test_hierarchical_enrichment_preserves_usage_when_later_window_fails():
         nonlocal calls
         calls += 1
         if calls == 2:
-            raise RuntimeError("provider unavailable")
+            failure = RuntimeError("provider unavailable")
+            failure.failure_details = {"error_code": "502", "usage_reported": False, "transient": True}
+            raise failure
         return OpenRouterEpisodeResult(
             video_id=window.video_id,
             model="deepseek/deepseek-v4-pro",
@@ -725,3 +770,4 @@ def test_hierarchical_enrichment_preserves_usage_when_later_window_fails():
     assert raised.value.prompt_tokens == 80
     assert raised.value.completion_tokens == 20
     assert raised.value.cost_usd == 0.25
+    assert raised.value.failure_details == {"error_code": "502", "usage_reported": False, "transient": True}

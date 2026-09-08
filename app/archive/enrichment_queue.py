@@ -232,7 +232,35 @@ def next_job(db: Any, model: str, max_window_ms: int = 5_400_000) -> dict[str, A
         text("SELECT paused_reason FROM archive_enrichment_queue_state WHERE model=:model AND prompt=:prompt"),
         values,
     ).scalar_one()
-    if paused:
+    recovery_video = None
+    if paused == "provider_cooldown":
+        recovery = (
+            db.execute(
+                text("""
+            SELECT j.video_id,j.available_at<=now() AS due FROM archive_enrichment_jobs j
+            JOIN archive_extraction_runs r ON r.id=j.last_run_id
+            WHERE j.model=:model AND j.prompt=:prompt AND j.status='retry'
+              AND j.reason='provider_failure' AND j.attempts<:max_attempts
+              AND r.status='failed' AND r.video_id=j.video_id
+              AND r.model_name=j.model AND r.prompt_version=j.prompt
+              AND r.id=(SELECT id FROM archive_extraction_runs
+                        WHERE model_name=:model AND prompt_version=:prompt
+                        ORDER BY started_at DESC,id DESC LIMIT 1)
+              AND r.metrics->'provider_failure'->>'transient'='true'
+            ORDER BY r.started_at DESC LIMIT 1
+        """),
+                values,
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if recovery is None:
+            pause_queue(db, model, "provider_failure")
+            return {"status": "paused", "reason": "provider_failure"}
+        if not recovery["due"]:
+            return {"status": "paused", "reason": paused}
+        recovery_video = str(recovery["video_id"])
+    elif paused:
         return {"status": "paused", "reason": paused}
     uncertain = db.execute(text("""
             SELECT EXISTS (SELECT 1 FROM archive_extraction_runs WHERE status='running'
@@ -242,6 +270,7 @@ def next_job(db: Any, model: str, max_window_ms: int = 5_400_000) -> dict[str, A
     if uncertain:
         pause_queue(db, model, "interrupted_or_external_run")
         return {"status": "paused", "reason": "interrupted_or_external_run"}
+    values["recovery_video"] = recovery_video
     # A human may have acted after discovery. Park, never overwrite that work.
     db.execute(
         text(f"""
@@ -258,6 +287,7 @@ def next_job(db: Any, model: str, max_window_ms: int = 5_400_000) -> dict[str, A
             JOIN videos v ON v.id=j.video_id
             WHERE j.model=:model AND j.prompt=:prompt AND j.status IN ('pending','retry')
               AND j.available_at<=now() AND j.attempts<:max_attempts
+              AND (CAST(:recovery_video AS uuid) IS NULL OR j.video_id=CAST(:recovery_video AS uuid))
             ORDER BY CASE WHEN j.status='retry' THEN 2 WHEN j.new_arrival THEN 0 ELSE 1 END,
                      v.uploaded_at DESC NULLS LAST,v.created_at DESC,v.id
             LIMIT 1 FOR UPDATE OF j SKIP LOCKED
@@ -268,6 +298,9 @@ def next_job(db: Any, model: str, max_window_ms: int = 5_400_000) -> dict[str, A
         .one_or_none()
     )
     if row is None:
+        if recovery_video is not None:
+            pause_queue(db, model, "provider_failure")
+            return {"status": "paused", "reason": "provider_failure"}
         db.commit()
         return {"status": "idle"}
     video_id = str(row["video_id"])
@@ -322,8 +355,25 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
         db.rollback()
         pause_queue(db, model, "queue_state_conflict")
         raise RuntimeError("queue attempt state changed unexpectedly")
-    if outcome.get("reason") == "provider_failure":
-        pause_queue(db, model, "provider_failure")
+    paused = db.execute(
+        text("SELECT paused_reason FROM archive_enrichment_queue_state WHERE model=:model AND prompt=:prompt"),
+        params(model),
+    ).scalar_one()
+    if paused == "provider_cooldown":
+        # A recovery probe is a normal counted extraction, never a history reset.
+        if status == "completed":
+            db.execute(
+                text(
+                    "UPDATE archive_enrichment_queue_state SET paused_reason=NULL WHERE model=:model AND prompt=:prompt"
+                ),
+                params(model),
+            )
+            db.commit()
+        else:
+            pause_queue(db, model, "credit_exhausted" if status == "credit_exhausted" else "provider_failure")
+    elif outcome.get("reason") == "provider_failure":
+        transient = outcome.get("metrics", {}).get("provider_failure", {}).get("transient") is True
+        pause_queue(db, model, "provider_cooldown" if transient else "provider_failure")
     elif status == "credit_exhausted":
         # Commit the outcome and pause atomically. A restart must not slip
         # between recording exhausted credit and persisting its stop condition.

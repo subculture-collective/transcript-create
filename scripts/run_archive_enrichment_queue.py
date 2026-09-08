@@ -50,6 +50,7 @@ class QueueGuardrailSnapshot:
     recorded_cost_usd_24h: float
     recent_finished: int
     recent_failures: int
+    reserved_cost_usd_24h: float = 0.0
 
     def as_dict(self) -> dict[str, int | float]:
         return {
@@ -57,6 +58,7 @@ class QueueGuardrailSnapshot:
             "recorded_cost_usd_24h": round(self.recorded_cost_usd_24h, 6),
             "recent_finished": self.recent_finished,
             "recent_failures": self.recent_failures,
+            "reserved_cost_usd_24h": round(self.reserved_cost_usd_24h, 6),
         }
 
 
@@ -102,6 +104,12 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
                         ELSE 0
                     END
                 ), 0) FROM attempts_24h) AS recorded_cost_usd_24h,
+                (SELECT COALESCE(SUM(CASE
+                        WHEN jsonb_typeof(metrics -> 'cost_reservation_usd') = 'number'
+                        THEN (metrics ->> 'cost_reservation_usd')::numeric
+                        ELSE 0
+                    END
+                ), 0) FROM attempts_24h) AS reserved_cost_usd_24h,
                 (SELECT COUNT(*) FROM recent_finished) AS recent_finished,
                 (SELECT COUNT(*) FROM recent_finished WHERE status = 'failed') AS recent_failures
         """),
@@ -115,6 +123,7 @@ def load_queue_guardrail_snapshot(db: Any, model: str, failure_window: int) -> Q
         recorded_cost_usd_24h=float(row["recorded_cost_usd_24h"]),
         recent_finished=int(row["recent_finished"]),
         recent_failures=int(row["recent_failures"]),
+        reserved_cost_usd_24h=float(row["reserved_cost_usd_24h"]),
     )
 
 
@@ -129,7 +138,7 @@ def evaluate_queue_guardrails(
     details = snapshot.as_dict()
     if snapshot.attempts_24h >= max_attempts_24h:
         return {"status": "guardrail_halted", "reason": "attempt_limit_24h", "guardrails": details}
-    if snapshot.recorded_cost_usd_24h >= max_cost_usd_24h:
+    if snapshot.recorded_cost_usd_24h + snapshot.reserved_cost_usd_24h >= max_cost_usd_24h:
         return {"status": "guardrail_halted", "reason": "cost_limit_24h", "guardrails": details}
     if snapshot.recent_finished >= failure_window:
         failure_rate = snapshot.recent_failures / snapshot.recent_finished

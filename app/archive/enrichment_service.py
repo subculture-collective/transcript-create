@@ -81,7 +81,9 @@ def require_pristine_video(db: Any, video_id: str) -> None:
         text("""
         SELECT EXISTS (SELECT 1 FROM archive_video_chapters WHERE video_id=:video_id)
             OR EXISTS (SELECT 1 FROM archive_label_assignments WHERE video_id=:video_id AND source='llm')
-            OR EXISTS (SELECT 1 FROM archive_chapter_feedback WHERE video_id=:video_id)
+            OR EXISTS (SELECT 1 FROM archive_chapter_feedback f WHERE video_id=:video_id
+                AND NOT EXISTS (SELECT 1 FROM archive_enrichment_maintenance_rows m
+                    WHERE m.table_name='archive_chapter_feedback' AND m.row_id=f.id::text))
     """),
         {"video_id": video_id},
     ).scalar_one()
@@ -473,6 +475,11 @@ def enrich_video_candidates(
             }
         )
         deps.finish_run(db, run_id, "completed", metrics)
+        if getattr(config, "ARCHIVE_ENRICHMENT_AUTO_APPROVE", False):
+            from .enrichment_publication import approve_run
+
+            metrics["publication"] = approve_run(db, run_id)
+            deps.finish_run(db, run_id, "completed", metrics)
         db.commit()
         return metrics
     except Exception as exc:

@@ -172,6 +172,37 @@ def test_pause_survives_discovery_and_worker_restart(queue, failure):
     assert next_job(db, model) == first
 
 
+def test_superseded_feedback_allows_backfill_but_new_feedback_blocks(queue):
+    db, model, video = queue
+    discover_jobs(db, model)
+    target = video()
+    batch = db.execute(
+        text(
+            "INSERT INTO archive_enrichment_maintenance(operation,reason) VALUES ('pre_pr28_cleanup','test') RETURNING id"
+        )
+    ).scalar_one()
+    feedback = db.execute(
+        text("INSERT INTO archive_chapter_feedback(video_id,action) VALUES (:id,'publish') RETURNING id"),
+        {"id": target},
+    ).scalar_one()
+    db.execute(
+        text(
+            "INSERT INTO archive_enrichment_maintenance_rows(batch_id,table_name,row_id,row_data) VALUES (:batch,'archive_chapter_feedback',:feedback,'{}'),(:batch,'archive_video_chapters',:video,jsonb_build_object('video_id',CAST(:video AS text)))"
+        ),
+        {"batch": batch, "feedback": str(feedback), "video": target},
+    )
+    discover_jobs(db, model)
+    assert (
+        db.execute(
+            text("SELECT new_arrival FROM archive_enrichment_jobs WHERE model=:model AND video_id=:video"),
+            {"model": model, "video": target},
+        ).scalar_one()
+        is False
+    )
+    db.execute(text("INSERT INTO archive_chapter_feedback(video_id,action) VALUES (:id,'reject')"), {"id": target})
+    assert next_job(db, model)["status"] == "idle"
+
+
 def test_editorial_feedback_parks_discovered_video(queue):
     db, model, video = queue
     target = video()

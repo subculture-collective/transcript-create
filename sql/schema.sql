@@ -603,6 +603,38 @@ CREATE INDEX IF NOT EXISTS archive_chapter_feedback_video_created_idx
     ON archive_chapter_feedback(video_id, created_at);
 CREATE INDEX IF NOT EXISTS archive_extraction_runs_status_idx ON archive_extraction_runs(status, started_at DESC);
 
+-- Auditable enrichment approval and snapshot-first maintenance.
+CREATE TABLE IF NOT EXISTS archive_enrichment_maintenance (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operation TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE TABLE IF NOT EXISTS archive_enrichment_maintenance_rows (
+    batch_id UUID NOT NULL REFERENCES archive_enrichment_maintenance(id),
+    table_name TEXT NOT NULL,
+    row_id TEXT NOT NULL,
+    row_data JSONB NOT NULL,
+    PRIMARY KEY (batch_id, table_name, row_id)
+);
+CREATE TABLE IF NOT EXISTS archive_enrichment_approvals (
+    run_id UUID PRIMARY KEY REFERENCES archive_extraction_runs(id),
+    reason TEXT NOT NULL,
+    snapshot JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS archive_enrichment_maintenance_row_lookup
+    ON archive_enrichment_maintenance_rows(table_name, row_id);
+CREATE INDEX IF NOT EXISTS archive_enrichment_maintenance_video_lookup
+    ON archive_enrichment_maintenance_rows((row_data->>'video_id'))
+    WHERE table_name IN ('archive_video_chapters', 'archive_label_assignments');
+CREATE INDEX IF NOT EXISTS archive_enrichment_assignment_chapter_lookup
+    ON archive_label_assignments(chapter_id) WHERE chapter_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS archive_enrichment_chapter_feedback_lookup
+    ON archive_chapter_feedback(chapter_id) WHERE chapter_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS archive_enrichment_assignment_feedback_lookup
+    ON archive_label_feedback(assignment_id) WHERE assignment_id IS NOT NULL;
+
 -- ---
 -- Citation-backed archive opinion history
 -- ---

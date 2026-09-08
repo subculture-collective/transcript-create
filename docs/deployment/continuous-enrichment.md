@@ -6,6 +6,11 @@ retry technical rejections without overwriting editorial decisions.
 The user authorized implementation, publication, deployment, and continuous paid
 processing on 2026-09-06, conditional on passing the safeguards below.
 
+September 7 amendment: the explicitly opted-in [PR28 approval policy](enrichment-approval-cutover.md)
+adds automatic publication only after all quality and editorial checks pass.
+Review-only behavior remains the default; canaries always disable auto-approval.
+The amendment does not authorize clearing a provider/failure pause.
+
 ## Contract
 
 - DeepSeek V4 Pro, balanced windows of at most 90 minutes, candidate-only output.

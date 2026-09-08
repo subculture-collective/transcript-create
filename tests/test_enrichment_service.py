@@ -153,7 +153,8 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
     }
 
 
-def test_enrich_video_generates_v4_pro_candidates_and_records_run():
+@pytest.mark.parametrize("auto_approve", [False, True])
+def test_enrich_video_generates_v4_pro_candidates_and_records_run(monkeypatch, auto_approve):
     episode = EpisodeInput(
         video_id="video-1",
         duration_ms=600_000,
@@ -228,7 +229,18 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
     )
     db = _Db()
 
-    metrics = enrich_video_candidates(db, "video-1", config=Config(), dependencies=dependencies)
+    approvals = []
+
+    def approve(db, run):
+        assert persisted and finished[-1]["status"] == "completed"
+        approvals.append(run)
+        return {"status": "approved", "run_id": run}
+
+    monkeypatch.setattr("app.archive.enrichment_publication.approve_run", approve)
+    config = Config()
+    config.ARCHIVE_ENRICHMENT_AUTO_APPROVE = auto_approve
+    metrics = enrich_video_candidates(db, "video-1", config=config, dependencies=dependencies)
+    assert approvals == (["run-1"] if auto_approve else [])
 
     assert metrics["model"] == "deepseek/deepseek-v4-pro"
     assert metrics["cost_usd"] == 0.01

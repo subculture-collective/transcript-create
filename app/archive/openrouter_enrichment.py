@@ -462,12 +462,18 @@ def _parse_response(
             elapsed_seconds=elapsed,
         )
 
+    provider_error = payload.get("error")
+    if isinstance(provider_error, dict):
+        # Never persist raw provider text/metadata: it may echo request contents.
+        code = provider_error.get("code")
+        safe_code = str(code) if isinstance(code, int) and 100 <= code <= 599 else "unknown"
+        raise invalid(f"OpenRouter request failed: response error code {safe_code}")
     try:
         content = payload["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
-        raise invalid("OpenRouter response did not contain assistant content") from exc
-    if not isinstance(content, str):
-        raise invalid("OpenRouter assistant content was not text")
+        raise invalid("OpenRouter request failed: response did not contain assistant content") from exc
+    if not isinstance(content, str) or not content.strip():
+        raise invalid("OpenRouter request failed: assistant content was empty or not text")
     try:
         raw_candidate = json.loads(content)
     except json.JSONDecodeError as exc:
@@ -642,7 +648,12 @@ def generate_openrouter_episode_enrichment(
     for attempt in range(max_retries + 1):
         try:
             with request.urlopen(req, timeout=timeout_seconds) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                try:
+                    payload = json.loads(response.read().decode("utf-8"))
+                except (ValueError, UnicodeError) as exc:
+                    raise RuntimeError("OpenRouter request failed: invalid response envelope") from exc
+            if not isinstance(payload, dict):
+                raise RuntimeError("OpenRouter request failed: response envelope was not an object")
             return _parse_response(
                 payload,
                 episode,

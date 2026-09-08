@@ -270,7 +270,7 @@ def is_credit_exhaustion_error(exc: BaseException) -> bool:
     current: BaseException | None = exc
     while current is not None:
         message = str(current).casefold()
-        if "http 402" in message or "insufficient credits" in message:
+        if "http 402" in message or "insufficient credits" in message or "response error code 402" in message:
             return True
         current = current.__cause__ or current.__context__
     return False

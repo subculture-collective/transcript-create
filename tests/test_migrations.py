@@ -515,6 +515,9 @@ def _table_catalog_contract(conn, table_names):
 def test_upgraded_and_fresh_schema_have_complete_user_fk_and_cleanup_inventory(alembic_config, clean_db, test_db_url):
     """Fresh bootstrap and upgraded deployments retain identical user-data rules."""
     parity_tables = (
+        "archive_enrichment_maintenance",
+        "archive_enrichment_maintenance_rows",
+        "archive_enrichment_approvals",
         "user_vocabularies",
         "saved_searches",
         "archive_chapter_feedback",

@@ -453,7 +453,7 @@ run_enrichment_canary() {
     enrichment_canary_started=true
     compose run -d --no-deps --name "$enrichment_canary_container_name" \
       --label "hasanara.enrichment-canary-token=$enrichment_canary_token" \
-      -e ARCHIVE_ENRICHMENT_ENABLED=true -e ARCHIVE_ENRICHMENT_PUBLISH=false \
+      -e ARCHIVE_ENRICHMENT_ENABLED=true -e ARCHIVE_ENRICHMENT_PUBLISH=false -e ARCHIVE_ENRICHMENT_AUTO_APPROVE=false \
       -e "ARCHIVE_ENRICHMENT_MODEL=$enrichment_canary_model" -e ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES=90 \
       -e ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO=1.00 archive-enrichment-queue \
       python3 /app/scripts/run_archive_enrichment_queue.py --once --video-id "$enrichment_canary_video_id" >/dev/null

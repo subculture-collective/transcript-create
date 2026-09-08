@@ -79,6 +79,35 @@ class _Response:
         return json.dumps(self.payload).encode()
 
 
+@pytest.mark.parametrize("defect", ["error", "missing", "empty"])
+def test_provider_failure_in_success_response_preserves_usage_without_replay(monkeypatch, defect):
+    from app.archive.openrouter_enrichment import OpenRouterResponseValidationError
+    from scripts.run_archive_enrichment_queue import is_credit_exhaustion_error
+
+    payload = _response_payload()
+    if defect == "error":
+        payload["error"] = {"code": 402, "message": "sensitive echoed input"}
+    elif defect == "missing":
+        del payload["choices"]
+    else:
+        payload["choices"][0]["message"]["content"] = ""
+    calls = []
+
+    def send(*args, **kwargs):
+        calls.append(1)
+        return _Response(payload)
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(OpenRouterResponseValidationError, match="OpenRouter request failed:") as failure:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert len(calls) == 1
+    assert failure.value.cost_usd == 0.0012
+    assert failure.value.prompt_tokens == 100
+    assert failure.value.completion_tokens == 50
+    assert "sensitive" not in str(failure.value)
+    assert is_credit_exhaustion_error(failure.value) is (defect == "error")
+
+
 def test_build_openrouter_request_uses_identical_strict_controls():
     body = build_openrouter_episode_request(_episode(), model="deepseek/deepseek-v4-pro")
 

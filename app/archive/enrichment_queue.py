@@ -31,7 +31,9 @@ PRISTINE_SQL = """
     AND NOT EXISTS (SELECT 1 FROM archive_video_chapters c WHERE c.video_id=v.id)
     AND NOT EXISTS (SELECT 1 FROM archive_label_assignments a
                     WHERE a.video_id=v.id AND a.source='llm')
-    AND NOT EXISTS (SELECT 1 FROM archive_chapter_feedback f WHERE f.video_id=v.id)
+    AND NOT EXISTS (SELECT 1 FROM archive_chapter_feedback f WHERE f.video_id=v.id
+        AND NOT EXISTS (SELECT 1 FROM archive_enrichment_maintenance_rows m
+            WHERE m.table_name='archive_chapter_feedback' AND m.row_id=f.id::text))
 """
 
 
@@ -57,7 +59,10 @@ def discover_jobs(db: Any, model: str) -> int:
         text(f"""
             INSERT INTO archive_enrichment_jobs
                 (video_id,model,prompt,new_arrival,attempts,status,available_at)
-            SELECT v.id,:model,:prompt,:new_arrival,h.failures,
+            SELECT v.id,:model,:prompt,(:new_arrival AND NOT EXISTS (
+                       SELECT 1 FROM archive_enrichment_maintenance_rows m
+                       WHERE m.table_name IN ('archive_video_chapters','archive_label_assignments')
+                         AND m.row_data->>'video_id'=v.id::text)),h.failures,
                    CASE WHEN h.failures>=:max_attempts THEN 'parked'
                         WHEN h.failures>0 THEN 'retry' ELSE 'pending' END,
                    COALESCE(h.last_failure + interval '1 hour',now())

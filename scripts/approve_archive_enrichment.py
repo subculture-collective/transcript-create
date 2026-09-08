@@ -18,7 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.archive.enrichment_cleanup import cleanup_legacy
-from app.archive.enrichment_publication import QUALITY_CUTOFF, approve_run
+from app.archive.enrichment_publication import QUALITY_CUTOFF, approve_run, invalidate_enrichment_views
 from app.archive.enrichment_queue import OWNER_LOCK
 from app.archive.openrouter_enrichment import PROMPT_VERSION
 from app.db import engine
@@ -67,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
             result = run_maintenance(db)
             if args.apply:
                 db.commit()
+                invalidate_enrichment_views()
             else:
                 db.rollback()
             print(json.dumps({"committed": args.apply, **result}, sort_keys=True))

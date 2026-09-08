@@ -7,6 +7,7 @@ Publication uses the normal chapter review validator and preserves audit rows.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from sqlalchemy import text
@@ -16,6 +17,22 @@ from .openrouter_enrichment import PROMPT_VERSION
 
 QUALITY_CUTOFF = "2026-09-07T00:30:07Z"
 APPROVAL_REASON = "User-authorized automatic approval of successful post-PR28 enrichment (2026-09-07)"
+
+
+def invalidate_enrichment_views(video_id: str | None = None) -> bool:
+    """Best-effort post-commit invalidation; never downgrade committed paid work."""
+    try:
+        from app.cache import invalidate_cache_pattern, invalidate_video_data
+
+        if video_id is not None:
+            invalidate_video_data(video_id)
+        else:
+            for prefix in ("video:*", "search:*", "archive:*", "aggregate:*"):
+                invalidate_cache_pattern(prefix)
+    except Exception:
+        logging.getLogger(__name__).warning("Enrichment committed; cache invalidation deferred")
+        return False
+    return True
 
 
 def approve_run(db: Any, run_id: str) -> dict[str, Any]:
@@ -62,7 +79,10 @@ def approve_run(db: Any, run_id: str) -> dict[str, Any]:
             or c["created_at"] != c["updated_at"]
             for c in chapters
         )
-        or any(a["status"] != "candidate" or a["created_at"] != a["updated_at"] for a in assignments)
+        or any(
+            str(a["video_id"]) != video_id or a["status"] != "candidate" or a["created_at"] != a["updated_at"]
+            for a in assignments
+        )
     ):
         raise ValueError("Approval refuses edited, conflicting or unvalidated candidates")
     if db.execute(
@@ -88,6 +108,8 @@ def approve_run(db: Any, run_id: str) -> dict[str, Any]:
         for label in labels
     ):
         raise ValueError("Approval refuses rejected or merged labels")
+    if any(label["status"] == "candidate" and label["source"] != "automatic" for label in labels):
+        raise ValueError("Approval refuses unpublished editorial labels")
     hidden_ids = {label["id"] for label in labels if label["status"] == "hidden"}
     visible_category_ids = {
         label["id"] for label in labels if label["kind"] == "category" and label["id"] not in hidden_ids

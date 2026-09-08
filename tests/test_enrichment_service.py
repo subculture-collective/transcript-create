@@ -230,6 +230,12 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run(monkeypatch, a
     db = _Db()
 
     approvals = []
+    invalidations = []
+
+    def invalidate(video_id):
+        assert [call[0] for call in db.calls].count("COMMIT") == 2
+        invalidations.append(video_id)
+        return True
 
     def approve(db, run):
         assert persisted and finished[-1]["status"] == "completed"
@@ -237,10 +243,12 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run(monkeypatch, a
         return {"status": "approved", "run_id": run}
 
     monkeypatch.setattr("app.archive.enrichment_publication.approve_run", approve)
+    monkeypatch.setattr("app.archive.enrichment_publication.invalidate_enrichment_views", invalidate)
     config = Config()
     config.ARCHIVE_ENRICHMENT_AUTO_APPROVE = auto_approve
     metrics = enrich_video_candidates(db, "video-1", config=config, dependencies=dependencies)
     assert approvals == (["run-1"] if auto_approve else [])
+    assert invalidations == (["video-1"] if auto_approve else [])
 
     assert metrics["model"] == "deepseek/deepseek-v4-pro"
     assert metrics["cost_usd"] == 0.01

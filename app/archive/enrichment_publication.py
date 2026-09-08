@@ -111,10 +111,20 @@ def approve_run(db: Any, run_id: str) -> dict[str, Any]:
     if any(label["status"] == "candidate" and label["source"] != "automatic" for label in labels):
         raise ValueError("Approval refuses unpublished editorial labels")
     hidden_ids = {label["id"] for label in labels if label["status"] == "hidden"}
-    visible_category_ids = {
-        label["id"] for label in labels if label["kind"] == "category" and label["id"] not in hidden_ids
-    }
-    if not any(a["label_id"] in visible_category_ids for a in assignments):
+    # Category identity belongs to the generating assignment, not the shared
+    # label's kind. A protected published/seed label such as News may remain a
+    # topic when reused by the controlled category extractor. This is the same
+    # provenance contract checked by validate_stored_candidates before commit.
+    category_assignments = [
+        assignment
+        for assignment in assignments
+        if assignment["evidence"]
+        and assignment["evidence"][0].get("extractor") == "llm_category"
+        and assignment["component_scores"].get("controlled_taxonomy") == 1
+    ]
+    if len(category_assignments) != metrics["categories"]:
+        raise ValueError("Stored category provenance does not match run metrics")
+    if not any(a["label_id"] not in hidden_ids for a in category_assignments):
         raise ValueError("Approval requires a non-hidden sustained category")
     # Never publish a shared candidate label if that would expose unrelated
     # already-visible assignments without explicit approval for those rows.

@@ -49,8 +49,10 @@ def cohort(db_session):
         )
         db.execute(
             text(
-                """INSERT INTO archive_label_assignments(id,video_id,label_id,run_id,source,status,publish_tier,unit_type,assignment_key)
-            VALUES (:assignment,:video,:label,:run,'llm','candidate','bronze','vod',gen_random_uuid()::text)"""
+                """INSERT INTO archive_label_assignments(id,video_id,label_id,run_id,source,status,publish_tier,unit_type,assignment_key,evidence,component_scores)
+            VALUES (:assignment,:video,:label,:run,'llm','candidate','bronze','vod',gen_random_uuid()::text,
+                    jsonb_build_array(jsonb_build_object('extractor','llm_category')),
+                    jsonb_build_object('controlled_taxonomy',1.0))"""
             ),
             ids,
         )
@@ -81,6 +83,38 @@ def test_approval_assignment_lookup_can_use_partial_run_index(cohort):
         .all()
     )
     assert "archive_enrichment_assignment_run_lookup" in "\n".join(plan)
+
+
+def test_approval_uses_category_assignment_provenance_without_retyping_shared_label(cohort):
+    db, make = cohort
+    ids = make()
+    db.execute(text("UPDATE archive_labels SET kind='topic',status='published',source='seed' WHERE id=:label"), ids)
+    before = db.execute(text("SELECT to_jsonb(l) FROM archive_labels l WHERE id=:label"), ids).scalar_one()
+    assert approve_run(db, ids["run"])["status"] == "approved"
+    assert db.execute(text("SELECT to_jsonb(l) FROM archive_labels l WHERE id=:label"), ids).scalar_one() == before
+
+
+@pytest.mark.parametrize("defect", ["empty_evidence", "wrong_extractor", "missing_score", "wrong_score", "wrong_count"])
+def test_approval_requires_matching_category_provenance_even_for_category_kind(cohort, defect):
+    db, make = cohort
+    ids = make()
+    updates = {
+        "empty_evidence": "evidence='[]'::jsonb",
+        "wrong_extractor": 'evidence=\'[{"extractor":"llm_subject"}]\'::jsonb',
+        "missing_score": "component_scores='{}'::jsonb",
+        "wrong_score": "component_scores=jsonb_build_object('controlled_taxonomy',0)",
+    }
+    if defect == "wrong_count":
+        db.execute(
+            text("UPDATE archive_extraction_runs SET metrics=jsonb_set(metrics,'{categories}','2') WHERE id=:run"), ids
+        )
+    else:
+        db.execute(text(f"UPDATE archive_label_assignments SET {updates[defect]} WHERE id=:assignment"), ids)
+    with pytest.raises(ValueError, match="category"), db.begin_nested():
+        approve_run(db, ids["run"])
+    assert (
+        db.execute(text("SELECT count(*) FROM archive_enrichment_approvals WHERE run_id=:run"), ids).scalar_one() == 0
+    )
 
 
 def test_approval_publishes_and_audits_without_reapproval(cohort):

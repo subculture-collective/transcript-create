@@ -47,6 +47,12 @@ IMAGE_VARIABLES = {
 DATABASE_URL = "postgresql+psycopg://postgres:inert@db:5432/transcripts"
 
 
+def test_api_packages_and_smokes_enrichment_maintenance_entrypoint():
+    dockerfile = (ROOT / "Dockerfile.api").read_text()
+    assert "COPY scripts/approve_archive_enrichment.py ./scripts/approve_archive_enrichment.py" in dockerfile
+    assert "RUN python scripts/approve_archive_enrichment.py --help > /dev/null" in dockerfile
+
+
 def digest(name: str) -> str:
     return f"registry.invalid/hasanara/{name}@sha256:{'a' * 64}"
 

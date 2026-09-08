@@ -36,9 +36,11 @@ COPY scripts/maintain_event_retention.py ./scripts/maintain_event_retention.py
 COPY scripts/refresh_archive_summary_stats.py ./scripts/refresh_archive_summary_stats.py
 COPY scripts/refresh_archive_intelligence.py ./scripts/refresh_archive_intelligence.py
 COPY scripts/run_archive_enrichment_queue.py ./scripts/run_archive_enrichment_queue.py
+COPY scripts/approve_archive_enrichment.py ./scripts/approve_archive_enrichment.py
 COPY scripts/recover_attention_backlog.py ./scripts/recover_attention_backlog.py
 COPY fonts ./fonts
 RUN python -m compileall -q app
+RUN python scripts/approve_archive_enrichment.py --help > /dev/null
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1

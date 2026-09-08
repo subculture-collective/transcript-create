@@ -67,6 +67,22 @@ def cohort(db_session):
     return db, make
 
 
+def test_approval_assignment_lookup_can_use_partial_run_index(cohort):
+    db, make = cohort
+    ids = make()
+    db.execute(text("SET LOCAL enable_seqscan=off"))
+    plan = (
+        db.execute(
+            text("""EXPLAIN SELECT * FROM archive_label_assignments
+        WHERE run_id=:run AND source='llm' ORDER BY id FOR UPDATE"""),
+            ids,
+        )
+        .scalars()
+        .all()
+    )
+    assert "archive_enrichment_assignment_run_lookup" in "\n".join(plan)
+
+
 def test_approval_publishes_and_audits_without_reapproval(cohort):
     db, make = cohort
     ids = make()

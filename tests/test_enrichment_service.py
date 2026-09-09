@@ -106,7 +106,8 @@ class _Db:
 
 
 @pytest.mark.parametrize("reported", [False, True])
-def test_provider_failure_persists_usage_provenance_and_separate_reservation(reported):
+@pytest.mark.parametrize("transport", [False, True])
+def test_provider_failure_persists_usage_provenance_and_separate_reservation(reported, transport, monkeypatch):
     from app.archive.openrouter_enrichment import OpenRouterResponseValidationError
 
     episode = EpisodeInput(
@@ -138,6 +139,14 @@ def test_provider_failure_persists_usage_provenance_and_separate_reservation(rep
     persisted = []
 
     def generate(*args):
+        if transport:
+            from app.archive.openrouter_enrichment import generate_openrouter_episode_enrichment
+
+            def unavailable(*args, **kwargs):
+                raise TimeoutError("private transport details")
+
+            monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", unavailable)
+            return generate_openrouter_episode_enrichment(episode, api_key="test", model="model")
         raise failure
 
     deps = EnrichmentRuntimeDependencies(
@@ -149,13 +158,17 @@ def test_provider_failure_persists_usage_provenance_and_separate_reservation(rep
         generate_episode=generate,
         persist_candidates=lambda *args, **kwargs: persisted.append(True),
     )
-    with pytest.raises(OpenRouterResponseValidationError):
+    with pytest.raises(RuntimeError if transport else OpenRouterResponseValidationError):
         enrich_video_candidates(_Db(), "video-1", config=config, dependencies=deps)
     assert not persisted
     status, metrics = finished[0]
-    assert status == "failed" and metrics["cost_usd"] == 0.01
-    assert metrics["provider_failure"]["usage_reported"] is reported
-    assert metrics.get("cost_reservation_usd", 0) == (0 if reported else 1.0)
+    assert status == "failed"
+    if not transport:
+        assert metrics["cost_usd"] == 0.01
+    assert metrics["provider_failure"]["usage_reported"] is (reported and not transport)
+    assert metrics.get("cost_reservation_usd", 0) == (0 if reported and not transport else 1.0)
+    if transport:
+        assert metrics["provider_failure"]["transient"] is False
 
 
 def test_persist_enrichment_writes_review_candidates_with_grounded_labels():

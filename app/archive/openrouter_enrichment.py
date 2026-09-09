@@ -732,7 +732,14 @@ def generate_openrouter_episode_enrichment(
         except (error.URLError, TimeoutError) as exc:
             # A lost response may already have incurred provider usage. Never
             # automatically replay an uncertain paid request.
-            raise RuntimeError(f"OpenRouter request outcome uncertain: {exc}") from exc
+            failure = RuntimeError("OpenRouter request outcome uncertain: transport response unavailable")
+            failure.__dict__["failure_details"] = {
+                "error_code": "transport_uncertain",
+                "usage_reported": False,
+                "transient": False,
+            }
+            failure.__dict__["elapsed_seconds"] = time.monotonic() - started
+            raise failure from exc
     raise RuntimeError("OpenRouter request failed after retries")
 
 

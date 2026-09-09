@@ -455,17 +455,25 @@ def test_provider_retry_policy(monkeypatch, code, body, header, retries, delay):
     assert calls[0]["response_format"]["json_schema"]["strict"] is True
 
 
-def test_timeout_is_not_replayed(monkeypatch):
+@pytest.mark.parametrize("transport_error", [TimeoutError("private response details"), error.URLError("private URL")])
+def test_timeout_is_not_replayed(monkeypatch, transport_error):
     calls = []
 
     def send(*args, **kwargs):
         calls.append(True)
-        raise TimeoutError("response lost")
+        raise transport_error
 
     monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
-    with pytest.raises(RuntimeError, match="outcome uncertain"):
+    with pytest.raises(RuntimeError, match="outcome uncertain") as raised:
         generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
     assert len(calls) == 1
+    assert "private" not in str(raised.value)
+    assert raised.value.failure_details == {
+        "error_code": "transport_uncertain",
+        "usage_reported": False,
+        "transient": False,
+    }
+    assert raised.value.elapsed_seconds >= 0
 
 
 @pytest.mark.parametrize("retry_after,transient", [(None, True), ("60", True), ("3600", False), ("bad", False)])
@@ -703,7 +711,8 @@ def test_hierarchical_enrichment_stops_before_next_window_at_cost_limit():
     assert raised.value.attempted_window_count == 1
 
 
-def test_hierarchical_enrichment_preserves_usage_when_later_window_fails():
+@pytest.mark.parametrize("transport", [False, True])
+def test_hierarchical_enrichment_preserves_usage_when_later_window_fails(monkeypatch, transport):
     episode = EpisodeInput(
         video_id="provider-failure",
         duration_ms=100 * 60_000,
@@ -723,6 +732,13 @@ def test_hierarchical_enrichment_preserves_usage_when_later_window_fails():
         nonlocal calls
         calls += 1
         if calls == 2:
+            if transport:
+
+                def unavailable(*args, **kwargs):
+                    raise TimeoutError("private transport details")
+
+                monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", unavailable)
+                return generate_openrouter_episode_enrichment(window, api_key="test", model="model")
             failure = RuntimeError("provider unavailable")
             failure.failure_details = {"error_code": "502", "usage_reported": False, "transient": True}
             raise failure
@@ -756,7 +772,10 @@ def test_hierarchical_enrichment_preserves_usage_when_later_window_fails():
             elapsed_seconds=1.5,
         )
 
-    with pytest.raises(OpenRouterHierarchicalGenerationError, match="provider unavailable") as raised:
+    with pytest.raises(
+        OpenRouterHierarchicalGenerationError,
+        match="outcome uncertain" if transport else "provider unavailable",
+    ) as raised:
         generate_hierarchical_openrouter_enrichment(
             episode,
             generate_window=generate_window,
@@ -770,4 +789,8 @@ def test_hierarchical_enrichment_preserves_usage_when_later_window_fails():
     assert raised.value.prompt_tokens == 80
     assert raised.value.completion_tokens == 20
     assert raised.value.cost_usd == 0.25
-    assert raised.value.failure_details == {"error_code": "502", "usage_reported": False, "transient": True}
+    assert raised.value.failure_details == {
+        "error_code": "transport_uncertain" if transport else "502",
+        "usage_reported": False,
+        "transient": not transport,
+    }

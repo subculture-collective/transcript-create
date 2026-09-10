@@ -266,16 +266,23 @@ class Settings(BaseSettings):
     ARCHIVE_ENRICHMENT_ENABLED: bool = False
     ARCHIVE_ENRICHMENT_PROVIDER: str = "openrouter"
     ARCHIVE_ENRICHMENT_MODEL: str = "deepseek/deepseek-v4-pro"
+    # Empty delegates provider selection/failover to OpenRouter for this model.
+    ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY: str = Field(default="", pattern=r"^(?:[a-z][a-z0-9/-]*)?$")
     OPENROUTER_API_KEY: str = ""
     ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES: int = Field(default=90, ge=30, le=120)
     ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS: float = Field(default=300.0, ge=30.0, le=900.0)
     ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO: float = Field(default=1.0, gt=0.0, le=10.0)
     ARCHIVE_ENRICHMENT_PUBLISH: bool = False
+    ARCHIVE_ENRICHMENT_AUTO_APPROVE: bool = False
     ARCHIVE_ENRICHMENT_QUEUE_SUCCESS_DELAY_SECONDS: int = Field(default=5, ge=0, le=300)
     ARCHIVE_ENRICHMENT_QUEUE_FAILURE_DELAY_SECONDS: int = Field(default=30, ge=1, le=3600)
     ARCHIVE_ENRICHMENT_QUEUE_POLL_SECONDS: int = Field(default=300, ge=30, le=3600)
     ARCHIVE_ENRICHMENT_QUEUE_FAILURE_COOLDOWN_SECONDS: int = Field(default=86400, ge=300, le=604800)
     ARCHIVE_ENRICHMENT_QUEUE_CREDIT_COOLDOWN_SECONDS: int = Field(default=3600, ge=300, le=86400)
+    ARCHIVE_ENRICHMENT_QUEUE_MAX_ATTEMPTS_PER_24H: int = Field(default=20, ge=1, le=10_000)
+    ARCHIVE_ENRICHMENT_QUEUE_MAX_COST_USD_PER_24H: float = Field(default=5.0, gt=0.0, le=1_000.0)
+    ARCHIVE_ENRICHMENT_QUEUE_FAILURE_WINDOW: int = Field(default=20, ge=5, le=1_000)
+    ARCHIVE_ENRICHMENT_QUEUE_MAX_FAILURE_RATE: float = Field(default=0.25, ge=0.0, le=1.0)
 
     # Transcript cleanup configuration
     CLEANUP_ENABLED: bool = True  # Enable transcript cleanup features

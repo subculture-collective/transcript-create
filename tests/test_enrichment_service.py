@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +13,62 @@ from app.archive.enrichment_service import (
     persist_enrichment_candidates,
 )
 from app.archive.openrouter_enrichment import EpisodeEnrichmentCandidate, OpenRouterEpisodeResult
+
+
+@pytest.mark.parametrize("provider", [None, "", "alibaba", "deepinfra/fp8"])
+def test_configured_routing_preserves_request_and_budget_contract(monkeypatch, provider):
+    from app.archive import enrichment_service as service
+    from app.archive.openrouter_enrichment import build_openrouter_episode_request
+
+    episode = EpisodeInput(
+        video_id="video-1",
+        duration_ms=1200000,
+        blocks=[{"block_index": 0, "start_ms": 0, "end_ms": 1200000, "text": "News and politics."}],
+    )
+    config = SimpleNamespace(
+        OPENROUTER_API_KEY="test",
+        ARCHIVE_ENRICHMENT_MODEL="deepseek/deepseek-v4-pro",
+        ARCHIVE_ENRICHMENT_TIMEOUT_SECONDS=300,
+        ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES=90,
+        ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO=1,
+    )
+    if provider is not None:
+        config.ARCHIVE_ENRICHMENT_OPENROUTER_PROVIDER_ONLY = provider
+    requests = []
+    sentinel = object()
+
+    def generate(window, **kwargs):
+        assert kwargs["defer_category_sustained_validation"] is True
+        body = build_openrouter_episode_request(
+            window,
+            model=kwargs["model"],
+            provider_only=kwargs["provider_only"],
+            allow_provider_fallbacks=kwargs["allow_provider_fallbacks"],
+        )
+        requests.append(body)
+        return sentinel
+
+    def hierarchical(value, *, generate_window, max_window_ms, max_cost_usd):
+        assert value is episode
+        assert max_window_ms == 5400000 and max_cost_usd == 1
+        assert generate_window(value) is sentinel
+        return generate_window(value)
+
+    monkeypatch.setattr(service, "generate_openrouter_episode_enrichment", generate)
+    monkeypatch.setattr(service, "generate_hierarchical_openrouter_enrichment", hierarchical)
+    assert service._generate_configured_episode(episode, config) is sentinel
+    assert len(requests) == 2
+    for body in requests:
+        assert body["model"] == "deepseek/deepseek-v4-pro"
+        assert body["provider"] == {
+            **({"only": [provider]} if provider else {}),
+            "allow_fallbacks": not bool(provider),
+            "require_parameters": True,
+            "data_collection": "deny",
+        }
+        assert body["response_format"]["json_schema"]["strict"] is True
+        assert body["reasoning"] == {"enabled": False, "exclude": True}
+        assert body["temperature"] == 0 and body["max_tokens"] == 8000
 
 
 class _Result:
@@ -46,6 +103,72 @@ class _Db:
 
     def rollback(self):
         self.calls.append(("ROLLBACK", None))
+
+
+@pytest.mark.parametrize("reported", [False, True])
+@pytest.mark.parametrize("transport", [False, True])
+def test_provider_failure_persists_usage_provenance_and_separate_reservation(reported, transport, monkeypatch):
+    from app.archive.openrouter_enrichment import OpenRouterResponseValidationError
+
+    episode = EpisodeInput(
+        video_id="video-1",
+        duration_ms=1200000,
+        blocks=[
+            {"block_index": 0, "start_ms": 0, "end_ms": 600000, "text": "News and politics discussion."},
+            {"block_index": 1, "start_ms": 600000, "end_ms": 1200000, "text": "More news and politics."},
+        ],
+    )
+    config = SimpleNamespace(
+        ARCHIVE_ENRICHMENT_ENABLED=True,
+        ARCHIVE_ENRICHMENT_PROVIDER="openrouter",
+        ARCHIVE_ENRICHMENT_MODEL="deepseek/deepseek-v4-pro",
+        ARCHIVE_ENRICHMENT_PUBLISH=False,
+        ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO=1.0,
+        OPENROUTER_API_KEY="test",
+    )
+    failure = OpenRouterResponseValidationError(
+        "OpenRouter request failed: response error code 502",
+        provider="Alibaba",
+        prompt_tokens=10,
+        completion_tokens=0,
+        cost_usd=0.01,
+        elapsed_seconds=10,
+        failure_details={"error_code": "502", "transient": True, "usage_reported": reported},
+    )
+    finished = []
+    persisted = []
+
+    def generate(*args):
+        if transport:
+            from app.archive.openrouter_enrichment import generate_openrouter_episode_enrichment
+
+            def unavailable(*args, **kwargs):
+                raise TimeoutError("private transport details")
+
+            monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", unavailable)
+            return generate_openrouter_episode_enrichment(episode, api_key="test", model="model")
+        raise failure
+
+    deps = EnrichmentRuntimeDependencies(
+        export_input=lambda db, **kwargs: EnrichmentInput(
+            schema_version="1", pipeline_version="test", episodes=[episode]
+        ),
+        create_run=lambda *args, **kwargs: "run-1",
+        finish_run=lambda db, run_id, status, metrics, error=None: finished.append((status, metrics)),
+        generate_episode=generate,
+        persist_candidates=lambda *args, **kwargs: persisted.append(True),
+    )
+    with pytest.raises(RuntimeError if transport else OpenRouterResponseValidationError):
+        enrich_video_candidates(_Db(), "video-1", config=config, dependencies=deps)
+    assert not persisted
+    status, metrics = finished[0]
+    assert status == "failed"
+    if not transport:
+        assert metrics["cost_usd"] == 0.01
+    assert metrics["provider_failure"]["usage_reported"] is (reported and not transport)
+    assert metrics.get("cost_reservation_usd", 0) == (0 if reported and not transport else 1.0)
+    if transport:
+        assert metrics["provider_failure"]["transient"] is False
 
 
 def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
@@ -124,8 +247,8 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
     candidate_delete = next(sql for sql, _params in db.calls if "DELETE FROM archive_video_chapters" in sql)
     assert len(chapter_inserts) == 2
     assert "source <> 'automatic'" in conflict_query
-    assert "status IN ('published', 'hidden')" in conflict_query
-    assert "status IN ('candidate', 'rejected')" in candidate_delete
+    assert "status IN ('published', 'hidden', 'rejected')" in conflict_query
+    assert "status = 'candidate'" in candidate_delete
     assert all(call[1]["status"] == "candidate" for call in chapter_inserts)
     assert all(call[1]["source"] == "automatic" for call in chapter_inserts)
     assert all(call[1]["model_name"] == "deepseek/deepseek-v4-pro" for call in chapter_inserts)
@@ -149,10 +272,12 @@ def test_persist_enrichment_writes_review_candidates_with_grounded_labels():
         "labels": 5,
         "assignments": 5,
         "skipped_ungrounded_labels": 1,
+        "skipped_duplicate_labels": 0,
     }
 
 
-def test_enrich_video_generates_v4_pro_candidates_and_records_run():
+@pytest.mark.parametrize("auto_approve", [False, True])
+def test_enrich_video_generates_v4_pro_candidates_and_records_run(monkeypatch, auto_approve):
     episode = EpisodeInput(
         video_id="video-1",
         duration_ms=600_000,
@@ -162,7 +287,8 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
                 "start_ms": 0,
                 "end_ms": 600_000,
                 "text": "Workers discuss labor organizing and a union vote.",
-            }
+            },
+            {"block_index": 1, "start_ms": 300_000, "end_ms": 600_000, "text": "Further organizing discussion."},
         ],
     )
     result = OpenRouterEpisodeResult(
@@ -194,6 +320,7 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
         cost_usd=0.01,
         elapsed_seconds=1.0,
         window_count=1,
+        category_rejections=[{"slug": "gaming", "reason": "insufficient_evidence_span"}],
     )
     finished = []
     persisted = []
@@ -225,16 +352,47 @@ def test_enrich_video_generates_v4_pro_candidates_and_records_run():
     )
     db = _Db()
 
-    metrics = enrich_video_candidates(db, "video-1", config=Config(), dependencies=dependencies)
+    approvals = []
+    invalidations = []
+
+    def invalidate(video_id):
+        assert [call[0] for call in db.calls].count("COMMIT") == 2
+        invalidations.append(video_id)
+        return True
+
+    def approve(db, run):
+        assert persisted and finished[-1]["status"] == "completed"
+        approvals.append(run)
+        return {"status": "approved", "run_id": run}
+
+    monkeypatch.setattr("app.archive.enrichment_publication.approve_run", approve)
+    monkeypatch.setattr("app.archive.enrichment_publication.invalidate_enrichment_views", invalidate)
+    config = Config()
+    config.ARCHIVE_ENRICHMENT_AUTO_APPROVE = auto_approve
+    metrics = enrich_video_candidates(db, "video-1", config=config, dependencies=dependencies)
+    assert approvals == (["run-1"] if auto_approve else [])
+    assert invalidations == (["video-1"] if auto_approve else [])
 
     assert metrics["model"] == "deepseek/deepseek-v4-pro"
     assert metrics["cost_usd"] == 0.01
+    assert metrics["run_id"] == "run-1"
+    assert metrics["repairs"]["category_rejections"] == [{"slug": "gaming", "reason": "insufficient_evidence_span"}]
     assert persisted == [{"run_id": "run-1"}]
     assert finished[0]["status"] == "completed"
     assert [call[0] for call in db.calls].count("COMMIT") == 2
 
 
-def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
+@pytest.mark.parametrize(
+    "overlap_violations,error_message",
+    [
+        (0, "per-video limit"),
+        (1, "does not overlap"),
+        (0, "no sustained categories"),
+        (0, "incomplete chapter coverage"),
+        (0, "unsupported chapter evidence"),
+    ],
+)
+def test_enrich_video_rejects_invalid_results_before_persistence(overlap_violations, error_message):
     episode = EpisodeInput(
         video_id="video-1",
         duration_ms=600_000,
@@ -244,7 +402,8 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
                 "start_ms": 0,
                 "end_ms": 600_000,
                 "text": "Workers discuss labor organizing and a union vote.",
-            }
+            },
+            {"block_index": 1, "start_ms": 300_000, "end_ms": 600_000, "text": "Further organizing discussion."},
         ],
     )
     result = OpenRouterEpisodeResult(
@@ -278,6 +437,17 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
     )
     finished = []
     persisted = []
+    result = result.model_copy(update={"evidence_overlap_violations": overlap_violations})
+    if error_message == "no sustained categories":
+        result = result.model_copy(update={"candidate": result.candidate.model_copy(update={"categories": []})})
+    if error_message == "incomplete chapter coverage":
+        result = result.model_copy(update={"window_count": 2})
+    if error_message == "unsupported chapter evidence":
+        chapters = [
+            result.candidate.chapters[0].model_copy(update={"evidence_block_indexes": [999]}),
+            result.candidate.chapters[1],
+        ]
+        result = result.model_copy(update={"candidate": result.candidate.model_copy(update={"chapters": chapters})})
 
     class Config:
         ARCHIVE_ENRICHMENT_ENABLED = True
@@ -300,11 +470,16 @@ def test_enrich_video_rejects_results_over_the_cost_limit_before_persistence():
     )
     db = _Db()
 
-    with pytest.raises(RuntimeError, match="per-video limit"):
+    with pytest.raises(RuntimeError, match=error_message) as raised:
         enrich_video_candidates(db, "video-1", config=Config(), dependencies=dependencies)
 
     assert persisted == []
     assert finished[0]["status"] == "failed"
-    assert "per-video limit" in finished[0]["error"]
+    assert error_message in finished[0]["error"]
+    assert finished[0]["metrics"]["evidence_overlap_violations"] == overlap_violations
+    assert finished[0]["metrics"]["cost_usd"] == 0.01
+    assert finished[0]["metrics"]["run_id"] == "run-1"
+    assert raised.value.archive_enrichment_failure_metrics["run_id"] == "run-1"
+    assert finished[0]["metrics"]["prompt_version"] == "archive-episode-enrichment-v7"
     assert [call[0] for call in db.calls].count("ROLLBACK") == 1
     assert [call[0] for call in db.calls].count("COMMIT") == 2

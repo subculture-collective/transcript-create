@@ -36,11 +36,14 @@ def create_extraction_run(
     extraction_tier: str,
     video_id: str | None = None,
     model_name: str | None = None,
+    prompt_version: str | None = None,
 ) -> str:
     row = db.execute(
         text("""
-            INSERT INTO archive_extraction_runs (scope, extraction_tier, video_id, model_name, status, started_at)
-            VALUES (:scope, :extraction_tier, :video_id, :model_name, 'running', now())
+            INSERT INTO archive_extraction_runs (
+                scope, extraction_tier, video_id, model_name, prompt_version, status, started_at
+            )
+            VALUES (:scope, :extraction_tier, :video_id, :model_name, :prompt_version, 'running', now())
             RETURNING id
             """),
         {
@@ -48,6 +51,7 @@ def create_extraction_run(
             "extraction_tier": extraction_tier,
             "video_id": video_id,
             "model_name": model_name,
+            "prompt_version": prompt_version,
         },
     ).first()
     return _extract_id(row)
@@ -127,6 +131,8 @@ def upsert_label_candidate(
                     ELSE EXCLUDED.status
                 END,
                 updated_at = now()
+            WHERE archive_labels.status NOT IN ('published', 'rejected', 'merged', 'hidden')
+              AND archive_labels.source NOT IN ('admin', 'seed', 'hybrid')
             RETURNING id
             """),
         {
@@ -140,6 +146,13 @@ def upsert_label_candidate(
             "run_id": run_id,
         },
     ).first()
+    if row is None:
+        # ON CONFLICT locks the current row before evaluating its WHERE clause.
+        # A protected conflict must be a true no-op, including timestamps,
+        # confidence and aliases. Resolve its ID in a fresh statement snapshot
+        # so a concurrently committed insert is visible under READ COMMITTED.
+        existing = db.execute(text("SELECT id FROM archive_labels WHERE slug = :slug"), {"slug": slug}).first()
+        return _extract_id(existing)
     label_id = _extract_id(row)
 
     seen_aliases: set[str] = set()

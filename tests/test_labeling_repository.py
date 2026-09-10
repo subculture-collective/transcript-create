@@ -4,6 +4,7 @@ import inspect
 import json
 
 import pytest
+from sqlalchemy import text
 
 from app.archive.labeling.repository import (
     assignment_key,
@@ -61,11 +62,12 @@ def test_create_and_finish_run_use_text_clause_and_json_metrics():
         "extraction_tier": "cheap",
         "video_id": "video-1",
         "model_name": "whisper",
+        "prompt_version": None,
     }
     assert json.loads(update_params["metrics"]) == metrics
 
 
-def test_upsert_label_preserves_rejected_and_inserts_normalized_aliases():
+def test_upsert_candidate_inserts_normalized_aliases_and_guards_protected_conflicts():
     db = _FakeDb(
         [
             (lambda sql, params: "pg_advisory_xact_lock" in sql, _FakeResult()),
@@ -97,10 +99,107 @@ def test_upsert_label_preserves_rejected_and_inserts_normalized_aliases():
     assert "GREATEST(archive_labels.confidence_score, EXCLUDED.confidence_score)" in compact_insert_sql
     assert "THEN archive_labels.kind ELSE EXCLUDED.kind" in compact_insert_sql
     assert "archive_labels.source IN ('admin', 'seed', 'hybrid')" in compact_insert_sql
+    assert "WHERE archive_labels.status NOT IN ('published', 'rejected', 'merged', 'hidden')" in compact_insert_sql
+    assert "AND archive_labels.source NOT IN ('admin', 'seed', 'hybrid')" in compact_insert_sql
     assert "ON CONFLICT (label_id, normalized_alias) DO NOTHING" in str(alias_sql)
     assert alias_params["normalized_alias"] == "new jersey"
     assert alias_params["alias"] == "New Jersey"
     assert len(db.calls) == 3
+
+
+def test_protected_conflict_returns_existing_id_without_alias_writes():
+    db = _FakeDb(
+        [
+            (lambda sql, params: "pg_advisory_xact_lock" in sql, _FakeResult()),
+            (lambda sql, params: "INSERT INTO archive_labels" in sql, _FakeResult()),
+            (lambda sql, params: "SELECT id FROM archive_labels" in sql, _FakeResult(first=("protected-id",))),
+        ]
+    )
+    assert (
+        upsert_label_candidate(
+            db,
+            label="Politics",
+            kind="category",
+            aliases=["New alias"],
+            confidence_score=0.99,
+            source="automatic",
+            publish_tier="bronze",
+            status="candidate",
+            run_id=None,
+        )
+        == "protected-id"
+    )
+    assert len(db.calls) == 3
+    assert db.calls[-1][1] == {"slug": "politics"}
+
+
+@pytest.mark.parametrize(
+    "status,source",
+    [(status, "automatic") for status in ("published", "rejected", "merged", "hidden")]
+    + [("candidate", source) for source in ("admin", "seed", "hybrid")],
+)
+def test_protected_label_is_a_database_noop(db_session, status, source):
+    label_id = db_session.execute(
+        text("""
+        INSERT INTO archive_labels (slug, label, kind, status, source, publish_tier, confidence_score,
+                                   created_at, updated_at)
+        VALUES ('protected-regression', 'Original label', 'topic', :status, :source, 'silver', 0.42,
+                '2020-01-01'::timestamptz, '2020-01-02'::timestamptz) RETURNING id
+        """),
+        {"status": status, "source": source},
+    ).scalar_one()
+    snapshot_sql = text("SELECT to_jsonb(l), xmin::text FROM archive_labels l WHERE id = :id")
+    before = db_session.execute(snapshot_sql, {"id": label_id}).one()
+    result = upsert_label_candidate(
+        db_session,
+        label="Protected Regression",
+        kind="category",
+        aliases=["New alias"],
+        confidence_score=0.99,
+        source="automatic",
+        publish_tier="gold",
+        status="candidate",
+        run_id=None,
+    )
+    assert result == str(label_id)
+    assert db_session.execute(snapshot_sql, {"id": label_id}).one() == before
+    assert (
+        db_session.execute(
+            text("SELECT count(*) FROM archive_label_aliases WHERE label_id = :id"),
+            {"id": label_id},
+        ).scalar_one()
+        == 0
+    )
+
+
+def test_automatic_candidate_still_updates_and_adds_aliases(db_session):
+    arguments = dict(
+        label="Mutable Regression",
+        kind="topic",
+        aliases=[],
+        confidence_score=0.42,
+        source="automatic",
+        publish_tier="bronze",
+        status="candidate",
+        run_id=None,
+    )
+    label_id = upsert_label_candidate(db_session, **arguments)
+    arguments.update(kind="category", confidence_score=0.99, aliases=["New alias"], publish_tier="gold")
+    assert upsert_label_candidate(db_session, **arguments) == label_id
+    row = db_session.execute(
+        text("SELECT kind, confidence_score, publish_tier FROM archive_labels WHERE id = :id"),
+        {"id": label_id},
+    ).one()
+    assert row.kind == "category"
+    assert float(row.confidence_score) == 0.99
+    assert row.publish_tier == "gold"
+    assert (
+        db_session.execute(
+            text("SELECT count(*) FROM archive_label_aliases WHERE label_id = :id"),
+            {"id": label_id},
+        ).scalar_one()
+        == 1
+    )
 
 
 def test_assignment_key_is_deterministic_and_sensitive_to_dimensions():

@@ -1,3 +1,4 @@
+import io
 import json
 from urllib import error
 
@@ -7,7 +8,9 @@ from app.archive.enrichment_runner import EpisodeInput, TranscriptBlockInput
 from app.archive.openrouter_enrichment import (
     EPISODE_ENRICHMENT_SCHEMA,
     EpisodeEnrichmentCandidate,
+    OpenRouterBudgetExceededError,
     OpenRouterEpisodeResult,
+    OpenRouterHierarchicalGenerationError,
     build_openrouter_episode_request,
     generate_hierarchical_openrouter_enrichment,
     generate_openrouter_episode_enrichment,
@@ -74,6 +77,59 @@ class _Response:
 
     def read(self) -> bytes:
         return json.dumps(self.payload).encode()
+
+
+@pytest.mark.parametrize("defect", ["error", "missing", "empty"])
+def test_provider_failure_in_success_response_preserves_usage_without_replay(monkeypatch, defect):
+    from app.archive.openrouter_enrichment import OpenRouterResponseValidationError
+    from scripts.run_archive_enrichment_queue import is_credit_exhaustion_error
+
+    payload = _response_payload()
+    if defect == "error":
+        payload["error"] = {"code": 402, "message": "sensitive echoed input"}
+    elif defect == "missing":
+        del payload["choices"]
+    else:
+        payload["choices"][0]["message"]["content"] = ""
+    calls = []
+
+    def send(*args, **kwargs):
+        calls.append(1)
+        return _Response(payload)
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(OpenRouterResponseValidationError, match="OpenRouter request failed:") as failure:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert len(calls) == 1
+    assert failure.value.cost_usd == 0.0012
+    assert failure.value.prompt_tokens == 100
+    assert failure.value.completion_tokens == 50
+    assert "sensitive" not in str(failure.value)
+    assert is_credit_exhaustion_error(failure.value) is (defect == "error")
+
+
+@pytest.mark.parametrize("code,transient", [(502, True), (503, True), (402, False), (401, False), (400, False)])
+def test_structured_provider_failure_metadata_no_immediate_replay(monkeypatch, code, transient):
+    from app.archive.openrouter_enrichment import OpenRouterResponseValidationError
+
+    calls = []
+    payload = {"id": "gen-safe-123", "error": {"code": code, "message": "secret text"}}
+
+    def send(*args, **kwargs):
+        calls.append(1)
+        return _Response(payload)
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(OpenRouterResponseValidationError) as raised:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert len(calls) == 1
+    assert raised.value.failure_details == {
+        "error_code": str(code),
+        "transient": transient,
+        "generation_id": "gen-safe-123",
+        "usage_reported": False,
+    }
+    assert "secret" not in str(raised.value)
 
 
 def test_build_openrouter_request_uses_identical_strict_controls():
@@ -157,6 +213,26 @@ def test_generate_openrouter_enrichment_normalizes_first_boundary_to_origin(monk
     assert result.candidate.chapters[0].start_ms == 0
 
 
+def test_generate_openrouter_enrichment_orders_and_deduplicates_chapter_boundaries(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    duplicate = dict(parsed["chapters"][1])
+    duplicate["title"] = "Duplicate Boundary Is Removed"
+    parsed["chapters"] = [parsed["chapters"][1], duplicate, parsed["chapters"][0]]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    result = generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model")
+
+    assert [chapter.start_ms for chapter in result.candidate.chapters] == [0, 600_000]
+    assert result.chapter_boundaries_reordered is True
+    assert result.chapter_boundaries_deduplicated == 1
+    assert result.as_dict()["normalizations"]["chapter_boundaries_deduplicated"] == 1
+
+
 def test_generate_openrouter_enrichment_records_nonoverlapping_evidence(monkeypatch):
     payload = _response_payload()
     parsed = json.loads(payload["choices"][0]["message"]["content"])
@@ -170,6 +246,40 @@ def test_generate_openrouter_enrichment_records_nonoverlapping_evidence(monkeypa
     result = generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model", max_retries=0)
 
     assert result.evidence_overlap_violations == 1
+
+
+@pytest.mark.parametrize(
+    "start_ms,previous_evidence,expected_start,repairs,violations",
+    [
+        (900_000, [0], 600_000, 1, 0),
+        (900_001, [0], 900_001, 0, 1),
+        (900_000, [1], 900_000, 0, 1),
+    ],
+)
+def test_chapter_end_boundary_repair_preserves_previous_evidence(
+    monkeypatch, start_ms, previous_evidence, expected_start, repairs, violations
+):
+    episode = _episode().model_copy(
+        update={
+            "blocks": [
+                TranscriptBlockInput(block_index=0, start_ms=0, end_ms=600_000, text="Labor discussion."),
+                TranscriptBlockInput(block_index=1, start_ms=600_000, end_ms=900_000, text="Housing discussion."),
+                TranscriptBlockInput(block_index=2, start_ms=900_000, end_ms=1_200_000, text="Closing discussion."),
+            ]
+        }
+    )
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["chapters"][0]["evidence_block_indexes"] = previous_evidence
+    parsed["chapters"][1]["start_ms"] = start_ms
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", lambda _req, timeout: _Response(payload))
+    result = generate_openrouter_episode_enrichment(episode, api_key="key", model="model", max_retries=0)
+    assert result.candidate.chapters[1].start_ms == expected_start
+    assert result.candidate.chapters[1].evidence_block_indexes == [1]
+    assert result.chapter_boundaries_realigned == repairs
+    assert result.as_dict()["normalizations"]["chapter_boundaries_realigned"] == repairs
+    assert result.evidence_overlap_violations == violations
 
 
 def test_generate_openrouter_enrichment_truncates_overlong_summaries(monkeypatch):
@@ -257,17 +367,41 @@ def test_generate_openrouter_enrichment_drops_category_without_sustained_evidenc
 
     assert [category.slug for category in result.candidate.categories] == ["politics"]
     assert result.categories_dropped == 1
+    assert result.category_rejections == [{"slug": "gaming", "reason": "insufficient_evidence_blocks"}]
     assert result.as_dict()["normalizations"]["categories_dropped"] == 1
+    assert result.as_dict()["normalizations"]["category_rejections"] == result.category_rejections
 
 
-def test_generate_openrouter_enrichment_retries_transient_http_errors(monkeypatch):
+def test_generate_openrouter_enrichment_can_defer_category_sustained_validation(monkeypatch):
+    payload = _response_payload()
+    parsed = json.loads(payload["choices"][0]["message"]["content"])
+    parsed["categories"] = [{"slug": "gaming", "evidence_block_indexes": [0]}]
+    payload["choices"][0]["message"]["content"] = json.dumps(parsed)
+    monkeypatch.setattr(
+        "app.archive.openrouter_enrichment.request.urlopen",
+        lambda _req, timeout: _Response(payload),
+    )
+
+    result = generate_openrouter_episode_enrichment(
+        _episode(),
+        api_key="key",
+        model="model",
+        defer_category_sustained_validation=True,
+    )
+
+    assert [category.slug for category in result.candidate.categories] == ["gaming"]
+    assert result.categories_dropped == 0
+    assert result.category_rejections == []
+
+
+def test_generate_openrouter_enrichment_retries_explicit_rate_limit(monkeypatch):
     attempts = 0
 
     def fake_urlopen(_req, timeout):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise error.HTTPError("https://example.test", 503, "busy", {}, None)
+            raise error.HTTPError("https://example.test", 429, "busy", {}, None)
         return _Response(_response_payload())
 
     monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", fake_urlopen)
@@ -276,6 +410,89 @@ def test_generate_openrouter_enrichment_retries_transient_http_errors(monkeypatc
     generate_openrouter_episode_enrichment(_episode(), api_key="key", model="model", max_retries=1)
 
     assert attempts == 2
+
+
+@pytest.mark.parametrize(
+    "code,body,header,retries,delay",
+    [
+        (413, b"request rate limit exceeded", "25", 2, 25),
+        (413, b"payload too large", None, 1, None),
+        (429, b"busy", "120", 1, None),
+        (429, b"busy", "malformed", 2, 15),
+        (400, b"json_schema unsupported", None, 1, None),
+        (503, b"upstream failure", None, 1, None),
+    ],
+)
+def test_provider_retry_policy(monkeypatch, code, body, header, retries, delay):
+    calls, sleeps = [], []
+
+    def send(req, timeout):
+        calls.append(json.loads(req.data))
+        if len(calls) == 1:
+            raise error.HTTPError(
+                "https://example.test",
+                code,
+                "provider error",
+                {"Retry-After": header} if header else {},
+                io.BytesIO(body),
+            )
+        return _Response(_response_payload())
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    monkeypatch.setattr("app.archive.openrouter_enrichment.time.sleep", sleeps.append)
+    if retries == 1:
+        with pytest.raises(RuntimeError):
+            generate_openrouter_episode_enrichment(
+                _episode(), api_key="test", model="model", provider_only=["deepinfra"]
+            )
+    else:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model", provider_only=["deepinfra"])
+    assert len(calls) == retries
+    assert sleeps == ([] if delay is None else [delay])
+    assert calls[0]["provider"] == dict(
+        only=["deepinfra"], allow_fallbacks=False, data_collection="deny", require_parameters=True
+    )
+    assert calls[0]["response_format"]["json_schema"]["strict"] is True
+
+
+@pytest.mark.parametrize("transport_error", [TimeoutError("private response details"), error.URLError("private URL")])
+def test_timeout_is_not_replayed(monkeypatch, transport_error):
+    calls = []
+
+    def send(*args, **kwargs):
+        calls.append(True)
+        raise transport_error
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(RuntimeError, match="outcome uncertain") as raised:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert len(calls) == 1
+    assert "private" not in str(raised.value)
+    assert raised.value.failure_details == {
+        "error_code": "transport_uncertain",
+        "usage_reported": False,
+        "transient": False,
+    }
+    assert raised.value.elapsed_seconds >= 0
+
+
+@pytest.mark.parametrize("retry_after,transient", [(None, True), ("60", True), ("3600", False), ("bad", False)])
+def test_gateway_failure_respects_longer_retry_after(monkeypatch, retry_after, transient):
+    def send(*args, **kwargs):
+        raise error.HTTPError(
+            "https://example.test",
+            503,
+            "unavailable",
+            {"Retry-After": retry_after} if retry_after else {},
+            io.BytesIO(b"private upstream data"),
+        )
+
+    monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", send)
+    with pytest.raises(RuntimeError) as raised:
+        generate_openrouter_episode_enrichment(_episode(), api_key="test", model="model")
+    assert raised.value.failure_details["transient"] is transient
+    assert raised.value.failure_details["usage_reported"] is False
+    assert "private" not in str(raised.value)
 
 
 def test_generate_openrouter_enrichment_requires_key():
@@ -339,6 +556,7 @@ def test_hierarchical_enrichment_bounds_windows_and_recombines_episode():
             completion_tokens=20,
             cost_usd=0.01,
             elapsed_seconds=1.0,
+            chapter_boundaries_realigned=1,
         )
 
     result = generate_hierarchical_openrouter_enrichment(
@@ -357,4 +575,222 @@ def test_hierarchical_enrichment_bounds_windows_and_recombines_episode():
         for index, chapter in enumerate(prediction.chapters[:-1])
     )
     assert result.window_count == 3
+    assert result.chapter_boundaries_realigned == 3
     assert result.cost_usd == pytest.approx(0.03)
+    assert [category.slug for category in result.candidate.categories] == ["politics"]
+    assert result.candidate.categories[0].evidence_block_indexes == [0, 6, 13]
+    assert result.category_rejections == []
+
+
+def test_hierarchical_enrichment_records_category_rejection_reason():
+    episode = EpisodeInput(
+        video_id="category-rejection",
+        duration_ms=100 * 60_000,
+        blocks=[
+            TranscriptBlockInput(
+                block_index=index,
+                start_ms=index * 10 * 60_000,
+                end_ms=(index + 1) * 10 * 60_000,
+                text=f"Gameplay discussion block {index}.",
+            )
+            for index in range(10)
+        ],
+    )
+
+    def generate_window(window: EpisodeInput) -> OpenRouterEpisodeResult:
+        categories = (
+            [{"slug": "gaming", "evidence_block_indexes": [window.blocks[0].block_index]}]
+            if window.blocks[0].block_index == 0
+            else []
+        )
+        return OpenRouterEpisodeResult(
+            video_id=window.video_id,
+            model="deepseek/deepseek-v4-pro",
+            provider="provider",
+            prompt_version="prompt-v1",
+            candidate=EpisodeEnrichmentCandidate(
+                subjects=["Gameplay"],
+                keywords=["gameplay discussion"],
+                categories=categories,
+                chapters=[
+                    {
+                        "start_ms": 0,
+                        "title": "Gameplay Begins in This Window",
+                        "summary": "The player begins this portion of the gameplay session.",
+                        "evidence_block_indexes": [window.blocks[0].block_index],
+                    },
+                    {
+                        "start_ms": window.duration_ms // 2,
+                        "title": "Gameplay Continues in This Window",
+                        "summary": "The player continues through this portion of the game.",
+                        "evidence_block_indexes": [window.blocks[-1].block_index],
+                    },
+                ],
+            ),
+            prompt_tokens=10,
+            completion_tokens=5,
+            cost_usd=0.001,
+            elapsed_seconds=0.1,
+        )
+
+    result = generate_hierarchical_openrouter_enrichment(
+        episode,
+        generate_window=generate_window,
+        max_window_ms=90 * 60_000,
+    )
+
+    assert result.candidate.categories == []
+    assert result.categories_dropped == 1
+    assert result.category_rejections == [{"slug": "gaming", "reason": "insufficient_evidence_blocks"}]
+
+
+def test_hierarchical_enrichment_stops_before_next_window_at_cost_limit():
+    duration_ms = 200 * 60_000
+    episode = EpisodeInput(
+        video_id="long-video",
+        duration_ms=duration_ms,
+        blocks=[
+            TranscriptBlockInput(
+                block_index=index,
+                start_ms=index * 10 * 60_000,
+                end_ms=(index + 1) * 10 * 60_000,
+                text=f"Discussion block {index} about sustained political coverage.",
+            )
+            for index in range(20)
+        ],
+    )
+    calls = 0
+
+    def generate_window(window: EpisodeInput) -> OpenRouterEpisodeResult:
+        nonlocal calls
+        calls += 1
+        return OpenRouterEpisodeResult(
+            video_id=window.video_id,
+            model="deepseek/deepseek-v4-pro",
+            provider="provider",
+            prompt_version="prompt-v1",
+            candidate=EpisodeEnrichmentCandidate(
+                subjects=["political coverage"],
+                keywords=["sustained political coverage"],
+                categories=[],
+                chapters=[
+                    {
+                        "start_ms": 0,
+                        "title": "Opening Political Coverage Discussion",
+                        "summary": "The opening portion discusses sustained political coverage.",
+                        "evidence_block_indexes": [window.blocks[0].block_index],
+                    },
+                    {
+                        "start_ms": window.duration_ms // 2,
+                        "title": "Continuing Political Coverage Discussion",
+                        "summary": "The later portion continues the political coverage discussion.",
+                        "evidence_block_indexes": [window.blocks[-1].block_index],
+                    },
+                ],
+            ),
+            prompt_tokens=100,
+            completion_tokens=20,
+            cost_usd=0.5,
+            elapsed_seconds=2.0,
+        )
+
+    with pytest.raises(OpenRouterBudgetExceededError) as raised:
+        generate_hierarchical_openrouter_enrichment(
+            episode,
+            generate_window=generate_window,
+            max_window_ms=90 * 60_000,
+            max_cost_usd=0.5,
+        )
+
+    assert calls == 1
+    assert raised.value.cost_usd == 0.5
+    assert raised.value.prompt_tokens == 100
+    assert raised.value.completion_tokens == 20
+    assert raised.value.elapsed_seconds == 2.0
+    assert raised.value.window_count == 1
+    assert raised.value.attempted_window_count == 1
+
+
+@pytest.mark.parametrize("transport", [False, True])
+def test_hierarchical_enrichment_preserves_usage_when_later_window_fails(monkeypatch, transport):
+    episode = EpisodeInput(
+        video_id="provider-failure",
+        duration_ms=100 * 60_000,
+        blocks=[
+            TranscriptBlockInput(
+                block_index=index,
+                start_ms=index * 10 * 60_000,
+                end_ms=(index + 1) * 10 * 60_000,
+                text=f"Discussion block {index} about the provider failure test.",
+            )
+            for index in range(10)
+        ],
+    )
+    calls = 0
+
+    def generate_window(window: EpisodeInput) -> OpenRouterEpisodeResult:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            if transport:
+
+                def unavailable(*args, **kwargs):
+                    raise TimeoutError("private transport details")
+
+                monkeypatch.setattr("app.archive.openrouter_enrichment.request.urlopen", unavailable)
+                return generate_openrouter_episode_enrichment(window, api_key="test", model="model")
+            failure = RuntimeError("provider unavailable")
+            failure.failure_details = {"error_code": "502", "usage_reported": False, "transient": True}
+            raise failure
+        return OpenRouterEpisodeResult(
+            video_id=window.video_id,
+            model="deepseek/deepseek-v4-pro",
+            provider="provider",
+            prompt_version="prompt-v1",
+            candidate=EpisodeEnrichmentCandidate(
+                subjects=["provider test"],
+                keywords=["provider failure test"],
+                categories=[],
+                chapters=[
+                    {
+                        "start_ms": 0,
+                        "title": "Provider Failure Test Opening",
+                        "summary": "The episode opens with the provider failure test discussion.",
+                        "evidence_block_indexes": [window.blocks[0].block_index],
+                    },
+                    {
+                        "start_ms": window.duration_ms // 2,
+                        "title": "Provider Failure Test Continuation",
+                        "summary": "The episode continues the provider failure test discussion.",
+                        "evidence_block_indexes": [window.blocks[-1].block_index],
+                    },
+                ],
+            ),
+            prompt_tokens=80,
+            completion_tokens=20,
+            cost_usd=0.25,
+            elapsed_seconds=1.5,
+        )
+
+    with pytest.raises(
+        OpenRouterHierarchicalGenerationError,
+        match="outcome uncertain" if transport else "provider unavailable",
+    ) as raised:
+        generate_hierarchical_openrouter_enrichment(
+            episode,
+            generate_window=generate_window,
+            max_window_ms=90 * 60_000,
+            max_cost_usd=1.0,
+        )
+
+    assert calls == 2
+    assert raised.value.window_count == 1
+    assert raised.value.attempted_window_count == 2
+    assert raised.value.prompt_tokens == 80
+    assert raised.value.completion_tokens == 20
+    assert raised.value.cost_usd == 0.25
+    assert raised.value.failure_details == {
+        "error_code": "transport_uncertain" if transport else "502",
+        "usage_reported": False,
+        "transient": not transport,
+    }

@@ -101,6 +101,27 @@ def test_migrations_upgrade_head(alembic_config, clean_db, test_db_url):
                 assert table in tables, f"Table {table} should exist after migrations"
 
 
+def test_enrichment_run_lookup_upgrade_and_downgrade(alembic_config, clean_db, test_db_url):
+    command.upgrade(alembic_config, "head")
+    with get_engine(test_db_url) as engine:
+        with engine.begin() as conn:
+            definition = conn.execute(
+                text("SELECT indexdef FROM pg_indexes WHERE indexname='archive_enrichment_assignment_run_lookup'")
+            ).scalar_one()
+            assert "(run_id, id)" in definition
+            assert "WHERE (source = 'llm'::text)" in definition
+    command.downgrade(alembic_config, "20260907_enrichment_publication")
+    with get_engine(test_db_url) as engine:
+        with engine.begin() as conn:
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM pg_indexes WHERE indexname='archive_enrichment_assignment_run_lookup'")
+                ).scalar_one()
+                == 0
+            )
+    command.upgrade(alembic_config, "head")
+
+
 def test_migrations_downgrade_base(alembic_config, clean_db, test_db_url):
     """Test that all migrations can be applied and then reverted."""
     # Apply all migrations
@@ -515,6 +536,9 @@ def _table_catalog_contract(conn, table_names):
 def test_upgraded_and_fresh_schema_have_complete_user_fk_and_cleanup_inventory(alembic_config, clean_db, test_db_url):
     """Fresh bootstrap and upgraded deployments retain identical user-data rules."""
     parity_tables = (
+        "archive_enrichment_maintenance",
+        "archive_enrichment_maintenance_rows",
+        "archive_enrichment_approvals",
         "user_vocabularies",
         "saved_searches",
         "archive_chapter_feedback",

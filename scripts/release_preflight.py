@@ -86,6 +86,9 @@ DIARIZATION_RENDERED_ENVIRONMENT = {
     "ALLOW_EVENT_TOKEN_CONTRACT_MIGRATION",
 }
 FOUR_GIB_VALUES = {"4g", "4G", 4_294_967_296, "4294967296"}
+ENRICHMENT_QUEUE_COMMAND = ["python3", "/app/scripts/run_archive_enrichment_queue.py", "--once"]
+FALSE_ENV_VALUES = {"false", "False", "FALSE", "0", False}
+TRUE_ENV_VALUES = {"true", "True", "TRUE", "1", True}
 
 
 class PreflightError(Exception):
@@ -255,6 +258,28 @@ def validate_rendered_services(rendered: dict[str, Any], services: set[str], man
             environment.get("ENVIRONMENT") != "production" or environment.get("LOG_LEVEL") != "INFO"
         ):
             fail("Compose application environment contract is invalid")
+        if service == "archive-enrichment-queue":
+            enabled = environment.get("ARCHIVE_ENRICHMENT_ENABLED") in TRUE_ENV_VALUES
+            if environment.get("ARCHIVE_ENRICHMENT_PUBLISH") not in FALSE_ENV_VALUES:
+                fail("Compose archive enrichment queue safety flags are invalid")
+            if enabled:
+                if details.get("command") != [*ENRICHMENT_QUEUE_COMMAND[:2], "--continuous"]:
+                    fail("Compose archive enrichment queue command contract is invalid")
+                if details.get("restart") != "unless-stopped":
+                    fail("Compose archive enrichment queue restart contract is invalid")
+                if environment.get("ARCHIVE_ENRICHMENT_MODEL") != "deepseek/deepseek-v4-pro":
+                    fail("Compose archive enrichment queue model contract is invalid")
+                if str(environment.get("ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES")) != "90":
+                    fail("Compose archive enrichment queue window contract is invalid")
+                if str(environment.get("ARCHIVE_ENRICHMENT_MAX_COST_USD_PER_VIDEO")) not in {"1", "1.0", "1.00"}:
+                    fail("Compose archive enrichment queue cost contract is invalid")
+            else:
+                if environment.get("ARCHIVE_ENRICHMENT_ENABLED") not in FALSE_ENV_VALUES:
+                    fail("Compose archive enrichment queue safety flags are invalid")
+                if details.get("restart") not in ("no", False):
+                    fail("Compose archive enrichment queue restart contract is invalid")
+                if details.get("command") != ENRICHMENT_QUEUE_COMMAND:
+                    fail("Compose archive enrichment queue command contract is invalid")
         if service == "api" and (
             environment.get("REDIS_URL") != "redis://redis:6379/0"
             or environment.get("RATE_LIMIT_REQUESTS") != "100"

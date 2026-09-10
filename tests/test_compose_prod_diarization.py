@@ -42,8 +42,12 @@ run_preflight() {{ :; }}
 check_diarization_role() {{ printf 'role-check\\n' >> "$CANARY_LOG"; }}
 compose() {{
   printf 'compose %s\\n' "$*" >> "$CANARY_LOG"
-  [[ $* == *"WITH fenced"* ]] && printf 'fenced\\n'
-  [[ $* == *"WITH finalized"* ]] && {{ [[ "{mode}" == finalization_mismatch ]] && printf '0\\n' || printf '1\\n'; }}
+  if [[ $* == *"psql"*"-f -"* ]]; then
+    sql=$(cat)
+    printf 'sql %s\\n' "$sql" >> "$CANARY_LOG"
+    [[ $sql == *"WITH fenced"* ]] && printf 'fenced\\n'
+    [[ $sql == *"WITH finalized"* ]] && {{ [[ "{mode}" == finalization_mismatch ]] && printf '0\\n' || printf '1\\n'; }}
+  fi
   return 0
 }}
 canary_token={TOKEN}

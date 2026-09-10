@@ -341,6 +341,29 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
     """A quality failure retries; credit exhaustion persists a global pause."""
     status = outcome["status"]
     reason = None if status == "completed" else outcome.get("reason", status)
+    quarantine = False
+    if status == "failed" and reason == "provider_failure" and outcome.get("metrics", {}).get("run_id"):
+        # Only a durably accounted transport-uncertain failure can continue
+        # unrelated work. Never trust caller-supplied flags or lose its reserve.
+        quarantine = db.execute(
+            text("""
+                SELECT EXISTS (SELECT 1 FROM archive_extraction_runs r
+                WHERE r.id=CAST(:run_id AS uuid) AND r.video_id=:video_id
+                  AND r.model_name=:model AND r.prompt_version=:prompt AND r.status='failed'
+                  AND r.error='OpenRouter request outcome uncertain: transport response unavailable'
+                  AND r.metrics->'provider_failure'->>'error_code'='transport_uncertain'
+                  AND r.metrics->'provider_failure'->'usage_reported'='false'::jsonb
+                  AND r.metrics->'provider_failure'->'transient'='false'::jsonb
+                  AND CASE WHEN jsonb_typeof(r.metrics->'cost_reservation_usd')='number'
+                      THEN (r.metrics->>'cost_reservation_usd')::numeric>0 ELSE false END
+                  AND NOT EXISTS (SELECT 1 FROM archive_video_chapters c WHERE c.video_id=r.video_id)
+                  AND NOT EXISTS (SELECT 1 FROM archive_label_assignments a
+                      WHERE a.video_id=r.video_id AND a.source='llm'))
+            """),
+            {**params(model), "video_id": video_id, "run_id": outcome["metrics"]["run_id"]},
+        ).scalar_one()
+        if quarantine:
+            reason = "transport_uncertain_quarantined"
     if status == "failed" and reason == "failed" and outcome.get("metrics", {}).get("run_id"):
         quality_rejection = db.execute(
             text("""
@@ -362,6 +385,7 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
         text("""
             UPDATE archive_enrichment_jobs
                SET status=CASE WHEN :outcome='completed' THEN 'completed'
+                               WHEN :quarantine THEN 'parked'
                                WHEN :outcome='credit_exhausted' THEN 'retry'
                                WHEN attempts>=:max_attempts THEN 'parked' ELSE 'retry' END,
                    attempts=attempts-CASE WHEN :outcome='credit_exhausted' THEN 1 ELSE 0 END,
@@ -375,6 +399,7 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
             "outcome": status,
             "run_id": outcome.get("metrics", {}).get("run_id"),
             "reason": reason,
+            "quarantine": quarantine,
         },
     )
     if updated.rowcount != 1:
@@ -397,7 +422,7 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
             db.commit()
         else:
             pause_queue(db, model, "credit_exhausted" if status == "credit_exhausted" else "provider_failure")
-    elif outcome.get("reason") == "provider_failure":
+    elif outcome.get("reason") == "provider_failure" and not quarantine:
         transient = outcome.get("metrics", {}).get("provider_failure", {}).get("transient") is True
         pause_queue(db, model, "provider_cooldown" if transient else "provider_failure")
     elif status == "credit_exhausted":
@@ -412,7 +437,8 @@ def finish_job(db: Any, model: str, video_id: str, outcome: dict[str, Any]) -> N
             db.execute(
                 text("""
             SELECT status FROM archive_enrichment_jobs j WHERE model=:model AND prompt=:prompt
-            AND (status='completed' OR (status IN ('retry','parked') AND reason='failed'))
+            AND (status='completed' OR (status IN ('retry','parked')
+                AND reason IN ('failed','transport_uncertain_quarantined')))
             AND NOT EXISTS (SELECT 1 FROM archive_extraction_runs r
                 WHERE r.id=j.last_run_id AND r.video_id=j.video_id
                   AND r.model_name=j.model AND r.prompt_version=j.prompt
@@ -459,6 +485,8 @@ def requeue_run(db: Any, model: str, run_id: str) -> dict[str, Any]:
     if existing:
         return {"status": "already_requeued", "run_id": run_id}
     metrics = run["metrics"] or {}
+    if metrics.get("provider_failure", {}).get("error_code") == "transport_uncertain":
+        raise ValueError("uncertain provider outcome requires billing reconciliation, not automatic requeue")
     overlap = metrics.get(
         "evidence_overlap_violations", metrics.get("repairs", {}).get("evidence_overlap_violations", 0)
     )
@@ -472,6 +500,8 @@ def requeue_run(db: Any, model: str, run_id: str) -> dict[str, Any]:
             OR EXISTS (SELECT 1 FROM archive_enrichment_jobs WHERE video_id=:video_id AND status IN ('running','completed'))
             OR EXISTS (SELECT 1 FROM archive_enrichment_jobs WHERE video_id=:video_id
                        AND model=:model AND prompt=:prompt AND attempts>=:max_attempts)
+            OR EXISTS (SELECT 1 FROM archive_extraction_runs WHERE video_id=:video_id
+                       AND metrics->'provider_failure'->>'error_code'='transport_uncertain')
     """),
         values,
     ).scalar_one()

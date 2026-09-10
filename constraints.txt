@@ -100,7 +100,7 @@ Pygments==2.20.0
 pyparsing==3.2.5
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
-pytorch-lightning==2.6.5
+pytorch-lightning==2.6.6
 pytorch-metric-learning==2.9.0
 pytz==2025.2
 PyYAML==6.0.3

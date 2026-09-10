@@ -353,13 +353,13 @@ class Settings(BaseSettings):
         parsed = urlparse(link)
         if (
             parsed.scheme != "https"
-            or parsed.hostname != "buy.stripe.com"
+            or parsed.hostname not in {"buy.stripe.com", "donate.stripe.com"}
             or not parsed.path.strip("/")
             or parsed.username is not None
             or parsed.password is not None
             or parsed.fragment
         ):
-            raise ValueError("DONATION_PAYMENT_LINK_URL must be an https://buy.stripe.com/<id> Payment Link")
+            raise ValueError("DONATION_PAYMENT_LINK_URL must use an official Stripe Payment Link hostname")
         return link
 
     @field_validator("DIARIZATION_ALLOWED_VIDEO_IDS", mode="before")

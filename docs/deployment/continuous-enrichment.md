@@ -78,7 +78,18 @@ guards still active. Success clears only the cooldown; failure leaves a durable
 operator-reviewed pause. An interrupted probe is never automatically replayed.
 No recovery checkpoint is inserted and no failure history is reset automatically.
 
-Uncertain network outcomes, unrecognized errors, schema incompatibility,
+Durably accounted uncertain transport outcomes quarantine only the affected video:
+the job becomes `parked` with reason `transport_uncertain_quarantined`, retains its
+attempt count and failed run, and is not automatically replayed. This requires
+the exact stored transport error, unreported usage, a positive cost reservation,
+and no chapter or LLM assignment rows. Ordinary requeue refuses uncertain runs
+and other runs for the same video until separately reviewed reconciliation.
+Unrelated work continues, but quarantined failures remain in both spending and
+systemic failure-rate accounting; three consecutive unhandled/quarantined failures
+still pause the queue. Uncertain failures during an existing recovery probe retain
+the global pause. Missing accounting or conflicting output also retains the pause.
+
+Unrecognized errors, schema incompatibility,
 authentication/credit failures and exhausted rate retries retain hard-stop
 behavior. Measured completed-window usage survives failures; partial candidates
 never persist. Sanitized `provider_failure` metrics retain the error code,

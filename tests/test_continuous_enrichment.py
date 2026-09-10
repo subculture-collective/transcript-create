@@ -10,6 +10,84 @@ from app.archive.enrichment_queue import OWNER_LOCK, discover_jobs, finish_job, 
 from app.archive.openrouter_enrichment import PROMPT_VERSION
 
 
+def test_uncertain_transport_quarantines_without_replay_and_keeps_breakers(queue):
+    from app.archive.enrichment_queue import queue_status, requeue_run
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+    from scripts.run_archive_enrichment_queue import load_queue_guardrail_snapshot
+
+    db, model, video = queue
+    for day in range(4):
+        video(day)
+    discover_jobs(db, model)
+    for attempt in range(3):
+        target = next_job(db, model)["video_id"]
+        run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+        metrics = {
+            "run_id": run,
+            "cost_usd": 0.02,
+            "cost_reservation_usd": 1.0,
+            "provider_failure": {"transient": False, "usage_reported": False, "error_code": "transport_uncertain"},
+        }
+        finish_extraction_run(
+            db, run, "failed", metrics, "OpenRouter request outcome uncertain: transport response unavailable"
+        )
+        finish_job(db, model, target, {"status": "failed", "reason": "provider_failure", "metrics": metrics})
+        row = db.execute(
+            text("SELECT status,attempts,reason,last_run_id FROM archive_enrichment_jobs WHERE video_id=:id"),
+            {"id": target},
+        ).one()
+        assert tuple(row[:3]) == ("parked", 1, "transport_uncertain_quarantined")
+        assert str(row.last_run_id) == run
+        assert (
+            db.execute(text("SELECT metrics FROM archive_extraction_runs WHERE id=:id"), {"id": run}).scalar_one()
+            == metrics
+        )
+        with pytest.raises(ValueError, match="billing reconciliation"):
+            requeue_run(db, model, run)
+        db.commit()
+        if attempt < 2:
+            assert queue_status(db, model)["status"] == "ready"
+    assert next_job(db, model) == {"status": "paused", "reason": "consecutive_failures"}
+    snapshot = load_queue_guardrail_snapshot(db, model, 20, continuous=True)
+    assert snapshot.attempts_24h == snapshot.recent_failures == 3
+    assert snapshot.recorded_cost_usd_24h == pytest.approx(0.06)
+    assert snapshot.reserved_cost_usd_24h == 3
+
+
+@pytest.mark.parametrize("invalid", ["missing_reserve", "reported_usage", "wrong_error", "wrong_run"])
+def test_uncertain_quarantine_requires_durable_evidence(queue, invalid):
+    from app.archive.enrichment_queue import queue_status
+    from app.archive.labeling.repository import create_extraction_run, finish_extraction_run
+
+    db, model, video = queue
+    target = video()
+    discover_jobs(db, model)
+    next_job(db, model)
+    run = create_extraction_run(db, "video", "premium", target, model, PROMPT_VERSION)
+    metrics = {
+        "run_id": run,
+        "cost_reservation_usd": 1.0,
+        "provider_failure": {
+            "transient": False,
+            "usage_reported": invalid == "reported_usage",
+            "error_code": "transport_uncertain",
+        },
+    }
+    if invalid == "missing_reserve":
+        metrics.pop("cost_reservation_usd")
+    error = (
+        "other error"
+        if invalid == "wrong_error"
+        else "OpenRouter request outcome uncertain: transport response unavailable"
+    )
+    finish_extraction_run(db, run, "failed", metrics, error)
+    other_run = create_extraction_run(db, "video", "premium", video(2), model, PROMPT_VERSION)
+    finish_extraction_run(db, other_run, "completed", {})
+    reported = {**metrics, "run_id": other_run} if invalid == "wrong_run" else metrics
+    finish_job(db, model, target, {"status": "failed", "reason": "provider_failure", "metrics": reported})
+    assert queue_status(db, model)["reason"] == "provider_failure"
+
+
 @pytest.mark.parametrize("legacy", [False, True])
 def test_managed_quality_rejections_do_not_trip_systemic_breakers(queue, legacy):
     from app.archive.enrichment_queue import HANDLED_QUALITY_ERRORS

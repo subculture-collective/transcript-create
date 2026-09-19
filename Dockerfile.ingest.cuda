@@ -67,7 +67,7 @@ RUN curl -fsSL https://deno.land/install.sh | sh \
 
 WORKDIR /app
 COPY requirements-api.txt requirements-ingest.txt constraints.txt ./
-RUN pip3 install --upgrade setuptools==81.0.0 wheel==0.47.0
+RUN pip3 install --upgrade pip==26.2 setuptools==83.0.0 wheel==0.47.0
 RUN pip3 install -c constraints.txt -r requirements-api.txt \
     && pip3 check
 RUN pip3 install -c constraints.txt ctranslate2==4.6.0 \

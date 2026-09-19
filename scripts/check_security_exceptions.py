@@ -20,18 +20,9 @@ class SecurityException:
     forbidden_call: str
 
 
-EXCEPTIONS = (
-    SecurityException(
-        advisory_id="GHSA-rrmf-rvhw-rf47",
-        expires_on=date(2026, 9, 13),
-        forbidden_call="torch.jit.script",
-    ),
-    SecurityException(
-        advisory_id="PYSEC-2026-3624",
-        expires_on=date(2026, 9, 13),
-        forbidden_call="lightning.LightningModule.load_from_checkpoint",
-    ),
-)
+# Both historical ML exceptions expired. Scan without suppressions; an
+# unavailable compatible wheel is a release blocker, not an implicit renewal.
+EXCEPTIONS: tuple[SecurityException, ...] = ()
 
 NPM_SEVERITIES = {"info", "low", "moderate", "high", "critical"}
 
@@ -179,7 +170,11 @@ def main() -> None:
     if args.pip_audit_args:
         print(" ".join(f"--ignore-vuln {item.advisory_id}" for item in EXCEPTIONS))
     else:
-        print("security exceptions are unexpired and unreachable")
+        print(
+            "security exception policy passed (no active exceptions)"
+            if not EXCEPTIONS
+            else "security exceptions are unexpired and unreachable"
+        )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements-api.txt constraints.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade setuptools==83.0.0 wheel==0.47.0 && \
+    pip install --upgrade pip==26.2 setuptools==83.0.0 wheel==0.47.0 && \
     pip install -c constraints.txt -r requirements-api.txt && \
     pip check
 
@@ -16,7 +16,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     GIT_COMMIT=${GIT_COMMIT} \
     BUILD_DATE=${BUILD_DATE}
-RUN python -m pip uninstall --yes setuptools wheel
+RUN python -m pip uninstall --yes pip setuptools wheel
 COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=dependencies /usr/local/bin /usr/local/bin
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \

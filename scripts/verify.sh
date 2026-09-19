@@ -104,7 +104,9 @@ echo 'Running backend verification...'
 "${PYTHON_BIN}" -m pytest tests --cov=app --cov-report=term --cov-fail-under=70 -q
 "${PYTHON_BIN}" -m bandit -r app worker -lll -ii -f screen
 
-read -r -a pip_audit_ignores <<< "$("${PYTHON_BIN}" scripts/check_security_exceptions.py --pip-audit-args)"
+# Preserve the validator's exit status; read alone hides failed substitutions.
+pip_audit_ignore_output="$("${PYTHON_BIN}" scripts/check_security_exceptions.py --pip-audit-args)"
+read -r -a pip_audit_ignores <<< "$pip_audit_ignore_output"
 "${PYTHON_BIN}" -m pip_audit --local --desc --skip-editable "${pip_audit_ignores[@]}"
 
 echo 'Running frontend verification...'

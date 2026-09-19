@@ -1034,7 +1034,7 @@ def test_release_images_use_clean_python_packages_and_pinned_go_sources() -> Non
     api = (ROOT / "Dockerfile.api").read_text(encoding="utf-8")
     postgres_walg = (ROOT / "Dockerfile.postgres-walg").read_text(encoding="utf-8")
 
-    cleanup = "RUN python -m pip uninstall --yes setuptools wheel"
+    cleanup = "RUN python -m pip uninstall --yes pip setuptools wheel"
     assert cleanup in api
     assert api.index(cleanup) < api.index("COPY --from=dependencies /usr/local/lib/python3.11/site-packages")
 

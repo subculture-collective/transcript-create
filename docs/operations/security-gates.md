@@ -3,20 +3,16 @@
 HasanAra blocks releases on reachable dependency advisories and high-severity
 Python SAST findings. The canonical runtime gate uses Python 3.11 and Node 20.
 
-Run the focused gates locally with:
+Run the focused gates locally with no advisory suppressions:
 
 ```bash
-python scripts/check_security_exceptions.py
-pip-audit --local --skip-editable \
-  --ignore-vuln GHSA-rrmf-rvhw-rf47 \
-  --ignore-vuln PYSEC-2026-3624
-pip-audit -r requirements.txt --no-deps --disable-pip
-pip-audit -r constraints.txt --no-deps --disable-pip
-pip-audit -r requirements-ml-runtime.txt --no-deps --disable-pip \
-  --ignore-vuln GHSA-rrmf-rvhw-rf47 \
-  --ignore-vuln PYSEC-2026-3624
-bandit -r app/ worker/ -lll -ii
-python scripts/check_security_exceptions.py --npm-audit --package-dir frontend
+rtk proxy python scripts/check_security_exceptions.py
+rtk proxy python -m pip_audit --local --skip-editable
+rtk proxy python -m pip_audit -r requirements.txt --no-deps --disable-pip
+rtk proxy python -m pip_audit -r constraints.txt --no-deps --disable-pip
+rtk proxy python -m pip_audit -r requirements-ml-runtime.txt --no-deps --disable-pip
+rtk proxy python -m bandit -r app/ worker/ -lll -ii
+rtk proxy python scripts/check_security_exceptions.py --npm-audit --package-dir frontend
 ```
 
 The installed-environment pip-audit covers resolved transitive packages in
@@ -39,66 +35,54 @@ requested tag, verifies provenance and application libraries for that exact
 digest, and supplies the immutable digest to every Helm workload. The retired
 GitHub/GHCR and duplicate production workflows must not be restored.
 
-## Active exceptions
+## September 19 follow-up: no active exceptions
 
-`PYSEC-2026-3624` affects the transitive `lightning==2.6.5` dependency used
-by the diarization worker. The vulnerable path imports an attacker-controlled
-`_instantiator` while loading a Lightning checkpoint. HasanAra does not accept
-checkpoint or model uploads, does not call `LightningModule.load_from_checkpoint`,
-and keeps model identifiers operator-controlled; CI fails if a direct call is
-introduced. Upstream has committed a fix but has not published a patched PyPI
-release.
+The historical Lightning and Torch exceptions expired September 13. Both
+suppressions have been removed; the policy helper emits no pip-audit ignore
+arguments. An incompatible or unavailable patched runtime remains a release
+blocker, not an implicit exception renewal. The local verification shell now
+preserves the validator's exit status before parsing its output.
 
-- Owner: backend maintainers
-- Approved: 2026-08-07
-- Renewal approved by the operator: 2026-09-06 UTC, for seven days
-- Reassessed: 2026-09-06; Lightning 2.6.5 remains the latest PyPI release and
-  no patched wheel is available. The deployed API contains neither Lightning
-  nor PyTorch. The source check found no direct forbidden calls; this does not
-  establish transitive unreachability in the ML workers.
-- Expires: 2026-09-13 UTC
-- Required action: upgrade to the first compatible patched Lightning release
-  and remove the exact ignore immediately
+- **AnyIO:** constraints pin 4.14.2, addressing the three findings reported in
+  the development environment at 4.14.0.
+- **Lightning:** constraints pin 2.6.6, matching the patched release for
+  `PYSEC-2026-3624`. Import smoke passed. The previous statement that no patched
+  PyPI release exists is obsolete.
+- **Setuptools:** constraints pin 83.0.0, matching the existing Dockerfile build
+  pin in the API and fixing `PYSEC-2026-3447`. The old constraints snapshot
+  pinned 81.0.0. The ingest image build pin is also updated to 83.0.0.
+- **pip:** API and ingest image build steps pin 26.2. The API's base image
+  included pip 24.0 with six reported advisories. Remove its original pip
+  distribution before copying the patched dependency stage, avoiding duplicate
+  distribution metadata. The final API image inventory audits cleanly and
+  `pip check` passes; this is a Python-package audit, not an OS image scan.
+- **Frontend:** the lockfile audit returned zero vulnerabilities on September 19
+  after the earlier registry outage cleared. There is no active brace-expansion
+  exception; the old path-specific exception description is retired.
+- **Torch remains blocked:** `GHSA-rrmf-rvhw-rf47` identifies 2.13.0 as patched.
+  Repository ML runtime pins remain Torch/TorchAudio 2.11.0. The local development
+  environment contains Torch 2.12.1 and is not an exact production ML environment.
+  On September 19, the official Python 3.11 Linux x86_64 indexes listed Torch
+  2.13.0 for CPU and ROCm 7.1, but none for CUDA 12.8. None of those three indexes
+  listed TorchAudio 2.13.0, and its PyPI version endpoint returned 404. Do not
+  combine an unmatched TorchAudio binary with a new Torch version just to clear
+  the advisory. Refresh the compatible upstream wheel matrix, resolve the full
+  ML role, and pass codec/pyannote/transcription hardware checks before changing
+  the production pins. The local Torch 2.12.1 metadata also requires
+  `setuptools<82`, conflicting with the patched 83.0.0; `uv pip check` correctly
+  reports that unresolved ML environment conflict. Do not downgrade Setuptools
+  back to its vulnerable version to satisfy it. Resolving the declared worker
+  plus ML requirements also fails because Torch 2.11.0 requires `setuptools<82`.
+  Existing combined ML Dockerfiles still pin Setuptools 81.0.0 and are not
+  qualified for release; the secure global constraint intentionally prevents
+  resolving that vulnerable combination. Resolve this as one compatible ML
+  runtime upgrade, not an isolated pin override.
 
-`GHSA-rrmf-rvhw-rf47` affects `torch==2.11.0` in the transcription and
-diarization worker images. It requires local invocation of `torch.jit.script`.
-HasanAra accepts audio/video input, never user model artifacts, and does not
-call that compiler API; CI fails if the call appears. Model identifiers and
-runtime configuration remain operator-controlled. The advisory is scored low.
-Torch 2.13.0 is patched, but the production ML image remains pinned to 2.11.0
-until the CUDA, pyannote, and GTX 1080 runtime matrix is qualified. A centralized
-UTC date and AST-based call check
-causes CI to fail when the exception expires or the compiler call is introduced
-through either qualified or imported-alias syntax.
-
-- Owner: backend maintainers
-- Approved: 2026-07-10
-- Renewal approved by the operator: 2026-09-06 UTC, for seven days
-- Reassessed: 2026-09-06; Torch 2.13.0 is patched and 2.14.0 is the latest
-  PyPI release. The source check found no direct forbidden compiler calls;
-  production GPU compatibility for the upgrade is not yet qualified. The API
-  deployment reuses unchanged ML image digests and preserves existing controls.
-- Expires: 2026-09-13 UTC
-- Required action: qualify Torch and TorchAudio 2.13.0 on every production ML
-  image and remove the exact ignore before expiry
-
-`1130588` and `1130589` / `GHSA-mh99-v99m-4gvg`, plus `1130736` and
-`1130737` / `GHSA-rgw5-rvv9-x895`, affect only the exact dev-only
-`brace-expansion` lockfile nodes: 1.1.16 at `node_modules/brace-expansion` and
-2.1.2 beneath `@redocly/openapi-core` and
-`@typescript-eslint/typescript-estree`. They are not part of the production
-frontend bundle. The npm wrapper rejects any production reachability, node path,
-version, or audit-path drift and recursively validates every advisory leaf; it
-does not blanket-ignore dev dependencies or other high/critical findings.
-
-- Owner: frontend maintainers
-- Approved: 2026-07-24
-- Reassessed: 2026-08-30; the lockfile paths remain dev-only, the recursive
-  audit graph and production-reachability checks remain green, and patched
-  transitive versions are available
-- Expires: 2026-09-06 UTC
-- Required action: update the three transitive lockfile nodes and delete this
-  exception and its exact dev-only lockfile check before expiry
+Sources: [Torch advisory](https://github.com/advisories/GHSA-rrmf-rvhw-rf47),
+[official CPU wheels](https://download.pytorch.org/whl/cpu/),
+[CUDA 12.8 wheels](https://download.pytorch.org/whl/cu128/),
+[ROCm 7.1 wheels](https://download.pytorch.org/whl/rocm7.1/), and
+[Lightning 2.6.6 metadata](https://pypi.org/pypi/lightning/2.6.6/json).
 
 A future exception must identify the advisory, affected package and path,
 reachability evidence, compensating control, owner, approval date, and an

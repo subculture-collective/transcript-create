@@ -1,3 +1,4 @@
+import { useSite } from '../services/site';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import PassagePanel from '../components/video/PassagePanel';
@@ -52,6 +53,7 @@ async function copyText(text: string) {
 }
 
 export default function VideoPage() {
+  const site = useSite();
   const { videoId } = useParams();
   const [params, setParams] = useSearchParams();
   const [video, setVideo] = useState<VideoInfo | null>(null);
@@ -239,8 +241,8 @@ export default function VideoPage() {
 
   useEffect(() => {
     if (!video) return;
-    document.title = `${formatVideoTitle(video.title, video.uploaded_at)} | HasanAra`;
-  }, [video]);
+    document.title = `${formatVideoTitle(video.title, video.uploaded_at)} | ${site.name}`;
+  }, [video, site.name]);
 
   useEffect(() => {
     if (!videoId) return;
@@ -680,8 +682,8 @@ export default function VideoPage() {
 
   useEffect(() => {
     if (!video) return;
-    document.title = `${episodeTitle} | HasanAra`;
-  }, [episodeTitle, video]);
+    document.title = `${episodeTitle} | ${site.name}`;
+  }, [episodeTitle, video, site.name]);
 
   function selectChapter(chapter: VideoChapter) {
     const segmentIndex = transcript?.segments.findIndex(

@@ -1,3 +1,4 @@
+import { useSite } from '../services/site';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, useAuth } from '../services';
@@ -14,6 +15,7 @@ import { AsyncError } from '../components/async/AsyncFeedback';
 const searchExamples = ['labor', 'Gaza', 'housing', 'election'];
 
 export default function HomePage() {
+  const site = useSite();
   const navigate = useNavigate();
   const { user, loading: authLoading, login, loginTwitch } = useAuth();
   const [summary, setSummary] = useState<ArchiveSummary | null>(null);
@@ -64,7 +66,7 @@ export default function HomePage() {
         <div className="relative z-10 grid min-h-[34rem] gap-10 px-5 py-8 sm:px-8 sm:py-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)] lg:items-end lg:px-12 lg:py-14">
           <div className="space-y-8">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="archive-eyebrow">HasanAbi broadcast archive</span>
+              <span className="archive-eyebrow">{site.creator_name} archive</span>
               <span className="source-pill">searchable transcripts</span>
             </div>
 
@@ -93,7 +95,7 @@ export default function HomePage() {
             <div className="archive-rule-title">Search the record</div>
             <form onSubmit={onSubmit} className="archive-command">
               <label className="sr-only" htmlFor="home-search">
-                Search the HasanAbi archive
+                Search the {site.creator_name} archive
               </label>
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="flex min-w-0 items-center gap-3 px-3">

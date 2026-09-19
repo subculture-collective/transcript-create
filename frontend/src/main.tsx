@@ -1,3 +1,4 @@
+import { SiteProvider } from './services/site';
 import { lazy, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
@@ -250,7 +251,9 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <RootErrorBoundary>
-            <RouterProvider router={router} />
+            <SiteProvider>
+              <RouterProvider router={router} />
+            </SiteProvider>
           </RootErrorBoundary>
         </AuthProvider>
       </QueryClientProvider>

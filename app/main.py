@@ -345,6 +345,9 @@ app.include_router(archive_router)
 app.include_router(jobs_router)
 from .routes.passages import router as passages_router  # noqa: E402
 
+from .routes.site import router as site_router  # noqa: E402
+
+app.include_router(site_router)
 app.include_router(passages_router)
 app.include_router(videos_router)
 app.include_router(favorites_router)

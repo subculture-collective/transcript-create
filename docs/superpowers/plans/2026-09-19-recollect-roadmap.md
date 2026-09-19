@@ -7,8 +7,8 @@ User direction: implement the roadmap as far as possible, verifying and committi
 | Increment | Acceptance | Status |
 | --- | --- | --- |
 | Passage selection | Search/transcript entry points, range editing, context, preview, reproducible links, failures handled | Committed `30228f5`; 288 frontend tests passed, one existing skip; build/lint and fixture browser checks passed |
-| Public preview pages | Server-rendered range/title/excerpt metadata and PNG card, safe escaping, bounded reads, invalid/missing source rejection, same-site player/context destination | In progress |
-| Creator configuration | Reusable site name/description, public configuration, no customer claims or secrets exposed, default HasanAra preserved | Pending |
+| Public preview pages | Server-rendered range/title/excerpt metadata and PNG card, safe escaping, bounded reads, invalid/missing source rejection, same-site player/context destination | Committed `65e8ee9`; 22 backend checks, 39 frontend checks, build and actual embedded-player stop verified |
+| Creator configuration | Reusable site name/description, public configuration, no customer claims or secrets exposed, default HasanAra preserved | Implemented; explicit public allowlist, 37 frontend tests and backend config test passed; build passed |
 | Publishing/community | Public updates and passage discussions, explicit publishing, permissions, pagination, reports, local moderation/audit, export | Pending |
 | Existing AT accounts | Official OAuth SDK, independent existing PDS support, explicit public standard records, no email-based identity merge | Pending inspection/implementation; live OAuth requires a reachable client configuration and user consent |
 | Authorized-original clips | Acquisition separate from rendering, bounded local-original registration, queued render, retention/expiry/access checks, synthetic-media verification | Pending |

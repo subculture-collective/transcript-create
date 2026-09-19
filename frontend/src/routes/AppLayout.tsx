@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router-dom';
+import { useSite } from '../services/site';
 import { useAuth, useTheme } from '../services';
 
 const navItems = [
@@ -81,6 +82,7 @@ const routeMeta: Array<{ match: RegExp; title: string; description: string }> = 
 ];
 
 function RouteTransitionManager() {
+  const site = useSite();
   const location = useLocation();
   const navigationType = useNavigationType();
   const previousPath = useRef(location.pathname);
@@ -92,14 +94,19 @@ function RouteTransitionManager() {
       title: 'HasanAra',
       description: 'Public broadcast archive.',
     };
-    document.title = meta.title;
+    document.title = meta.title.replaceAll('HasanAra', site.name);
     let description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     if (!description) {
       description = document.createElement('meta');
       description.name = 'description';
       document.head.appendChild(description);
     }
-    description.content = meta.description;
+    description.content =
+      location.pathname === '/'
+        ? site.description
+        : meta.description
+            .replaceAll('HasanAra', site.name)
+            .replaceAll('HasanAbi', site.creator_name);
 
     const pathChanged = previousPath.current !== location.pathname;
     if (!pathChanged) return;
@@ -123,7 +130,7 @@ function RouteTransitionManager() {
       }
       setAnnouncement(meta.title.replace(' — HasanAra', ''));
     });
-  }, [location.pathname, navigationType]);
+  }, [location.pathname, navigationType, site]);
 
   return (
     <span className="sr-only" aria-live="polite">
@@ -133,6 +140,7 @@ function RouteTransitionManager() {
 }
 
 export default function AppLayout() {
+  const site = useSite();
   const { user, loading, error: authError, login, loginTwitch, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -174,7 +182,11 @@ export default function AppLayout() {
       >
         <div className="mx-auto flex max-w-[100rem] items-center justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex items-center gap-4">
-            <Link to="/" className="group flex items-center gap-3" aria-label="Home - HasanAra">
+            <Link
+              to="/"
+              className="group flex items-center gap-3"
+              aria-label={`Home - ${site.name}`}
+            >
               <img
                 src="/icon.svg"
                 alt=""
@@ -184,7 +196,7 @@ export default function AppLayout() {
               />
               <span>
                 <span className="block text-xl font-semibold leading-none tracking-[-0.04em] text-ink group-hover:text-accent">
-                  HasanAra
+                  {site.name}
                 </span>
                 <span className="mt-1 hidden text-[8px] font-bold uppercase tracking-[0.24em] text-subtle sm:block">
                   Broadcast archive
@@ -489,7 +501,7 @@ export default function AppLayout() {
       >
         <div className="mx-auto grid max-w-[100rem] gap-5 px-4 py-7 text-sm text-muted sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:px-6">
           <p>
-            &copy; {new Date().getFullYear()} HasanAra. A{' '}
+            &copy; {new Date().getFullYear()} {site.name}. A{' '}
             <a href="https://subcult.tv" className="action-link underline underline-offset-2">
               Subcult
             </a>{' '}

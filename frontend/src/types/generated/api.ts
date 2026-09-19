@@ -1763,6 +1763,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/site': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Site Config */
+    get: operations['site_config_site_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/support': {
     parameters: {
       query?: never;
@@ -5176,6 +5193,19 @@ export interface components {
     SessionsResponse: {
       /** Sessions */
       sessions: components['schemas']['SessionResponse'][];
+    };
+    /** SiteConfig */
+    SiteConfig: {
+      /** Community Enabled */
+      community_enabled: boolean;
+      /** Creator Name */
+      creator_name: string;
+      /** Description */
+      description: string;
+      /** Name */
+      name: string;
+      /** Public Passages Enabled */
+      public_passages_enabled: boolean;
     };
     /** SupportConfig */
     SupportConfig: {
@@ -9151,6 +9181,26 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  site_config_site_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SiteConfig'];
         };
       };
     };

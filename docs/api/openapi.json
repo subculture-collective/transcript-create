@@ -5619,6 +5619,39 @@
         "title": "SessionsResponse",
         "type": "object"
       },
+      "SiteConfig": {
+        "properties": {
+          "community_enabled": {
+            "title": "Community Enabled",
+            "type": "boolean"
+          },
+          "creator_name": {
+            "title": "Creator Name",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "public_passages_enabled": {
+            "title": "Public Passages Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "creator_name",
+          "public_passages_enabled",
+          "community_enabled"
+        ],
+        "title": "SiteConfig",
+        "type": "object"
+      },
       "SupportConfig": {
         "properties": {
           "donations_enabled": {
@@ -12428,6 +12461,27 @@
         "summary": "Render a passage social card",
         "tags": [
           "Passages"
+        ]
+      }
+    },
+    "/site": {
+      "get": {
+        "operationId": "site_config_site_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Site Config",
+        "tags": [
+          "Site"
         ]
       }
     },

@@ -54,7 +54,7 @@ COPY scripts/verify_ml_runtime.py /tmp/verify_ml_runtime.py
 # Install Python dependencies with pip cache mount for faster rebuilds
 # Use CPU-only PyTorch (smaller, no CUDA/ROCm)
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --no-cache-dir --upgrade setuptools==81.0.0 wheel==0.47.0 && \
+    pip3 install --no-cache-dir --upgrade pip==26.2 setuptools==83.0.0 wheel==0.47.0 && \
     TORCH_VERSION="$(sed -n 's/^torch==//p' requirements-ml-runtime.txt)" && \
     TORCHAUDIO_VERSION="$(sed -n 's/^torchaudio==//p' requirements-ml-runtime.txt)" && \
     TORCHCODEC_VERSION="$(sed -n 's/^torchcodec==//p' requirements-ml-runtime.txt)" && \

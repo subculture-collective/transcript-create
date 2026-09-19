@@ -67,7 +67,7 @@ COPY scripts/verify_ml_runtime.py /tmp/verify_ml_runtime.py
 # Install Python dependencies with pip cache mount for faster rebuilds
 # Use BuildKit cache mount to persist pip cache across builds
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --no-cache-dir --upgrade setuptools==81.0.0 wheel==0.47.0 && \
+    pip3 install --no-cache-dir --upgrade pip==26.2 setuptools==83.0.0 wheel==0.47.0 && \
     TORCH_VERSION="$(sed -n 's/^torch==//p' requirements-ml-runtime.txt)" && \
     TORCHAUDIO_VERSION="$(sed -n 's/^torchaudio==//p' requirements-ml-runtime.txt)" && \
     TORCHCODEC_VERSION="$(sed -n 's/^torchcodec==//p' requirements-ml-runtime.txt)" && \
@@ -75,11 +75,18 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --no-cache-dir --index-url ${ROCM_WHEEL_INDEX} \
         "torch==${TORCH_VERSION}" "torchaudio==${TORCHAUDIO_VERSION}" && \
     # TorchCodec does not publish ROCm wheels. Its CPU wheel is compatible
-    # with Torch 2.11 and pyannote receives in-memory waveforms in our worker.
+    # with Torch >=2.11 and pyannote receives in-memory waveforms in our worker.
     pip3 install --no-cache-dir --no-deps \
         --index-url https://download.pytorch.org/whl/cpu \
         "torchcodec==${TORCHCODEC_VERSION}" && \
-    pip3 install --no-cache-dir -c constraints.txt -r requirements.txt && \
+    # Ubuntu 22.04 uses Python 3.10, like the CUDA ML image.
+    WHISPER_VERSION="$(sed -n 's/^openai-whisper==//p' requirements.txt)" && \
+    pip3 install --no-cache-dir --no-build-isolation \
+        "openai-whisper==${WHISPER_VERSION}" && \
+    grep -v '^openai-whisper==' requirements.txt > /tmp/requirements-worker.txt && \
+    grep -Ev '^(contourpy|scipy|networkx)==' constraints.txt > /tmp/constraints-worker.txt && \
+    printf 'scipy==1.15.3\nnetworkx==3.4.2\n' >> /tmp/constraints-worker.txt && \
+    pip3 install --no-cache-dir -c /tmp/constraints-worker.txt -r /tmp/requirements-worker.txt && \
     pip3 check && \
     python3 /tmp/verify_ml_runtime.py
 

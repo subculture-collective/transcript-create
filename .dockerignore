@@ -40,6 +40,10 @@ cover/
 data/
 cache/
 .cache
+# Local verification sessions may contain cookies or private fixture state.
+.playwright-cli/
+output/playwright/
+output/verification/
 docker-volumes/
 
 # Frontend build artifacts

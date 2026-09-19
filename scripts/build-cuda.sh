@@ -8,14 +8,14 @@
 #   ./build-cuda.sh [cuda_version] [--no-cache] [--push]
 #
 # Arguments:
-#   cuda_version - audited CUDA version (12.8 only), default: 12.8
+#   cuda_version - audited CUDA version (12.6 only), default: 12.6
 #   --no-cache   - Build without using cache
 #   --push       - Push to registry after build
 #
 # Examples:
-#   ./build-cuda.sh                    # Build with CUDA 12.8 and cache
-#   ./build-cuda.sh 12.8 --no-cache    # Build CUDA 12.8 without cache
-#   ./build-cuda.sh 12.8 --push        # Scan, then push to registry
+#   ./build-cuda.sh                    # Build with CUDA 12.6 and cache
+#   ./build-cuda.sh 12.6 --no-cache    # Build CUDA 12.6 without cache
+#   ./build-cuda.sh 12.6 --push        # Scan, then push to registry
 # =============================================================================
 
 set -euo pipefail
@@ -27,7 +27,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Default values
-CUDA_VERSION="${1:-12.8}"
+CUDA_VERSION="${1:-12.6}"
 NO_CACHE=""
 PUSH_IMAGE=false
 IMAGE_NAME="${IMAGE_NAME:-hasanara}"
@@ -54,12 +54,12 @@ done
 
 # Map CUDA version to PyTorch wheel index
 case ${CUDA_VERSION} in
-    12.8)
-        CUDA_WHEEL_INDEX="https://download.pytorch.org/whl/cu128"
+    12.6)
+        CUDA_WHEEL_INDEX="https://download.pytorch.org/whl/cu126"
         ;;
     *)
         echo -e "${RED}Unsupported CUDA version: ${CUDA_VERSION}${NC}"
-        echo "Supported version: 12.8"
+        echo "Supported version: 12.6"
         exit 1
         ;;
 esac

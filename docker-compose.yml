@@ -91,7 +91,7 @@ services:
         build:
             context: .
             args:
-                ROCM_WHEEL_INDEX: https://download.pytorch.org/whl/rocm6.0
+                ROCM_WHEEL_INDEX: https://download.pytorch.org/whl/rocm7.1
         image: hasanara-worker:latest
         env_file: .env
         environment:

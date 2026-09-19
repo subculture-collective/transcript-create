@@ -15,10 +15,10 @@
 # =============================================================================
 # Stage 1: Base image with system dependencies
 # =============================================================================
-FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04 AS base
+FROM nvidia/cuda:12.6.0-runtime-ubuntu22.04 AS base
 
 # Build argument for PyTorch CUDA wheel index
-ARG CUDA_WHEEL_INDEX=https://download.pytorch.org/whl/cu128
+ARG CUDA_WHEEL_INDEX=https://download.pytorch.org/whl/cu126
 
 # Set environment variables for non-interactive installs
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -63,7 +63,7 @@ COPY scripts/verify_ml_runtime.py /tmp/verify_ml_runtime.py
 # Use BuildKit cache mount to persist pip cache across builds. The pinned
 # openai-whisper sdist needs a non-isolated metadata build on Python 3.10.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --no-cache-dir --upgrade setuptools==81.0.0 wheel==0.47.0 && \
+    pip3 install --no-cache-dir --upgrade pip==26.2 setuptools==83.0.0 wheel==0.47.0 && \
     pip3 install --no-cache-dir --only-binary=:all: --index-url https://pypi.org/simple \
         -r requirements-cuda-bootstrap.txt && \
     TORCH_VERSION="$(sed -n 's/^torch==//p' requirements-ml-runtime.txt)" && \
@@ -71,7 +71,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     TORCHCODEC_VERSION="$(sed -n 's/^torchcodec==//p' requirements-ml-runtime.txt)" && \
     pip3 install --no-cache-dir --index-url ${CUDA_WHEEL_INDEX} \
         "torch==${TORCH_VERSION}" "torchaudio==${TORCHAUDIO_VERSION}" && \
-    # TorchCodec 0.14 has no CUDA 12.8 wheel. Audio is preloaded before
+    # TorchCodec 0.14 has no CUDA 12.6 wheel. Audio is preloaded before
     # diarization, so use the compatible CPU decoder without replacing Torch.
     pip3 install --no-cache-dir --no-deps \
         --index-url https://download.pytorch.org/whl/cpu \
@@ -88,7 +88,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python3 /tmp/verify_ml_runtime.py
 
 # Verify PyTorch installation
-RUN python3 -c "import torch; assert '+cu128' in torch.__version__; print('Torch version:', torch.__version__); print('CUDA version:', torch.version.cuda)"
+RUN python3 -c "import torch; assert '+cu126' in torch.__version__; print('Torch version:', torch.__version__); print('CUDA version:', torch.version.cuda)"
 
 # =============================================================================
 # Stage 3: Final application stage

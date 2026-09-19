@@ -1,6 +1,7 @@
 # Auditable base-version inventory for image-specific PyTorch wheels.
-# Dockerfiles install the matching CPU, CUDA 12.8, or ROCm 7.1 local build.
-torch==2.11.0
+# Dockerfiles install the matching CPU, CUDA 12.6, or ROCm 7.1 local build.
+torch==2.13.0
+# TorchAudio 2.11 supports Torch >=2.11; its version need not match Torch.
 torchaudio==2.11.0
 torchcodec==0.14.0
 pyannote.audio==4.0.1

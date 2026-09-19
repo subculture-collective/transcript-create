@@ -17,6 +17,7 @@ type Props = {
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
   onClickSegment: (segment: Segment, id: number) => void;
   onSaveMoment: (segment: Segment, segIndex: number, text: string) => void;
+  onSharePassage?: (segment: Segment) => void;
   onCopyQuote: (segment: Segment, text: string, segIndex: number) => void;
 };
 
@@ -28,6 +29,7 @@ export default function PlainTranscriptTurns({
   onClickSegment,
   onSaveMoment,
   onCopyQuote,
+  onSharePassage,
 }: Props) {
   return (
     <div className="transcript-document" role="list" aria-label="Transcript paragraphs">
@@ -126,6 +128,15 @@ export default function PlainTranscriptTurns({
                   >
                     Copy quote
                   </button>
+                  {onSharePassage && (
+                    <button
+                      type="button"
+                      className="selection-action"
+                      onClick={() => onSharePassage(activeEntry.segment)}
+                    >
+                      Share passage
+                    </button>
+                  )}
                 </div>
               )}
             </div>

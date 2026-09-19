@@ -18,6 +18,7 @@ type Props = {
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
   onClickSentence: (segment: Segment, segIndex: number, sentenceId: string) => void;
   onSaveMoment: (segment: Segment, segIndex: number, text: string) => void;
+  onSharePassage?: (segment: Segment) => void;
   onCopyQuote: (segment: Segment, text: string, segIndex: number) => void;
 };
 
@@ -163,6 +164,7 @@ function FormattedTranscriptDocument({
   onClickSentence,
   onSaveMoment,
   onCopyQuote,
+  onSharePassage,
 }: Props) {
   const preparedBlocks = useMemo(
     () =>
@@ -290,6 +292,15 @@ function FormattedTranscriptDocument({
                   >
                     Copy quote
                   </button>
+                  {onSharePassage && (
+                    <button
+                      type="button"
+                      className="selection-action"
+                      onClick={() => onSharePassage(selectedPiece.firstSegment)}
+                    >
+                      Share passage
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -1,3 +1,4 @@
+import { buildPassageLink } from '../../features/passages/range';
 import { Link } from 'react-router-dom';
 import type { SearchHit } from '../../types/api';
 import { buildTimestampLink } from '../../features/archive/format';
@@ -33,6 +34,14 @@ export default function MomentActionRow({
       >
         Open moment
       </Link>
+      {Number.isSafeInteger(moment.end_ms) && moment.end_ms > moment.start_ms && (
+        <Link
+          to={buildPassageLink(videoId, { startMs: moment.start_ms, endMs: moment.end_ms })}
+          className="btn-ghost min-h-11 px-2 text-xs"
+        >
+          Share passage
+        </Link>
+      )}
       {query && (
         <Link
           to={buildPlayMatchesLink(videoId, moment, query)}

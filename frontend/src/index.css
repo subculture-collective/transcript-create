@@ -1036,6 +1036,11 @@ body {
 }
 
 @media (max-width: 63.999rem) and (orientation: landscape) and (max-height: 600px) {
+  .passage-panel {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
   .episode-page {
     display: grid;
     grid-template-columns: minmax(18rem, 48vw) minmax(0, 1fr);

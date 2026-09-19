@@ -31,6 +31,10 @@ describe('MomentActionRow', () => {
       'href',
       '/v/video-1?t=1&t_ms=1140#moment-1140'
     );
+    expect(screen.getByRole('link', { name: 'Share passage' })).toHaveAttribute(
+      'href',
+      '/v/video-1?t=1&t_ms=1140&end_ms=2000#moment-1140'
+    );
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Copy quote' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Full VOD' })).toHaveAttribute('href', '/v/video-1');

@@ -3,6 +3,7 @@ import { loadYouTubeApi } from '../services/youtubeApi';
 
 type YouTubePlayer = {
   destroy?: () => void;
+  loadVideoById?: (options: { videoId: string; startSeconds: number; endSeconds?: number }) => void;
   seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
   playVideo?: () => void;
   pauseVideo?: () => void;
@@ -38,6 +39,7 @@ export type YouTubePlayerHandle = {
   pause: () => void;
   togglePlay: () => void;
   getCurrentTime: () => number | null;
+  previewRange: (startSeconds: number, endSeconds: number) => void;
 };
 
 type Props = { videoId: string; start?: number; title?: string };
@@ -54,12 +56,14 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
   const previousStartRef = useRef(start);
   startRef.current = start;
   const pendingSeekRef = useRef<{ seconds: number; play: boolean } | null>(null);
+  const pendingRangeRef = useRef<{ startSeconds: number; endSeconds: number } | null>(null);
   const [ready, setReady] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   const seek = useCallback(
     (seconds: number, play = false) => {
+      pendingRangeRef.current = null;
       pendingSeekRef.current = { seconds, play };
       if (!ready || !playerRef.current) return;
       try {
@@ -78,6 +82,7 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
     let active = true;
     setReady(false);
     setScriptError(null);
+    pendingRangeRef.current = null;
     const initialStart = startRef.current;
     pendingSeekRef.current = initialStart ? { seconds: initialStart, play: false } : null;
     void loadYouTubeApi()
@@ -117,13 +122,32 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
     const changed = previousStartRef.current !== start;
     previousStartRef.current = start;
     if (start || changed) pendingSeekRef.current = { seconds: start, play: false };
-    if (ready && pendingSeekRef.current) {
+    if (ready && pendingRangeRef.current) {
+      playerRef.current?.loadVideoById?.({ videoId, ...pendingRangeRef.current });
+      pendingRangeRef.current = null;
+      pendingSeekRef.current = null;
+    } else if (ready && pendingSeekRef.current) {
       const pendingSeek = pendingSeekRef.current;
       seek(pendingSeek.seconds, pendingSeek.play);
     }
   }, [ready, seek, start, videoId]);
 
   useImperativeHandle(ref, () => ({
+    previewRange(startSeconds: number, endSeconds: number) {
+      if (
+        !Number.isFinite(startSeconds) ||
+        !Number.isFinite(endSeconds) ||
+        startSeconds < 0 ||
+        endSeconds <= startSeconds
+      )
+        return;
+      pendingSeekRef.current = null;
+      pendingRangeRef.current = { startSeconds, endSeconds };
+      if (ready && playerRef.current?.loadVideoById) {
+        playerRef.current.loadVideoById({ videoId, startSeconds, endSeconds });
+        pendingRangeRef.current = null;
+      }
+    },
     seekTo(seconds: number, options?: { play?: boolean }) {
       seek(seconds, options?.play ?? false);
     },
@@ -135,6 +159,8 @@ export default forwardRef<YouTubePlayerHandle, Props>(function YouTubePlayer(
       }
     },
     pause() {
+      pendingRangeRef.current = null;
+      if (pendingSeekRef.current) pendingSeekRef.current.play = false;
       try {
         playerRef.current?.pauseVideo?.();
       } catch {

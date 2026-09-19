@@ -10,6 +10,8 @@ import axe from 'axe-core';
 
 const playerMocks = vi.hoisted(() => ({
   destroy: vi.fn(),
+  previewRange: vi.fn(),
+  pause: vi.fn(),
   getCurrentTime: vi.fn(() => 0),
   seekTo: vi.fn(),
   togglePlay: vi.fn(),
@@ -109,6 +111,32 @@ describe('VideoPage', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('opens a shared passage in a fresh session and preserves its exact range', async () => {
+    mockAuth();
+    mockEpisode();
+    renderVideo('/v/video-1?t=12&t_ms=12125&end_ms=22000');
+    expect(await screen.findByRole('heading', { name: 'Share a passage' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Start time')).toHaveValue('00:00:12.125');
+    expect(screen.getByLabelText('End time')).toHaveValue('00:00:22');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview passage' }));
+    expect(playerMocks.previewRange).toHaveBeenCalledWith(12.125, 22);
+    fireEvent.click(screen.getByRole('button', { name: 'Close passage' }));
+    expect(screen.queryByRole('heading', { name: 'Share a passage' })).not.toBeInTheDocument();
+  });
+
+  it('starts a passage from a transcript selection and leaves old links start-only', async () => {
+    mockAuth();
+    mockEpisode();
+    renderVideo('/v/video-1?t=12');
+    fireEvent.click(await screen.findByRole('button', { name: 'Play paragraph from 00:00:12' }));
+    expect(screen.queryByLabelText('End time')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Share passage' }));
+    expect(await screen.findByLabelText('Start time')).toHaveValue('00:00:12');
+    expect(screen.getByLabelText('End time')).toHaveValue('00:00:18');
+    fireEvent.click(screen.getByRole('button', { name: 'Play paragraph from 00:00:18' }));
+    expect(screen.queryByLabelText('End time')).not.toBeInTheDocument();
   });
 
   it('renders people and content tags near the VOD metadata', async () => {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import PassagePanel from '../components/video/PassagePanel';
+import { buildPassageLink, readPassageRange } from '../features/passages/range';
 import { HTTPError } from 'ky';
 import {
   api,
@@ -120,7 +122,24 @@ export default function VideoPage() {
     const t = tStr ? Number(tStr) : 0;
     return Number.isFinite(t) && t >= 0 ? Math.floor(t * 1000) : 0;
   }, [params]);
+  const passageRange = readPassageRange(params);
   const startSeconds = Math.floor(startMilliseconds / 1000);
+  function sharePassage(segment: Segment) {
+    setIsPlayingMatches(false);
+    playerRef.current?.pause();
+    const url = new URL(
+      buildPassageLink(videoId!, { startMs: segment.start_ms, endMs: segment.end_ms }),
+      window.location.origin
+    );
+    setParams(url.searchParams);
+  }
+  function closePassage() {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('end_ms');
+      return next;
+    });
+  }
   const requestedTranscriptSource = useMemo(() => {
     const source = params.get('source');
     if (source === 'whisper' || source === 'youtube' || source === 'merged') return source;
@@ -142,7 +161,7 @@ export default function VideoPage() {
 
   const scrollElementIntoView = useCallback(
     (element: Element | null, options?: ScrollIntoViewOptions) => {
-      if (!element) return;
+      if (!element || params.has('end_ms')) return;
       if (autoFollowScrollTimeoutRef.current != null) {
         window.clearTimeout(autoFollowScrollTimeoutRef.current);
       }
@@ -151,7 +170,7 @@ export default function VideoPage() {
       }, 1000);
       element.scrollIntoView(options ?? { behavior: 'smooth', block: 'center' });
     },
-    []
+    [params]
   );
 
   const resumeAutoFollow = useCallback(() => {
@@ -436,6 +455,7 @@ export default function VideoPage() {
       const s = Math.floor(ms / 1000);
       setParams((prev: URLSearchParams) => {
         const p = new URLSearchParams(prev as unknown as string);
+        p.delete('end_ms');
         p.set('t', String(s));
         if (ms % 1000 !== 0) p.set('t_ms', String(Math.max(0, Math.floor(ms))));
         else p.delete('t_ms');
@@ -725,9 +745,13 @@ export default function VideoPage() {
                 type="button"
                 className="btn-secondary"
                 onClick={() =>
-                  void copyText(window.location.href).then(() =>
-                    setOperationFeedback('Episode link copied.')
-                  )
+                  void copyText(window.location.href)
+                    .then(() => setOperationFeedback('Episode link copied.'))
+                    .catch(() =>
+                      setOperationFeedback(
+                        'The episode link could not be copied. Copy the address from your browser.'
+                      )
+                    )
                 }
               >
                 Share
@@ -747,6 +771,27 @@ export default function VideoPage() {
       >
         {video && <VideoDetailsPanel video={video} />}
       </VideoHeader>
+      {video && passageRange && (
+        <PassagePanel
+          key={`${videoId}:${params.get('t_ms') ?? params.get('t')}:${params.get('end_ms')}`}
+          videoId={video.id}
+          title={episodeTitle}
+          initialRange={passageRange}
+          durationMs={video.duration_seconds ? video.duration_seconds * 1000 : undefined}
+          segments={transcript?.segments ?? []}
+          playerRef={playerRef}
+          onClose={closePassage}
+          onShowPlayer={() => {
+            if (viewMode === 'reader') setViewMode('standard');
+            if (!isMobileEpisode)
+              requestAnimationFrame(() =>
+                document
+                  .getElementById('episode-player')
+                  ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+              );
+          }}
+        />
+      )}
       {operationFeedback && (
         <div className="text-sm text-success" role="status">
           {operationFeedback}
@@ -770,7 +815,7 @@ export default function VideoPage() {
           }
         >
           {video && !isMobileEpisode && (
-            <div>
+            <div id="episode-player">
               <PlayerPanel video={video} start={start} playerRef={playerRef} />
             </div>
           )}
@@ -1125,6 +1170,7 @@ export default function VideoPage() {
                         onClickSentence={onClickFormattedSentence}
                         onSaveMoment={saveTranscriptMoment}
                         onCopyQuote={copyTranscriptQuote}
+                        onSharePassage={sharePassage}
                       />
                     </>
                   ) : (
@@ -1193,6 +1239,7 @@ export default function VideoPage() {
                         onClickSegment={onClickSegment}
                         onSaveMoment={saveTranscriptMoment}
                         onCopyQuote={copyTranscriptQuote}
+                        onSharePassage={sharePassage}
                       />
                     </>
                   ))}

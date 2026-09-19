@@ -13,6 +13,7 @@ class SiteConfig(BaseModel):
     description: str
     creator_name: str
     public_passages_enabled: bool
+    atproto_enabled: bool
     community_enabled: bool
 
 
@@ -24,4 +25,5 @@ def site_config():
         creator_name=settings.SITE_CREATOR_NAME,
         public_passages_enabled=settings.PUBLIC_PASSAGES_ENABLED,
         community_enabled=settings.COMMUNITY_ENABLED,
+        atproto_enabled=settings.ATPROTO_ENABLED,
     )

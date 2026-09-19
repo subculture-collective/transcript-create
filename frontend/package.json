@@ -19,6 +19,7 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
+    "@atproto/oauth-client-browser": "0.5.7",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.90.20",
     "ky": "^1.11.0",

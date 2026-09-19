@@ -1137,6 +1137,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/atproto/client-metadata.json': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Client Metadata */
+    get: operations['client_metadata_atproto_client_metadata_json_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/atproto/config': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Client Config */
+    get: operations['client_config_atproto_config_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/callback/google': {
     parameters: {
       query?: never;
@@ -5458,6 +5492,8 @@ export interface components {
     };
     /** SiteConfig */
     SiteConfig: {
+      /** Atproto Enabled */
+      atproto_enabled: boolean;
       /** Community Enabled */
       community_enabled: boolean;
       /** Creator Name */
@@ -8313,6 +8349,46 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  client_metadata_atproto_client_metadata_json_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+    };
+  };
+  client_config_atproto_config_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
         };
       };
     };

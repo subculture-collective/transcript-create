@@ -6,6 +6,7 @@ export type SiteConfig = {
   description: string;
   creator_name: string;
   public_passages_enabled: boolean;
+  atproto_enabled?: boolean;
   community_enabled: boolean;
 };
 const defaults: SiteConfig = {

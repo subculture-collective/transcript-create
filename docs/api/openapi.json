@@ -5892,6 +5892,10 @@
       },
       "SiteConfig": {
         "properties": {
+          "atproto_enabled": {
+            "title": "Atproto Enabled",
+            "type": "boolean"
+          },
           "community_enabled": {
             "title": "Community Enabled",
             "type": "boolean"
@@ -5918,6 +5922,7 @@
           "description",
           "creator_name",
           "public_passages_enabled",
+          "atproto_enabled",
           "community_enabled"
         ],
         "title": "SiteConfig",
@@ -10512,6 +10517,44 @@
         "summary": "Get a citation-backed topic timeline",
         "tags": [
           "Archive"
+        ]
+      }
+    },
+    "/atproto/client-metadata.json": {
+      "get": {
+        "operationId": "client_metadata_atproto_client_metadata_json_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Client Metadata",
+        "tags": [
+          "AT Protocol"
+        ]
+      }
+    },
+    "/atproto/config": {
+      "get": {
+        "operationId": "client_config_atproto_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Client Config",
+        "tags": [
+          "AT Protocol"
         ]
       }
     },

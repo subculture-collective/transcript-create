@@ -7,6 +7,7 @@ export default defineConfig(() => {
   const apiBase = process.env.VITE_API_BASE
   const proxyTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:41177'
   return {
+    build: { rollupOptions: { input: { main: 'index.html', at: 'at.html' } } },
     plugins: [react(), tailwindcss()],
     server: {
       proxy: apiBase

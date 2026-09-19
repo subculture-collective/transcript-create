@@ -348,6 +348,11 @@ export default function CommunityPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 py-6">
       <header>
+        {site.atproto_enabled && (
+          <a className="action-link" href="/at.html">
+            Connect an AT account for public sharing
+          </a>
+        )}
         <p className="text-sm uppercase tracking-wider text-accent">
           {site.creator_name} · Community
         </p>

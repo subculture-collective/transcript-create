@@ -217,6 +217,14 @@ export default function PassagePanel({
         </button>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
+        {site.atproto_enabled && range && (
+          <a
+            className="btn-secondary"
+            href={`/at.html?passage=${encodeURIComponent(buildPassageShareLink(videoId, range))}`}
+          >
+            Share to Bluesky
+          </a>
+        )}
         {site.community_enabled && range && (
           <Link
             className="btn-secondary"

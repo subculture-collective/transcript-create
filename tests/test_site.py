@@ -14,4 +14,11 @@ def test_site_config_is_explicit_public_allowlist(monkeypatch):
     assert data["name"] == "Creator library"
     assert data["creator_name"] == "Demo creator"
     assert data["public_passages_enabled"] is False
-    assert set(data) == {"name", "creator_name", "description", "community_enabled", "public_passages_enabled"}
+    assert set(data) == {
+        "name",
+        "creator_name",
+        "description",
+        "community_enabled",
+        "atproto_enabled",
+        "public_passages_enabled",
+    }

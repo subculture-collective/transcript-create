@@ -40,7 +40,7 @@ Official API references checked September 19, 2026: [YouTube IFrame API](https:/
 
 ## Remaining stages
 
-Per-selection social cards are not implemented here: the SPA still serves its existing generic social metadata. Before calling the sharing feature complete for a particular social destination, add server-readable title/range/excerpt metadata, define public-source eligibility and caching/deletion behavior, and check actual unfurls on the selected platforms. Client-side metadata changes alone would not prove crawler support.
+Public share links now open `/api/share/videos/{videoId}?start_ms=...&end_ms=...`, a server-rendered page containing title/range/excerpt metadata, an embedded source player, a 1200 × 630 PNG card, and a link back to the editable `/v/` range. Reads bypass transcript/video caches and responses use no-store so source deletion stops future serving. Platform caches cannot be recalled. `PUBLIC_PASSAGES_ENABLED=false` disables these routes for nonpublic deployments. Actual social-platform unfurls remain unverified; these HTTP/PNG checks do not establish how every platform caches or displays the card.
 
 Downloadable clips require a separately authorized source, source/transcript alignment checks, rendering, access controls, retention, costs, and expiry. The current Export menu continues to export transcripts, not video clips.
 

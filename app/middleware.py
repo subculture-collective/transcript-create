@@ -59,7 +59,7 @@ def apply_security_headers(response: Response) -> Response:
     response.headers["X-XSS-Protection"] = "1; mode=block"
     if settings.ENVIRONMENT == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = API_CONTENT_SECURITY_POLICY
+    response.headers.setdefault("Content-Security-Policy", API_CONTENT_SECURITY_POLICY)
     if "server" in response.headers:
         del response.headers["server"]
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"

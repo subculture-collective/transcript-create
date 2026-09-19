@@ -16,3 +16,6 @@ reportlab==4.4.4
 prometheus-client==0.21.0
 slowapi==0.1.9
 redis==5.2.1
+
+# Server-rendered passage preview cards
+pillow==12.3.0

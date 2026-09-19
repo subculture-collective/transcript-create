@@ -55,3 +55,7 @@ export function readPassageRange(params: URLSearchParams): PassageRange | null {
   const endMs = /^\d+$/.test(end) ? Number(end) : NaN;
   return { startMs, endMs };
 }
+
+export function buildPassageShareLink(videoId: string, range: PassageRange) {
+  return `/api/share/videos/${encodeURIComponent(videoId)}?${new URLSearchParams({ start_ms: String(range.startMs), end_ms: String(range.endMs) })}`;
+}

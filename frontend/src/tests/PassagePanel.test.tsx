@@ -57,7 +57,7 @@ describe('PassagePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy passage link' }));
     expect(await screen.findByText('Passage link copied.')).toBeInTheDocument();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      expect.stringContaining('/v/video-1?t=10&end_ms=25500#moment-10000')
+      expect.stringContaining('/api/share/videos/video-1?start_ms=10000&end_ms=25500')
     );
     fireEvent.click(screen.getByRole('button', { name: 'Continue after passage' }));
     expect(player.seekTo).toHaveBeenCalledWith(25.5, { play: true });

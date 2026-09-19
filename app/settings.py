@@ -126,6 +126,9 @@ class Settings(BaseSettings):
 
     # Frontend origin for CORS/redirects
     FRONTEND_ORIGIN: str = "http://localhost:5173"
+    SITE_NAME: str = "HasanAra"
+    SITE_DESCRIPTION: str = "Search the archive, share a passage, and keep its context."
+    PUBLIC_PASSAGES_ENABLED: bool = True
     # Public Stripe-hosted Payment Link. HasanAra never accepts card details or
     # creates charges directly; an empty value keeps donations disabled.
     DONATION_PAYMENT_LINK_URL: str = ""

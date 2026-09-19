@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { Segment } from '../../types/api';
 import type { YouTubePlayerHandle } from '../YouTubePlayer';
 import {
-  buildPassageLink,
+  buildPassageShareLink,
   formatPassageTime,
   parsePassageTime,
   passageRangeError,
@@ -44,7 +44,7 @@ export default function PassagePanel({
   const endMs = parsePassageTime(end);
   const error = passageRangeError(startMs, endMs, durationMs);
   const range = !error && startMs !== null && endMs !== null ? { startMs, endMs } : null;
-  const link = range ? `${window.location.origin}${buildPassageLink(videoId, range)}` : '';
+  const link = range ? `${window.location.origin}${buildPassageShareLink(videoId, range)}` : '';
   const context = useMemo(() => {
     if (startMs === null || endMs === null || error) return { entries: [], omitted: 0 };
     const first = segments.findIndex((s) => s.end_ms > startMs && s.start_ms < endMs);

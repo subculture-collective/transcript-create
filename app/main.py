@@ -343,6 +343,9 @@ app.include_router(account_router)
 app.include_router(api_keys_router)
 app.include_router(archive_router)
 app.include_router(jobs_router)
+from .routes.passages import router as passages_router  # noqa: E402
+
+app.include_router(passages_router)
 app.include_router(videos_router)
 app.include_router(favorites_router)
 app.include_router(saved_searches_router)

@@ -19,6 +19,8 @@ For each implementation increment run focused backend/frontend tests and relevan
 
 Final evidence and remaining release gates are recorded in [the September 19 verification report](../../product/recollect-verification-20260919.md). Almaz source and Gitea main were rechecked after reboot at `311ddbe3df474b967e46409bc22218c3df49c119`. All implementation commits are local; no push or deployment. Full verification remains blocked at dependency audit despite passing backend tests and separately passing frontend/build/browser checks.
 
+Follow-up authorized file review and fixes: `d33d229` commits the corrected deploy guide, hardened cleanup utility/tests and artifact ignore rules; `5499990` patches AnyIO/Lightning/Setuptools and API/ingest pip tooling, retires expired suppressions and fixes validator exit propagation. Fresh final backend: 1,859 passed. Frontend, constraints, final API Python inventory and resolved ingest dependency audits are clean. The remaining Torch/TorchAudio/Setuptools compatibility blocker is documented with wheel-index and resolver evidence in the verification report; full ML release verification remains open.
+
 ## Reuse inventory
 
 - HasanAra: FastAPI, PostgreSQL/Alembic, account roles, session/CSRF helpers, audit logs, React SPA, source-linked transcript and search flows.

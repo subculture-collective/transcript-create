@@ -2,6 +2,23 @@
 
 The first product phase and several later-roadmap foundations are implemented locally on `codex/passage-sharing`. This is not a deployed or fully release-qualified product. Community, AT sharing and original-media clip export remain opt-in. No live account, social post, paid inference, real media acquisition or production mutation was performed.
 
+## Follow-up: reviewed files and audit fixes
+
+The user subsequently authorized reviewing the previously untracked files and fixing the encountered issues. These results supersede the earlier audit status below.
+
+- `d33d229`: committed the corrected deployment quick reference and audio-cleanup utility with disposable-filesystem regression tests. The guide now uses authoritative Gitea/release evidence and removes the hand-written manifest fallback, stale branch example and suppressed migration-log errors. Cleanup rejects extra directories, handles leading dashes, completes discovery before deletion and propagates discovery failures. ShellCheck and Bash syntax passed. No actual audio archive was cleaned.
+- Browser screenshots, session traces and synthetic media stay on disk as ignored local artifacts. Existing tracked evidence remains tracked; no artifacts were deleted.
+- `5499990`: pinned AnyIO 4.14.2, Lightning 2.6.6 and Setuptools 83.0.0; patched API/ingest image tooling to pip 26.2; removed both expired ML audit suppressions. Fixed the shell gate so failed exception validation cannot be swallowed by `read`. Regression tests exercise that failure status.
+- Fresh final backend run (`recollect-ops-final-20260919`): **1,859 tests passed, 82.90% coverage**, Ruff/Black/isort/mypy and configured Bandit gate passed. The full script then correctly failed on the remaining Torch advisory. Disposable services were cleaned up.
+- Frontend lockfile audit recovered from the registry outage and reported **zero vulnerabilities**. The repository npm audit wrapper passed. No frontend source behavior changed in this follow-up.
+- Constraints inventory audit: **140 packages, zero known vulnerabilities**. This inventory excludes the separately declared ML runtime pins and is not evidence that the whole ML role resolves.
+- Built the complete local API image `hasanara-api:recollect-audit-fix`, image identity `sha256:35202f81c7d4ab6f9354c33f62b43b447953c7738f37d7294b317961d0457804`. Application import and `pip check` passed with network disabled. Exported installed inventory: **52 packages, zero known vulnerabilities**. Confirmed exactly one pip/Setuptools/wheel distribution, with versions 26.2/83.0.0/0.47.0. This qualifies Python dependencies, not an OS scan or production deployment.
+- Resolved Python 3.10 ingest requirements with the updated constraints: **70 packages, zero known vulnerabilities**. A GPU image build/hardware smoke was not performed in this follow-up.
+
+**Unresolved ML blocker:** local Torch 2.12.1 remains affected by `GHSA-rrmf-rvhw-rf47`; patched version is 2.13.0. On September 19, official CPU and ROCm 7.1 indexes had a Python 3.11 Linux x86_64 Torch 2.13.0 wheel, CUDA 12.8 did not, and none of those three indexes had TorchAudio 2.13.0. The PyPI TorchAudio 2.13.0 endpoint returned 404. Resolving the repository's Torch 2.11.0 stack with patched Setuptools 83.0.0 fails because Torch requires Setuptools below 82. The local Torch 2.12.1 metadata has the same conflict. No downgrade, ignore renewal or unmatched binary upgrade was used to hide this. A compatible ML runtime upgrade and hardware qualification remain required; see [security gates](../operations/security-gates.md).
+
+Follow-up evidence is under `output/verification/recollect-20260919/`: `backend-ops-final.log`, `npm-audit-followup.json`, `constraints-audit-fixed.json`, `api-image-build.log`, `api-image-freeze.txt`, `api-image-audit.json`, `ingest-candidate-lock.txt`, `ingest-resolution-audit.json`, and `ml-resolution.log`. Earlier failed exploratory logs are retained and are not final passing evidence.
+
 ## Source and checkpoints
 
 The initial checkout was fast-forwarded to Almaz's source checkout and Gitea main at `311ddbe3df474b967e46409bc22218c3df49c119`. Both were rechecked after the Kvant reboot and remain at that revision. Runtime image revisions are a separate boundary: the initial deployment inspection found API image revision `45dae4c` and an older web image revision `3ac7305`; syncing source does not establish matching deployed artifacts.

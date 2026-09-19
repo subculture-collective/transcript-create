@@ -1451,7 +1451,8 @@ export interface paths {
     delete: operations['delete_post_community_posts__post_id__delete'];
     options?: never;
     head?: never;
-    patch?: never;
+    /** Edit Post */
+    patch: operations['edit_post_community_posts__post_id__patch'];
     trace?: never;
   };
   '/community/posts/{post_id}/moderate': {
@@ -1533,6 +1534,23 @@ export interface paths {
     put?: never;
     /** Resolve Report */
     post: operations['resolve_report_community_reports__report_id__resolve_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/community/timeline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Community Timeline */
+    get: operations['community_timeline_community_timeline_get'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -2629,6 +2647,30 @@ export interface components {
       };
       /** Type */
       type: string;
+    };
+    /** ArchiveActivity */
+    ArchiveActivity: {
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string;
+      /**
+       * Kind
+       * @constant
+       */
+      kind: 'archive';
+      video: components['schemas']['ArchiveAddition'];
+    };
+    /** ArchiveAddition */
+    ArchiveAddition: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Title */
+      title: string | null;
     };
     /** ArchiveChapterCandidate */
     ArchiveChapterCandidate: {
@@ -4310,6 +4352,13 @@ export interface components {
        */
       video_id: string;
     };
+    /** CommunityTimeline */
+    CommunityTimeline: {
+      /** Items */
+      items: (components['schemas']['PostActivity'] | components['schemas']['ArchiveActivity'])[];
+      /** Next Offset */
+      next_offset: number | null;
+    };
     /**
      * CreateAPIKeyRequest
      * @description Request to create a new API key.
@@ -5029,6 +5078,30 @@ export interface components {
       video_id: string | null;
       /** Video Title */
       video_title: string | null;
+    };
+    /** PostActivity */
+    PostActivity: {
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string;
+      /**
+       * Kind
+       * @constant
+       */
+      kind: 'post';
+      post: components['schemas']['Post'];
+    };
+    /** PostEdit */
+    PostEdit: {
+      /** Body */
+      body: string;
+      /**
+       * If Match
+       * Format: date-time
+       */
+      if_match: string;
     };
     /** PostInput */
     PostInput: {
@@ -8938,6 +9011,41 @@ export interface operations {
       };
     };
   };
+  edit_post_community_posts__post_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        post_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PostEdit'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Post'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
   moderate_post_community_posts__post_id__moderate_post: {
     parameters: {
       query?: never;
@@ -9089,6 +9197,38 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  community_timeline_community_timeline_get: {
+    parameters: {
+      query?: {
+        offset?: number;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommunityTimeline'];
+        };
       };
       /** @description Validation Error */
       422: {

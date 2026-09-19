@@ -5,6 +5,8 @@ Local implementation, disabled by default (`COMMUNITY_ENABLED=false`). Apply Ale
 ## User journeys
 
 - Creator administrator: Community → write text → Save draft → My posts → Publish publicly. Only administrators can create updates or pin root posts.
+- Author editing: My posts → Edit post → Save draft edit. Publishing remains a separate action. Public edits explicitly say they take effect immediately. Edits require the displayed revision; a concurrent change returns a conflict and preserves the typed text. Authors cannot edit hidden posts around moderation.
+- Combined timeline: published creator updates and root passage discussions appear alongside completed recordings with transcript segments. Drafts, hidden posts, and replies are excluded. Archive dates represent entry creation, not recording/broadcast dates. Pagination and source links are retained; publishing from this view refreshes it immediately.
 - Member: select a transcript passage → Discuss passage → review source/range → save draft or publish publicly. Signed-in members can reply to published root posts.
 - Moderator: Reports → decision reason → Hide/Restore → Resolve. Hidden posts also have a dedicated queue. Hiding a root suppresses its entire discussion from public reads. Reports are private to moderators; reporter identity is not exposed in the queue.
 - Author: Export my posts downloads paginated JSON including drafts/hidden content; Delete post and replies requires an explicit browser confirmation. Account deletion removes authored community content, reports, and dependent replies. Account merges preserve authorship and deduplicate reports while preserving open review state.
@@ -18,6 +20,8 @@ New tables: `community_posts`, `community_reports`. Source-video deletion cascad
 A migration rollback drops community tables and their content; export/backup must precede a real downgrade. Disable the feature to hide entry points/endpoints without deleting data. This is community-management software, not a staffed moderation service. Deployment needs an operator, escalation rules, policy review and retention/backup procedures. No private/paid community or federation guarantee is implied.
 
 ## Verification, September 19, 2026
+
+Final post-reboot verification supersedes the increment counts below: 1,852 backend tests passed against a fresh disposable database with all migrations, 82.90% coverage; 304 frontend tests passed, one existing skip, 85.96% line coverage. API contract, lint, formatting, production build and bundle budgets passed. Existing browser regressions: 19 passed. Separate synthetic browser/API data verified draft → edit → publish → combined timeline, immediate timeline refresh after publishing, and a 390px layout without horizontal overflow. No production writes. See `recollect-verification-20260919.md` for the remaining audit and external qualification gates.
 
 - Fresh isolated PostgreSQL/Redis/OpenSearch, full migration history: 1,837 backend tests passed, 82.61% application coverage. Migration/bootstrap parity includes the new tables and user FKs.
 - Frontend: 294 passed, one existing skip. Build and lint passed during the increment.

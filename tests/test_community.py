@@ -172,3 +172,56 @@ def test_disabled_authentication_and_session_csrf(client, db_session, monkeypatc
         "/community/posts", json={"kind": "update", "body": "With CSRF"}, headers={"X-CSRF-Token": csrf}
     )
     assert response.status_code == 201, response.text
+
+
+def test_author_edits_require_current_version_and_cannot_bypass_moderation(community):
+    client, db, users, current, video = community
+    post = client.post("/community/posts", json={"kind": "update", "body": "Original draft"}).json()
+    edit = {"body": "Edited draft", "if_match": post["updated_at"]}
+    current["user"] = users[1]
+    assert client.patch(f"/community/posts/{post['id']}", json=edit).status_code == 403
+    current["user"] = users[0]
+    changed = client.patch(f"/community/posts/{post['id']}", json=edit)
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["status"] == "draft"
+    assert changed.json()["body"] == "Edited draft"
+    assert client.patch(f"/community/posts/{post['id']}", json=edit).status_code == 409
+    client.post(f"/community/posts/{post['id']}/publish")
+    client.post(f"/community/posts/{post['id']}/moderate", json={"action": "hide", "reason": "Review"})
+    assert (
+        client.patch(
+            f"/community/posts/{post['id']}", json={"body": "Bypass", "if_match": changed.json()["updated_at"]}
+        ).status_code
+        == 409
+    )
+    assert client.get("/community/posts").json()["items"] == []
+
+
+def test_combined_timeline_includes_ready_recordings_and_public_roots_only(community):
+    client, db, users, current, video = community
+    db.execute(
+        text("UPDATE videos SET state='completed',created_at=now()-interval '1 day' WHERE id=:id"), {"id": video}
+    )
+    db.execute(
+        text("INSERT INTO segments(video_id,start_ms,end_ms,text) VALUES (:id,0,1000,'Source context')"), {"id": video}
+    )
+    root = client.post("/community/posts", json={"kind": "update", "body": "Public update", "publish": True}).json()
+    client.post("/community/posts", json={"kind": "update", "body": "Private draft"})
+    client.post(
+        "/community/posts",
+        json={"kind": "reply", "body": "Reply only in thread", "parent_id": root["id"], "publish": True},
+    )
+    response = client.get("/community/timeline?limit=1")
+    assert response.status_code == 200, response.text
+    page = response.json()
+    assert page["next_offset"] == 1
+    assert page["items"][0]["kind"] == "post"
+    assert page["items"][0]["post"]["body"] == "Public update"
+    archive = client.get("/community/timeline?offset=1").json()
+    assert len(archive["items"]) == 1
+    assert archive["items"][0]["kind"] == "archive"
+    assert set(archive["items"][0]["video"]) == {"id", "title"}
+    client.post(f"/community/posts/{root['id']}/moderate", json={"action": "hide", "reason": "Review"})
+    assert [item["kind"] for item in client.get("/community/timeline").json()["items"]] == ["archive"]
+    db.execute(text("DELETE FROM videos WHERE id=:id"), {"id": video})
+    assert client.get("/community/timeline").json()["items"] == []

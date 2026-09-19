@@ -7,6 +7,7 @@ import {
   type CommunityPost,
   type CommunityReport,
   type PostPage,
+  type TimelinePage,
 } from '../services/community';
 import { buildPassageLink, formatPassageTime } from '../features/passages/range';
 
@@ -14,6 +15,9 @@ function PostCard({ post, refresh }: { post: CommunityPost; refresh: () => void 
   const { user, role } = useAuth();
   const [replies, setReplies] = useState<PostPage | null>(null);
   const [body, setBody] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editedBody, setEditedBody] = useState(post.body);
+  const [editVersion, setEditVersion] = useState(post.updated_at);
   const [reason, setReason] = useState('');
   const [tools, setTools] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -26,8 +30,17 @@ function PostCard({ post, refresh }: { post: CommunityPost; refresh: () => void 
       await task();
       setMessage(success);
       refresh();
-    } catch {
-      setMessage('That action failed. Your text is preserved; please retry.');
+    } catch (error) {
+      const conflict =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        (error.response as Response)?.status === 409;
+      setMessage(
+        conflict
+          ? 'This post changed or needs moderation. Your text is preserved. Copy your edit, reload the post, and review before saving again.'
+          : 'That action failed. Your text is preserved; please retry.'
+      );
     } finally {
       setBusy(false);
     }
@@ -84,6 +97,53 @@ function PostCard({ post, refresh }: { post: CommunityPost; refresh: () => void 
           </button>
         )}
       </div>
+      {user?.id === post.author_id && post.status !== 'hidden' && (
+        <button
+          className="btn-ghost"
+          disabled={busy}
+          onClick={() => {
+            setEditedBody(post.body);
+            setEditVersion(post.updated_at);
+            setEditing(true);
+          }}
+        >
+          Edit post
+        </button>
+      )}
+      {editing && (
+        <form
+          className="space-y-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(async () => {
+              await community.edit(post.id, editedBody, editVersion);
+              setEditing(false);
+            }, 'Edit saved.');
+          }}
+        >
+          <label className="block">
+            Edit text
+            <textarea
+              className="form-control"
+              maxLength={5000}
+              required
+              value={editedBody}
+              onChange={(e) => setEditedBody(e.target.value)}
+            />
+          </label>
+          <p className="text-sm text-muted">
+            {post.status === 'published'
+              ? 'Saving changes this public post immediately.'
+              : 'This post remains a private draft.'}
+          </p>
+          <button className="btn-primary" disabled={busy || !editedBody.trim()}>
+            {post.status === 'published' ? 'Save public edit' : 'Save draft edit'}
+          </button>
+          <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>
+            Cancel edit
+          </button>
+        </form>
+      )}
       {tools && (
         <div className="space-y-3 border-t border-border pt-3">
           <label className="block">
@@ -247,7 +307,8 @@ export default function CommunityPage() {
   const site = useSite();
   const { user, role } = useAuth();
   const [params] = useSearchParams();
-  const [tab, setTab] = useState<'feed' | 'mine' | 'reports' | 'hidden'>('feed');
+  const [tab, setTab] = useState<'feed' | 'mine' | 'reports' | 'hidden' | 'timeline'>('feed');
+  const [timelineRevision, setTimelineRevision] = useState(0);
   const [page, setPage] = useState<PostPage>({ items: [], next_offset: null });
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [reportsNext, setReportsNext] = useState<number | null>(null);
@@ -269,7 +330,7 @@ export default function CommunityPage() {
     Number.isSafeInteger(end) &&
     end > start;
   const refresh = useCallback(async () => {
-    if (!site.community_enabled) return;
+    if (!site.community_enabled || tab === 'timeline') return;
     setLoading(true);
     setError('');
     try {
@@ -305,6 +366,7 @@ export default function CommunityPage() {
         ...(passage ? { video_id: videoId!, start_ms: start, end_ms: end } : {}),
       });
       setBody('');
+      setTimelineRevision((revision) => revision + 1);
       setNotice(
         publish ? 'Published publicly on this site.' : 'Draft saved. Find it under My posts.'
       );
@@ -423,6 +485,12 @@ export default function CommunityPage() {
       )}
       <div className="flex flex-wrap gap-2" aria-label="Community views">
         <button
+          className={tab === 'timeline' ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setTab('timeline')}
+        >
+          Combined timeline
+        </button>
+        <button
           className={tab === 'feed' ? 'btn-primary' : 'btn-secondary'}
           onClick={() => setTab('feed')}
         >
@@ -467,7 +535,9 @@ export default function CommunityPage() {
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
-      {loading && page.items.length === 0 && reports.length === 0 ? (
+      {tab === 'timeline' ? (
+        <CombinedTimeline key={timelineRevision} />
+      ) : loading && page.items.length === 0 && reports.length === 0 ? (
         <p role="status">Loading community…</p>
       ) : tab === 'reports' ? (
         <section aria-label="Moderation reports" className="space-y-4">
@@ -582,5 +652,71 @@ function ReportCard({ report, refresh }: { report: CommunityReport; refresh: () 
       </div>
       {error && <p role="alert">{error}</p>}
     </article>
+  );
+}
+
+function CombinedTimeline() {
+  const [page, setPage] = useState<TimelinePage>({ items: [], next_offset: null });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async (offset = 0) => {
+    setLoading(true);
+    setError('');
+    try {
+      const next = await community.timeline(offset);
+      setPage((previous) => ({
+        items: offset ? [...previous.items, ...next.items] : next.items,
+        next_offset: next.next_offset,
+      }));
+    } catch {
+      setError('Could not load the timeline.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return (
+    <section className="space-y-4" aria-label="Combined community timeline">
+      <p className="text-sm text-muted">
+        Creator updates, passage discussions, and recordings added to the archive. Archive dates
+        show when the recording entered this library.
+      </p>
+      {error && (
+        <p role="alert">
+          {error}{' '}
+          <button className="btn-ghost" onClick={() => void load()}>
+            Retry timeline
+          </button>
+        </p>
+      )}
+      {!loading && !error && !page.items.length && <p>No activity yet.</p>}
+      {page.items.map((item) =>
+        item.kind === 'post' ? (
+          <PostCard key={`post:${item.post.id}`} post={item.post} refresh={() => void load()} />
+        ) : (
+          <article key={`archive:${item.video.id}`} className="surface-card space-y-2">
+            <p className="text-sm text-muted">
+              Archive addition ·{' '}
+              <time dateTime={item.at}>{new Date(item.at).toLocaleString()}</time>
+            </p>
+            <Link className="action-link" to={`/v/${item.video.id}`}>
+              {item.video.title || 'Untitled recording'}
+            </Link>
+          </article>
+        )
+      )}
+      {loading && <p role="status">Loading timeline…</p>}
+      {page.next_offset !== null && (
+        <button
+          className="btn-secondary"
+          disabled={loading}
+          onClick={() => void load(page.next_offset!)}
+        >
+          More activity
+        </button>
+      )}
+    </section>
   );
 }

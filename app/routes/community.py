@@ -69,6 +69,34 @@ class PostPage(BaseModel):
     next_offset: int | None
 
 
+class PostEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    body: str = Field(min_length=1, max_length=5000)
+    if_match: datetime
+
+
+class ArchiveAddition(BaseModel):
+    id: UUID
+    title: str | None
+
+
+class PostActivity(BaseModel):
+    kind: Literal["post"]
+    at: datetime
+    post: Post
+
+
+class ArchiveActivity(BaseModel):
+    kind: Literal["archive"]
+    at: datetime
+    video: ArchiveAddition
+
+
+class CommunityTimeline(BaseModel):
+    items: list[PostActivity | ArchiveActivity]
+    next_offset: int | None
+
+
 class Reason(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     reason: str = Field(min_length=1, max_length=1000)
@@ -132,6 +160,35 @@ def list_posts(
             text(SELECT_POST + f"""WHERE p.status='published' AND {where}
         ORDER BY p.pinned DESC, p.created_at DESC, p.id DESC LIMIT :limit OFFSET :offset"""),
             {"parent": parent_id, "video": video_id, "limit": limit + 1, "offset": offset},
+        )
+        .mappings()
+        .all()
+    )
+    return {"items": rows[:limit], "next_offset": offset + limit if len(rows) > limit else None}
+
+
+@router.get("/timeline", response_model=CommunityTimeline)
+def community_timeline(
+    offset: int = Query(0, ge=0, le=100000), limit: int = Query(20, ge=1, le=100), db=Depends(get_db)
+):
+    rows = (
+        db.execute(
+            text("""
+        SELECT * FROM (
+            SELECT p.id, 'post' AS kind, p.created_at AS at,
+                to_jsonb(p) || jsonb_build_object('author_name', COALESCE(u.name, 'Member'), 'video_title', v.title) AS post,
+                NULL::jsonb AS video
+            FROM community_posts p JOIN users u ON u.id=p.author_id LEFT JOIN videos v ON v.id=p.video_id
+            WHERE p.status='published' AND p.parent_id IS NULL
+            UNION ALL
+            SELECT v.id, 'archive' AS kind, v.created_at AS at, NULL::jsonb AS post,
+                jsonb_build_object('id', v.id, 'title', v.title) AS video
+            FROM videos v WHERE v.state='completed' AND
+                (EXISTS(SELECT 1 FROM segments s WHERE s.video_id=v.id)
+                 OR EXISTS(SELECT 1 FROM youtube_transcripts yt JOIN youtube_segments ys ON ys.youtube_transcript_id=yt.id WHERE yt.video_id=v.id))
+        ) activity ORDER BY at DESC, kind, id DESC LIMIT :limit OFFSET :offset
+    """),
+            {"limit": limit + 1, "offset": offset},
         )
         .mappings()
         .all()
@@ -212,6 +269,31 @@ def create_post(payload: PostInput, request: Request, user=Depends(require_auth)
         params,
     )
     audit(db, request, user, "create", post_id, {"status": params["status"]})
+    result = read_post(db, post_id)
+    db.commit()
+    return result
+
+
+@router.patch("/posts/{post_id}", response_model=Post)
+def edit_post(post_id: UUID, payload: PostEdit, request: Request, user=Depends(require_auth), db=Depends(get_db)):
+    db.execute(text("SELECT id FROM community_posts WHERE id=:id FOR UPDATE"), {"id": post_id})
+    post = read_post(db, post_id)
+    if str(post["author_id"]) != str(user["id"]):
+        raise HTTPException(403, "Only the author can edit this post")
+    if post["status"] == "hidden":
+        raise HTTPException(409, "A moderator must review this hidden post before it can be edited")
+    if post["kind"] == "update" and not has_role(user, "admin"):
+        raise HTTPException(403, "Creator access required")
+    if post["updated_at"] != payload.if_match:
+        raise HTTPException(409, "This post changed. Reload it before saving another edit")
+    if post["parent_id"]:
+        public_parent(db, post["parent_id"])
+    # clock_timestamp changes even inside a caller's longer transaction.
+    db.execute(
+        text("UPDATE community_posts SET body=:body,updated_at=clock_timestamp() WHERE id=:id"),
+        {"id": post_id, "body": payload.body},
+    )
+    audit(db, request, user, "edit", post_id, {"status": post["status"]})
     result = read_post(db, post_id)
     db.commit()
     return result

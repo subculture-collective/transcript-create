@@ -24,7 +24,20 @@ export type CommunityReport = {
   body: string;
   post_status: string;
 };
+export type TimelinePage = {
+  items: Array<
+    | { kind: 'post'; at: string; post: CommunityPost }
+    | { kind: 'archive'; at: string; video: { id: string; title: string | null } }
+  >;
+  next_offset: number | null;
+};
 export const community = {
+  timeline: (offset = 0) =>
+    http.get('community/timeline', { searchParams: { offset } }).json<TimelinePage>(),
+  edit: (id: string, body: string, ifMatch: string) =>
+    http
+      .patch(`community/posts/${id}`, { json: { body, if_match: ifMatch } })
+      .json<CommunityPost>(),
   posts: (offset = 0, parentId?: string) =>
     http
       .get('community/posts', {

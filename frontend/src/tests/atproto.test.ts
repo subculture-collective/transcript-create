@@ -23,12 +23,10 @@ describe('AT public sharing boundaries', () => {
     expect(createPublicRecord('🙂'.repeat(300)).text).toBe('🙂'.repeat(300));
   });
   it('writes only to the verified SDK session DID and retains the retry key', async () => {
-    const fetchHandler = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({ uri: 'at://did:plc:example/app.bsky.feed.post/draft-key' }),
-      });
+    const fetchHandler = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ uri: 'at://did:plc:example/app.bsky.feed.post/draft-key' }),
+    });
     const record = createPublicRecord('A deliberate public post');
     const session = { sub: 'did:plc:example', fetchHandler } as unknown as OAuthSession;
     await publishAT(session, record, 'draft-key');

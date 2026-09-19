@@ -264,6 +264,56 @@
         "title": "AnalyticsEventInput",
         "type": "object"
       },
+      "ArchiveActivity": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "kind": {
+            "const": "archive",
+            "title": "Kind",
+            "type": "string"
+          },
+          "video": {
+            "$ref": "#/components/schemas/ArchiveAddition"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "video"
+        ],
+        "title": "ArchiveActivity",
+        "type": "object"
+      },
+      "ArchiveAddition": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ArchiveAddition",
+        "type": "object"
+      },
       "ArchiveChapterCandidate": {
         "properties": {
           "chapter_index": {
@@ -3367,6 +3417,41 @@
         "title": "ClipStatus",
         "type": "object"
       },
+      "CommunityTimeline": {
+        "properties": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PostActivity"
+                },
+                {
+                  "$ref": "#/components/schemas/ArchiveActivity"
+                }
+              ]
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          }
+        },
+        "required": [
+          "items",
+          "next_offset"
+        ],
+        "title": "CommunityTimeline",
+        "type": "object"
+      },
       "CreateAPIKeyRequest": {
         "description": "Request to create a new API key.",
         "properties": {
@@ -4887,6 +4972,52 @@
           "updated_at"
         ],
         "title": "Post",
+        "type": "object"
+      },
+      "PostActivity": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "kind": {
+            "const": "post",
+            "title": "Kind",
+            "type": "string"
+          },
+          "post": {
+            "$ref": "#/components/schemas/Post"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "post"
+        ],
+        "title": "PostActivity",
+        "type": "object"
+      },
+      "PostEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "if_match": {
+            "format": "date-time",
+            "title": "If Match",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "if_match"
+        ],
+        "title": "PostEdit",
         "type": "object"
       },
       "PostInput": {
@@ -11242,6 +11373,57 @@
         "tags": [
           "Community"
         ]
+      },
+      "patch": {
+        "operationId": "edit_post_community_posts__post_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Post Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Post",
+        "tags": [
+          "Community"
+        ]
       }
     },
     "/community/posts/{post_id}/moderate": {
@@ -11470,6 +11652,63 @@
           }
         },
         "summary": "Resolve Report",
+        "tags": [
+          "Community"
+        ]
+      }
+    },
+    "/community/timeline": {
+      "get": {
+        "operationId": "community_timeline_community_timeline_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityTimeline"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Community Timeline",
         "tags": [
           "Community"
         ]

@@ -81,12 +81,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         "torchcodec==${TORCHCODEC_VERSION}" && \
     # Ubuntu 22.04 uses Python 3.10, like the CUDA ML image.
     WHISPER_VERSION="$(sed -n 's/^openai-whisper==//p' requirements.txt)" && \
-    pip3 install --no-cache-dir --no-build-isolation \
+    pip3 install --no-cache-dir --no-build-isolation -c requirements-ml-runtime.txt \
         "openai-whisper==${WHISPER_VERSION}" && \
     grep -v '^openai-whisper==' requirements.txt > /tmp/requirements-worker.txt && \
     grep -Ev '^(contourpy|scipy|networkx)==' constraints.txt > /tmp/constraints-worker.txt && \
     printf 'scipy==1.15.3\nnetworkx==3.4.2\n' >> /tmp/constraints-worker.txt && \
-    pip3 install --no-cache-dir -c /tmp/constraints-worker.txt -r /tmp/requirements-worker.txt && \
+    pip3 install --no-cache-dir -c /tmp/constraints-worker.txt -c requirements-ml-runtime.txt -r /tmp/requirements-worker.txt && \
     pip3 check && \
     python3 /tmp/verify_ml_runtime.py
 
@@ -104,6 +104,9 @@ RUN rm -rf /usr/local/lib/python3.10/dist-packages/*
 # Copy Python packages from deps stage
 COPY --from=python-deps /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
 COPY --from=python-deps /usr/local/bin /usr/local/bin
+
+# Immutable runtime: installer vendors are unnecessary after build checks.
+RUN python3 -m pip uninstall --yes pip && apt-get purge -y python3-pip
 
 # Set working directory
 WORKDIR /app

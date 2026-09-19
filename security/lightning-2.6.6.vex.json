@@ -1,0 +1,15 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "urn:uuid:4dc321ec-6d80-4e8f-8f12-cd27b0208911",
+  "author": "HasanAra automated release checks",
+  "timestamp": "2026-09-19T18:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {"name": "CVE-2026-58659"},
+      "products": [{"@id": "pkg:pypi/lightning@2.6.6"}],
+      "status": "fixed",
+      "impact_statement": "Lightning 2.6.6 contains the upstream d710d689510d50e800f53b3cd773cbca20b1f86f checkpoint-instantiator fix. The September 19 Trivy database incorrectly reports a fixed version of 2022.6.15. Acceptance requires scripts/check_lightning_patch.py against the scanned image: exact package version, exact patched source SHA-256 and rejection of an untrusted checkpoint instantiator. Other packages, versions and advisories remain blocking. Source: https://github.com/Lightning-AI/pytorch-lightning/commit/d710d689510d50e800f53b3cd773cbca20b1f86f"
+    }
+  ]
+}

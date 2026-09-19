@@ -141,7 +141,7 @@ Docker Compose provides a complete development environment with all services pre
 docker compose build
 
 # Or build with specific ROCm version
-docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm6.1
+docker compose build --build-arg ROCM_WHEEL_INDEX=https://download.pytorch.org/whl/rocm7.1
 ```
 
 #### 2. Start Services

@@ -18,7 +18,7 @@ rtk proxy python scripts/check_security_exceptions.py --npm-audit --package-dir 
 The installed-environment pip-audit covers resolved transitive packages in
 backend CI. The three manifest audits independently cover every exact direct,
 full-snapshot, and image-specific ML runtime pin without invoking package build
-hooks. Each CPU, CUDA 12.8, and ROCm 7.1 image runs `pip check`, imports Torch,
+hooks. Each CPU, CUDA 12.6, and ROCm 7.1 image runs `pip check`, imports Torch,
 TorchAudio, TorchCodec, and pyannote, and is blocked by fixed high/critical
 Trivy application-library findings. Operating-system findings are reported
 separately; package-type scanning is conservative and is not described as
@@ -51,38 +51,36 @@ preserves the validator's exit status before parsing its output.
 - **Setuptools:** constraints pin 83.0.0, matching the existing Dockerfile build
   pin in the API and fixing `PYSEC-2026-3447`. The old constraints snapshot
   pinned 81.0.0. The ingest image build pin is also updated to 83.0.0.
-- **pip:** API and ingest image build steps pin 26.2. The API's base image
-  included pip 24.0 with six reported advisories. Remove its original pip
-  distribution before copying the patched dependency stage, avoiding duplicate
-  distribution metadata. The final API image inventory audits cleanly and
-  `pip check` passes; this is a Python-package audit, not an OS image scan.
+- **pip:** build stages use 26.2, then remove pip from immutable runtime images.
+  Its vendored msgpack and setuptools remained vulnerable even in pip 26.2.1;
+  removing the installer removes that code rather than hiding its metadata.
 - **Frontend:** the lockfile audit returned zero vulnerabilities on September 19
   after the earlier registry outage cleared. There is no active brace-expansion
   exception; the old path-specific exception description is retired.
-- **Torch remains blocked:** `GHSA-rrmf-rvhw-rf47` identifies 2.13.0 as patched.
-  Repository ML runtime pins remain Torch/TorchAudio 2.11.0. The local development
-  environment contains Torch 2.12.1 and is not an exact production ML environment.
-  On September 19, the official Python 3.11 Linux x86_64 indexes listed Torch
-  2.13.0 for CPU and ROCm 7.1, but none for CUDA 12.8. None of those three indexes
-  listed TorchAudio 2.13.0, and its PyPI version endpoint returned 404. Do not
-  combine an unmatched TorchAudio binary with a new Torch version just to clear
-  the advisory. Refresh the compatible upstream wheel matrix, resolve the full
-  ML role, and pass codec/pyannote/transcription hardware checks before changing
-  the production pins. The local Torch 2.12.1 metadata also requires
-  `setuptools<82`, conflicting with the patched 83.0.0; `uv pip check` correctly
-  reports that unresolved ML environment conflict. Do not downgrade Setuptools
-  back to its vulnerable version to satisfy it. Resolving the declared worker
-  plus ML requirements also fails because Torch 2.11.0 requires `setuptools<82`.
-  Existing combined ML Dockerfiles still pin Setuptools 81.0.0 and are not
-  qualified for release; the secure global constraint intentionally prevents
-  resolving that vulnerable combination. Resolve this as one compatible ML
-  runtime upgrade, not an isolated pin override.
+- **Torch:** ML runtimes now pin 2.13.0, TorchAudio 2.11.0 and TorchCodec 0.14.0.
+  The earlier conclusion that TorchAudio 2.13.0 was required was incorrect:
+  upstream explicitly supports TorchAudio 2.11 with Torch 2.11 and later, and
+  TorchCodec 0.14 with Torch 2.11 and later. CPU, CUDA 12.6 and ROCm 7.1 wheels
+  are available. The separate CUDA 12.8 faster-whisper ingest role is unchanged
+  in accelerator selection. Triton 3.7.1 and repeated ML constraints prevent
+  later dependency installation from silently downgrading Torch.
+- **Lightning scanner correction:** Trivy's September 19 database incorrectly
+  gives `CVE-2026-58659` a fixed version of `2022.6.15`. Version 2.6.6 contains
+  the upstream checkpoint-instantiator allowlist fix. The exact package/version
+  VEX statement in `security/lightning-2.6.6.vex.json` records it as fixed.
+  Before accepting it, local and release image gates run
+  `scripts/check_lightning_patch.py` inside the exact image with networking
+  disabled. This requires version 2.6.6, the patched source SHA-256, and actual
+  rejection of an untrusted checkpoint instantiator. Any drift fails closed;
+  other packages, versions and advisories remain blocking. This is a verified
+  fixed-artifact correction, not renewed acceptance of vulnerable code.
 
 Sources: [Torch advisory](https://github.com/advisories/GHSA-rrmf-rvhw-rf47),
-[official CPU wheels](https://download.pytorch.org/whl/cpu/),
-[CUDA 12.8 wheels](https://download.pytorch.org/whl/cu128/),
+[TorchAudio compatibility](https://github.com/pytorch/audio),
+[TorchCodec compatibility](https://github.com/meta-pytorch/torchcodec),
+[official CUDA 12.6 wheels](https://download.pytorch.org/whl/cu126/),
 [ROCm 7.1 wheels](https://download.pytorch.org/whl/rocm7.1/), and
-[Lightning 2.6.6 metadata](https://pypi.org/pypi/lightning/2.6.6/json).
+[Lightning checkpoint fix](https://github.com/Lightning-AI/pytorch-lightning/commit/d710d689510d50e800f53b3cd773cbca20b1f86f).
 
 A future exception must identify the advisory, affected package and path,
 reachability evidence, compensating control, owner, approval date, and an

@@ -129,7 +129,7 @@ torch_pitch_shift==1.2.5
 torchcodec==0.14.0
 torchmetrics==1.8.2
 tqdm==4.67.1
-triton==3.6.0
+triton==3.7.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2025.2

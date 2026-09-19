@@ -61,7 +61,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
         "torch==${TORCH_VERSION}" "torchaudio==${TORCHAUDIO_VERSION}" \
         "torchcodec==${TORCHCODEC_VERSION}" && \
-    pip3 install --no-cache-dir -c constraints.txt -r requirements.txt && \
+    pip3 install --no-cache-dir -c constraints.txt -c requirements-ml-runtime.txt -r requirements.txt && \
     pip3 check && \
     python3 /tmp/verify_ml_runtime.py
 
@@ -80,6 +80,9 @@ RUN rm -rf /usr/local/lib/python3.11/site-packages/*
 # Copy Python packages from deps stage
 COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=python-deps /usr/local/bin /usr/local/bin
+
+# Immutable runtime: installer vendors are unnecessary after build checks.
+RUN python3 -m pip uninstall --yes pip
 
 # Set working directory
 WORKDIR /app

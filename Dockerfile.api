@@ -19,6 +19,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN python -m pip uninstall --yes pip setuptools wheel
 COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=dependencies /usr/local/bin /usr/local/bin
+RUN python -m pip uninstall --yes pip
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL https://deno.land/install.sh | sh \

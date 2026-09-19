@@ -273,11 +273,17 @@ jobs:
           IMAGE_REF: ${{ matrix.image }}:${{ steps.target.outputs.tag }}
         run: |
           set -euo pipefail
+          if [[ '${{ matrix.role }}' == ml-cuda ]]; then
+            docker run --rm --network none --cpus=2 --memory=4g \
+              -v "$PWD/scripts/check_lightning_patch.py:/check.py:ro" \
+              --entrypoint python3 "$IMAGE_REF" /check.py
+          fi
           docker run --rm \
             --cpus=2 --memory=4g --memory-swap=4g --pids-limit=512 \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$TRIVY_CACHE_VOLUME:/root/.cache/trivy" \
-            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --scanners vuln --format sarif \
+            -v "$PWD/security/lightning-2.6.6.vex.json:/lightning.vex.json:ro" \
+            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --vex /lightning.vex.json --scanners vuln --format sarif \
             --severity CRITICAL,HIGH --pkg-types library --exit-code 1 "$IMAGE_REF" \
             > "trivy-${{ matrix.role }}-local-library.sarif"
       - name: Push scanned local image and resolve digest
@@ -363,12 +369,18 @@ jobs:
           IMAGE_REF: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
         run: |
           set -euo pipefail
+          if [[ '${{ matrix.role }}' == ml-cuda ]]; then
+            docker run --rm --network none --cpus=2 --memory=4g \
+              -v "$PWD/scripts/check_lightning_patch.py:/check.py:ro" \
+              --entrypoint python3 "$IMAGE_REF" /check.py
+          fi
           docker run --rm \
             --cpus=2 --memory=4g --memory-swap=4g --pids-limit=512 \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$HOME/.docker:/root/.docker:ro" \
             -v "$TRIVY_CACHE_VOLUME:/root/.cache/trivy" \
-            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --scanners vuln --format sarif \
+            -v "$PWD/security/lightning-2.6.6.vex.json:/lightning.vex.json:ro" \
+            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --vex /lightning.vex.json --scanners vuln --format sarif \
             --severity CRITICAL,HIGH --pkg-types library --exit-code 1 "$IMAGE_REF" \
             > "trivy-${{ matrix.role }}-library.sarif"
       - name: Report digest OS vulnerabilities

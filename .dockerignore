@@ -16,7 +16,7 @@ __pycache__
 .ruff_cache/
 
 # Virtual environments
-.venv
+.venv*/
 .release-venv/
 venv/
 ENV/

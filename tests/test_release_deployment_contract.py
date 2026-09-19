@@ -1372,6 +1372,10 @@ def test_release_workflow_contracts() -> None:
 
     local_scan = scan_step("Block local high and critical application-library vulnerabilities")
     digest_scan = scan_step("Block digest high and critical application-library vulnerabilities")
+    for scan in (local_scan, digest_scan):
+        assert "--vex /lightning.vex.json" in scan
+        assert "scripts/check_lightning_patch.py:/check.py:ro" in scan
+        assert "--network none" in scan
     os_scan = scan_step("Report digest OS vulnerabilities")
     sbom_scan = scan_step("Generate SPDX JSON SBOM for digest")
     cleanup = scan_step("Remove Trivy scanner cache")

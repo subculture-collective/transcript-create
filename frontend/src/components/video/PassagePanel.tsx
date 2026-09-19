@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useSite } from '../../services/site';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { Segment } from '../../types/api';
@@ -216,6 +217,14 @@ export default function PassagePanel({
         </button>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
+        {site.community_enabled && range && (
+          <Link
+            className="btn-secondary"
+            to={`/community?video_id=${encodeURIComponent(videoId)}&start_ms=${range.startMs}&end_ms=${range.endMs}`}
+          >
+            Discuss passage
+          </Link>
+        )}
         <button
           type="button"
           className="btn-primary"

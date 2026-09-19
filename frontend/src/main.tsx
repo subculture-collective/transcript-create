@@ -12,6 +12,7 @@ import { registerWebVitals } from './services/webVitals';
 
 registerWebVitals();
 
+const CommunityPage = lazy(() => import('./routes/CommunityPage'));
 const HomePage = lazy(() => import('./routes/HomePage'));
 const SearchPage = lazy(() => import('./routes/SearchPage'));
 const ExplorePage = lazy(() => import('./routes/ExplorePage'));
@@ -45,6 +46,14 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     errorElement: <RouteErrorPage />,
     children: [
+      {
+        path: 'community',
+        element: (
+          <Page>
+            <CommunityPage />
+          </Page>
+        ),
+      },
       {
         index: true,
         element: (

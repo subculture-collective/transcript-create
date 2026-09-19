@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-rou
 import { useSite } from '../services/site';
 import { useAuth, useTheme } from '../services';
 
-const navItems = [
+const baseNavItems = [
   { to: '/', label: 'Home' },
   { to: '/search', label: 'Search' },
   { to: '/explore', label: 'Explore' },
@@ -141,6 +141,9 @@ function RouteTransitionManager() {
 
 export default function AppLayout() {
   const site = useSite();
+  const navItems = site.community_enabled
+    ? [...baseNavItems, { to: '/community', label: 'Community' }]
+    : baseNavItems;
   const { user, loading, error: authError, login, loginTwitch, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

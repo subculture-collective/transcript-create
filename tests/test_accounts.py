@@ -108,6 +108,16 @@ def test_merge_existing_provider_account_preserves_data_and_rotates_access(db_se
         {"source": str(source.user["id"]), "hash": "b" * 64},
     )
 
+    community_id = uuid.uuid4()
+    db_session.execute(
+        text("INSERT INTO community_posts(id,author_id,kind,body) VALUES (:id,:author,'update','A saved draft')"),
+        {"id": community_id, "author": source.user["id"]},
+    )
+    db_session.execute(
+        text("INSERT INTO community_reports(post_id,reporter_id,reason) VALUES (:id,:author,'Review')"),
+        {"id": community_id, "author": source.user["id"]},
+    )
+
     merged = merge_account_identity(
         db_session,
         target.user["id"],
@@ -116,30 +126,54 @@ def test_merge_existing_provider_account_preserves_data_and_rotates_access(db_se
         ip_address="127.0.0.1",
     )
 
+    assert (
+        db_session.execute(
+            text("SELECT author_id FROM community_posts WHERE id=:id"), {"id": community_id}
+        ).scalar_one()
+        == target.user["id"]
+    )
+    assert (
+        db_session.execute(
+            text("SELECT reporter_id FROM community_reports WHERE post_id=:id"), {"id": community_id}
+        ).scalar_one()
+        == target.user["id"]
+    )
     assert merged.source_user_id == str(source.user["id"])
     assert merged.user["role"] == "admin"
     assert merged.user["plan"] == "pro"
-    assert db_session.execute(
-        text("SELECT count(*) FROM users WHERE id=:id"), {"id": str(source.user["id"])}
-    ).scalar_one() == 0
-    assert db_session.execute(
-        text("SELECT count(*) FROM user_identities WHERE user_id=:id"),
-        {"id": str(target.user["id"])},
-    ).scalar_one() == 2
-    searches = db_session.execute(
-        text("SELECT query, filters FROM saved_searches WHERE user_id=:id ORDER BY query"),
-        {"id": str(target.user["id"])},
-    ).mappings().all()
+    assert (
+        db_session.execute(text("SELECT count(*) FROM users WHERE id=:id"), {"id": str(source.user["id"])}).scalar_one()
+        == 0
+    )
+    assert (
+        db_session.execute(
+            text("SELECT count(*) FROM user_identities WHERE user_id=:id"),
+            {"id": str(target.user["id"])},
+        ).scalar_one()
+        == 2
+    )
+    searches = (
+        db_session.execute(
+            text("SELECT query, filters FROM saved_searches WHERE user_id=:id ORDER BY query"),
+            {"id": str(target.user["id"])},
+        )
+        .mappings()
+        .all()
+    )
     assert searches == [
         {"query": "shared", "filters": {"owner": "target"}},
         {"query": "source-only", "filters": {}},
     ]
-    assert db_session.execute(
-        text("SELECT count(*) FROM sessions WHERE user_id=:id"), {"id": str(target.user["id"])}
-    ).scalar_one() == 1
-    assert db_session.execute(
-        text("SELECT count(*) FROM api_keys WHERE key_hash=:hash"), {"hash": "b" * 64}
-    ).scalar_one() == 0
+    assert (
+        db_session.execute(
+            text("SELECT count(*) FROM sessions WHERE user_id=:id"), {"id": str(target.user["id"])}
+        ).scalar_one()
+        == 1
+    )
+    assert (
+        db_session.execute(text("SELECT count(*) FROM api_keys WHERE key_hash=:hash"), {"hash": "b" * 64}).scalar_one()
+        == 0
+    )
 
 
 def test_merge_rejects_overlapping_provider_without_mutation(db_session):

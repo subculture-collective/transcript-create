@@ -343,10 +343,11 @@ app.include_router(account_router)
 app.include_router(api_keys_router)
 app.include_router(archive_router)
 app.include_router(jobs_router)
+from .routes.community import router as community_router  # noqa: E402
 from .routes.passages import router as passages_router  # noqa: E402
-
 from .routes.site import router as site_router  # noqa: E402
 
+app.include_router(community_router)
 app.include_router(site_router)
 app.include_router(passages_router)
 app.include_router(videos_router)

@@ -538,6 +538,30 @@ def merge_account_identity(
         {"target": target_user_id, "source": source_user_id},
     )
 
+    # Carry community authorship forward before the absorbed account is removed.
+    db.execute(
+        text("UPDATE community_posts SET author_id=CAST(:target AS uuid) WHERE author_id=CAST(:source AS uuid)"),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    # A duplicate report remains open if either account still had an open report.
+    db.execute(
+        text("""UPDATE community_reports target SET status='open'
+        FROM community_reports source WHERE source.reporter_id=CAST(:source AS uuid)
+        AND target.reporter_id=CAST(:target AS uuid) AND target.post_id=source.post_id AND source.status='open'"""),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    db.execute(
+        text(
+            """DELETE FROM community_reports source WHERE source.reporter_id=CAST(:source AS uuid)
+        AND EXISTS (SELECT 1 FROM community_reports target WHERE target.reporter_id=CAST(:target AS uuid) AND target.post_id=source.post_id)"""
+        ),
+        {"target": target_user_id, "source": source_user_id},
+    )
+    db.execute(
+        text("UPDATE community_reports SET reporter_id=CAST(:target AS uuid) WHERE reporter_id=CAST(:source AS uuid)"),
+        {"target": target_user_id, "source": source_user_id},
+    )
+
     for table in ("favorites", "user_searches", "user_vocabularies", "saved_searches"):
         db.execute(
             text(f"UPDATE {table} SET user_id=CAST(:target AS uuid) WHERE user_id=CAST(:source AS uuid)"),

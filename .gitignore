@@ -267,3 +267,8 @@ cookies.txt
 release-images.json
 .release-commit
 deploy-backups/
+
+# Local browser sessions and verification artifacts (may contain private state)
+.playwright-cli/
+output/playwright/
+output/verification/

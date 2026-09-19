@@ -1,3 +1,4 @@
+import ClipExportControls from './ClipExportControls';
 import { Link } from 'react-router-dom';
 import { useSite } from '../../services/site';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
@@ -278,6 +279,13 @@ export default function PassagePanel({
           </button>
         )}
       </div>
+      {site.clip_exports_enabled && range && (
+        <ClipExportControls
+          key={`${videoId}:${range.startMs}:${range.endMs}`}
+          videoId={videoId}
+          range={range}
+        />
+      )}
       {feedback && (
         <p className="mt-3 text-sm text-ink" role="status">
           {feedback}

@@ -3287,6 +3287,86 @@
         "title": "CleanupStats",
         "type": "object"
       },
+      "ClipRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "end_ms": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "start_ms": {
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "start_ms",
+          "end_ms"
+        ],
+        "title": "ClipRequest",
+        "type": "object"
+      },
+      "ClipStatus": {
+        "properties": {
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "video_id": {
+            "format": "uuid",
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "video_id",
+          "start_ms",
+          "end_ms",
+          "status",
+          "expires_at"
+        ],
+        "title": "ClipStatus",
+        "type": "object"
+      },
       "CreateAPIKeyRequest": {
         "description": "Request to create a new API key.",
         "properties": {
@@ -5896,6 +5976,10 @@
             "title": "Atproto Enabled",
             "type": "boolean"
           },
+          "clip_exports_enabled": {
+            "title": "Clip Exports Enabled",
+            "type": "boolean"
+          },
           "community_enabled": {
             "title": "Community Enabled",
             "type": "boolean"
@@ -5922,6 +6006,7 @@
           "description",
           "creator_name",
           "public_passages_enabled",
+          "clip_exports_enabled",
           "atproto_enabled",
           "community_enabled"
         ],
@@ -10729,6 +10814,131 @@
         "summary": "Get current user",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/clips": {
+      "post": {
+        "operationId": "request_clip_clips_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClipStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Clip",
+        "tags": [
+          "Original clip exports"
+        ]
+      }
+    },
+    "/clips/{job_id}": {
+      "get": {
+        "operationId": "clip_status_clips__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClipStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clip Status",
+        "tags": [
+          "Original clip exports"
+        ]
+      }
+    },
+    "/clips/{job_id}/download": {
+      "get": {
+        "operationId": "download_clip_clips__job_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Clip",
+        "tags": [
+          "Original clip exports"
         ]
       }
     },

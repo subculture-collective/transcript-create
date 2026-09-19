@@ -20,5 +20,6 @@ def test_site_config_is_explicit_public_allowlist(monkeypatch):
         "description",
         "community_enabled",
         "atproto_enabled",
+        "clip_exports_enabled",
         "public_passages_enabled",
     }

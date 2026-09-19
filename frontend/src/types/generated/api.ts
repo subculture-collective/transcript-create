@@ -1314,6 +1314,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/clips': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Request Clip */
+    post: operations['request_clip_clips_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/clips/{job_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Clip Status */
+    get: operations['clip_status_clips__job_id__get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/clips/{job_id}/download': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download Clip */
+    get: operations['download_clip_clips__job_id__download_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/community/export': {
     parameters: {
       query?: never;
@@ -4224,6 +4275,41 @@ export interface components {
        */
       special_tokens_removed: number;
     };
+    /** ClipRequest */
+    ClipRequest: {
+      /** End Ms */
+      end_ms: number;
+      /** Start Ms */
+      start_ms: number;
+      /**
+       * Video Id
+       * Format: uuid
+       */
+      video_id: string;
+    };
+    /** ClipStatus */
+    ClipStatus: {
+      /** End Ms */
+      end_ms: number;
+      /** Error */
+      error?: string | null;
+      /** Expires At */
+      expires_at: number;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Start Ms */
+      start_ms: number;
+      /** Status */
+      status: string;
+      /**
+       * Video Id
+       * Format: uuid
+       */
+      video_id: string;
+    };
     /**
      * CreateAPIKeyRequest
      * @description Request to create a new API key.
@@ -5494,6 +5580,8 @@ export interface components {
     SiteConfig: {
       /** Atproto Enabled */
       atproto_enabled: boolean;
+      /** Clip Exports Enabled */
+      clip_exports_enabled: boolean;
       /** Community Enabled */
       community_enabled: boolean;
       /** Creator Name */
@@ -8562,6 +8650,101 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['AuthMeResponse'];
+        };
+      };
+    };
+  };
+  request_clip_clips_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClipRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ClipStatus'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  clip_status_clips__job_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ClipStatus'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  download_clip_clips__job_id__download_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
       };
     };

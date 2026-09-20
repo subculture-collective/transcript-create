@@ -1,8 +1,8 @@
 # Disaster Recovery Plan
 
-> **Status: generic/local reference; superseded for HasanAra production.** The
+> **Status: generic/local reference.** The
 > direct Compose and destructive recovery commands below are not approved for
-> the HasanAra host and must not be executed there. Use the guarded
+> a guarded production stack and must not be executed there. Use the
 > [private-beta deployment and recovery procedure](../deployment/private-beta.md)
 > and the [S3-compatible PITR runbook](pitr-s3.md). Production recovery requires
 > an isolated empty target, immutable release inputs, operator approval, and

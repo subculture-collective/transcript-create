@@ -2,7 +2,7 @@
 
 ## Data model and access
 
-HasanAra uses a dedicated `ha_analytics` cookie for first-party usage
+The application uses the legacy-named `ha_analytics` cookie for first-party usage
 analytics. The cookie contains 32 random bytes encoded as unpadded base64url;
 it is `HttpOnly`, `SameSite=Lax`, valid for one year, and `Secure` in
 production. The database stores only its HMAC-SHA256 digest in

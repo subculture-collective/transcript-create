@@ -1,28 +1,24 @@
-# Documentation status
+# Documentation index
 
-**Status:** authoritative index (2026-07-23).
+**Status:** authoritative index (2026-09-19).
 
-| Status | Meaning |
+Use this index to distinguish maintained contracts from optional deployment guides. Dated
+audit exports, implementation plans, screenshots and completion reports are intentionally
+excluded from the repository; Git history retains them when historical context is needed.
+
+| Area | Maintained entry points |
 | --- | --- |
-| Shipped | matches current runtime and verification |
-| Experimental | present but not a compatibility promise |
-| Disabled | intentionally unavailable |
-| Planned | future possibility, no current contract |
-| Historical | retained context, not operational guidance |
-| Superseded | replaced by an identified canonical document |
+| Product overview | [README](../README.md) |
+| Architecture and development | [architecture](development/architecture.md), [setup](development/setup.md), [testing](development/testing.md), [transcript processing](development/transcript-processing.md) |
+| API and authorization | [API reference](api-reference.md), [generated OpenAPI](api/openapi.json), [versioning](api/versioning.md), [access matrix](access-matrix.md), [authentication](authentication.md) |
+| Branding and releases | [client branding](deployment/client-branding.md), [deployment matrix](deployment/README.md), [release process](development/release-process.md) |
+| Database and operations | [migrations](MIGRATIONS.md), [operations](operations/README.md), [production readiness](operations/production-readiness.md), [backup operations](operations/backup-operations.md) |
+| Product contracts | [passage sharing](product/passage-sharing.md), [creator community](product/creator-community.md), [authorized clips](product/authorized-original-clips.md) |
+| Interface | [design system](DESIGN_SYSTEM.md), [accessibility](ACCESSIBILITY.md) |
 
-Authoritative shipped documents are README, architecture, testing, API
-reference/OpenAPI, access matrix, migrations, deployment matrix, design system,
-accessibility, authentication, API versioning, operations runbooks, and the
-[review traceability ledger](review-traceability.md). The production release
-candidate is additionally governed by the [private-beta deployment
-runbook](deployment/private-beta.md) and [moderated testing and beta
-protocol](user-testing/private-beta.md). Their operator and human evidence gates
-remain pending until explicitly recorded; documentation does not imply that a
-beta or public release has been approved.
+The [private-beta runbook](deployment/private-beta.md) and [moderated testing
+protocol](user-testing/private-beta.md) describe evidence required for an actual release.
+Their presence does not indicate that a client deployment has passed those gates.
 
-Release automation is hosted by Gitea Actions at
-`.gitea/workflows/release.yaml`. GitHub/GHCR release publication is not an
-authoritative HasanAra path.
-
-Public donation support through a validated Stripe-hosted Payment Link is **shipped** without introducing product billing or card-data handling. Billing, subscriptions, payment webhooks, and PWA/offline support remain **disabled**. Review reports and implementation summaries are **historical** after their findings enter the remediation plan. Older deployment/provider guides are **superseded** by `docs/deployment/README.md` unless explicitly revalidated.
+Release automation is hosted by Gitea Actions in `.gitea/workflows/release.yaml`. Product
+billing, subscriptions, payment webhooks and offline/PWA installation remain disabled.

@@ -476,7 +476,7 @@ Tests don't work. Help?
 
 ### Recognition
 
-All contributors are recognized in [CONTRIBUTORS.md](../../CONTRIBUTORS.md). Your contributions, big or small, are valued!
+Contributors are recognized in [the contributor list](../CONTRIBUTORS.md).
 
 ## Common Pitfalls to Avoid
 

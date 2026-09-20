@@ -19,12 +19,10 @@ New tables: `community_posts`, `community_reports`. Source-video deletion cascad
 
 A migration rollback drops community tables and their content; export/backup must precede a real downgrade. Disable the feature to hide entry points/endpoints without deleting data. This is community-management software, not a staffed moderation service. Deployment needs an operator, escalation rules, policy review and retention/backup procedures. No private/paid community or federation guarantee is implied.
 
-## Verification, September 19, 2026
+## Verification
 
-Final post-reboot verification supersedes the increment counts below: 1,852 backend tests passed against a fresh disposable database with all migrations, 82.90% coverage; 304 frontend tests passed, one existing skip, 85.96% line coverage. API contract, lint, formatting, production build and bundle budgets passed. Existing browser regressions: 19 passed. Separate synthetic browser/API data verified draft → edit → publish → combined timeline, immediate timeline refresh after publishing, and a 390px layout without horizontal overflow. No production writes. See `recollect-verification-20260919.md` for the remaining audit and external qualification gates.
-
-- Fresh isolated PostgreSQL/Redis/OpenSearch, full migration history: 1,837 backend tests passed, 82.61% application coverage. Migration/bootstrap parity includes the new tables and user FKs.
-- Frontend: 294 passed, one existing skip. Build and lint passed during the increment.
-- Real browser/local API: configurable branding, draft → publish → persisted reply, report → hide → restore → resolve, mobile width without horizontal overflow. All accounts/content were synthetic local fixtures.
-- Full `scripts/verify.sh` stopped after backend/security analysis at dependency audit. Existing AnyIO 4.14.0, Lightning 2.6.5 and PyTorch 2.12.1 findings require dependency qualification; Lightning/PyTorch exceptions expired September 13. No exceptions were extended.
-- A subsequent focused run accidentally targeted the browser-seeded fixture database; its assumptions of an empty feed/only test-created admins failed. The fresh complete run above is the authoritative backend result. Keep browser fixtures and unit/integration databases separate.
+Backend route and authorization tests cover publishing, revision conflicts, moderation,
+account export and deletion. Frontend tests cover the creator, member and moderator
+journeys. The seeded browser suite exercises the public timeline and passage workflow.
+Run the canonical repository gate described in [testing](../development/testing.md)
+before enabling the feature in a client deployment.

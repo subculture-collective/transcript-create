@@ -163,7 +163,7 @@ This extends the session lifetime without requiring re-authentication.
 
 ### CSRF Protection
 
-OAuth flows use a random `state` parameter to prevent CSRF attacks. HasanAra stores PostgreSQL-authoritative hashes of single-use, expiring state records and, for Google, nonce records. On callback, the record must match the provider and intent, and link flows must also match the initiating user. The Authlib cookie is retained only for protocol compatibility and is not authoritative state.
+OAuth flows use a random `state` parameter to prevent CSRF attacks. The application stores PostgreSQL-authoritative hashes of single-use, expiring state records and, for Google, nonce records. On callback, the record must match the provider and intent, and link flows must also match the initiating user. The Authlib cookie is retained only for protocol compatibility and is not authoritative state.
 
 Enable/disable state validation:
 ```bash

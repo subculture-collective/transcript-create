@@ -26,8 +26,8 @@ against complete host/site loss; replicate the bucket off-host for that threat.
 ## Enablement and preflight
 
 1. Treat PITR enablement or a PITR configuration change as a reviewed immutable
-   candidate. During a controlled deployment window on the authoritative
-   HasanAra host, run strict `scripts/compose_prod.sh preflight`, then deploy
+   candidate. During a controlled deployment window, run strict
+   `scripts/compose_prod.sh preflight`, then deploy
    that approved candidate with `scripts/compose_prod.sh deploy`. The wrapper
    clears inherited shell variables before loading `.env.prod`, preventing stale
    exported credentials or callback URLs from overriding production configuration.
@@ -70,7 +70,7 @@ required recovery window; deleting old full backups also makes their dependent
 WAL history unrecoverable. Review R2 lifecycle rules so they do not expire WALs
 needed by retained backups.
 
-The guarded HasanAra stack has no ad hoc in-place PITR-disable command. Treat
+The guarded production stack has no ad hoc in-place PITR-disable command. Treat
 disablement as a reviewed release change: first verify a recent logical backup
 and the required restore rehearsal, revise the authoritative helper/overlay in
 source, pass the release gates, and deploy the resulting immutable candidate.

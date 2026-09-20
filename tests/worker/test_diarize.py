@@ -1,5 +1,6 @@
 """Tests for worker.diarize module."""
 
+import os
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -217,8 +218,7 @@ class TestDiarizeAndAlign:
 
         result = diarize.diarize_and_align(wav_path, whisper_segments)
 
-        # Should assign first matching speaker
-        assert result[0]["speaker"] in ["Speaker 1", "Speaker 2"]
+        assert result[0]["speaker"] == "Speaker 1"
 
 
 class TestGetPipeline:
@@ -251,15 +251,11 @@ class TestGetPipeline:
         """Test returns None when pyannote.audio import fails."""
         mock_settings.ENABLE_DIARIZATION = True
         mock_settings.HF_TOKEN = "test_token"
+        mock_settings.DIARIZATION_STRICT = False
         diarize._pipeline = None
-        diarize._pyannote_import_error = ImportError("pyannote not installed")
 
-        # When import error occurred, _get_pipeline should return None
-        result = diarize._get_pipeline()
-
-        # Result depends on whether pyannote.audio is actually available
-        # In the mocked environment, it returns None
-        assert result is None or result is not None  # Either is valid in test environment
+        with patch.dict("sys.modules", {"pyannote.audio": None}):
+            assert diarize._get_pipeline() is None
 
     @patch("worker.diarize.settings")
     def test_get_pipeline_caches_result(self, mock_settings):
@@ -285,16 +281,20 @@ class TestGetPipeline:
         mock_settings.HF_TOKEN = "my_token"
         mock_settings.DIARIZATION_MODEL = "pyannote/speaker-diarization-community-1"
         mock_settings.DIARIZATION_FALLBACK_MODEL = "pyannote/speaker-diarization"
-        mock_settings.DIARIZATION_DEVICE = "cpu"
+        mock_settings.DIARIZATION_DEVICE = "auto"
+        mock_settings.DIARIZATION_STRICT = False
         diarize._pipeline = None
+        pipeline_instance = Mock()
+        pipeline = Mock(from_pretrained=Mock(return_value=pipeline_instance))
 
-        # The code path for setting env vars exists in _get_pipeline
-        # This test documents that behavior
-        # Full integration testing of env var setup is beyond unit test scope
-        result = diarize._get_pipeline()
-
-        # Either returns a pipeline or None depending on environment
-        assert result is None or result is not None
+        with (
+            patch.dict("sys.modules", {"pyannote.audio": Mock(Pipeline=pipeline)}),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            assert diarize._get_pipeline() is pipeline_instance
+            assert os.environ["HUGGINGFACE_HUB_TOKEN"] == "my_token"
+            assert os.environ["HF_TOKEN"] == "my_token"
+        pipeline.from_pretrained.assert_called_once_with("pyannote/speaker-diarization-community-1", token="my_token")
 
 
 def test_strict_audio_preload_failure_does_not_fall_back_to_path(monkeypatch):

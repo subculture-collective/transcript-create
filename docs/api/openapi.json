@@ -7146,12 +7146,12 @@
   },
   "info": {
     "contact": {
-      "name": "onnwee",
-      "url": "https://github.com/onnwee"
+      "name": "Transcript Archive maintainers"
     },
     "description": "\nYouTube video transcription service API with searchable and exportable transcripts.\n\n## Features\n\n* **Job Management** - Create and monitor transcription jobs for single videos or entire channels\n* **Video Transcripts** - Access Whisper-generated transcripts with optional speaker diarization\n* **YouTube Captions** - Retrieve and export YouTube's native closed captions\n* **Full-Text Search** - Search across transcripts using PostgreSQL or OpenSearch\n* **Export Formats** - Download transcripts in SRT, VTT, JSON, and PDF formats\n* **Authentication** - OAuth 2.0 via Google and Twitch\n* **Admin Tools** - Event analytics and user management\n\n## Authentication\n\nMost endpoints require authentication via session cookies set after OAuth login.\nAdmin endpoints require additional authorization.\n    ",
     "license": {
-      "name": "TBD"
+      "identifier": "Apache-2.0",
+      "name": "Apache License 2.0"
     },
     "title": "Transcript Create API",
     "version": "0.1.0"
@@ -13973,21 +13973,11 @@
             },
             "description": "Favorite created"
           },
-          "400": {
-            "description": "Invalid or missing required fields"
-          },
           "401": {
             "description": "Authentication required"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Invalid or missing required fields"
           }
         },
         "summary": "Add favorite segment",

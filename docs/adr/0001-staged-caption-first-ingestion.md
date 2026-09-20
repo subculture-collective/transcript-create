@@ -6,13 +6,13 @@ Accepted
 
 ## Context
 
-HasanAra ingests HasanAbi VODs from YouTube and keeps them searchable as quickly as possible. YouTube captions often arrive before native Whisper transcription, and caption fetches can be rate-limited or temporarily unavailable. The worker also runs on a GTX 1080 deployment where idle GPU time during caption cooldowns is wasteful.
+Transcript Archive ingests long-form YouTube recordings and keeps them searchable as quickly as possible. YouTube captions often arrive before native Whisper transcription, and caption fetches can be rate-limited or temporarily unavailable. Some deployments use constrained GPU workers where idle time during caption cooldowns is wasteful.
 
 The archive needs a flow that keeps captions moving, builds a searchable archive early, and still produces native transcripts for the final archive record.
 
 ## Decision
 
-HasanAra will import YouTube transcripts first.
+The worker imports YouTube transcripts first.
 
 Native Whisper transcription may start per video in rolling mode once that specific video reaches a terminal caption state: `completed`, `unavailable`, or `failed`.
 

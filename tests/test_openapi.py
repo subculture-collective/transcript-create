@@ -36,9 +36,11 @@ class TestOpenAPISpec:
         assert "contact" in spec["info"]
         assert "license" in spec["info"]
 
-        # Check contact info
-        assert spec["info"]["contact"]["name"] == "onnwee"
-        assert "url" in spec["info"]["contact"]
+        assert spec["info"]["contact"] == {"name": "Transcript Archive maintainers"}
+        assert spec["info"]["license"] == {
+            "name": "Apache License 2.0",
+            "identifier": "Apache-2.0",
+        }
 
     def test_openapi_spec_has_tags(self, client: TestClient):
         """Test that the OpenAPI spec includes route tags."""

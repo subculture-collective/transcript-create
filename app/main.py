@@ -68,12 +68,10 @@ Admin endpoints require additional authorization.
     """,
     version="0.1.0",
     lifespan=lifespan,
-    contact={
-        "name": "onnwee",
-        "url": "https://github.com/onnwee",
-    },
+    contact={"name": "Transcript Archive maintainers"},
     license_info={
-        "name": "TBD",
+        "name": "Apache License 2.0",
+        "identifier": "Apache-2.0",
     },
     docs_url="/docs",
     redoc_url="/redoc",

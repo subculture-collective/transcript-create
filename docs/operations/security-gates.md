@@ -1,6 +1,6 @@
 # Blocking Dependency and SAST Gates
 
-HasanAra blocks releases on reachable dependency advisories and high-severity
+Transcript Archive blocks releases on reachable dependency advisories and high-severity
 Python SAST findings. The canonical runtime gate uses Python 3.11 and Node 20.
 
 Run the focused gates locally with no advisory suppressions:

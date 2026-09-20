@@ -731,6 +731,6 @@ kubectl get events -n transcript-create --sort-by='.lastTimestamp' 2>/dev/null |
 ## Related Documentation
 
 - [Production Checklist](./production-checklist.md)
-- [Upgrade Guide](./upgrade-guide.md)
+- [Migration runbook](../MIGRATIONS.md)
 - [Kubernetes Guide](./kubernetes.md)
 - [Docker Compose Guide](./docker-compose.md)

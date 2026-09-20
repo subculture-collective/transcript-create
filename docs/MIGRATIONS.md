@@ -55,9 +55,10 @@ skip this migration with the flag false. A downgrade invalidates every session:
 plaintext cookie tokens cannot be reconstructed from hashes, so do not resume an
 older consumer with live hash-only sessions.
 
-### HasanAra Docker Compose equivalent
+### Guarded Docker Compose equivalent
 
-The HasanAra host has one authoritative path: `scripts/compose_prod.sh`. Do not
+Deployments using the guarded production stack have one authoritative path:
+`scripts/compose_prod.sh`. Do not
 construct a partial Compose array or run `docker compose` directly. Before the
 window, place the downloaded `release-images.json` at the repository root and
 configure `.env.prod` with the matching 0200-aware digest references. The helper

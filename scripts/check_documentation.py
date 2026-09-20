@@ -17,9 +17,11 @@ CANONICAL = (
     "docs/development/architecture.md",
     "docs/development/testing.md",
     "docs/deployment/README.md",
+    "docs/deployment/client-branding.md",
     "docs/deployment/private-beta.md",
+    "docs/development/transcript-processing.md",
     "docs/operations/production-readiness.md",
-    "docs/review-traceability.md",
+    "docs/product/passage-sharing.md",
     "docs/user-testing/private-beta.md",
 )
 LINK = re.compile(r"\[[^]]+\]\(([^)]+)\)")
@@ -27,7 +29,7 @@ LINK = re.compile(r"\[[^]]+\]\(([^)]+)\)")
 
 def validate_links(path: Path, errors: list[str]) -> None:
     for target in LINK.findall(path.read_text(encoding="utf-8")):
-        if target.startswith(("http://", "https://", "#")):
+        if target.startswith(("http://", "https://", "mailto:", "#", "/")):
             continue
         local = target.split("#", 1)[0]
         if local and not (path.parent / local).resolve().exists():
@@ -44,6 +46,20 @@ def main() -> int:
         if relative != "README.md" and "**Status:**" not in path.read_text(encoding="utf-8"):
             errors.append(f"{relative}: missing status metadata")
         validate_links(path, errors)
+
+    for path in (ROOT / "docs").rglob("*.md"):
+        validate_links(path, errors)
+
+    retired_artifact_roots = (
+        ".tmp/frontend-review-doc",
+        "evidence/features",
+        "output/ui-ux-audit-2026-08-12",
+        "transcript-audit-2026-08-11",
+        "docs/superpowers/plans",
+    )
+    for relative in retired_artifact_roots:
+        if (ROOT / relative).exists():
+            errors.append(f"retired audit or planning artifact exists: {relative}")
 
     retired_assets = (
         "frontend/public/offline.html",

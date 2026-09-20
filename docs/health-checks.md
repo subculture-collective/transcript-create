@@ -701,7 +701,7 @@ ab -n 100 -c 5 http://localhost:8000/health/detailed
 ✅ Works with Kubernetes liveness/readiness probes  
 ✅ Configurable critical components  
 ✅ Worker heartbeat mechanism active  
-✅ Comprehensive test coverage (25 tests)  
+✅ Covered by the canonical backend verification suite  
 
 ---
 
@@ -713,6 +713,6 @@ See the interactive API documentation at `/docs` for complete request/response s
 
 ## Related Documentation
 
-- [Prometheus Metrics](./IMPLEMENTATION_SUMMARY_MONITORING.md)
+- [Operations](operations/README.md)
 - [Kubernetes Deployment Guide](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
-- [Production Deployment](./docs/deployment.md)
+- [Production readiness](operations/production-readiness.md)

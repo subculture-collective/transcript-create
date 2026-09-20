@@ -10378,13 +10378,6 @@ export interface operations {
           'application/json': unknown;
         };
       };
-      /** @description Invalid or missing required fields */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
       /** @description Authentication required */
       401: {
         headers: {
@@ -10392,14 +10385,12 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description Validation Error */
+      /** @description Invalid or missing required fields */
       422: {
         headers: {
           [name: string]: unknown;
         };
-        content: {
-          'application/json': components['schemas']['HTTPValidationError'];
-        };
+        content?: never;
       };
     };
   };

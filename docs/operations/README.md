@@ -35,9 +35,9 @@ migration ordering, release evidence, and operator approval gates.
 
 ## Local and generic-stack quick links
 
-> **Do not run the direct Compose examples below on the HasanAra production
-> host.** They are retained for local or generic stacks that do not use the
-> guarded release helper. HasanAra production changes must follow the
+> **Do not run the direct Compose examples below on a production deployment
+> that uses the guarded release helper.** They are retained for local or generic
+> stacks. Guarded production changes must follow the
 > [private-beta deployment runbook](../deployment/private-beta.md) and use only
 > the named, preflighted actions exposed by `scripts/compose_prod.sh`. Restore
 > rehearsals run on the isolated staging host described by that runbook.

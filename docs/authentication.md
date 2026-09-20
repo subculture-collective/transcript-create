@@ -1,6 +1,6 @@
 # Authentication and accounts
 
-HasanAra supports Google and Twitch OAuth sign-in. There is no password registration, password reset, automatic email-based account merging, or provider access-token persistence. A HasanAra account may link one Google and one Twitch identity; the immutable provider subject, not email, identifies an external account. If the two identities were used to create separate HasanAra accounts, the signed-in user may explicitly merge them after proving control of the second provider again.
+Transcript Archive supports Google and Twitch OAuth sign-in. There is no password registration, password reset, automatic email-based account merging, or provider access-token persistence. An account may link Google and Twitch identities; the immutable provider subject, not email, identifies an external account. If identities created separate accounts, the signed-in user may explicitly merge them after proving control of the second provider again.
 
 ## Provider setup
 
@@ -11,7 +11,7 @@ Create an OAuth 2.0 **Web application** client in Google Cloud Console. Configur
 - Local: `http://localhost:8000/auth/callback/google`
 - Production: `https://api.example.com/auth/callback/google` (replace `api.example.com` before deploy)
 
-Google uses OpenID Connect scopes `openid email profile`. HasanAra uses the verified OIDC `sub` claim as the identity key; email is profile metadata only. Do not enable the obsolete Google+ API instruction.
+Google uses OpenID Connect scopes `openid email profile`. The application uses the verified OIDC `sub` claim as the identity key; email is profile metadata only. Do not enable the obsolete Google+ API instruction.
 
 ### Twitch
 
@@ -44,7 +44,7 @@ BOOTSTRAP_ADMIN_IDENTITIES=
 
 Production requires HTTPS frontend origins and HTTPS provider callbacks. `FRONTEND_ORIGIN` is the default allowed CORS origin; `CORS_ALLOW_ORIGINS` can add explicit origins but must not use wildcards or local origins in production. Session cookies are HttpOnly and Secure in production, with `SameSite=Lax`.
 
-For the HasanAra production host, put the redirect URIs in the deployment-only
+For a production deployment, put the redirect URIs in its deployment-only
 `.env.prod` and use only the guarded immutable release helper described in the
 [private-beta deployment runbook](deployment/private-beta.md):
 
@@ -53,8 +53,8 @@ scripts/compose_prod.sh preflight
 scripts/compose_prod.sh deploy
 ```
 
-Do not substitute raw Compose commands or the generic
-`docker-compose.prod.yml`/Watchtower path on that host. The helper clears
+Do not substitute raw Compose commands when that deployment uses the guarded
+release path. The helper clears
 inherited shell variables before loading `.env.prod`. The release overlays
 require both `OAUTH_GOOGLE_REDIRECT_URI` and `OAUTH_TWITCH_REDIRECT_URI`; they
 intentionally have no callback defaults. `BOOTSTRAP_ADMIN_IDENTITIES` remains
@@ -64,7 +64,7 @@ optional and may be empty.
 
 Start sign-in with `GET /auth/login/google` or `GET /auth/login/twitch`. Each redirect creates a server-side PostgreSQL OAuth-request record. State and, for Google, nonce bindings are provider- and intent-bound, expire after ten minutes, and are consumed once. The Authlib cookie only supports protocol compatibility; it is not authoritative state.
 
-Successful sign-in creates or reuses the account for that provider subject. HasanAra never merges accounts by matching email. Provider tokens are used only for the exchange and are not persisted.
+Successful sign-in creates or reuses the account for that provider subject. The application never merges accounts by matching email. Provider tokens are used only for the exchange and are not persisted.
 
 Session cookies contain an opaque raw token, but the database stores only its SHA-256 hash. `GET /auth/me` keeps the compatibility envelope and also returns the resolved `role` and `capabilities`; `GET /auth/csrf` returns a token bound to the active session.
 

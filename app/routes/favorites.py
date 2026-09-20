@@ -6,7 +6,7 @@ from sqlalchemy import text as _text
 from ..common.session import get_session_token as _get_session_token
 from ..common.session import get_user_from_session as _get_user_from_session
 from ..db import get_db
-from ..exceptions import AuthenticationError, ValidationError
+from ..exceptions import AuthenticationError, NotFoundError, ValidationError
 
 router = APIRouter(prefix="", tags=["Favorites"])
 
@@ -93,7 +93,7 @@ def list_favorites(request: Request, db=Depends(get_db), video_id: uuid.UUID | N
             "description": "Favorite created",
             "content": {"application/json": {"example": {"id": "123e4567-e89b-12d3-a456-426614174000"}}},
         },
-        400: {"description": "Invalid or missing required fields"},
+        422: {"description": "Invalid or missing required fields"},
         401: {"description": "Authentication required"},
     },
 )
@@ -106,12 +106,22 @@ def add_favorite(payload: dict, request: Request, db=Depends(get_db)):
     start = payload.get("start_ms")
     end = payload.get("end_ms")
     textv = payload.get("text")
-    if not (vid and isinstance(start, int) and isinstance(end, int)):
+    try:
+        video_id = uuid.UUID(str(vid))
+    except (TypeError, ValueError, AttributeError):
+        raise ValidationError("Missing or invalid required fields: video_id, start_ms, end_ms")
+    if (
+        type(start) is not int
+        or type(end) is not int
+        or start < 0
+        or end <= start
+        or (textv is not None and not isinstance(textv, str))
+    ):
         raise ValidationError("Missing or invalid required fields: video_id, start_ms, end_ms")
     fid = uuid.uuid4()
     db.execute(
         _text("INSERT INTO favorites (id,user_id,video_id,start_ms,end_ms,text) VALUES (:i,:u,:v,:s,:e,:t)"),
-        {"i": str(fid), "u": str(user["id"]), "v": str(vid), "s": start, "e": end, "t": textv},
+        {"i": str(fid), "u": str(user["id"]), "v": str(video_id), "s": start, "e": end, "t": textv},
     )
     db.commit()
     return {"id": fid}
@@ -137,6 +147,11 @@ def delete_favorite(favorite_id: uuid.UUID, request: Request, db=Depends(get_db)
     user = _get_user_from_session(db, _get_session_token(request))
     if not user:
         raise AuthenticationError()
-    db.execute(_text("DELETE FROM favorites WHERE id=:i AND user_id=:u"), {"i": str(favorite_id), "u": str(user["id"])})
+    result = db.execute(
+        _text("DELETE FROM favorites WHERE id=:i AND user_id=:u"),
+        {"i": str(favorite_id), "u": str(user["id"])},
+    )
+    if result.rowcount == 0:
+        raise NotFoundError("Favorite not found", resource_type="favorite")
     db.commit()
     return {"ok": True}

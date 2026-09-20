@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import YouTubePlayer from '../components/YouTubePlayer';
 import { createRef } from 'react';
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer';
+import { resetYouTubeApiForTests } from '../services/youtubeApi';
 
 describe('YouTubePlayer', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11,6 +12,7 @@ describe('YouTubePlayer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetYouTubeApiForTests();
     playerState = 2;
 
     // Mock YouTube IFrame API
@@ -42,6 +44,8 @@ describe('YouTubePlayer', () => {
 
   afterEach(() => {
     delete window.YT;
+    resetYouTubeApiForTests();
+    document.querySelector('script[data-youtube-iframe-api]')?.remove();
   });
 
   it('previews a bounded range and resumes unrestricted playback with a seek', async () => {
@@ -298,12 +302,12 @@ describe('YouTubePlayer', () => {
     expect(() => unmount()).not.toThrow();
   });
 
-  it.skip('loads YouTube API script when not available', async () => {
-    // This test is skipped because happy-dom doesn't support external script loading
-    // In a real browser environment, this functionality works correctly
+  it('loads the YouTube API script and initializes after its ready callback', async () => {
+    const playerConstructor = window.YT!.Player;
     delete window.YT;
-
-    const appendChildSpy = vi.spyOn(document.body, 'appendChild');
+    const appendChildSpy = vi
+      .spyOn(document.body, 'appendChild')
+      .mockImplementation((node) => node);
 
     render(<YouTubePlayer videoId="test-video-id" />);
 
@@ -311,8 +315,15 @@ describe('YouTubePlayer', () => {
       expect(appendChildSpy).toHaveBeenCalled();
     });
 
-    const scriptTag = appendChildSpy.mock.calls[0][0] as HTMLScriptElement;
+    const scriptTag = appendChildSpy.mock.calls.find(
+      ([element]) => (element as HTMLElement).tagName === 'SCRIPT'
+    )?.[0] as HTMLScriptElement;
     expect(scriptTag.src).toBe('https://www.youtube.com/iframe_api');
+    expect(scriptTag.dataset.youtubeIframeApi).toBe('true');
+
+    window.YT = { Player: playerConstructor };
+    window.onYouTubeIframeAPIReady?.();
+    await waitFor(() => expect(playerConstructor).toHaveBeenCalled());
 
     appendChildSpy.mockRestore();
   });

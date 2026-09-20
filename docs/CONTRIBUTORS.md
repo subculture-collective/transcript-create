@@ -1,6 +1,7 @@
 # Contributors ✨
 
-Thank you to everyone who has contributed to Transcript Create! This project wouldn't be possible without the support of our community.
+Thank you to everyone who has contributed to Transcript Archive. See the repository's
+[contribution guide](../CONTRIBUTING.md) before opening a change.
 
 ## Core Team
 
@@ -71,4 +72,4 @@ Thank you to all the open source projects and libraries that make Transcript Cre
 
 ---
 
-**Want to be added to this list?** Check out our [Contributing Guide](CONTRIBUTING.md) to get started!
+**Want to be added to this list?** Check out our [contribution guide](../CONTRIBUTING.md) to get started.

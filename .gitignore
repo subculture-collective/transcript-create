@@ -270,8 +270,13 @@ deploy-backups/
 
 # Local browser sessions and verification artifacts (may contain private state)
 .playwright-cli/
-output/playwright/
-output/verification/
+/output/
+/evidence/
+/.tmp/
+/.brainstorming-output.md
+/*.bak-*
+/title-entity-candidates*.csv
+/people-from-titles.json
 
 # Deployment-owned client assets for local Vite previews
 frontend/public/branding/

@@ -2,7 +2,9 @@
 
 ## Overview
 
-This guide provides step-by-step instructions for setting up reliable YouTube video ingestion in HasanAra. The HasanAra archive focuses on HasanAbi VOD channels (`@HasanAbiVODs3`, `@HasanAbiVODsBackup`, and `@HasanAbiVODs`). YouTube requires specific configurations including JavaScript runtimes, cookies, and PO tokens to successfully download videos.
+This guide describes reliable YouTube ingestion for a client archive. Configure the
+client's approved channels in deployment-owned settings. YouTube extraction may require
+a JavaScript runtime, cookies and PO tokens depending on the source and challenge state.
 
 ## Prerequisites
 

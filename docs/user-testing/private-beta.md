@@ -30,8 +30,8 @@ access to the research and triage team.
 
 Read this script before each session, and record the participant's choices:
 
-> Thank you for helping test HasanAra. We are evaluating whether people can
-> find, verify, and cite HasanAbi VOD material; we are not evaluating you.
+> Thank you for helping test this archive. We are evaluating whether people can
+> find, verify, and cite recorded material; we are not evaluating you.
 > Participation is voluntary. You may skip any question, decline recording, take
 > a break, or stop the session at any time without giving a reason. We use a
 > pseudonymous participant ID and may collect pseudonymous product analytics for
@@ -48,7 +48,7 @@ instructions. Record the prompt, not a prescribed path.
 
 Every participant completes these core scenarios:
 
-1. **Recent VOD availability:** “You want to catch up on a recent HasanAbi VOD.
+1. **Recent recording availability:** “You want to catch up on a recent recording.
    Find one and explain what material is available for it.”
 2. **Quote or topic citation:** “Find a moment where a topic or quote is
    discussed and give someone a timestamped citation they could use to check it.”
@@ -72,8 +72,8 @@ recovery; confidence in any timestamped citation; and a 1–7 Single Ease Questi
 
 At the end, ask:
 
-1. “What value, if any, would HasanAra provide for you?”
-2. “What would need to change for you to trust HasanAra with this kind of task?”
+1. “What value, if any, would this archive provide for you?”
+2. “What would need to change for you to trust this archive with this kind of task?”
 
 ## Defect severity and moderated exit
 

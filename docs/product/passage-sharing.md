@@ -1,47 +1,62 @@
-# Passage sharing: first Recollect implementation
+# Passage sharing
 
-Updated September 19, 2026. Local implementation on `codex/passage-sharing`, based on deployed HasanAra source `311ddbe3df474b967e46409bc22218c3df49c119`. This change has not been deployed.
+**Status:** shipped product contract (2026-09-19).
 
-## Product boundary
+Passage sharing lets a visitor choose a timestamp range, preview it in the source player,
+and share a same-site link with transcript context. The basic workflow does not create a
+database record, require an account or copy source media.
 
-This implements the first archive-sharing workflow from the Recollect proposal: find a passage, adjust its time range, preview the source, and share a same-site link with surrounding transcript context. It does not require a new account, database record, paid inference, or media acquisition.
+## User workflow
 
-The proposal source was read on Soyuz at `/Users/onnwee/Documents/Codex/2026-09-19/ho/outputs/HasanAra-Proposal/08 Research/Moment Sharing and Clip Export.md`, together with Current State, Decision Memo, Research Index, and Creator Community and AT Protocol. The user clarified that this task should build the first product phase in code rather than update those research notes.
+1. Choose **Share passage** on a search result or transcript selection.
+2. Adjust the start and end using seconds, `HH:MM:SS.mmm`, the current playback
+   position, or adjacent transcript segments.
+3. Preview bounded playback and inspect the highlighted transcript with surrounding
+   context.
+4. Copy the passage link or invoke the browser's native share sheet.
+5. Open the link in another session to restore the range and context.
 
-## Available workflow
+The editor rejects malformed, reversed, missing-start and known-out-of-duration ranges.
+Invalid ends are not silently clamped. Recordings without duration metadata cannot have
+their upper bound verified. Large selections preserve their full time range while limiting
+rendered selected segments to 200 and explaining the omission.
 
-1. Choose **Share passage** on a search result, or select a transcript sentence/paragraph and choose **Share passage** in its actions.
-2. The editor starts with that result's or selection's start and end. Enter seconds or `HH:MM:SS.mmm`, use the current playback position for either boundary, or include the previous/next transcript segment.
-3. Inspect the duration and highlighted text with preceding/following context. Highlighting identifies overlapping transcript segments, not an exact word-level edit. Large selections render at most 200 selected segments plus context, with an explicit omission notice; their full time range remains in the link.
-4. **Preview passage** requests bounded playback in the existing YouTube player. Repeat it to replay. **Continue after passage** seeks to the end and resumes ordinary playback.
-5. **Copy passage link** copies the edited range. Browsers supporting native sharing also expose **Share passage**. If copying fails, the read-only link field supports manual selection/copy. Cancelling native sharing does not copy automatically or claim that a post was published.
-6. Opening the copied URL in a fresh session restores the range editor and transcript context. Selecting another transcript moment returns to ordinary timestamp navigation.
+## URL and playback contract
 
-## URL and state contract
+An editable link uses this shape:
 
-Example: `/v/{videoId}?t=1108&t_ms=1108670&end_ms=1120530#moment-1108670`.
+```text
+/v/{videoId}?t=1108&t_ms=1108670&end_ms=1120530#moment-1108670
+```
 
-The existing start-only URL remains unchanged. `t_ms` carries precise starts; `end_ms` adds an exclusive end boundary. A malformed, reversed, missing-start, or known-out-of-duration range displays a validation error and cannot be previewed or shared. Invalid end times are not silently clamped. A recording whose duration is unavailable cannot have its upper bound verified from metadata.
+The existing `t` value keeps old start-only links compatible. `t_ms` carries the precise
+start and `end_ms` adds the exclusive end. The URL contains no transcript text,
+credentials or sender identity. It points to the currently available source and
+transcript; it is not an immutable archive.
 
-Editor changes are drafts until copied/shared; the displayed passage link always reflects valid edits. No text, credentials, or sender identity are embedded in the URL. Links refer to the currently available source and transcript; they do not preserve an immutable copy or guarantee that a removed source will remain playable.
+The player queues a preview until the YouTube API is ready, loads the bounded range with
+`loadVideoById`, and clears the pending preview after an ordinary seek or pause. YouTube
+starts can be approximate, so this is not a frame-accurate clip editor. See the
+[YouTube IFrame API](https://developers.google.com/youtube/iframe_api_reference) and
+[Web Share API](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share).
 
-The editor owns draft input and sharing feedback. VideoPage owns navigation and the player reference. The player queues preview requests until readiness, uses the official object form of `loadVideoById` with start/end seconds, and clears the pending preview on an ordinary seek or pause. Existing transcript auto-scroll is suppressed while the passage editor is open so it cannot scroll past the editor on arrival.
+## Public passage pages
 
-Official API references checked September 19, 2026: [YouTube IFrame API](https://developers.google.com/youtube/iframe_api_reference) and [Web Share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share). YouTube playback starts can be approximate; this is not a frame-accurate clip editor. Seeking after a bounded load cancels the endpoint according to the YouTube API contract.
+When `PUBLIC_PASSAGES_ENABLED=true`, `/api/share/videos/{videoId}` renders a public page
+with title, range, excerpt metadata, an embedded player, a 1200 by 630 PNG card, and a
+link back to the editable range. Reads bypass transcript and video caches, and responses
+use `no-store` so deleting a source prevents future application responses. External social
+platform caches cannot be recalled. Set the flag to false for private deployments.
+
+Downloadable media clips are a separate feature requiring an authorized source,
+source-transcript alignment, rendering, access controls, retention and expiry. Transcript
+exports do not produce video clips.
 
 ## Verification
 
-- Frontend tests cover precise URL round trips, malformed input, old links, fresh-session range hydration, transcript entry points, adjacent extension, playback boundaries, delayed player readiness, clipboard denial, native-share cancellation, and bounded rendering for long selections.
-- Final checks passed: `npm test -- --run` (288 passed, one existing skip, 52 test files), `npm run build`, `npm run lint`, and `git diff --check`. Commands ran in `frontend` except the Git check.
-- Browser checks exercised local Chromium at desktop, 390 × 844 portrait, and 844 × 390 landscape. Edited preview boundaries and continue-watching calls were read back from a player test double. Copied-link reopening and invalid-range disabled states were checked. Portrait and landscape document width matched viewport width.
-- Browser data was synthetic and API calls were intercepted. The checks establish local UI behavior and player API arguments, not live YouTube playback accuracy, real mobile share-sheet behavior, production health, or deployed functionality.
-- Local browser screenshots and snapshots are saved under `output/playwright/passage-sharing-20260919/cli`. The setup initially attempted a headed browser without an X server, then used headless Chromium. Initial requests before fixture interception failed against the absent local API; the subsequent fixture-backed interactions completed. No production API was used.
-- Existing YouTube script-loading test remains skipped because the unit-test DOM cannot load that external script.
-
-## Remaining stages
-
-Public share links now open `/api/share/videos/{videoId}?start_ms=...&end_ms=...`, a server-rendered page containing title/range/excerpt metadata, an embedded source player, a 1200 × 630 PNG card, and a link back to the editable `/v/` range. Reads bypass transcript/video caches and responses use no-store so source deletion stops future serving. Platform caches cannot be recalled. `PUBLIC_PASSAGES_ENABLED=false` disables these routes for nonpublic deployments. Actual social-platform unfurls remain unverified; these HTTP/PNG checks do not establish how every platform caches or displays the card.
-
-Downloadable clips require a separately authorized source, source/transcript alignment checks, rendering, access controls, retention, costs, and expiry. The current Export menu continues to export transcripts, not video clips.
-
-Existing-account AT Protocol OAuth, creator publishing, public passage discussions, moderation, and optional PDS hosting belong to subsequent phases. No new identities, social posts, hosted accounts, billing, or production services are introduced by this change.
+Frontend tests cover URL round trips, input validation, range hydration, transcript entry
+points, adjacent extension, playback boundaries, delayed API readiness, clipboard and
+native-share failures, and bounded long-selection rendering. Backend tests cover public
+page feature gating, source removal, no-store responses and PNG card generation. The
+seeded browser suite covers the user-facing archive journey; live social unfurls and
+platform cache behavior require deployment-specific checks.

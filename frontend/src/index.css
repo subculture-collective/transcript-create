@@ -1,9 +1,9 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-display: 'Alegreya Sans', 'Segoe UI', sans-serif;
-  --font-body: 'Alegreya Sans', 'Segoe UI', sans-serif;
-  --font-sans: 'Alegreya Sans', 'Segoe UI', sans-serif;
+  --font-display: system-ui, 'Segoe UI', sans-serif;
+  --font-body: system-ui, 'Segoe UI', sans-serif;
+  --font-sans: system-ui, 'Segoe UI', sans-serif;
   --font-serif:
     'Atkinson Hyperlegible Next', 'Alegreya', 'Iowan Old Style', 'Palatino Linotype',
     'Book Antiqua', Georgia, serif;
@@ -18,14 +18,14 @@
   --color-ink: #f1f1f4;
   --color-muted: #9a9aaa;
   --color-subtle: #8d8d9f;
-  --color-accent: #b7ff3c;
-  --color-accent-hover: #d1ff7a;
-  --color-accent-soft: #1f2a12;
+  --color-accent: #93c5fd;
+  --color-accent-hover: #bfdbfe;
+  --color-accent-soft: #172b46;
   --color-accent-contrast: #101014;
-  --color-player-accent: #b7ff3c;
+  --color-player-accent: #93c5fd;
   --color-cta: #c084fc;
-  --color-success: #b7ff3c;
-  --color-success-soft: #1f2a12;
+  --color-success: #93c5fd;
+  --color-success-soft: #172b46;
   --color-warning: #ffd166;
   --color-warning-soft: #2f2412;
   --color-danger: #ff6b6b;
@@ -50,13 +50,13 @@
   --color-ink: #1e1d22;
   --color-muted: #5f5c68;
   --color-subtle: #6b6774;
-  --color-accent: #477007;
-  --color-accent-hover: #3f6505;
-  --color-accent-soft: #edf5dd;
+  --color-accent: #1d4ed8;
+  --color-accent-hover: #1e40af;
+  --color-accent-soft: #dbeafe;
   --color-accent-contrast: #ffffff;
   --color-cta: #7c3aed;
-  --color-success: #477007;
-  --color-success-soft: #edf5dd;
+  --color-success: #1d4ed8;
+  --color-success-soft: #dbeafe;
   --color-warning: #8b5900;
   --color-warning-soft: #fff1cf;
   --color-danger: #a93a3a;
@@ -64,7 +64,7 @@
 }
 
 html {
-  background: #101014;
+  background: var(--color-canvas);
 }
 
 body {
@@ -97,8 +97,8 @@ body {
 }
 
 ::selection {
-  background: rgba(183, 255, 60, 0.28);
-  color: #f1f1f4;
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
 }
 
 *:focus-visible {
@@ -177,7 +177,7 @@ body {
   }
 
   .admin-chart-swatch-lime {
-    background-color: #b7ff3c;
+    background-color: #93c5fd;
   }
 
   .admin-chart-swatch-purple {
@@ -228,7 +228,7 @@ body {
       90deg,
       transparent,
       rgba(241, 241, 244, 0.18),
-      rgba(183, 255, 60, 0.3),
+      color-mix(in srgb, var(--color-accent) 30%, transparent),
       rgba(241, 241, 244, 0.12),
       transparent
     );
@@ -259,7 +259,7 @@ body {
   }
 
   .btn-primary {
-    @apply inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg border border-accent/60 bg-accent px-3.5 py-1.5 text-center font-semibold text-accent-contrast shadow-[0_0_0_1px_rgba(183,255,60,0.08),0_12px_30px_rgba(183,255,60,0.18)] transition-[color,background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg border border-accent/60 bg-accent px-3.5 py-1.5 text-center font-semibold text-accent-contrast shadow-lg transition-[color,background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-secondary {
@@ -271,7 +271,7 @@ body {
   }
 
   .btn {
-    @apply inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg border border-accent/60 bg-accent px-5 py-2 text-center font-semibold text-accent-contrast shadow-[0_0_0_1px_rgba(183,255,60,0.08),0_14px_32px_rgba(183,255,60,0.18)] transition-[color,background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg border border-accent/60 bg-accent px-5 py-2 text-center font-semibold text-accent-contrast shadow-lg transition-[color,background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .badge-success {
@@ -337,7 +337,11 @@ body {
     content: '';
     @apply pointer-events-none absolute inset-0 opacity-70;
     background:
-      radial-gradient(circle at 82% 10%, rgba(183, 255, 60, 0.14), transparent 30%),
+      radial-gradient(
+        circle at 82% 10%,
+        color-mix(in srgb, var(--color-accent) 14%, transparent),
+        transparent 30%
+      ),
       linear-gradient(120deg, transparent 0 58%, rgba(192, 132, 252, 0.055) 58% 100%);
   }
 
@@ -572,7 +576,7 @@ body {
 
   .transcript-sentence-current {
     @apply text-accent;
-    text-shadow: 0 0 18px rgba(183, 255, 60, 0.22);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--color-accent) 22%, transparent);
   }
 
   .transcript-sentence-match {

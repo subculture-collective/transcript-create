@@ -458,7 +458,7 @@ describe('AccountPage', () => {
 
     expect(
       await screen.findByText(
-        'That Twitch identity belongs to another HasanAra account. You can merge it into this account after confirming ownership again.'
+        'That Twitch identity belongs to another archive account. You can merge it into this account after confirming ownership again.'
       )
     ).toBeVisible();
     expect(screen.getByRole('alertdialog')).toHaveTextContent(

@@ -1,12 +1,14 @@
 import hmac
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+from .branding import BrandProfile, load_brand_profile
 
 BASE_DIR = Path(__file__).resolve().parents[1]  # repo root (parent of 'app')
 
@@ -126,8 +128,25 @@ class Settings(BaseSettings):
 
     # Frontend origin for CORS/redirects
     FRONTEND_ORIGIN: str = "http://localhost:5173"
-    SITE_NAME: str = Field(default="HasanAra", min_length=1, max_length=80)
-    SITE_CREATOR_NAME: str = Field(default="HasanAbi", min_length=1, max_length=100)
+    ARCHIVE_EDITORIAL_PRESET: Literal["generic", "hasanara"] = "generic"
+    SITE_PROFILE_PATH: str = ""
+    SITE_BRANDING: BrandProfile = Field(default_factory=BrandProfile, exclude=True)
+
+    @model_validator(mode="after")
+    def load_client_profile(self):
+        profile = load_brand_profile(self.SITE_PROFILE_PATH) if self.SITE_PROFILE_PATH else self.SITE_BRANDING
+        self.SITE_BRANDING = profile
+        for field, value in (
+            ("SITE_NAME", profile.name),
+            ("SITE_DESCRIPTION", profile.description),
+            ("SITE_CREATOR_NAME", profile.creator_name),
+        ):
+            if field not in self.model_fields_set:
+                setattr(self, field, value)
+        return self
+
+    SITE_NAME: str = Field(default="Transcript Archive", min_length=1, max_length=80)
+    SITE_CREATOR_NAME: str = Field(default="the creators", min_length=1, max_length=100)
     COMMUNITY_ENABLED: bool = False
     CLIP_EXPORTS_ENABLED: bool = False
     CLIP_ORIGINALS_ROOT: str = ""
@@ -136,7 +155,7 @@ class Settings(BaseSettings):
     ATPROTO_HANDLE_RESOLVER: str = "https://bsky.social"
     SITE_DESCRIPTION: str = Field(default="Search the archive, share a passage, and keep its context.", max_length=300)
     PUBLIC_PASSAGES_ENABLED: bool = True
-    # Public Stripe-hosted Payment Link. HasanAra never accepts card details or
+    # Public Stripe-hosted Payment Link. The archive never accepts card details or
     # creates charges directly; an empty value keeps donations disabled.
     DONATION_PAYMENT_LINK_URL: str = ""
     # Session and OAuth
@@ -219,18 +238,14 @@ class Settings(BaseSettings):
 
     # Advanced transcription features
     # Language detection (uses Whisper's built-in capability)
-    WHISPER_LANGUAGE: str = "en"  # HasanAbi archive audio is English; avoids music-driven language misdetection
+    WHISPER_LANGUAGE: str = "en"  # Default transcription language; avoids music-driven language misdetection
     # Quality presets: fast, balanced, accurate
     WHISPER_QUALITY_PRESET: str = "balanced"  # Default quality preset
     WHISPER_BEAM_SIZE: int = 5  # Beam size for decoding (1-10, higher = more accurate but slower)
     WHISPER_TEMPERATURE: float = 0.0  # Temperature for sampling (0.0-1.0, 0.0 = greedy)
     WHISPER_VAD_FILTER: bool = True  # Skip music/silence before decoding with faster-whisper
     WHISPER_WORD_TIMESTAMPS: bool = True  # Extract word-level timestamps
-    WHISPER_INITIAL_PROMPT: str = (
-        "What's going on, everybody? I hope everyone's having a fantastic evening, afternoon, pre-noon, "
-        "no matter where you are in the world. I'm Hasan Piker, and this is the HasanAbi broadcast. "
-        "All the boys, girls and Enbies. Hasan HasanAbi Piker. Oliver Larkin. Melat Kiros."
-    )
+    WHISPER_INITIAL_PROMPT: str = ""
     # Speaker diarization assigns anonymous labels like "Speaker 1"/"Speaker 2".
     # It does not identify real people without a separate voice-enrollment system.
     ENABLE_DIARIZATION: bool = False

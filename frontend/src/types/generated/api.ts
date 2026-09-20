@@ -1072,7 +1072,7 @@ export interface paths {
     };
     /**
      * Get archive summary
-     * @description Summary statistics for HasanAra based on real VOD and transcript data.
+     * @description Summary statistics for the archive based on real VOD and transcript data.
      */
     get: operations['archive_summary_archive_summary_get'];
     put?: never;
@@ -3567,7 +3567,7 @@ export interface components {
       /**
        * Creator Name
        * @description Archive display name
-       * @default HasanAra
+       * @default Transcript Archive
        */
       creator_name: string;
       /**
@@ -4050,6 +4050,23 @@ export interface components {
       name: string | null;
       /** Plan */
       plan: string;
+    };
+    /** BrandTheme */
+    BrandTheme: {
+      /** Dark */
+      dark?: {
+        [key: string]: string;
+      };
+      /**
+       * Font
+       * @default system
+       * @enum {string}
+       */
+      font: 'system' | 'editorial' | 'mono';
+      /** Light */
+      light?: {
+        [key: string]: string;
+      };
     };
     /**
      * CleanedSegment
@@ -5661,10 +5678,52 @@ export interface components {
       creator_name: string;
       /** Description */
       description: string;
+      /**
+       * Favicon Url
+       * @default /icon.svg
+       */
+      favicon_url: string;
+      /**
+       * Logo Url
+       * @default /icon.svg
+       */
+      logo_url: string;
       /** Name */
       name: string;
+      /**
+       * Operator Name
+       * @default Archive team
+       */
+      operator_name: string;
+      /**
+       * Operator Url
+       * @default
+       */
+      operator_url: string;
+      /**
+       * Project Notice
+       * @default Source recordings and trademarks belong to their respective owners.
+       */
+      project_notice: string;
       /** Public Passages Enabled */
       public_passages_enabled: boolean;
+      /**
+       * Schema Version
+       * @default 1
+       * @constant
+       */
+      schema_version: 1;
+      /**
+       * Social Image Url
+       * @default /social-card.svg
+       */
+      social_image_url: string;
+      /**
+       * Tagline
+       * @default Broadcast archive
+       */
+      tagline: string;
+      theme?: components['schemas']['BrandTheme'];
     };
     /** SupportConfig */
     SupportConfig: {

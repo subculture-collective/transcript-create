@@ -4,6 +4,7 @@ import re
 from collections import Counter, defaultdict
 
 from app.archive.intelligence_repository import alias_matches_text
+from app.settings import settings
 
 from .normalization import is_junk_phrase, normalize_label, normalized_alias
 from .types import LabelCandidate
@@ -364,7 +365,8 @@ def _title_candidate_text(title: str) -> str:
         text,
         flags=re.IGNORECASE,
     )
-    text = re.sub(r"\b(?:HasanAbi|Hasan Piker|Hasan)\b", " ", text)
+    if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara":
+        text = re.sub(r"\b(?:HasanAbi|Hasan Piker|Hasan)\b", " ", text)
     return text
 
 
@@ -385,9 +387,20 @@ def suggest_person_names_from_title(title: str) -> list[str]:
     for pattern in patterns:
         for match in re.finditer(pattern, text):
             name = " ".join(match.group(1).replace("–", " ").replace("-", " ").split())
-            if len(name) < 4 or name in TITLE_PERSON_STOPWORDS:
+            if len(name) < 4 or name in (
+                TITLE_PERSON_STOPWORDS
+                if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara"
+                else TITLE_PERSON_STOPWORDS - {"Hasan", "HasanAbi", "Hasan Piker"}
+            ):
                 continue
-            if any(name.startswith(stop) or name.endswith(stop) for stop in TITLE_PERSON_STOPWORDS):
+            if any(
+                name.startswith(stop) or name.endswith(stop)
+                for stop in (
+                    TITLE_PERSON_STOPWORDS
+                    if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara"
+                    else TITLE_PERSON_STOPWORDS - {"Hasan", "HasanAbi", "Hasan Piker"}
+                )
+            ):
                 continue
             lowered_name = name.lower()
             if name.isupper() or any(term in lowered_name for term in TITLE_PERSON_REJECT_TERMS):

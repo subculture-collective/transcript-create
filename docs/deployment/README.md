@@ -16,3 +16,7 @@ Deploy in order: backup and restore-test; additive migrations; analytics scrub/s
 Application images may roll back independently while additive migrations remain compatible. Never roll back across the analytics credential-scrub boundary to token-writing code.
 
 The frontend currently ships a one-release `/sw.js` retirement worker. It deletes legacy cache-first PWA storage, unregisters itself, and reloads controlled windows; the application does not register a new worker. Keep the retirement asset available for one release, then remove it after previously controlled clients have upgraded.
+
+## Client branding
+
+See [client branding and shared core updates](client-branding.md) for independent deployments using the same core release.

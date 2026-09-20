@@ -16,7 +16,7 @@ describe('public project pages', () => {
     expect(
       screen.getByRole('heading', { name: 'A broadcast archive built like a public record.' })
     ).toBeInTheDocument();
-    expect(screen.getByText(/not affiliated with HasanAbi/i)).toBeInTheDocument();
+    expect(screen.getByText(/Source recordings and trademarks belong/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Search the archive/ })).toHaveAttribute(
       'href',
       '/search'

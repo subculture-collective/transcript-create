@@ -49,9 +49,7 @@ export default function StreamCard({ video, dateField }: StreamCardProps) {
             {title}
           </Link>
           <p className="feed-card-support">
-            {metadata.length > 0
-              ? metadata.join(' · ')
-              : video.channel_name || 'HasanAbi broadcast archive'}
+            {metadata.length > 0 ? metadata.join(' · ') : video.channel_name || 'Broadcast archive'}
           </p>
         </div>
         <details className="feed-card-menu">

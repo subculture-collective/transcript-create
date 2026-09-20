@@ -243,7 +243,7 @@ export default function StreamsPage() {
           <div>
             <p className="archive-eyebrow">Public archive</p>
             <h1 tabIndex={-1} className="text-2xl font-semibold tracking-[-0.04em] text-ink">
-              Browse HasanAbi VODs
+              Browse recordings
             </h1>
           </div>
           <p className="feed-count">

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "clients": [
+    {
+      "id": "northstar",
+      "profile": "northstar.json",
+      "assets": "northstar-assets",
+      "services": [
+        "api",
+        "frontend",
+        "migrations"
+      ]
+    }
+  ]
+}

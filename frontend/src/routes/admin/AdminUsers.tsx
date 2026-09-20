@@ -239,7 +239,7 @@ export default function AdminUsers() {
         {!compact && (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <caption className="sr-only">HasanAra users and authorization roles</caption>
+              <caption className="sr-only">Archive users and authorization roles</caption>
               <thead className="border-b border-border bg-surface-muted/70 text-xs uppercase tracking-[0.16em] text-subtle">
                 <tr>
                   <th className="px-4 py-3 font-semibold">User</th>

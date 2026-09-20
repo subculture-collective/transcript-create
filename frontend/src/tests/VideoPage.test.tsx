@@ -178,7 +178,7 @@ describe('VideoPage', () => {
       expect(screen.getByRole('heading', { name: 'Guest Stream' })).toBeInTheDocument();
     });
 
-    await waitFor(() => expect(document.title).toBe('Guest Stream | HasanAra'));
+    await waitFor(() => expect(document.title).toBe('Guest Stream | Transcript Archive'));
     expect(screen.getByText(/Automated transcripts can contain errors/i)).toBeInTheDocument();
     expect(
       screen.getByText(/verify quotations against the linked source video/i)

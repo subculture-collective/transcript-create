@@ -185,7 +185,7 @@ def test_archive_enrichment_defaults_to_disabled_v4_pro_candidates():
 
     assert config.WHISPER_LANGUAGE == "en"
     assert config.WHISPER_VAD_FILTER is True
-    assert "HasanAbi" in config.WHISPER_INITIAL_PROMPT
+    assert config.WHISPER_INITIAL_PROMPT == ""
     assert config.ARCHIVE_ENRICHMENT_ENABLED is False
     assert config.ARCHIVE_ENRICHMENT_MODEL == "deepseek/deepseek-v4-pro"
     assert config.ARCHIVE_ENRICHMENT_MAX_WINDOW_MINUTES == 90

@@ -102,7 +102,7 @@ def build_chapter_naming_request(
     model: str,
 ) -> dict[str, Any]:
     evidence = _evidence_for_proposal(proposal, windows)
-    system = f"""You name and summarize chapters for a HasanAbi stream archive.
+    system = f"""You name and summarize chapters for a broadcast archive.
 Prompt version: {PROMPT_VERSION}
 Use only the supplied transcript evidence. Do not invent people, places, events, numbers, outcomes, or opinions.
 Write a specific editorial title, not a transcript quote, filler phrase, or sentence fragment.

@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-  <title id="title">HasanAra</title>
+  <title id="title">Transcript Archive</title>
   <desc id="desc">A public, citation-backed broadcast archive.</desc>
   <rect width="1200" height="630" fill="#101014"/>
   <path d="M0 510 1200 170v460H0Z" fill="#17171d"/>
   <g transform="translate(104 111) scale(4.8)">
     <rect width="64" height="64" rx="13" fill="#17171d" stroke="#343441"/>
-    <path fill="#b7ff3c" d="M11 16h18v18c0 9-5.8 14.4-16.5 15.5v-8.2c5.1-.8 7.7-3.2 7.9-7.3H11V16Zm22 0h20v18c0 9-5.8 14.4-16.5 15.5v-8.2c5.1-.8 7.7-3.2 7.9-7.3H33V16Z"/>
+    <path fill="#93c5fd" d="M11 16h18v18c0 9-5.8 14.4-16.5 15.5v-8.2c5.1-.8 7.7-3.2 7.9-7.3H11V16Zm22 0h20v18c0 9-5.8 14.4-16.5 15.5v-8.2c5.1-.8 7.7-3.2 7.9-7.3H33V16Z"/>
     <path fill="#17171d" d="m39 21 11 6.5L39 34V21Z"/>
   </g>
-  <text x="470" y="286" fill="#f1f1f4" font-family="Alegreya Sans,Segoe UI,sans-serif" font-size="104" font-weight="700" letter-spacing="-5">HasanAra</text>
-  <text x="476" y="354" fill="#b7ff3c" font-family="JetBrains Mono,monospace" font-size="25" font-weight="700" letter-spacing="5">BROADCAST ARCHIVE</text>
+  <text x="470" y="286" fill="#f1f1f4" font-family="Alegreya Sans,Segoe UI,sans-serif" font-size="62" font-weight="700" letter-spacing="-5">Transcript Archive</text>
+  <text x="476" y="354" fill="#93c5fd" font-family="JetBrains Mono,monospace" font-size="25" font-weight="700" letter-spacing="5">BROADCAST ARCHIVE</text>
   <text x="110" y="545" fill="#9a9aaa" font-family="Alegreya Sans,Segoe UI,sans-serif" font-size="34">Watch the source. Search the transcript. Cite the moment.</text>
 </svg>

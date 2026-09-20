@@ -37,11 +37,9 @@ export default function StreamFiltersBar({
             <p className="mb-1 text-sm font-medium uppercase tracking-[0.24em] text-subtle">
               VOD library
             </p>
-            <h1 className="page-title">Browse HasanAbi VODs</h1>
+            <h1 className="page-title">Browse recordings</h1>
           </div>
-          <p className="max-w-2xl text-muted">
-            Search the HasanAbi archive and narrow by broadcast date.
-          </p>
+          <p className="max-w-2xl text-muted">Search the archive and narrow by broadcast date.</p>
         </div>
 
         <div className="grid min-w-[14rem] grid-cols-2 gap-3 rounded-2xl border border-border bg-surface-muted/60 p-4 text-sm sm:grid-cols-4 lg:min-w-[30rem]">

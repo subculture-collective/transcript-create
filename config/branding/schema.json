@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "BrandTheme": {
+      "additionalProperties": false,
+      "properties": {
+        "font": {
+          "default": "system",
+          "enum": [
+            "system",
+            "editorial",
+            "mono"
+          ],
+          "title": "Font",
+          "type": "string"
+        },
+        "dark": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Dark",
+          "type": "object"
+        },
+        "light": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Light",
+          "type": "object"
+        }
+      },
+      "title": "BrandTheme",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "name": {
+      "default": "Transcript Archive",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "Search the archive, share a passage, and keep its context.",
+      "maxLength": 300,
+      "title": "Description",
+      "type": "string"
+    },
+    "creator_name": {
+      "default": "the creators",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Creator Name",
+      "type": "string"
+    },
+    "tagline": {
+      "default": "Broadcast archive",
+      "maxLength": 100,
+      "title": "Tagline",
+      "type": "string"
+    },
+    "operator_name": {
+      "default": "Archive team",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Operator Name",
+      "type": "string"
+    },
+    "operator_url": {
+      "default": "",
+      "title": "Operator Url",
+      "type": "string"
+    },
+    "project_notice": {
+      "default": "Source recordings and trademarks belong to their respective owners.",
+      "maxLength": 500,
+      "title": "Project Notice",
+      "type": "string"
+    },
+    "logo_url": {
+      "default": "/icon.svg",
+      "title": "Logo Url",
+      "type": "string"
+    },
+    "favicon_url": {
+      "default": "/icon.svg",
+      "title": "Favicon Url",
+      "type": "string"
+    },
+    "social_image_url": {
+      "default": "/social-card.svg",
+      "title": "Social Image Url",
+      "type": "string"
+    },
+    "theme": {
+      "$ref": "#/$defs/BrandTheme"
+    }
+  },
+  "title": "BrandProfile",
+  "type": "object"
+}

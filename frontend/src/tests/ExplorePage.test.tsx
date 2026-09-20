@@ -227,7 +227,7 @@ describe('ExplorePage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: 'Explore the HasanAbi VOD archive' })
+        screen.getByRole('heading', { name: 'Explore the recording archive' })
       ).toBeInTheDocument();
     });
     expect(screen.getByRole('navigation', { name: /Discovery rail/i })).toBeInTheDocument();
@@ -355,7 +355,7 @@ describe('ExplorePage', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('heading', { name: 'Explore the HasanAbi VOD archive' })
+        screen.getByRole('heading', { name: 'Explore the recording archive' })
       ).toBeInTheDocument()
     );
 
@@ -445,7 +445,7 @@ describe('ExplorePage', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('heading', { name: 'Explore the HasanAbi VOD archive' })
+        screen.getByRole('heading', { name: 'Explore the recording archive' })
       ).toBeInTheDocument()
     );
     fireEvent.click(screen.getByRole('button', { name: 'Weeks' }));

@@ -226,7 +226,7 @@ export default function AdminLabelIntelligence() {
         <h1 className="page-title">Label intelligence</h1>
         <p className="max-w-3xl text-sm text-muted">
           Review automatically extracted topics, recurring bits, entities, and evidence before
-          publishing them into HasanAra discovery surfaces.
+          publishing them into archive discovery surfaces.
         </p>
       </div>
 

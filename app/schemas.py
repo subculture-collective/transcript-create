@@ -287,7 +287,7 @@ class ArchiveSummaryStats(BaseModel):
 
 
 class ArchiveSummary(BaseModel):
-    creator_name: str = Field("HasanAra", description="Archive display name")
+    creator_name: str = Field("Transcript Archive", description="Archive display name")
     video_count: int = Field(0, description="Count of archived videos with transcript coverage")
     total_duration_seconds: int = Field(0, description="Total duration across archived videos")
     transcript_word_count: int = Field(0, description="Estimated transcript word count")

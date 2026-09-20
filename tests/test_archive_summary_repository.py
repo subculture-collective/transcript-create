@@ -349,7 +349,9 @@ def test_named_period_bounds_helpers_cover_calendar_edges():
     assert week_end.weekday() == 6
 
 
-def test_seed_archive_topics_uses_publishable_defaults():
+def test_seed_archive_topics_uses_publishable_defaults(monkeypatch):
+    monkeypatch.setattr("app.settings.settings.ARCHIVE_EDITORIAL_PRESET", "hasanara")
+
     class _SeedDb(_FakeDb):
         def execute(self, sql, params=None):
             sql_text = str(sql)
@@ -367,6 +369,7 @@ def test_seed_archive_topics_uses_publishable_defaults():
 
 
 def test_seed_named_periods_corrects_current_curated_windows(monkeypatch):
+    monkeypatch.setattr("app.settings.settings.ARCHIVE_EDITORIAL_PRESET", "hasanara")
     monkeypatch.setattr("app.archive.intelligence_repository._seed_today", lambda: date(2026, 11, 10))
 
     db = _SeedDb()
@@ -923,3 +926,13 @@ def test_cached_period_topics_are_revalidated_before_public_use():
     )
 
     assert [item.slug for item in period.top_topics] == ["gaza"]
+
+
+def test_generic_archive_does_not_seed_client_editorial_topics(monkeypatch):
+    monkeypatch.setattr("app.settings.settings.ARCHIVE_EDITORIAL_PRESET", "generic")
+    db = _SeedDb()
+    seed_archive_topics(db)
+    assert not any("INSERT INTO archive_topics" in sql for sql, _ in db.calls)
+    seed_named_periods(db)
+    assert not any(row["kind"] in {"event", "leadup"} for row in db.inserted_periods)
+    assert not any("UPDATE archive_named_periods" in sql for sql, _ in db.calls)

@@ -125,11 +125,11 @@ def build_summary_request(label: str, evidence: list[dict[str, Any]], *, model: 
     normalized = normalize_evidence(evidence)
     if not normalized:
         raise SummaryValidationError("summary requires at least one non-empty evidence snippet")
-    system = f"""You write concise, neutral summaries for a HasanAbi stream archive.
+    system = f"""You write concise, neutral summaries for a broadcast archive.
 Prompt version: {PROMPT_VERSION}
 Use only the supplied evidence. Do not infer opinions, motives, outcomes, or facts absent from it.
 Write one to three specific claims. Every claim must cite one or more supplied evidence_id values.
-Synthesize subjects and events instead of saying that Hasan "mentioned", "referenced", or "discussed" them.
+Synthesize subjects and events instead of saying that the speaker "mentioned", "referenced", or "discussed" them.
 Prefer recurring or representative subjects over isolated fragments. Avoid mentioning evidence IDs in claim text.
 Keep each claim under 35 words and the entire summary under 90 words. Omit phrases such as "the archive evidence shows."
 Numeric dates in titles may use DD/MM/YY. Do not restate an exact date from a title; the period field is authoritative.

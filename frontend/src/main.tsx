@@ -256,16 +256,16 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <RootErrorBoundary>
-            <SiteProvider>
+    <SiteProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <RootErrorBoundary>
               <RouterProvider router={router} />
-            </SiteProvider>
-          </RootErrorBoundary>
-        </AuthProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+            </RootErrorBoundary>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </SiteProvider>
   </StrictMode>
 );

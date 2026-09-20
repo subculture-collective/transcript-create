@@ -26,9 +26,7 @@ describe('archive moment links', () => {
       'HasanAbi broadcast'
     );
     expect(formatVideoTitle('', '2026-08-07T00:00:00Z')).toMatch(/^Broadcast from /);
-    expect(formatVideoTitle('HasanAbi July 10, 2026 –', null)).toBe(
-      'HasanAbi broadcast — July 10, 2026'
-    );
+    expect(formatVideoTitle('HasanAbi July 10, 2026 –', null)).toBe('HasanAbi July 10, 2026');
   });
 
   it('formats archive-scale runtime for humans', () => {

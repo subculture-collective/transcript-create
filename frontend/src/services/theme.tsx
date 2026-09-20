@@ -1,3 +1,4 @@
+import { useSite } from './site';
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -31,6 +32,7 @@ function getInitialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const site = useSite();
   const [themePreference, setThemePreference] = useState<ThemePreference>(getStoredPreference);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
@@ -39,12 +41,42 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.remove('light', 'dark');
     document.documentElement.classList.add(theme);
 
+    const colors = site.theme?.[theme] ?? {};
+    const tokens = new Set(
+      'canvas surface surface-muted surface-raised border border-strong ink muted subtle accent accent-hover accent-soft accent-contrast player-accent cta success success-soft warning warning-soft danger danger-soft'.split(
+        ' '
+      )
+    );
+    const applied: string[] = [];
+    for (const [token, color] of Object.entries(colors)) {
+      if (tokens.has(token) && /^#[0-9a-f]{6}$/i.test(color)) {
+        const property = `--color-${token}`;
+        document.documentElement.style.setProperty(property, color);
+        applied.push(property);
+      }
+    }
+    const fonts = {
+      system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      editorial: '"Alegreya Sans", "Segoe UI", sans-serif',
+      mono: 'ui-monospace, "SFMono-Regular", Menlo, monospace',
+    };
+    const font = fonts[site.theme?.font ?? 'system'] ?? fonts.system;
+    for (const token of ['--font-body', '--font-display', '--font-sans']) {
+      document.documentElement.style.setProperty(token, font);
+      applied.push(token);
+    }
     // Update meta theme-color
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', theme === 'dark' ? '#101014' : '#f1f1f4');
+      metaThemeColor.setAttribute(
+        'content',
+        colors.canvas ?? (theme === 'dark' ? '#101014' : '#f1f1f4')
+      );
     }
-  }, [theme]);
+    return () => {
+      for (const token of applied) document.documentElement.style.removeProperty(token);
+    };
+  }, [theme, site.theme]);
 
   // Listen to system preference changes
   useEffect(() => {

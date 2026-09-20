@@ -4,7 +4,7 @@ import json
 from typing import Any
 from urllib import error, request
 
-SYSTEM_PROMPT = """You review noisy automatic labels for a HasanAbi VOD archive.
+SYSTEM_PROMPT = """You review noisy automatic labels for a broadcast archive.
 Return only JSON. Distinguish aliases/merges from related terms.
 Actions:
 - keep: durable archive topic as-is.

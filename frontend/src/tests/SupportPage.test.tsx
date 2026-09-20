@@ -27,7 +27,7 @@ describe('SupportPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Donations are not open yet/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Donate securely/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Independent project')).toBeInTheDocument();
+    expect(screen.getByText('Archive project')).toBeInTheDocument();
     expect((await axe.run(container)).violations).toEqual([]);
   });
 
@@ -47,6 +47,6 @@ describe('SupportPage', () => {
     expect(link).toHaveAttribute('href', 'https://buy.stripe.com/test_example');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(screen.getByText(/Card details never touch HasanAra/)).toBeInTheDocument();
+    expect(screen.getByText(/Card details never touch Transcript Archive/)).toBeInTheDocument();
   });
 });

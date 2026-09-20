@@ -26,7 +26,7 @@ describe('HomePage', () => {
       return { json: vi.fn().mockResolvedValue({}) } as never;
     }) as never);
     vi.spyOn(api, 'getArchiveSummary').mockResolvedValue({
-      creator_name: 'HasanAra',
+      creator_name: 'Transcript Archive',
       video_count: 12,
       total_duration_seconds: 7260,
       transcript_word_count: 4200,
@@ -63,7 +63,7 @@ describe('HomePage', () => {
     });
 
     expect(screen.getByPlaceholderText('A topic, quote, guest, or phrase…')).toBeInTheDocument();
-    expect(screen.getByLabelText('Search the HasanAbi archive')).toBeInTheDocument();
+    expect(screen.getByLabelText('Search Transcript Archive')).toBeInTheDocument();
     expect(screen.getByText('Searchable VODs')).toBeInTheDocument();
     expect(screen.getAllByText('Newest VOD').length).toBeGreaterThan(0);
     expect(screen.getByRole('group', { name: 'VOD metadata' })).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe('HomePage', () => {
       </MemoryRouter>
     );
 
-    const input = screen.getByLabelText('Search the HasanAbi archive');
+    const input = screen.getByLabelText('Search Transcript Archive');
     await user.type(input, '   ');
     await user.click(screen.getByRole('button', { name: 'Search archive' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/');

@@ -272,3 +272,6 @@ deploy-backups/
 .playwright-cli/
 output/playwright/
 output/verification/
+
+# Deployment-owned client assets for local Vite previews
+frontend/public/branding/

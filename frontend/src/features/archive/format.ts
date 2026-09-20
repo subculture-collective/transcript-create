@@ -51,9 +51,9 @@ export function formatVideoTitle(title?: string | null, uploadedAt?: string | nu
   const cleaned = title?.replace(/\s*[-–—]\s*$/, '').trim();
   if (cleaned) {
     const dateOnly = cleaned.match(
-      /^(?:hasanabi\s+)?((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},\s+\d{4})$/i
+      /^((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},\s+\d{4})$/i
     );
-    return dateOnly ? `HasanAbi broadcast — ${dateOnly[1]}` : cleaned;
+    return dateOnly ? `Broadcast — ${dateOnly[1]}` : cleaned;
   }
   const date = formatDate(uploadedAt);
   return date === '—' ? 'Broadcast recording' : `Broadcast from ${date}`;

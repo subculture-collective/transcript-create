@@ -6,6 +6,8 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from app.archive.video_metadata_repository import get_video_metadata_map
 from app.schemas import ArchivePopularSearch, ArchiveSummary, VideoInfo
 
+from ..settings import settings
+
 ARCHIVE_VIDEO_FILTER_SQL = """
     EXISTS (SELECT 1 FROM segments s WHERE s.video_id = v.id)
     OR EXISTS (SELECT 1 FROM youtube_transcripts yt WHERE yt.video_id = v.id)
@@ -106,7 +108,7 @@ class ArchiveRepository:
             popular_rows = []
 
         return ArchiveSummary(
-            creator_name="HasanAra",
+            creator_name=settings.SITE_NAME,
             video_count=int(stats["video_count"] or 0),
             total_duration_seconds=int(stats["total_duration_seconds"] or 0),
             transcript_word_count=int(stats["transcript_word_count"] or 0),

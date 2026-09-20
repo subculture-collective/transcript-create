@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import fs from "node:fs";
 
 const seededVideo = {
   id: "00000000-0000-0000-0000-000000000201",
@@ -312,7 +313,7 @@ test("anonymous visitors can search from the populated archive home", async ({
   ).toBeVisible();
   await expect(page.getByText("Seeded archive episode").first()).toBeVisible();
 
-  await page.getByLabel("Search the HasanAbi archive").fill("labor rights");
+  await page.getByLabel("Search Transcript Archive").fill("labor rights");
   await page.getByRole("button", { name: "Search archive" }).click();
   await expect(page).toHaveURL(/\/search\?q=labor%20rights$/);
 });
@@ -346,7 +347,7 @@ test("legacy library and saved links render their current destinations", async (
 }) => {
   await page.goto("/streams");
   await expect(
-    page.getByRole("heading", { name: "Browse HasanAbi VODs" }),
+    page.getByRole("heading", { name: "Browse recordings" }),
   ).toBeVisible();
   await expect(page.getByText("Seeded archive episode")).toBeVisible();
 
@@ -562,7 +563,7 @@ test("a shared filtered search restores supported state and ignores retired filt
     await expect(recipient.getByLabel("To", { exact: true })).toHaveValue(
       "2026-06-30",
     );
-    await expect(recipient.getByLabel("Transcript")).toHaveCount(0);
+    await expect(recipient.getByLabel("Transcript", { exact: true })).toHaveCount(0);
     await expect(recipient.getByLabel("Category")).toHaveCount(0);
     await expect(recipient.getByLabel("Minimum seconds")).toHaveCount(0);
     await expect(recipient.getByLabel("Maximum seconds")).toHaveCount(0);
@@ -577,7 +578,7 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   page,
 }) => {
   await page.goto("/");
-  const homeSearch = page.getByLabel("Search the HasanAbi archive");
+  const homeSearch = page.getByLabel("Search Transcript Archive");
   await homeSearch.focus();
   await page.keyboard.type("labor");
   await page.keyboard.press("Enter");
@@ -993,4 +994,40 @@ test("core public routes do not overflow a 320px viewport", async ({
       `${route} horizontal overflow`,
     ).toBeLessThanOrEqual(dimensions.clientWidth + 1);
   }
+});
+
+
+test("client profiles apply identity, assets and both themes across responsive pages", async ({ page }) => {
+  const profile = JSON.parse(fs.readFileSync(path.resolve("../config/branding/northstar.json"), "utf8"));
+  await page.route("**/api/site", route => route.fulfill({ json: { ...profile, public_passages_enabled: true, community_enabled: false } }));
+  await page.route("**/branding/*", route => route.fulfill({ path: path.resolve("../config/branding/northstar-assets", new URL(route.request().url()).pathname.split("/").pop()!), contentType: "image/svg+xml" }));
+  await page.addInitScript(() => localStorage.setItem('themePreference', 'dark'));
+  await page.goto("/about");
+  await expect(page.getByText("About Northstar Archive")).toBeVisible();
+  await expect(page).toHaveTitle("About the archive — Northstar Archive");
+  await expect(page.getByRole("link", { name: "Home - Northstar Archive" }).locator("img")).toHaveAttribute("src", "/branding/logo.svg");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/branding/logo.svg');
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim())).toBe('#fbbf24');
+  await page.getByRole('button', { name: 'Switch to light mode' }).click();
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim())).toBe('#92400e');
+  await expect(page.locator('#root > div')).toHaveCSS('background-color', 'rgb(255, 253, 245)');
+  await page.screenshot({ path: '../output/playwright/northstar-desktop.png', fullPage: true, animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Support', exact: true }).click();
+  await expect(page.getByText('Support Northstar Archive')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await expect(page.getByText(/HasanAra|HasanAbi|Subcult/)).toHaveCount(0);
+  await page.screenshot({ path: '../output/playwright/northstar-mobile.png', fullPage: true, animations: 'disabled' });
+});
+
+test("passage ranges retain context, validate edits and produce public sharing links", async ({ page }) => {
+  await page.goto(`/v/${seededVideo.id}?t=1&t_ms=1000&end_ms=5000`);
+  await expect(page.getByRole('heading', { name: 'Share a passage' })).toBeVisible();
+  await page.getByLabel('Start time', { exact: true }).fill('2');
+  await page.getByLabel('End time', { exact: true }).fill('1');
+  await expect(page.getByRole('button', { name: 'Copy passage link' })).toBeDisabled();
+  await page.getByLabel('End time', { exact: true }).fill('5');
+  await expect(page.getByRole('button', { name: 'Copy passage link' })).toBeEnabled();
+  await expect(page.getByLabel('Passage link', { exact: true })).toHaveValue(new RegExp(`/api/share/videos/${seededVideo.id}\\?start_ms=2000&end_ms=5000$`));
 });

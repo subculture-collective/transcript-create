@@ -95,7 +95,7 @@ export default function HomePage() {
             <div className="archive-rule-title">Search the record</div>
             <form onSubmit={onSubmit} className="archive-command">
               <label className="sr-only" htmlFor="home-search">
-                Search the {site.creator_name} archive
+                Search {site.name}
               </label>
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="flex min-w-0 items-center gap-3 px-3">

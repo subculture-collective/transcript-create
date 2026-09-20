@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HasanAra quotation and play mark">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Transcript Archive quotation and play mark">
   <style>
     .tile { fill: #17171d; }
-    .mark { fill: #b7ff3c; }
+    .mark { fill: #93c5fd; }
     @media (prefers-color-scheme: light) {
       .tile { fill: #f8f5ee; }
       .mark { fill: #477007; }

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "name": "Northstar Archive",
+  "creator_name": "Northstar Studio",
+  "description": "Recordings, ideas, and the moments that connect them.",
+  "tagline": "The Northstar collection",
+  "operator_name": "Northstar Studio",
+  "operator_url": "https://example.org",
+  "project_notice": "An archive maintained by Northstar Studio. Source creators retain their rights.",
+  "logo_url": "/branding/logo.svg",
+  "favicon_url": "/branding/logo.svg",
+  "social_image_url": "/branding/social-card.svg",
+  "theme": {
+    "font": "system",
+    "dark": {
+      "canvas": "#111827",
+      "ink": "#f9fafb",
+      "accent": "#fbbf24",
+      "accent-hover": "#fcd34d",
+      "accent-soft": "#332b15",
+      "accent-contrast": "#111827",
+      "player-accent": "#fbbf24"
+    },
+    "light": {
+      "canvas": "#fffdf5",
+      "ink": "#1f2937",
+      "accent": "#92400e",
+      "accent-hover": "#78350f",
+      "accent-soft": "#fef3c7",
+      "accent-contrast": "#ffffff",
+      "player-accent": "#92400e"
+    }
+  }
+}

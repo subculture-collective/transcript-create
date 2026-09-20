@@ -128,13 +128,17 @@ def passage_page(
     embed = ""
     if re.fullmatch(r"[A-Za-z0-9_-]{11}", youtube_id):
         embed = f'<iframe title="Source video" src="https://www.youtube.com/embed/{youtube_id}?start={start_ms // 1000}&amp;end={(end_ms + 999) // 1000}" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>'
+    palette = settings.SITE_BRANDING.theme.dark
+    canvas = palette.get("canvas", "#101014")
+    ink = palette.get("ink", "#f1f1f4")
+    accent = palette.get("accent", "#93c5fd")
     body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)} · {times}</title><meta name="description" content="{esc(excerpt)}">
 <meta property="og:type" content="article"><meta property="og:title" content="{esc(title)} · {times}">
 <meta property="og:description" content="{esc(excerpt)}"><meta property="og:url" content="{esc(page_url)}">
 <meta property="og:image" content="{esc(image_url)}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><link rel="canonical" href="{esc(page_url)}">
-<style>body{{margin:0;background:#101014;color:#f4f1e9;font:18px/1.65 system-ui}}main{{max-width:850px;margin:3rem auto;padding:1.5rem}}h1{{line-height:1.2}}a{{color:#c6f76c}}time{{color:#c6f76c;font:14px monospace}}iframe{{width:100%;aspect-ratio:16/9;border:0;min-height:210px}}.note{{color:#b8b6be;font-size:14px}}.action{{display:inline-block;padding:12px 18px;border:1px solid #c6f76c;border-radius:8px}}</style></head>
+<style>body{{margin:0;background:{canvas};color:{ink};font:18px/1.65 system-ui}}main{{max-width:850px;margin:3rem auto;padding:1.5rem}}h1{{line-height:1.2}}a{{color:{accent}}}time{{color:{accent};font:14px monospace}}iframe{{width:100%;aspect-ratio:16/9;border:0;min-height:210px}}.note{{color:#b8b6be;font-size:14px}}.action{{display:inline-block;padding:12px 18px;border:1px solid {accent};border-radius:8px}}</style></head>
 <body><main><p>{esc(settings.SITE_NAME)} · Shared passage</p><h1>{esc(title)}</h1><p>{times}</p>
 {embed}<p><a class="action" href="{esc(player_url)}">Open passage, adjust selection and read surrounding context</a></p>
 <h2>Transcript excerpt</h2>{paragraphs}<p class="note">This excerpt shows up to 12 overlapping transcript segments. Automated wording and timing may be approximate. Verify quotations against the source; the link does not preserve removed media.</p></main></body></html>"""
@@ -156,18 +160,24 @@ def passage_card(
     db=Depends(get_db),
 ):
     passage = load_passage(db, video_id, start_ms, end_ms)
-    image = Image.new("RGB", (1200, 630), "#101014")
+    palette = settings.SITE_BRANDING.theme.dark
+    image = Image.new("RGB", (1200, 630), palette.get("canvas", "#101014"))
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, 18, 630), fill="#b7ff60")
+    draw.rectangle((0, 0, 18, 630), fill=palette.get("accent", "#93c5fd"))
     font = ImageFont.load_default(size=38)
     small = ImageFont.load_default(size=26)
-    draw.text((60, 42), settings.SITE_NAME[:60], font=small, fill="#b7ff60")
+    draw.text((60, 42), settings.SITE_NAME[:60], font=small, fill=palette.get("accent", "#93c5fd"))
     title = str(passage["video"]["title"] or "Archive recording")[:200]
-    draw.multiline_text((60, 102), "\n".join(textwrap.wrap(title, 48)[:3]), font=font, fill="#f4f1e9", spacing=10)
+    draw.multiline_text(
+        (60, 102), "\n".join(textwrap.wrap(title, 48)[:3]), font=font, fill=palette.get("ink", "#f1f1f4"), spacing=10
+    )
     excerpt = " ".join(passage["rows"][0]["text"].split())[:300]
     draw.multiline_text((60, 290), "\n".join(textwrap.wrap(excerpt, 66)[:5]), font=small, fill="#ceccd4", spacing=9)
     draw.text(
-        (60, 550), f"{passage_time(start_ms)} - {passage_time(end_ms)} | Source and context", font=small, fill="#b7ff60"
+        (60, 550),
+        f"{passage_time(start_ms)} - {passage_time(end_ms)} | Source and context",
+        font=small,
+        fill=palette.get("accent", "#93c5fd"),
     )
     output = BytesIO()
     image.save(output, format="PNG")

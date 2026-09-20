@@ -32,33 +32,33 @@ export function PrivacyPage() {
       <h2>What works without an account</h2>
       <p>
         You can search, browse transcripts, open timelines, and follow source links without signing
-        in. HasanAra records limited operational logs and aggregate usage events needed to secure,
-        maintain, and improve the service.
+        in. The archive records limited operational logs and aggregate usage events needed to
+        secure, maintain, and improve the service.
       </p>
       <h2>Accounts and saved material</h2>
       <p>
-        If you sign in with Google or Twitch, HasanAra receives the identity details that provider
-        shares, such as a provider identifier, display name, email address, and avatar. Saved
-        searches, moments, and account preferences are stored so they can be synchronized.
+        If you sign in with Google or Twitch, The archive receives the identity details that
+        provider shares, such as a provider identifier, display name, email address, and avatar.
+        Saved searches, moments, and account preferences are stored so they can be synchronized.
       </p>
       <h2>Donations</h2>
       <p>
-        Stripe receives payment information when you use its hosted donation page. HasanAra does not
-        collect or store complete card numbers. Stripe may share transaction identifiers, payment
-        status, amount, contact details, and fraud-prevention signals needed to administer the
-        contribution.
+        Stripe receives payment information when you use its hosted donation page. The archive does
+        not collect or store complete card numbers. Stripe may share transaction identifiers,
+        payment status, amount, contact details, and fraud-prevention signals needed to administer
+        the contribution.
       </p>
       <h2>Your choices</h2>
       <p>
         You can browse anonymously, revoke sessions, unlink supported identity providers, and delete
-        your HasanAra account from the account page. Payment records may be retained where required
+        your archive account from the account page. Payment records may be retained where required
         for accounting, fraud prevention, or legal compliance.
       </p>
       <p>
-        Questions about this policy can be raised through the project channels linked at{' '}
-        <a href="https://subcult.tv" className="action-link">
-          subcult.tv
-        </a>
+        Questions about this policy can be raised through the operator listed on the{' '}
+        <Link to="/about" className="action-link">
+          about page
+        </Link>
         .
       </p>
     </PolicyPage>
@@ -70,7 +70,7 @@ export function TermsPage() {
     <PolicyPage eyebrow="Project policy" title="Terms" updated="September 1, 2026">
       <h2>Use of the archive</h2>
       <p>
-        HasanAra is provided for research, discovery, commentary, and citation. Do not use the
+        The archive is provided for research, discovery, commentary, and citation. Do not use the
         service to harass people, evade access controls, overload infrastructure, or misrepresent
         generated transcripts as infallible quotations.
       </p>

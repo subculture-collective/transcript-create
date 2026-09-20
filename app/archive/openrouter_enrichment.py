@@ -323,7 +323,7 @@ def build_openrouter_episode_request(
         }
         for block in episode.blocks
     ]
-    system = f"""You are the senior archive editor for a HasanAbi livestream archive.
+    system = f"""You are the senior archive editor for a broadcast archive.
 Prompt version: {PROMPT_VERSION}
 Create useful navigation chapters and grounded retrieval metadata from the supplied timestamped transcript.
 Use only the transcript. Do not invent people, events, claims, games, places, or outcomes.
@@ -644,7 +644,7 @@ def generate_openrouter_episode_enrichment(
     allow_provider_fallbacks: bool = False,
     provider_only: list[str] | None = None,
     max_retries: int = 2,
-    app_url: str = "https://hasanara.tv",
+    app_url: str = "http://localhost:5173",
     defer_category_sustained_validation: bool = False,
 ) -> OpenRouterEpisodeResult:
     if not api_key.strip():
@@ -662,7 +662,7 @@ def generate_openrouter_episode_enrichment(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": app_url,
-            "X-Title": "HasanAra topic enrichment bake-off",
+            "X-Title": "Transcript Archive enrichment",
         },
         method="POST",
     )

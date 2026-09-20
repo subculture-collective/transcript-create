@@ -487,7 +487,7 @@ def _review_assignment_action(
     "/archive/summary",
     response_model=ArchiveSummary,
     summary="Get archive summary",
-    description="Summary statistics for HasanAra based on real VOD and transcript data.",
+    description="Summary statistics for the archive based on real VOD and transcript data.",
 )
 def archive_summary(
     recent_limit: int = Query(6, ge=0, le=20, description="Number of recent videos to include"),

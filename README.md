@@ -1,22 +1,17 @@
-# HasanAra
+# Transcript Archive
 
-HasanAra is a citation-first HasanAbi VOD archive. It searches timestamped transcripts, groups evidence by episode, and provides topic timelines, opinion-history revisions, related episodes, quoted moments, and portable mention exports.
+A configurable, citation-first archive for long-form recordings. Search timestamped transcripts, browse episodes and topics, save moments, and share passages with their surrounding context.
 
-## Outcome
+This repository is the shared application core. Client deployments supply a versioned JSON profile and assets, and use the same application images. Client branding does not require a source fork or a frontend rebuild.
 
-HasanAra turns long-form video into reviewable research: a reader can move from
-a query to the relevant timestamp, episode context, and supporting excerpts
-without treating an AI-generated summary as the source of record. It is the
-deployed, branded successor to the earlier Transcript Create project.
-
-**Public signals:** [deployed application](https://hasanara.tv) ·
-[API contract](docs/api-reference.md) · [Apache-2.0 license](LICENSE) ·
-[third-party notices](docs/THIRD_PARTY_NOTICES.md)
+- [Brand a client and update client deployments](docs/deployment/client-branding.md)
+- [Example client profile](config/branding/northstar.json)
+- [API contract](docs/api-reference.md) · [Apache-2.0 license](LICENSE) · [third-party notices](docs/THIRD_PARTY_NOTICES.md)
 
 ## Current status
 
 - **Shipped:** React 19 frontend, FastAPI API, PostgreSQL source of truth, Redis DTO caches, optional OpenSearch acceleration with PostgreSQL fallback, durable ingestion jobs, scoped API keys, pseudonymous analytics, and archive intelligence.
-- **Shipped:** public Support/About/Privacy/Terms pages and a validated, Stripe-hosted donation Payment Link that never handles card data in HasanAra.
+- **Shipped:** public Support/About/Privacy/Terms pages and a validated, Stripe-hosted donation Payment Link that never handles card data in the application.
 - **Disabled:** product billing, subscriptions, payment webhooks, and PWA/offline installation. There are no charge-creation routes or service workers.
 - **Historical:** documents marked historical describe earlier implementations and are not operational guidance.
 

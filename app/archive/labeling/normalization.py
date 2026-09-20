@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from app.settings import settings
+
 # Transcript-derived keyphrases are very noisy: caption fragments often turn
 # pronouns, contractions, filler, or function-word runs into title-cased labels
 # that look valid syntactically but carry no durable archive meaning.
@@ -272,7 +274,15 @@ def is_junk_phrase(value: str) -> bool:
     if not terms:
         return True
 
-    if normalized in STOP_TERMS or normalized in _FILLER_TERMS:
+    if (
+        normalized
+        in (
+            STOP_TERMS
+            if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara"
+            else STOP_TERMS - {"hasan", "hasanabi", "hassan", "abi"}
+        )
+        or normalized in _FILLER_TERMS
+    ):
         return True
 
     if re.fullmatch(
@@ -280,7 +290,16 @@ def is_junk_phrase(value: str) -> bool:
     ):
         return True
 
-    if all(term in STOP_TERMS or term in _FILLER_TERMS for term in terms):
+    if all(
+        term
+        in (
+            STOP_TERMS
+            if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara"
+            else STOP_TERMS - {"hasan", "hasanabi", "hassan", "abi"}
+        )
+        or term in _FILLER_TERMS
+        for term in terms
+    ):
         return True
 
     if _looks_like_transcript_fragment(terms):

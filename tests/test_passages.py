@@ -80,3 +80,23 @@ def test_public_passages_can_be_disabled_for_nonpublic_deployments(client, passa
 def test_missing_transcript_and_unknown_video_do_not_generate_previews(client, passage_video):
     assert client.get(f"/share/videos/{passage_video}?start_ms=20000&end_ms=21000").status_code == 404
     assert client.get(f"/share/videos/{uuid.uuid4()}?start_ms=1000&end_ms=2000").status_code == 404
+
+
+def test_passage_and_card_use_client_palette(client, passage_video, monkeypatch):
+    from app.branding import BrandProfile
+
+    monkeypatch.setattr(settings, "SITE_NAME", "Northstar <Archive>")
+    monkeypatch.setattr(
+        settings,
+        "SITE_BRANDING",
+        BrandProfile(theme={"dark": {"canvas": "#112233", "ink": "#eeeeee", "accent": "#ffaa00"}}),
+    )
+    path = f"/share/videos/{passage_video}"
+    page = client.get(path + "?start_ms=1000&end_ms=4000")
+    assert "Northstar &lt;Archive&gt;" in page.text
+    assert "background:#112233" in page.text
+    assert "color:#ffaa00" in page.text
+    card = client.get(path + "/card.png?start_ms=1000&end_ms=4000")
+    image = Image.open(BytesIO(card.content))
+    assert image.getpixel((1199, 629)) == (17, 34, 51)
+    assert image.getpixel((0, 0)) == (255, 170, 0)

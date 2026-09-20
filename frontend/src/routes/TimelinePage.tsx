@@ -42,7 +42,7 @@ export default function TimelinePage() {
         <div className="text-xs uppercase tracking-[0.24em] text-subtle">Timeline</div>
         <h1 className="page-title">Archive chronology</h1>
         <p className="max-w-2xl text-muted">
-          Browse HasanAbi VODs by month and jump into the search results for any span of time.
+          Browse recordings by month and jump into the search results for any span of time.
         </p>
       </section>
 

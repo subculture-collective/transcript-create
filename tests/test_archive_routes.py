@@ -211,7 +211,7 @@ class TestArchiveRoutes:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["summary"]["creator_name"] == "HasanAra"
+        assert data["summary"]["creator_name"] == "Transcript Archive"
         assert data["exploration_modes"] == ["timeline", "topics", "trending", "suggested"]
         assert data["trending_searches"][0]["term"] == "ice protests"
         assert data["topic_cards"]

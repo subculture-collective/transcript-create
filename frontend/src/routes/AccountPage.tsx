@@ -193,7 +193,7 @@ export default function AccountPage() {
     if (error === 'identity_conflict' && (provider === 'google' || provider === 'twitch')) {
       setMergePending(provider);
       setNotice(
-        `That ${provider[0].toUpperCase()}${provider.slice(1)} identity belongs to another HasanAra account. You can merge it into this account after confirming ownership again.`
+        `That ${provider[0].toUpperCase()}${provider.slice(1)} identity belongs to another archive account. You can merge it into this account after confirming ownership again.`
       );
     }
     if (error === 'account_merge_conflict') {
@@ -508,7 +508,7 @@ export default function AccountPage() {
             <h2 id="profile-heading">Profile</h2>
           </div>
           <p className="mt-4 text-sm text-muted">
-            This is the name and avatar shown around HasanAra.
+            This is the name and avatar shown around the archive.
           </p>
           <form className="mt-6 space-y-5" onSubmit={saveProfile}>
             <div>

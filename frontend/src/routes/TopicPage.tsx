@@ -174,7 +174,7 @@ export default function TopicPage() {
           <h1 className="page-title mt-2">Topic: {topic}</h1>
           <p className="mt-2 max-w-2xl text-muted">
             Citation-backed mention map for a real search term. This page only shows moments that
-            were actually found in HasanAbi VODs.
+            were actually found in recordings.
           </p>
         </div>
 

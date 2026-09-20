@@ -227,7 +227,7 @@ export default function ExplorePage() {
         role="status"
         aria-live="polite"
       >
-        <h1 className="sr-only">Explore the HasanAbi VOD archive</h1>
+        <h1 className="sr-only">Explore the recording archive</h1>
         <div className="h-5 w-28 rounded bg-surface-muted" />
         <div className="mt-7 h-14 max-w-3xl rounded bg-surface-muted" />
         <div className="mt-5 h-5 max-w-xl rounded bg-surface-muted" />
@@ -239,7 +239,7 @@ export default function ExplorePage() {
   if (!data)
     return (
       <div className="archive-section text-center text-muted">
-        <h1 className="page-title">Explore the HasanAbi VOD archive</h1>
+        <h1 className="page-title">Explore the recording archive</h1>
         <p className="mt-3">Archive intelligence is not available yet.</p>
         {error ? (
           <div className="mt-4">
@@ -276,7 +276,7 @@ export default function ExplorePage() {
               <span className="source-pill">{selectedPeriodKindLabel}</span>
             </div>
             <h1 className="mt-5 max-w-4xl text-5xl font-semibold leading-[0.92] tracking-[-0.06em] text-ink sm:text-7xl">
-              Explore the HasanAbi VOD archive
+              Explore the recording archive
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-muted sm:text-lg">
               Follow a period, topic, person, or recurring stream label into the broadcasts and

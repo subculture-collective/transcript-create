@@ -33,6 +33,7 @@ from app.schemas import (
     ArchiveTrendingSearch,
     VideoInfo,
 )
+from app.settings import settings
 
 alias_matches_text = query_domains.alias_matches_text
 slugify_topic = query_domains.slugify_topic
@@ -825,7 +826,7 @@ def _table_has_rows(db, table_name: str) -> bool:
 def seed_archive_topics(db):
     inserted = 0
     updated = 0
-    for seed in SEED_TOPICS:
+    for seed in (SEED_TOPICS if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara" else ()):
         result = _safe_execute(
             db,
             """
@@ -934,31 +935,32 @@ def _named_period_records_from_videos(db, years_back: int) -> list[dict[str, obj
             }
         )
 
-    for record in CURATED_NAMED_PERIODS:
+    for record in (CURATED_NAMED_PERIODS if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara" else ()):
         curated_date_to = record["date_to"]
         assert isinstance(curated_date_to, date)
         records.append({**record, "status": "published", "sort_order": curated_date_to.toordinal()})
 
-    midterms_date_to = date(2026, 11, 3)
-    midterms_date_from = min(_seed_today(), midterms_date_to)
-    records.append(
-        {
-            "slug": "2026-midterms-leadup",
-            "label": "2026 Midterms Leadup",
-            "kind": "leadup",
-            "date_from": midterms_date_from,
-            "date_to": midterms_date_to,
-            "description": "Leadup to the 2026 U.S. midterms",
-            "status": "published",
-            "sort_order": midterms_date_to.toordinal(),
-        }
-    )
+    if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara":
+        midterms_date_to = date(2026, 11, 3)
+        midterms_date_from = min(_seed_today(), midterms_date_to)
+        records.append(
+            {
+                "slug": "2026-midterms-leadup",
+                "label": "2026 Midterms Leadup",
+                "kind": "leadup",
+                "date_from": midterms_date_from,
+                "date_to": midterms_date_to,
+                "description": "Leadup to the 2026 U.S. midterms",
+                "status": "published",
+                "sort_order": midterms_date_to.toordinal(),
+            }
+        )
 
     return records
 
 
 def seed_named_periods(db, years_back: int = 6):
-    for slug in RETIRED_NAMED_PERIOD_SLUGS:
+    for slug in (RETIRED_NAMED_PERIOD_SLUGS if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara" else ()):
         _safe_execute(
             db,
             """
@@ -968,7 +970,7 @@ def seed_named_periods(db, years_back: int = 6):
             """,
             {"slug": slug},
         )
-    for pattern in RETIRED_NAMED_PERIOD_PATTERNS:
+    for pattern in (RETIRED_NAMED_PERIOD_PATTERNS if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara" else ()):
         _safe_execute(
             db,
             """
@@ -1482,7 +1484,7 @@ def _fallback_evidence_for_videos(db, videos: list[VideoInfo], limit: int = 200)
 
 def _fallback_seed_topic_cards(evidence_pool: list[ArchiveEvidenceMoment], limit: int) -> list[ArchiveTopicCard]:
     cards: list[ArchiveTopicCard] = []
-    for seed in SEED_TOPICS:
+    for seed in (SEED_TOPICS if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara" else ()):
         evidence: list[ArchiveEvidenceMoment] = []
         for moment in evidence_pool:
             if any(alias_matches_text(alias, moment.snippet) for alias in seed.aliases):
@@ -1843,7 +1845,14 @@ def autopublish_search_topics(db, limit: int = 20):
 
 
 def hide_automatic_stop_topics(db):
-    placeholders, params = _in_clause("stop_slug", sorted(AUTO_TOPIC_STOP_TERMS))
+    placeholders, params = _in_clause(
+        "stop_slug",
+        sorted(
+            AUTO_TOPIC_STOP_TERMS
+            if settings.ARCHIVE_EDITORIAL_PRESET == "hasanara"
+            else AUTO_TOPIC_STOP_TERMS - {"hasan", "hasanabi", "hassan", "abi"}
+        ),
+    )
     result = _safe_execute(
         db,
         f"""

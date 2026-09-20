@@ -2126,7 +2126,7 @@
       "ArchiveSummary": {
         "properties": {
           "creator_name": {
-            "default": "HasanAra",
+            "default": "Transcript Archive",
             "description": "Archive display name",
             "title": "Creator Name",
             "type": "string"
@@ -3025,6 +3025,37 @@
           "plan"
         ],
         "title": "AuthMeUserResponse",
+        "type": "object"
+      },
+      "BrandTheme": {
+        "additionalProperties": false,
+        "properties": {
+          "dark": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Dark",
+            "type": "object"
+          },
+          "font": {
+            "default": "system",
+            "enum": [
+              "system",
+              "editorial",
+              "mono"
+            ],
+            "title": "Font",
+            "type": "string"
+          },
+          "light": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Light",
+            "type": "object"
+          }
+        },
+        "title": "BrandTheme",
         "type": "object"
       },
       "CleanedSegment": {
@@ -6102,6 +6133,7 @@
         "type": "object"
       },
       "SiteConfig": {
+        "additionalProperties": false,
         "properties": {
           "atproto_enabled": {
             "title": "Atproto Enabled",
@@ -6123,13 +6155,61 @@
             "title": "Description",
             "type": "string"
           },
+          "favicon_url": {
+            "default": "/icon.svg",
+            "title": "Favicon Url",
+            "type": "string"
+          },
+          "logo_url": {
+            "default": "/icon.svg",
+            "title": "Logo Url",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "operator_name": {
+            "default": "Archive team",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Operator Name",
+            "type": "string"
+          },
+          "operator_url": {
+            "default": "",
+            "title": "Operator Url",
+            "type": "string"
+          },
+          "project_notice": {
+            "default": "Source recordings and trademarks belong to their respective owners.",
+            "maxLength": 500,
+            "title": "Project Notice",
             "type": "string"
           },
           "public_passages_enabled": {
             "title": "Public Passages Enabled",
             "type": "boolean"
+          },
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "social_image_url": {
+            "default": "/social-card.svg",
+            "title": "Social Image Url",
+            "type": "string"
+          },
+          "tagline": {
+            "default": "Broadcast archive",
+            "maxLength": 100,
+            "title": "Tagline",
+            "type": "string"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/BrandTheme"
           }
         },
         "required": [
@@ -10483,7 +10563,7 @@
     },
     "/archive/summary": {
       "get": {
-        "description": "Summary statistics for HasanAra based on real VOD and transcript data.",
+        "description": "Summary statistics for the archive based on real VOD and transcript data.",
         "operationId": "archive_summary_archive_summary_get",
         "parameters": [
           {

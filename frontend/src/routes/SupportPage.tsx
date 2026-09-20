@@ -1,3 +1,4 @@
+import { useSite } from '../services/site';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services';
@@ -22,6 +23,7 @@ const fundingLines = [
 ];
 
 export default function SupportPage() {
+  const site = useSite();
   const [config, setConfig] = useState<SupportConfig | null>(null);
   const [unavailable, setUnavailable] = useState(false);
 
@@ -48,13 +50,14 @@ export default function SupportPage() {
         <div className="relative z-10 grid min-h-[31rem] gap-10 px-5 py-9 sm:px-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.7fr)] lg:items-end lg:px-12 lg:py-14">
           <div className="max-w-4xl space-y-7">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="archive-eyebrow">Support HasanAra</span>
+              <span className="archive-eyebrow">Support {site.name}</span>
               <span className="source-pill">public infrastructure</span>
             </div>
             <h1 className="archive-display">Keep the public record searchable.</h1>
             <p className="max-w-2xl text-lg leading-8 text-muted sm:text-xl">
-              HasanAra turns years of livestreams into a searchable, timestamped archive. Donations
-              pay for the unglamorous machinery that keeps the record online, cited, and open.
+              {site.name} turns years of livestreams into a searchable, timestamped archive.
+              Donations pay for the unglamorous machinery that keeps the record online, cited, and
+              open.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               {donationsEnabled ? (
@@ -84,13 +87,13 @@ export default function SupportPage() {
             </div>
           </div>
 
-          <aside className="archive-section border-accent/25" aria-label="Project independence">
-            <div className="archive-eyebrow">Independent project</div>
+          <aside className="archive-section border-accent/25" aria-label="Project information">
+            <div className="archive-eyebrow">Archive project</div>
             <p className="mt-4 text-xl font-semibold leading-8 tracking-[-0.025em] text-ink">
-              Built by Subcult. Not operated by or affiliated with HasanAbi, Twitch, or YouTube.
+              {site.project_notice}
             </p>
             <p className="mt-4 text-sm leading-6 text-muted">
-              A donation supports HasanAra’s hosting and research infrastructure. It does not buy
+              A donation supports {site.name}’s hosting and research infrastructure. It does not buy
               editorial influence, special access, or content from the creator whose public
               broadcasts are indexed here.
             </p>
@@ -122,11 +125,11 @@ export default function SupportPage() {
         <div className="archive-section">
           <div className="archive-eyebrow">Payment boundary</div>
           <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-ink">
-            Card details never touch HasanAra.
+            Card details never touch {site.name}.
           </h2>
           <p className="mt-3 text-sm leading-6 text-muted">
-            The donation button opens a Stripe-hosted checkout. Stripe handles payment confirmation;
-            HasanAra does not collect or store your card number.
+            The donation button opens a Stripe-hosted checkout. Stripe handles payment confirmation;{' '}
+            {site.name} does not collect or store your card number.
           </p>
         </div>
         <div className="archive-section">

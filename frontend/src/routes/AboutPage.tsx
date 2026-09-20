@@ -1,3 +1,4 @@
+import { useSite } from '../services/site';
 import { Link } from 'react-router-dom';
 
 const method = [
@@ -8,16 +9,17 @@ const method = [
 ];
 
 export default function AboutPage() {
+  const site = useSite();
   return (
     <div className="space-y-5 lg:space-y-7">
       <section className="archive-masthead">
         <div className="relative z-10 grid min-h-[29rem] gap-10 px-5 py-9 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(19rem,0.65fr)] lg:items-end lg:px-12 lg:py-14">
           <div className="space-y-7">
-            <div className="archive-eyebrow">About HasanAra</div>
+            <div className="archive-eyebrow">About {site.name}</div>
             <h1 className="archive-display">A broadcast archive built like a public record.</h1>
             <p className="max-w-3xl text-lg leading-8 text-muted sm:text-xl">
-              HasanAra makes long-form political livestreams legible: searchable transcripts,
-              timestamped evidence, topic histories, and direct paths back to the original video.
+              {site.name} makes long-form recordings legible: searchable transcripts, timestamped
+              evidence, topic histories, and direct paths back to the original video.
             </p>
             <div className="flex flex-wrap gap-4 text-sm font-semibold">
               <Link to="/search" className="action-link">
@@ -30,10 +32,7 @@ export default function AboutPage() {
           </div>
           <aside className="archive-section">
             <div className="archive-eyebrow">Project boundary</div>
-            <p className="mt-4 text-lg font-semibold leading-7 text-ink">
-              HasanAra is an independent Subcult project and is not affiliated with HasanAbi,
-              Twitch, or YouTube.
-            </p>
+            <p className="mt-4 text-lg font-semibold leading-7 text-ink">{site.project_notice}</p>
             <p className="mt-3 text-sm leading-6 text-muted">
               The archive indexes public broadcasts for research, discovery, and citation. Source
               creators retain their rights; links point viewers back to the original material.
@@ -71,20 +70,20 @@ export default function AboutPage() {
             Search results are leads, not verdicts.
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-            Automated transcripts and generated chapters can be wrong. HasanAra keeps the source,
+            Automated transcripts and generated chapters can be wrong. {site.name} keeps the source,
             timestamps, and transcript context visible so readers can verify what was actually said.
             Corrections should improve the record without erasing its provenance.
           </p>
         </div>
         <div className="archive-section">
           <div className="archive-eyebrow">Built by</div>
-          <p className="mt-3 text-xl font-semibold text-ink">Subcult</p>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            Independent tools for culture, research, and collective memory.
-          </p>
-          <a href="https://subcult.tv" className="action-link mt-5 inline-flex text-sm">
-            Visit Subcult ↗
-          </a>
+          <p className="mt-3 text-xl font-semibold text-ink">{site.operator_name}</p>
+          <p className="mt-2 text-sm leading-6 text-muted">{site.description}</p>
+          {site.operator_url && (
+            <a href={site.operator_url} className="action-link mt-5 inline-flex text-sm">
+              Visit {site.operator_name} ↗
+            </a>
+          )}
         </div>
       </section>
     </div>

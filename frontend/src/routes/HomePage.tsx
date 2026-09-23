@@ -75,7 +75,6 @@ export default function HomePage() {
                   day: 'numeric',
                 })}
               </span>
-              {summary && <span>{formatNumber(summary.video_count)} broadcasts on record</span>}
               <span>searchable transcripts</span>
             </div>
 

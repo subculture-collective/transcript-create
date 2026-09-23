@@ -13,12 +13,23 @@ import {
   useAuth,
   track,
 } from '../services';
-import type { Segment, TranscriptResponse, VideoInfo, SearchHit, VideoChapter } from '../types/api';
-// favorites, useAuth imported from services barrel
+import type {
+  ExploreIntelligenceResponse,
+  Segment,
+  TranscriptResponse,
+  VideoInfo,
+  SearchHit,
+  VideoChapter,
+} from '../types/api';
 import { ExportMenu } from '../components';
 import type { YouTubePlayerHandle } from '../components/YouTubePlayer';
-// track imported from services barrel
-import { buildTimestampLink, formatTimestamp, formatVideoTitle } from '../features/archive/format';
+import {
+  buildTimestampLink,
+  formatDate,
+  formatDuration,
+  formatTimestamp,
+  formatVideoTitle,
+} from '../features/archive/format';
 import type { TranscriptSource } from '../features/archive/format';
 import {
   buildTranscriptTurns,
@@ -31,6 +42,10 @@ import {
   filterTurnsForChapters,
   mountedChapterIndexes,
 } from '../features/videoTranscript/progressiveChapters';
+import { findEpisodeTopics, type TopicCandidate } from '../features/videoTranscript/topics';
+import EpisodeNavigator, { type NavigatorTab } from '../components/video/EpisodeNavigator';
+import EpisodeStrip, { type StripTick } from '../components/video/EpisodeStrip';
+import { visibleOutlineChapters } from '../components/video/EpisodeOutline';
 import {
   FormattedTranscriptDocument,
   EpisodeIntelligence,
@@ -52,6 +67,53 @@ async function copyText(text: string) {
   await navigator.clipboard.writeText(text);
 }
 
+// Archive-wide topic cards change slowly; share one request across episodes.
+let archiveIntelligenceRequest: Promise<ExploreIntelligenceResponse> | null = null;
+function loadArchiveIntelligence() {
+  archiveIntelligenceRequest ??= api.getExploreIntelligence().catch((error: unknown) => {
+    archiveIntelligenceRequest = null;
+    throw error;
+  });
+  return archiveIntelligenceRequest;
+}
+
+function topicCandidates(
+  video: VideoInfo | null,
+  intelligence: ExploreIntelligenceResponse | null
+): TopicCandidate[] {
+  const candidates: TopicCandidate[] = [];
+  for (const card of intelligence?.topic_cards ?? [])
+    candidates.push({
+      key: `topic:${card.slug}`,
+      label: card.label,
+      terms: card.aliases ?? [],
+      kind: 'topic',
+    });
+  for (const tag of video?.tags ?? [])
+    candidates.push({ key: `tag:${tag.slug}`, label: tag.label, terms: [], kind: 'tag' });
+  for (const person of [...(video?.people ?? []), ...(intelligence?.people ?? [])])
+    candidates.push({
+      key: `person:${person.slug}`,
+      label: person.display_name,
+      terms: person.aliases ?? [],
+      kind: 'person',
+    });
+  for (const tag of intelligence?.tags ?? [])
+    candidates.push({ key: `tag:${tag.slug}`, label: tag.label, terms: [], kind: 'tag' });
+  for (const search of [
+    ...(intelligence?.trending_searches ?? []),
+    ...(intelligence?.suggested_searches ?? []),
+    ...(intelligence?.summary?.popular_searches ?? []),
+  ])
+    candidates.push({
+      key: `search:${search.term.toLowerCase()}`,
+      label: search.term,
+      terms: [],
+      kind: 'search',
+    });
+  return candidates;
+}
+
 export default function VideoPage() {
   const site = useSite();
   const { videoId } = useParams();
@@ -68,8 +130,14 @@ export default function VideoPage() {
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const { user } = useAuth();
   const [serverFavs, setServerFavs] = useState<
-    Array<{ id: string; start_ms: number; end_ms: number }>
+    Array<{ id: string; start_ms: number; end_ms: number; text?: string }>
   >([]);
+  const [localFavoritesVersion, setLocalFavoritesVersion] = useState(0);
+  const [intelligence, setIntelligence] = useState<ExploreIntelligenceResponse | null>(null);
+  const [intelligenceStatus, setIntelligenceStatus] = useState<'loading' | 'ready' | 'error'>(
+    'loading'
+  );
+  const [activeTopicKey, setActiveTopicKey] = useState<string | null>(null);
   const [activeSegId, setActiveSegId] = useState<number | null>(null);
   const [activeSentenceId, setActiveSentenceId] = useState<string | null>(null);
   const [activeBlockIndex, setActiveBlockIndex] = useState<number | null>(null);
@@ -82,7 +150,9 @@ export default function VideoPage() {
   const [isMobileEpisode, setIsMobileEpisode] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia?.('(max-width: 1023px)').matches
   );
-  const [mobileTab, setMobileTab] = useState<'transcript' | 'chapters' | 'info'>('transcript');
+  const [mobileTab, setMobileTab] = useState<'transcript' | 'chapters' | 'topics' | 'info'>(
+    'transcript'
+  );
   const [sheetSnap, setSheetSnap] = useState<'collapsed' | 'half' | 'expanded'>('half');
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
   const autoFollowScrollTimeoutRef = useRef<number | null>(null);
@@ -106,13 +176,37 @@ export default function VideoPage() {
   }, []);
 
   useEffect(() => {
-    if (!isMobileEpisode) return;
+    let active = true;
+    setIntelligenceStatus('loading');
+    loadArchiveIntelligence()
+      .then((response) => {
+        if (!active) return;
+        setIntelligence(response);
+        setIntelligenceStatus('ready');
+      })
+      .catch(() => {
+        if (active) setIntelligenceStatus('error');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const closeSelection = useCallback(() => {
+    setActiveSegId(null);
+    setActiveSentenceId(null);
+    setActiveBlockIndex(null);
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSheetSnap('collapsed');
+      if (event.key !== 'Escape') return;
+      if (document.querySelector('.transcript-block[data-open="true"]')) closeSelection();
+      else if (isMobileEpisode) setSheetSnap('collapsed');
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isMobileEpisode]);
+  }, [closeSelection, isMobileEpisode]);
 
   const startMilliseconds = useMemo(() => {
     const exact = params.get('t_ms');
@@ -265,6 +359,7 @@ export default function VideoPage() {
             id: i.id,
             start_ms: i.start_ms,
             end_ms: i.end_ms,
+            text: i.text,
           }));
           setServerFavs(filtered);
         })
@@ -310,6 +405,26 @@ export default function VideoPage() {
     setActiveTranscriptChapter(0);
     setFullTranscript(false);
   }, [videoId]);
+
+  // Reading past the last mounted section brings in the next one, so the
+  // transcript reads as one continuous document.
+  const continueReadingRef = useRef<HTMLDivElement | null>(null);
+  const lastMountedChapter = mountedTranscriptChapters.at(-1) ?? 0;
+  useEffect(() => {
+    const element = continueReadingRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined' || fullTranscript) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setActiveTranscriptChapter((current) =>
+          Math.min(transcriptChapters.length - 1, Math.max(current, lastMountedChapter))
+        );
+      },
+      { rootMargin: '0px 0px 400px 0px' }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [fullTranscript, lastMountedChapter, transcriptChapters.length, transcriptStatus]);
 
   useEffect(() => {
     const unlockAutoFollow = () => setAutoFollowEnabled(false);
@@ -469,17 +584,21 @@ export default function VideoPage() {
     [setParams, videoId]
   );
 
-  function onClickSegment(seg: Segment, id: number) {
+  // Selecting a passage opens its actions; playback starts only on request.
+  function onClickSegment(_seg: Segment, id: number) {
     mountSegmentChapter(id - 1);
     setActiveSegId(id);
     setActiveSentenceId(null);
     setActiveBlockIndex(null);
-    jumpTo(seg.start_ms);
-    // update hash for deep-linking this segment
     history.replaceState(null, '', `#seg-${id}`);
   }
 
-  function onClickFormattedSentence(segment: Segment, segIndex: number, sentenceId: string) {
+  function playFromSegment(seg: Segment, id: number) {
+    onClickSegment(seg, id);
+    jumpTo(seg.start_ms);
+  }
+
+  function onClickFormattedSentence(_segment: Segment, segIndex: number, sentenceId: string) {
     mountSegmentChapter(segIndex - 1);
     setActiveSegId(segIndex);
     setActiveSentenceId(sentenceId);
@@ -488,13 +607,42 @@ export default function VideoPage() {
           ?.block_index
       : null;
     setActiveBlockIndex(blockId ?? null);
-    jumpTo(segment.start_ms);
     const sentenceSuffix = sentenceId.split('-s-').at(1);
     history.replaceState(
       null,
       '',
       sentenceSuffix ? `#seg-${segIndex}-s-${sentenceSuffix}` : `#seg-${segIndex}`
     );
+  }
+
+  function playFromSentence(segment: Segment, segIndex: number, sentenceId: string) {
+    onClickFormattedSentence(segment, segIndex, sentenceId);
+    jumpTo(segment.start_ms);
+  }
+
+  /** Select and reveal the passage containing `ms` without starting playback. */
+  function openMomentAt(ms: number) {
+    const segments = transcript?.segments ?? [];
+    let segIndex = segments.findIndex((seg) => ms >= seg.start_ms && ms < seg.end_ms);
+    if (segIndex < 0) segIndex = segments.findIndex((seg) => seg.start_ms >= ms);
+    if (segIndex < 0) return;
+    setAutoFollowEnabled(false);
+    // Keep the URL hash in step so a chapter remount reselects this passage.
+    history.replaceState(null, '', `#moment-${segments[segIndex].start_ms}`);
+    mountSegmentChapter(segIndex);
+    const block = hasFormattedBlocks
+      ? formattedBlocks.find((candidate) => candidate.segment_ids.includes(segIndex))
+      : undefined;
+    setActiveSegId(segIndex + 1);
+    setActiveSentenceId(null);
+    setActiveBlockIndex(block?.block_index ?? null);
+    if (isMobileEpisode) setMobileTab('transcript');
+    window.setTimeout(() => {
+      const element =
+        (block ? document.getElementById(`block-${block.block_index}`) : null) ??
+        document.getElementById(`seg-${segIndex + 1}`);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
   }
 
   const start = useMemo(() => secondsToYouTubeTs(startSeconds), [startSeconds]);
@@ -618,7 +766,7 @@ export default function VideoPage() {
           text,
         });
         setServerFavs((current) => [
-          { id: created.id, start_ms: segment.start_ms, end_ms: segment.end_ms },
+          { id: created.id, start_ms: segment.start_ms, end_ms: segment.end_ms, text },
           ...current,
         ]);
       } else {
@@ -635,6 +783,7 @@ export default function VideoPage() {
           type: wasSaved ? 'favorite_remove' : 'favorite_add',
           payload: { videoId, start_ms: segment.start_ms },
         });
+        setLocalFavoritesVersion((version) => version + 1);
         setOperationFeedback(wasSaved ? 'Transcript moment removed.' : 'Transcript moment saved.');
         return;
       }
@@ -657,6 +806,51 @@ export default function VideoPage() {
     } catch {
       setOperationFeedback('The quote could not be copied.');
     }
+  }
+
+  async function copyTranscriptLink(segment: Segment, segIndex: number) {
+    if (!videoId) return;
+    try {
+      await copyText(
+        `${window.location.origin}${buildTimestampLink(videoId, segment.start_ms, segIndex)}`
+      );
+      setOperationFeedback('Link to this moment copied.');
+    } catch {
+      setOperationFeedback('The link could not be copied.');
+    }
+  }
+
+  const episodeTopics = useMemo(
+    () => findEpisodeTopics(transcript?.segments ?? [], topicCandidates(video, intelligence)),
+    [intelligence, transcript?.segments, video]
+  );
+  const activeTopic = episodeTopics.find((topic) => topic.key === activeTopicKey) ?? null;
+  const outlineChapters = useMemo(() => visibleOutlineChapters(chapters), [chapters]);
+  const durationMs =
+    (video?.duration_seconds ?? 0) * 1000 ||
+    (transcript?.segments.length ? transcript.segments[transcript.segments.length - 1].end_ms : 0);
+  const stripTicks = useMemo<StripTick[]>(() => {
+    if (activeTopic)
+      return activeTopic.mentions.map((mention) => ({ ms: mention.startMs, kind: 'topic' }));
+    return (hits ?? []).map((hit) => ({ ms: hit.start_ms, kind: 'match' }));
+  }, [activeTopic, hits]);
+  const savedMoments = useMemo(() => {
+    void localFavoritesVersion;
+    if (!videoId) return [];
+    const local = favorites
+      .list()
+      .filter((item) => item.videoId === videoId)
+      .map((item) => ({ startMs: item.startMs, text: item.text }));
+    const server = serverFavs.map((item) => ({ startMs: item.start_ms, text: item.text ?? '' }));
+    const byStart = new Map([...local, ...server].map((item) => [item.startMs, item]));
+    return [...byStart.values()].sort((left, right) => left.startMs - right.startMs);
+  }, [localFavoritesVersion, serverFavs, videoId]);
+
+  function highlightTopic(label: string) {
+    const next = new URLSearchParams(params);
+    next.set('q', label);
+    setParams(next);
+    setAutoFollowEnabled(false);
   }
 
   const transcriptTurns = useMemo(
@@ -691,9 +885,14 @@ export default function VideoPage() {
     );
     if (segmentIndex != null && segmentIndex >= 0) mountSegmentChapter(segmentIndex);
     jumpTo(chapter.start_ms);
-    const evidence = chapter.evidence[0];
-    const target = evidence ? document.getElementById(`block-${evidence.block_index}`) : null;
-    scrollElementIntoView(target, { behavior: 'smooth', block: 'start' });
+    setAutoFollowEnabled(true);
+    window.setTimeout(() => {
+      const evidence = chapter.evidence[0];
+      const target =
+        document.getElementById(`chapter-${chapter.chapter_index}`) ??
+        (evidence ? document.getElementById(`block-${evidence.block_index}`) : null);
+      scrollElementIntoView(target, { behavior: 'smooth', block: 'start' });
+    }, 60);
   }
   if (videoStatus === 'missing') {
     return (
@@ -718,8 +917,136 @@ export default function VideoPage() {
       </section>
     );
   }
+  const transcriptSource = (transcript?.source ?? 'whisper') as TranscriptSource;
+  const showProgressiveControls = !fullTranscript && transcriptChapters.length > 1;
+
+  const renderNavigator = (currentMs: number | null, fixedTab?: NavigatorTab) =>
+    video ? (
+      <EpisodeNavigator
+        key={fixedTab ?? 'rail'}
+        videoId={video.id}
+        durationMs={durationMs}
+        chapters={outlineChapters}
+        currentMs={currentMs}
+        onSelectChapter={(chapter) => {
+          selectChapter(chapter);
+          if (isMobileEpisode) setMobileTab('transcript');
+        }}
+        topics={episodeTopics}
+        topicsLoading={intelligenceStatus === 'loading' || transcriptStatus === 'loading'}
+        activeTopicKey={activeTopicKey}
+        onToggleTopic={setActiveTopicKey}
+        onHighlightTopic={(topic) => {
+          highlightTopic(topic.label);
+          if (isMobileEpisode) setMobileTab('transcript');
+        }}
+        onOpenMoment={openMomentAt}
+        savedMoments={savedMoments}
+        fixedTab={fixedTab}
+      />
+    ) : null;
+
+  const playbackSync = (
+    <PlaybackProgress
+      chapters={chapters}
+      onSelectChapter={selectChapter}
+      playerRef={playerRef}
+      transcriptKey={`${videoId}:${transcript?.segments.length ?? 0}:${formattedBlocks.length}:${mountedTranscriptChapters.join(',')}:${mobileTab}:${viewMode}`}
+      autoFollow={autoFollowEnabled}
+      onAutoScroll={autoScrollToPlayback}
+      onPlaybackTime={(currentMs) => {
+        const segmentIndex = transcript?.segments.findIndex(
+          (segment) => currentMs >= segment.start_ms && currentMs < segment.end_ms
+        );
+        if (segmentIndex != null && segmentIndex >= 0 && autoFollowEnabled)
+          mountSegmentChapter(segmentIndex);
+      }}
+    >
+      {(currentMs) =>
+        isMobileEpisode ? (
+          (mobileTab === 'chapters' || mobileTab === 'topics') && (
+            <div className="mobile-sheet-panel">{renderNavigator(currentMs, mobileTab)}</div>
+          )
+        ) : (
+          <>
+            {video && (
+              <EpisodeStrip
+                durationMs={durationMs}
+                chapters={outlineChapters}
+                currentMs={currentMs}
+                ticks={stripTicks}
+                onSeek={(ms) => {
+                  setAutoFollowEnabled(true);
+                  jumpTo(ms);
+                }}
+              />
+            )}
+            {renderNavigator(currentMs)}
+          </>
+        )
+      }
+    </PlaybackProgress>
+  );
+
+  const progressiveNav = transcriptChapters.length > 1 && (
+    <nav className="transcript-sections" aria-label="Transcript sections">
+      <span className="mr-auto" role="status" aria-live="polite">
+        Section {activeTranscriptChapter + 1} of {transcriptChapters.length}
+      </span>
+      {showProgressiveControls && (
+        <>
+          <button
+            type="button"
+            className="toolbar-button"
+            disabled={activeTranscriptChapter === 0}
+            onClick={() => setActiveTranscriptChapter((current) => Math.max(0, current - 1))}
+          >
+            Previous section
+          </button>
+          <button
+            type="button"
+            className="toolbar-button"
+            disabled={activeTranscriptChapter >= transcriptChapters.length - 1}
+            onClick={() =>
+              setActiveTranscriptChapter((current) =>
+                Math.min(transcriptChapters.length - 1, current + 1)
+              )
+            }
+          >
+            Next section
+          </button>
+        </>
+      )}
+      <button
+        type="button"
+        className="toolbar-button"
+        aria-description="Full-document mode may reduce performance on long transcripts."
+        onClick={() => setFullTranscript((current) => !current)}
+      >
+        {fullTranscript ? 'Use progressive transcript' : 'Load full transcript'}
+      </button>
+    </nav>
+  );
+
+  const nextSection = transcriptChapters[lastMountedChapter + 1];
+  const continueReading = showProgressiveControls && nextSection && (
+    <div className="transcript-pager" ref={continueReadingRef}>
+      <span>
+        Continue reading from{' '}
+        <strong className="font-mono text-ink">{formatTimestamp(nextSection.startMs)}</strong>
+      </span>
+      <button
+        type="button"
+        className="toolbar-button toolbar-button-accent"
+        onClick={() => setActiveTranscriptChapter(nextSection.index)}
+      >
+        Keep reading ↓
+      </button>
+    </div>
+  );
+
   return (
-    <div className="episode-page space-y-7">
+    <div className="episode-page">
       {video && isMobileEpisode && (
         <div className="mobile-player-dock" id="episode-player">
           <PlayerPanel video={video} start={start} playerRef={playerRef} />
@@ -727,6 +1054,24 @@ export default function VideoPage() {
       )}
       <VideoHeader
         title={episodeTitle}
+        facts={
+          video ? (
+            <>
+              <span className="font-medium text-ink">
+                {video.channel_name || 'Unknown channel'}
+              </span>
+              {video.uploaded_at && <span>{formatDate(video.uploaded_at)}</span>}
+              {video.duration_seconds ? (
+                <span className="font-mono text-[13px]">
+                  {formatDuration(video.duration_seconds)}
+                </span>
+              ) : null}
+              {transcript && (
+                <span>{transcript.segments.length.toLocaleString()} transcript segments</span>
+              )}
+            </>
+          ) : null
+        }
         actions={
           video ? (
             <>
@@ -771,7 +1116,9 @@ export default function VideoPage() {
           ) : null
         }
       >
-        {video && <VideoDetailsPanel video={video} />}
+        {video && (video.people?.length || video.tags?.length) ? (
+          <VideoDetailsPanel video={video} />
+        ) : null}
       </VideoHeader>
       {video && passageRange && (
         <PassagePanel
@@ -795,19 +1142,14 @@ export default function VideoPage() {
         />
       )}
       {operationFeedback && (
-        <div className="text-sm text-success" role="status">
+        <div className="mb-4 text-sm text-success" role="status">
           {operationFeedback}
-        </div>
-      )}
-      {video && (
-        <div className="desktop-episode-intelligence">
-          <EpisodeIntelligence videoId={video.id} />
         </div>
       )}
 
       <div className={viewMode === 'standard' ? 'transcript-layout' : 'space-y-6'}>
-        <section
-          aria-label="Playback and reading controls"
+        <aside
+          aria-label="Player and episode navigator"
           className={
             viewMode === 'standard'
               ? 'transcript-rail'
@@ -821,64 +1163,8 @@ export default function VideoPage() {
               <PlayerPanel video={video} start={start} playerRef={playerRef} />
             </div>
           )}
-          <div className="rail-panel">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="meta-label">Reading mode</span>
-              <span className="font-mono text-[10px] text-subtle">
-                {transcript?.segments.length.toLocaleString() ?? '—'} segments
-              </span>
-            </div>
-            <div className="view-switch" role="group" aria-label="Transcript layout">
-              {(['standard', 'theater', 'reader'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={viewMode === mode ? 'view-switch-active' : ''}
-                  aria-pressed={viewMode === mode}
-                  onClick={() => setViewMode(mode)}
-                >
-                  {mode === 'standard' ? 'Split' : mode === 'theater' ? 'Watch' : 'Read'}
-                </button>
-              ))}
-            </div>
-            <p className="mt-3 text-xs leading-5 text-subtle">
-              Select any sentence to play from that moment. Scroll manually to pause auto-follow.
-            </p>
-            <div className="mt-4 border-t border-border/70 pt-4">
-              {autoFollowEnabled ? (
-                <div
-                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-accent"
-                  role="status"
-                >
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_rgba(183,255,60,0.65)]"
-                    aria-hidden="true"
-                  />
-                  Following live transcript
-                </div>
-              ) : (
-                <button type="button" className="follow-live-button" onClick={resumeAutoFollow}>
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
-                  Enable follow live
-                </button>
-              )}
-            </div>
-          </div>
-          <PlaybackProgress
-            chapters={chapters}
-            onSelectChapter={selectChapter}
-            playerRef={playerRef}
-            transcriptKey={`${videoId}:${transcript?.segments.length ?? 0}:${formattedBlocks.length}`}
-            autoFollow={autoFollowEnabled}
-            onAutoScroll={autoScrollToPlayback}
-            onPlaybackTime={(currentMs) => {
-              const segmentIndex = transcript?.segments.findIndex(
-                (segment) => currentMs >= segment.start_ms && currentMs < segment.end_ms
-              );
-              if (segmentIndex != null && segmentIndex >= 0) mountSegmentChapter(segmentIndex);
-            }}
-          />
-        </section>
+          {!isMobileEpisode && playbackSync}
+        </aside>
 
         <section
           className={`${viewMode === 'standard' ? 'min-w-0' : 'mx-auto max-w-5xl'} mobile-transcript-sheet`}
@@ -913,7 +1199,7 @@ export default function VideoPage() {
                 <span aria-hidden="true" />
               </button>
               <div className="mobile-sheet-tabs" role="tablist" aria-label="Episode reader">
-                {(['transcript', 'chapters', 'info'] as const).map((tab) => (
+                {(['transcript', 'chapters', 'topics', 'info'] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
@@ -949,41 +1235,82 @@ export default function VideoPage() {
               </div>
             </div>
           )}
+          {isMobileEpisode && playbackSync}
           {(!isMobileEpisode || mobileTab === 'transcript') && (
             <div className="transcript-shell">
               <header className="transcript-toolbar">
-                <div className="flex flex-col gap-4 border-b border-border/70 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="mb-1 flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full bg-accent shadow-[0_0_12px_rgba(183,255,60,0.65)]"
-                        aria-hidden="true"
-                      />
-                      <h2
-                        id="transcript-title"
-                        className="text-lg font-semibold tracking-[-0.025em] text-ink"
-                      >
-                        Interactive transcript
-                      </h2>
-                    </div>
-                    <p className="text-xs text-subtle">
-                      Timecoded, searchable, and linked to the source
-                    </p>
+                <h2 id="transcript-title" className="sr-only">
+                  Transcript
+                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="min-w-[14rem] flex-1">
+                    <TranscriptSearchBar
+                      initialQuery={params.get('q') ?? ''}
+                      onSearch={(value) => {
+                        const next = new URLSearchParams(params);
+                        if (value) next.set('q', value);
+                        else next.delete('q');
+                        setParams(next);
+                      }}
+                    />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {viewMode !== 'standard' && (
-                      <div className="view-switch" role="group" aria-label="Transcript layout">
-                        {(['standard', 'theater', 'reader'] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            className={viewMode === mode ? 'view-switch-active' : ''}
-                            onClick={() => setViewMode(mode)}
-                          >
-                            {mode === 'standard' ? 'Split' : mode === 'theater' ? 'Watch' : 'Read'}
-                          </button>
-                        ))}
-                      </div>
+                  {matchIndices.length > 0 && (
+                    <div
+                      className="flex items-center gap-1.5"
+                      role="group"
+                      aria-label="Search navigation"
+                    >
+                      <span
+                        className="min-w-14 text-center font-mono text-xs text-muted"
+                        aria-live="polite"
+                        aria-atomic="true"
+                      >
+                        {matchCursor + 1} / {matchIndices.length}
+                      </span>
+                      <button
+                        type="button"
+                        className="toolbar-button"
+                        onClick={() => gotoMatch(-1)}
+                        aria-label="Go to previous match"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="toolbar-button"
+                        onClick={() => gotoMatch(1)}
+                        aria-label="Go to next match"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="toolbar-button"
+                        onClick={() => setIsPlayingMatches((value) => !value)}
+                        aria-label="Play all matching transcript moments"
+                      >
+                        {isPlayingMatches ? 'Stop' : 'Play matches'}
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {autoFollowEnabled ? (
+                      <span
+                        className="inline-flex min-h-11 items-center gap-2 px-2 text-xs font-semibold text-accent"
+                        role="status"
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+                        Following live transcript
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="follow-live-button"
+                        onClick={resumeAutoFollow}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+                        Enable follow live
+                      </button>
                     )}
                     {viewMode === 'reader' && video && (
                       <button
@@ -995,65 +1322,22 @@ export default function VideoPage() {
                         Play / pause
                       </button>
                     )}
-                    {!autoFollowEnabled && (
-                      <button
-                        type="button"
-                        className="toolbar-button toolbar-button-accent"
-                        onClick={resumeAutoFollow}
-                        aria-label="Follow current sentence"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-accent" /> Follow live
-                      </button>
+                    {!isMobileEpisode && (
+                      <div className="view-switch" role="group" aria-label="Transcript layout">
+                        {(['standard', 'theater', 'reader'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            className={viewMode === mode ? 'view-switch-active' : ''}
+                            aria-pressed={viewMode === mode}
+                            onClick={() => setViewMode(mode)}
+                          >
+                            {mode === 'standard' ? 'Split' : mode === 'theater' ? 'Watch' : 'Read'}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
-
-                <div className="grid gap-3 px-4 py-4 sm:px-6 xl:grid-cols-[minmax(16rem,1fr)_auto] xl:items-center">
-                  <TranscriptSearchBar
-                    initialQuery={params.get('q') ?? ''}
-                    onSearch={(value) => {
-                      const next = new URLSearchParams(params);
-                      if (value) next.set('q', value);
-                      else next.delete('q');
-                      setParams(next);
-                    }}
-                  />
-                  {matchIndices.length > 0 && (
-                    <div
-                      className="flex flex-wrap items-center gap-1.5"
-                      role="group"
-                      aria-label="Search navigation"
-                    >
-                      <span
-                        className="mr-1 min-w-14 text-center font-mono text-xs text-muted"
-                        aria-live="polite"
-                        aria-atomic="true"
-                      >
-                        {matchCursor + 1} / {matchIndices.length}
-                      </span>
-                      <button
-                        className="toolbar-button"
-                        onClick={() => gotoMatch(-1)}
-                        aria-label="Go to previous match"
-                      >
-                        ←
-                      </button>
-                      <button
-                        className="toolbar-button"
-                        onClick={() => gotoMatch(1)}
-                        aria-label="Go to next match"
-                      >
-                        →
-                      </button>
-                      <button
-                        className="toolbar-button"
-                        onClick={() => setIsPlayingMatches((value) => !value)}
-                        aria-label="Play all matching transcript moments"
-                      >
-                        {isPlayingMatches ? 'Stop' : 'Play matches'}
-                      </button>
-                    </div>
-                  )}
                 </div>
               </header>
 
@@ -1064,19 +1348,11 @@ export default function VideoPage() {
                       className="mb-4 inline-block h-7 w-7 animate-spin rounded-full border-2 border-border border-t-accent"
                       aria-hidden="true"
                     />
-                    <p className="font-mono text-xs uppercase tracking-[0.18em]">
-                      Loading transcript
-                    </p>
+                    <p className="text-sm">Loading transcript…</p>
                   </div>
                 )}
                 {transcriptStatus === 'error' && (
                   <div className="mx-auto max-w-lg px-6 py-24 text-center" role="alert">
-                    <div
-                      className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-danger/20 bg-danger-soft text-danger"
-                      aria-hidden="true"
-                    >
-                      !
-                    </div>
                     <h3 className="text-lg font-semibold text-ink">
                       Transcript took too long to load
                     </h3>
@@ -1100,180 +1376,52 @@ export default function VideoPage() {
                     </button>
                   </div>
                 )}
-                {transcriptStatus === 'ready' &&
-                  transcript &&
-                  (hasFormattedBlocks ? (
-                    <>
-                      <TranscriptQualityNotice
-                        source={(transcript.source ?? 'whisper') as TranscriptSource}
-                        sourceLabel={transcript.source_label}
-                        blocks={formattedBlocks}
-                      />
-                      {transcriptChapters.length > 1 && (
-                        <nav
-                          className="mx-4 mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-panel px-3 py-3 sm:mx-6"
-                          aria-label="Transcript chapters"
-                        >
-                          <span
-                            className="mr-auto text-sm text-muted"
-                            role="status"
-                            aria-live="polite"
-                          >
-                            Chapter {activeTranscriptChapter + 1} of {transcriptChapters.length}
-                            <span className="ml-2 text-subtle">
-                              {transcriptChapters[activeTranscriptChapter]?.label}
-                            </span>
-                          </span>
-                          {!fullTranscript && (
-                            <>
-                              <button
-                                type="button"
-                                className="toolbar-button"
-                                disabled={activeTranscriptChapter === 0}
-                                onClick={() =>
-                                  setActiveTranscriptChapter((current) => Math.max(0, current - 1))
-                                }
-                              >
-                                Previous chapter
-                              </button>
-                              <button
-                                type="button"
-                                className="toolbar-button"
-                                disabled={activeTranscriptChapter >= transcriptChapters.length - 1}
-                                onClick={() =>
-                                  setActiveTranscriptChapter((current) =>
-                                    Math.min(transcriptChapters.length - 1, current + 1)
-                                  )
-                                }
-                              >
-                                Next chapter
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            className="toolbar-button"
-                            aria-description="Full-document mode may reduce performance on long transcripts."
-                            onClick={() => setFullTranscript((current) => !current)}
-                          >
-                            {fullTranscript ? 'Use progressive transcript' : 'Load full transcript'}
-                          </button>
-                        </nav>
-                      )}
+                {transcriptStatus === 'ready' && transcript && (
+                  <>
+                    <TranscriptQualityNotice
+                      source={transcriptSource}
+                      sourceLabel={transcript.source_label}
+                      blocks={hasFormattedBlocks ? formattedBlocks : []}
+                    />
+                    {progressiveNav}
+                    {hasFormattedBlocks ? (
                       <FormattedTranscriptDocument
-                        source={(transcript.source ?? 'whisper') as TranscriptSource}
+                        source={transcriptSource}
                         blocks={visibleFormattedBlocks}
                         transcriptSegments={transcript.segments}
                         hits={hits}
+                        chapters={outlineChapters}
                         activeBlockIndex={activeBlockIndex}
                         activeSegId={activeSegId}
                         activeSentenceId={activeSentenceId}
                         isSavedSegment={isSavedSegment}
                         onClickSentence={onClickFormattedSentence}
+                        onPlayFrom={playFromSentence}
+                        onCloseSelection={closeSelection}
                         onSaveMoment={saveTranscriptMoment}
                         onCopyQuote={copyTranscriptQuote}
+                        onCopyLink={copyTranscriptLink}
                         onSharePassage={sharePassage}
                       />
-                    </>
-                  ) : (
-                    <>
-                      <TranscriptQualityNotice
-                        source={(transcript.source ?? 'whisper') as TranscriptSource}
-                        sourceLabel={transcript.source_label}
-                        blocks={[]}
-                      />
-                      {transcriptChapters.length > 1 && (
-                        <nav
-                          className="mx-4 mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-panel px-3 py-3 sm:mx-6"
-                          aria-label="Transcript chapters"
-                        >
-                          <span
-                            className="mr-auto text-sm text-muted"
-                            role="status"
-                            aria-live="polite"
-                          >
-                            Chapter {activeTranscriptChapter + 1} of {transcriptChapters.length}
-                            <span className="ml-2 text-subtle">
-                              {transcriptChapters[activeTranscriptChapter]?.label}
-                            </span>
-                          </span>
-                          {!fullTranscript && (
-                            <>
-                              <button
-                                type="button"
-                                className="toolbar-button"
-                                disabled={activeTranscriptChapter === 0}
-                                onClick={() =>
-                                  setActiveTranscriptChapter((current) => Math.max(0, current - 1))
-                                }
-                              >
-                                Previous chapter
-                              </button>
-                              <button
-                                type="button"
-                                className="toolbar-button"
-                                disabled={activeTranscriptChapter >= transcriptChapters.length - 1}
-                                onClick={() =>
-                                  setActiveTranscriptChapter((current) =>
-                                    Math.min(transcriptChapters.length - 1, current + 1)
-                                  )
-                                }
-                              >
-                                Next chapter
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            className="toolbar-button"
-                            aria-description="Full-document mode may reduce performance on long transcripts."
-                            onClick={() => setFullTranscript((current) => !current)}
-                          >
-                            {fullTranscript ? 'Use progressive transcript' : 'Load full transcript'}
-                          </button>
-                        </nav>
-                      )}
+                    ) : (
                       <PlainTranscriptTurns
                         turns={visibleTranscriptTurns}
-                        source={(transcript.source ?? 'whisper') as TranscriptSource}
+                        source={transcriptSource}
                         activeSegId={activeSegId}
                         isSavedSegment={isSavedSegment}
                         onClickSegment={onClickSegment}
+                        onPlayFrom={playFromSegment}
+                        onCloseSelection={closeSelection}
                         onSaveMoment={saveTranscriptMoment}
                         onCopyQuote={copyTranscriptQuote}
+                        onCopyLink={copyTranscriptLink}
                         onSharePassage={sharePassage}
                       />
-                    </>
-                  ))}
+                    )}
+                    {continueReading}
+                  </>
+                )}
               </div>
-            </div>
-          )}
-          {isMobileEpisode && mobileTab === 'chapters' && (
-            <div className="mobile-sheet-panel">
-              <h2 className="section-title">Chapters</h2>
-              {chapters.length > 0 ? (
-                <ol className="mt-4 space-y-2">
-                  {chapters.map((chapter) => (
-                    <li key={`${chapter.chapter_index}:${chapter.start_ms}`}>
-                      <button
-                        type="button"
-                        className="chapter-sheet-item"
-                        onClick={() => {
-                          selectChapter(chapter);
-                          setMobileTab('transcript');
-                        }}
-                      >
-                        <span>{formatTimestamp(chapter.start_ms)}</span>
-                        <strong>{chapter.title}</strong>
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="mt-3 text-muted">
-                  Chapter landmarks are not available for this episode.
-                </p>
-              )}
             </div>
           )}
           {isMobileEpisode && mobileTab === 'info' && video && (

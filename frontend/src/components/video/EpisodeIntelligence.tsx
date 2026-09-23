@@ -1,32 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../services';
-import type { QuotedMoment, RelatedEpisode } from '../../types/api';
+import { useEpisodeIntelligence } from '../../features/videoTranscript/useEpisodeIntelligence';
 import { buildTimestampLink, formatTimestamp } from '../../features/archive/format';
 
 export default function EpisodeIntelligence({ videoId }: { videoId: string }) {
-  const [related, setRelated] = useState<RelatedEpisode[] | null>(null);
-  const [quoted, setQuoted] = useState<QuotedMoment[] | null>(null);
-  const [error, setError] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    setRelated(null);
-    setQuoted(null);
-    setError(false);
-    void Promise.all([
-      api.getRelatedEpisodes(videoId, controller.signal),
-      api.getQuotedMoments(videoId, controller.signal),
-    ])
-      .then(([relatedResponse, quotedResponse]) => {
-        setRelated(relatedResponse.items ?? []);
-        setQuoted(quotedResponse.items ?? []);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setError(true);
-      });
-    return () => controller.abort();
-  }, [videoId]);
-
+  const { related, quoted, error } = useEpisodeIntelligence(videoId);
   if (error)
     return (
       <div className="alert-warning" role="alert">
@@ -40,7 +17,7 @@ export default function EpisodeIntelligence({ videoId }: { videoId: string }) {
       </div>
     );
   return (
-    <section className="grid gap-6 lg:grid-cols-2" aria-label="Episode intelligence">
+    <section className="grid gap-4" aria-label="Episode intelligence">
       <div className="surface-card space-y-3">
         <h2 className="section-title">Related episodes</h2>
         {related.length === 0 && <p className="text-muted">No explainable related episodes yet.</p>}

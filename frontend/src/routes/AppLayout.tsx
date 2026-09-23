@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router-dom';
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from 'react-router-dom';
 import { useSite } from '../services/site';
 import { useAuth, useTheme } from '../services';
+import TheWire from '../components/TheWire';
 
 const baseNavItems = [
   { to: '/', label: 'Home' },
@@ -146,6 +154,39 @@ function RouteTransitionManager() {
   );
 }
 
+function HeaderSearch() {
+  const navigate = useNavigate();
+  const [value, setValue] = useState('');
+  return (
+    <form
+      role="search"
+      aria-label="Search the archive"
+      className="header-search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const query = value.trim();
+        if (!query) return;
+        navigate(`/search?q=${encodeURIComponent(query)}`);
+        setValue('');
+      }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+      <input
+        type="search"
+        name="header-q"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Search every transcript…"
+        aria-label="Search transcripts"
+        autoComplete="off"
+      />
+    </form>
+  );
+}
+
 export default function AppLayout() {
   const site = useSite();
   const navItems = site.community_enabled
@@ -186,11 +227,8 @@ export default function AppLayout() {
         Skip to main content
       </a>
 
-      <header
-        className="sticky top-0 z-40 border-b border-border/80 bg-canvas/85 backdrop-blur-2xl"
-        role="banner"
-      >
-        <div className="mx-auto flex max-w-[100rem] items-center justify-between gap-4 px-4 py-3 lg:px-6">
+      <header className="site-header" role="banner">
+        <div className="mx-auto flex h-16 max-w-[100rem] items-center justify-between gap-4 px-4 lg:px-6">
           <div className="flex items-center gap-4">
             <Link
               to="/"
@@ -200,31 +238,25 @@ export default function AppLayout() {
               <img
                 src={site.logo_url || '/icon.svg'}
                 alt=""
-                width="40"
-                height="40"
-                className="h-10 w-10 rounded-lg border border-border bg-surface object-cover"
+                width="64"
+                height="36"
+                className="site-logo"
               />
               <span>
-                <span className="block text-xl font-semibold leading-none tracking-[-0.04em] text-ink group-hover:text-accent">
+                <span className="brand-name block leading-none text-ink group-hover:text-accent">
                   {site.name}
                 </span>
-                <span className="mt-1 hidden text-[8px] font-bold uppercase tracking-[0.24em] text-subtle sm:block">
+                <span className="mt-1 hidden text-[11px] font-medium text-subtle sm:block">
                   {site.tagline || 'Broadcast archive'}
                 </span>
               </span>
             </Link>
+            {!location.pathname.startsWith('/search') && <HeaderSearch />}
           </div>
 
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
             {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `nav-link ${isActive ? 'bg-surface-muted text-ink' : ''}`
-                }
-              >
+              <NavLink key={item.to} to={item.to} end={item.to === '/'} className="nav-link">
                 {item.label}
               </NavLink>
             ))}
@@ -351,6 +383,7 @@ export default function AppLayout() {
           </button>
         </div>
 
+        <TheWire />
         {mobileMenuOpen && (
           <nav
             id="mobile-menu"

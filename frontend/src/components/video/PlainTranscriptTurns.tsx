@@ -9,16 +9,21 @@ import {
   type TranscriptSource,
 } from '../../features/archive/format';
 import HighlightedSnippet from '../HighlightedSnippet';
+import SectionActions from './SectionActions';
 
 type Props = {
   turns: TranscriptTurn[];
   source: TranscriptSource;
   activeSegId: number | null;
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
+  /** Opens (or closes) the passage actions for a segment. */
   onClickSegment: (segment: Segment, id: number) => void;
+  onPlayFrom: (segment: Segment, id: number) => void;
+  onCloseSelection: () => void;
   onSaveMoment: (segment: Segment, segIndex: number, text: string) => void;
   onSharePassage?: (segment: Segment) => void;
   onCopyQuote: (segment: Segment, text: string, segIndex: number) => void;
+  onCopyLink: (segment: Segment, segIndex: number) => void;
 };
 
 export default function PlainTranscriptTurns({
@@ -27,8 +32,11 @@ export default function PlainTranscriptTurns({
   activeSegId,
   isSavedSegment,
   onClickSegment,
+  onPlayFrom,
+  onCloseSelection,
   onSaveMoment,
   onCopyQuote,
+  onCopyLink,
   onSharePassage,
 }: Props) {
   return (
@@ -40,13 +48,18 @@ export default function PlainTranscriptTurns({
           : false;
 
         return (
-          <section key={turn.key} className="transcript-block content-auto" role="listitem">
+          <section
+            key={turn.key}
+            className="transcript-block transcript-paragraph content-auto"
+            role="listitem"
+            data-open={activeEntry ? 'true' : undefined}
+          >
             <div className="transcript-block-meta">
               <button
                 type="button"
                 className="transcript-timecode"
                 onClick={() =>
-                  turn.segments[0] && onClickSegment(turn.segments[0].segment, turn.segments[0].id)
+                  turn.segments[0] && onPlayFrom(turn.segments[0].segment, turn.segments[0].id)
                 }
               >
                 {turn.segments[0] ? formatTimestamp(turn.segments[0].segment.start_ms) : '—'}
@@ -68,8 +81,9 @@ export default function PlainTranscriptTurns({
                         data-start-ms={seg.start_ms}
                         data-end-ms={seg.end_ms}
                         onClick={() => onClickSegment(seg, id)}
-                        className={`transcript-sentence mx-0.5 text-left ${activeSegId === id ? 'transcript-sentence-active' : ''} ${match ? 'transcript-sentence-match' : ''} ${saved ? 'underline decoration-warning decoration-2 underline-offset-4' : ''}`}
-                        aria-label={`Play ${turn.speaker ?? 'paragraph'} from ${formatTimestamp(seg.start_ms)}`}
+                        aria-expanded={activeSegId === id}
+                        className={`transcript-sentence text-left ${activeSegId === id ? 'transcript-sentence-active' : ''} ${match ? 'transcript-sentence-match' : ''} ${saved ? 'transcript-sentence-saved' : ''}`}
+                        aria-label={`Open ${turn.speaker ?? 'paragraph'} at ${formatTimestamp(seg.start_ms)}`}
                       >
                         {normalizeTranscriptText(seg.text)}{' '}
                       </button>
@@ -79,7 +93,7 @@ export default function PlainTranscriptTurns({
               </p>
               {turn.segments.some(({ match }) => match) && (
                 <div
-                  className="rounded-lg border border-warning/20 bg-warning-soft p-3 text-xs text-ink"
+                  className="mt-2 rounded-xl border border-warning/25 bg-warning-soft p-3 text-xs text-ink"
                   role="note"
                 >
                   <div className="mb-1 font-semibold uppercase tracking-[0.12em] text-warning">
@@ -99,45 +113,24 @@ export default function PlainTranscriptTurns({
                 </div>
               )}
               {activeEntry && (
-                <div className="selection-toolbar">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent">
-                    Selected · {formatTimestamp(activeEntry.segment.start_ms)}
-                  </span>
-                  <button
-                    type="button"
-                    className="selection-action"
-                    onClick={() =>
-                      onSaveMoment(
-                        activeEntry.segment,
-                        activeEntry.id,
-                        activeEntry.segment.text
-                          .replace(/\s+/g, ' ')
-                          .replace(/\s+([,.!?;:])/g, '$1')
-                          .trim()
-                      )
-                    }
-                  >
-                    {activeEntrySaved ? 'Remove moment' : 'Save moment'}
-                  </button>
-                  <button
-                    type="button"
-                    className="selection-action"
-                    onClick={() =>
-                      onCopyQuote(activeEntry.segment, activeEntry.segment.text, activeEntry.id)
-                    }
-                  >
-                    Copy quote
-                  </button>
-                  {onSharePassage && (
-                    <button
-                      type="button"
-                      className="selection-action"
-                      onClick={() => onSharePassage(activeEntry.segment)}
-                    >
-                      Share passage
-                    </button>
-                  )}
-                </div>
+                <SectionActions
+                  startMs={activeEntry.segment.start_ms}
+                  saved={activeEntrySaved}
+                  onPlay={() => onPlayFrom(activeEntry.segment, activeEntry.id)}
+                  onCopyQuote={() =>
+                    onCopyQuote(activeEntry.segment, activeEntry.segment.text, activeEntry.id)
+                  }
+                  onCopyLink={() => onCopyLink(activeEntry.segment, activeEntry.id)}
+                  onSave={() =>
+                    onSaveMoment(
+                      activeEntry.segment,
+                      activeEntry.id,
+                      normalizeTranscriptText(activeEntry.segment.text)
+                    )
+                  }
+                  onShare={onSharePassage ? () => onSharePassage(activeEntry.segment) : undefined}
+                  onClose={onCloseSelection}
+                />
               )}
             </div>
           </section>

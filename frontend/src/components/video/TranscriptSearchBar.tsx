@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 
 type Props = {
   initialQuery: string;
@@ -7,6 +7,8 @@ type Props = {
 
 export default function TranscriptSearchBar({ initialQuery, onSearch }: Props) {
   const [value, setValue] = useState(initialQuery);
+  // Follow the URL when the query changes elsewhere, e.g. a topic highlight.
+  useEffect(() => setValue(initialQuery), [initialQuery]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

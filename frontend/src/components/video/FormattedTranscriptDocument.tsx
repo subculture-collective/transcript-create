@@ -1,11 +1,12 @@
-import { memo, useMemo } from 'react';
-import type { SearchHit, Segment, TranscriptBlock } from '../../types/api';
+import { Fragment, memo, useMemo } from 'react';
+import type { SearchHit, Segment, TranscriptBlock, VideoChapter } from '../../types/api';
 import {
   canonicalMomentId,
   formatTimestamp,
   type TranscriptSource,
 } from '../../features/archive/format';
 import { normalizeTranscriptText } from '../../features/videoTranscript/transcript';
+import SectionActions from './SectionActions';
 
 type Props = {
   blocks: TranscriptBlock[];
@@ -15,11 +16,16 @@ type Props = {
   activeBlockIndex: number | null;
   activeSegId: number | null;
   activeSentenceId: string | null;
+  chapters?: VideoChapter[];
   isSavedSegment: (segment: Segment, segIndex: number) => boolean;
+  /** Opens (or closes) the passage actions for a sentence. */
   onClickSentence: (segment: Segment, segIndex: number, sentenceId: string) => void;
+  onPlayFrom: (segment: Segment, segIndex: number, sentenceId: string) => void;
+  onCloseSelection: () => void;
   onSaveMoment: (segment: Segment, segIndex: number, text: string) => void;
   onSharePassage?: (segment: Segment) => void;
   onCopyQuote: (segment: Segment, text: string, segIndex: number) => void;
+  onCopyLink: (segment: Segment, segIndex: number) => void;
 };
 
 type SentencePiece = {
@@ -145,6 +151,29 @@ function buildSentencePieces(
       ];
 }
 
+/** Break long formatted blocks into readable paragraphs at sentence ends. */
+const PARAGRAPH_WORDS = 80;
+function splitIntoParagraphs(pieces: SentencePiece[]) {
+  const paragraphs: SentencePiece[][] = [];
+  let current: SentencePiece[] = [];
+  let words = 0;
+  for (const piece of pieces) {
+    current.push(piece);
+    words += piece.text.split(/\s+/).length;
+    if (words >= PARAGRAPH_WORDS && endsSentence(piece.text)) {
+      paragraphs.push(current);
+      current = [];
+      words = 0;
+    }
+  }
+  if (current.length) {
+    // Fold a short tail into the previous paragraph rather than leave a stub.
+    if (paragraphs.length && words < PARAGRAPH_WORDS / 3) paragraphs.at(-1)!.push(...current);
+    else paragraphs.push(current);
+  }
+  return paragraphs;
+}
+
 function sentenceDomId(piece: SentencePiece) {
   const suffix = piece.id.includes('-s-')
     ? piece.id.split('-s-').at(1)
@@ -160,10 +189,14 @@ function FormattedTranscriptDocument({
   activeBlockIndex,
   activeSegId,
   activeSentenceId,
+  chapters = [],
   isSavedSegment,
   onClickSentence,
+  onPlayFrom,
+  onCloseSelection,
   onSaveMoment,
   onCopyQuote,
+  onCopyLink,
   onSharePassage,
 }: Props) {
   const preparedBlocks = useMemo(
@@ -189,9 +222,25 @@ function FormattedTranscriptDocument({
     }
     return ids;
   }, [hits, transcriptSegments]);
+  // Each chapter heading sits before the first mounted block that reaches it.
+  const headingsByBlock = useMemo(() => {
+    const byBlock = new Map<number, VideoChapter[]>();
+    let cursor = 0;
+    const ordered = [...chapters].sort((left, right) => left.start_ms - right.start_ms);
+    for (const chapter of ordered) {
+      while (cursor < blocks.length && blocks[cursor].end_ms <= chapter.start_ms) cursor += 1;
+      const block = blocks[cursor];
+      if (!block || chapter.end_ms <= block.start_ms) continue;
+      const list = byBlock.get(block.block_index) ?? [];
+      list.push(chapter);
+      byBlock.set(block.block_index, list);
+    }
+    return byBlock;
+  }, [blocks, chapters]);
   return (
     <article className="transcript-document" aria-label="Readable transcript">
       {preparedBlocks.map(({ block, pieces }) => {
+        const headings = headingsByBlock.get(block.block_index) ?? [];
         const selectedPiece =
           pieces.find((piece) => activeSentenceId === piece.id) ??
           pieces.find((piece) => piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1));
@@ -201,110 +250,136 @@ function FormattedTranscriptDocument({
         const isActiveBlock = activeBlockIndex === block.block_index || Boolean(selectedPiece);
 
         return (
-          <section
-            key={block.block_index}
-            id={`block-${block.block_index}`}
-            className="transcript-block content-auto"
-            data-active={isActiveBlock ? 'true' : undefined}
-          >
-            <div className="transcript-block-meta">
-              <button
-                type="button"
-                className="transcript-timecode"
-                onClick={() =>
-                  pieces[0] &&
-                  onClickSentence(pieces[0].firstSegment, pieces[0].firstSegIndex, pieces[0].id)
-                }
-                aria-label={`Play from ${formatTimestamp(block.start_ms)}`}
+          <Fragment key={block.block_index}>
+            {headings.map((chapter) => (
+              <div
+                key={`chapter:${chapter.chapter_index}:${chapter.start_ms}`}
+                id={`chapter-${chapter.chapter_index}`}
+                className="transcript-chapter-heading"
               >
-                {formatTimestamp(block.start_ms)}
-              </button>
-              {block.speaker_label && (
-                <div className="transcript-speaker">{block.speaker_label}</div>
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="transcript-copy">
-                {pieces.map((piece) => {
-                  const pieceActive = activeSentenceId
-                    ? activeSentenceId === piece.id
-                    : piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1);
-                  const pieceSaved = isSavedSegment(piece.firstSegment, piece.firstSegIndex);
-                  const pieceHighlighted = piece.segmentIds.some((segIdx) =>
-                    hitSegmentIds.has(segIdx)
-                  );
-
-                  return (
-                    <span key={piece.id} id={canonicalMomentId(source, piece.startMs)}>
-                      <span
-                        id={sentenceDomId(piece)}
-                        role="button"
-                        data-transcript-sentence="true"
-                        data-start-ms={piece.startMs}
-                        data-end-ms={piece.endMs}
-                        tabIndex={0}
+                <span className="font-mono text-xs text-accent">
+                  {formatTimestamp(chapter.start_ms)}
+                </span>
+                <h3>{chapter.title}</h3>
+              </div>
+            ))}
+            <section
+              id={`block-${block.block_index}`}
+              className="transcript-block content-auto"
+              data-active={isActiveBlock ? 'true' : undefined}
+            >
+              {splitIntoParagraphs(pieces).map((paragraph, paragraphIndex) => {
+                const first = paragraph[0];
+                const open = Boolean(selectedPiece && paragraph.includes(selectedPiece));
+                return (
+                  <div
+                    key={first.id}
+                    className="transcript-paragraph"
+                    data-open={open ? 'true' : undefined}
+                  >
+                    <div className="transcript-block-meta">
+                      <button
+                        type="button"
+                        className="transcript-timecode"
                         onClick={() =>
-                          onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id)
+                          onPlayFrom(first.firstSegment, first.firstSegIndex, first.id)
                         }
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id);
-                          }
-                        }}
-                        className={`transcript-sentence ${pieceActive ? 'transcript-sentence-active' : ''} ${pieceHighlighted && !pieceActive ? 'transcript-sentence-match' : ''} ${pieceSaved ? 'underline decoration-warning decoration-2 underline-offset-4' : ''}`}
-                        aria-label={`Play sentence from ${formatTimestamp(piece.startMs)}`}
+                        aria-label={`Play from ${formatTimestamp(first.startMs)}`}
                       >
-                        {piece.text}
-                      </span>{' '}
-                    </span>
-                  );
-                })}
-              </p>
-              {selectedPiece && (
-                <div className="selection-toolbar">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent">
-                    Selected · {formatTimestamp(selectedPiece.startMs)}
-                  </span>
-                  <button
-                    type="button"
-                    className="selection-action"
-                    onClick={() =>
-                      onSaveMoment(
-                        selectedPiece.firstSegment,
-                        selectedPiece.firstSegIndex,
-                        selectedPiece.text
-                      )
-                    }
-                  >
-                    {selectedSaved ? 'Remove moment' : 'Save moment'}
-                  </button>
-                  <button
-                    type="button"
-                    className="selection-action"
-                    onClick={() =>
-                      onCopyQuote(
-                        selectedPiece.firstSegment,
-                        selectedPiece.text,
-                        selectedPiece.firstSegIndex
-                      )
-                    }
-                  >
-                    Copy quote
-                  </button>
-                  {onSharePassage && (
-                    <button
-                      type="button"
-                      className="selection-action"
-                      onClick={() => onSharePassage(selectedPiece.firstSegment)}
-                    >
-                      Share passage
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </section>
+                        {formatTimestamp(first.startMs)}
+                      </button>
+                      {paragraphIndex === 0 && block.speaker_label && (
+                        <div className="transcript-speaker">{block.speaker_label}</div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="transcript-copy">
+                        {paragraph.map((piece) => {
+                          const pieceActive = activeSentenceId
+                            ? activeSentenceId === piece.id
+                            : piece.segmentIds.some((segIdx) => activeSegId === segIdx + 1);
+                          const pieceSaved = isSavedSegment(
+                            piece.firstSegment,
+                            piece.firstSegIndex
+                          );
+                          const pieceHighlighted = piece.segmentIds.some((segIdx) =>
+                            hitSegmentIds.has(segIdx)
+                          );
+
+                          return (
+                            <span key={piece.id} id={canonicalMomentId(source, piece.startMs)}>
+                              <span
+                                id={sentenceDomId(piece)}
+                                role="button"
+                                aria-expanded={pieceActive}
+                                data-transcript-sentence="true"
+                                data-start-ms={piece.startMs}
+                                data-end-ms={piece.endMs}
+                                tabIndex={0}
+                                onClick={() =>
+                                  onClickSentence(piece.firstSegment, piece.firstSegIndex, piece.id)
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onClickSentence(
+                                      piece.firstSegment,
+                                      piece.firstSegIndex,
+                                      piece.id
+                                    );
+                                  }
+                                }}
+                                className={`transcript-sentence ${pieceActive ? 'transcript-sentence-active' : ''} ${pieceHighlighted && !pieceActive ? 'transcript-sentence-match' : ''} ${pieceSaved ? 'transcript-sentence-saved' : ''}`}
+                                aria-label={`Open passage at ${formatTimestamp(piece.startMs)}`}
+                              >
+                                {piece.text}
+                              </span>{' '}
+                            </span>
+                          );
+                        })}
+                      </p>
+                      {open && selectedPiece && (
+                        <SectionActions
+                          startMs={selectedPiece.startMs}
+                          saved={selectedSaved}
+                          onPlay={() =>
+                            onPlayFrom(
+                              selectedPiece.firstSegment,
+                              selectedPiece.firstSegIndex,
+                              selectedPiece.id
+                            )
+                          }
+                          onCopyQuote={() =>
+                            onCopyQuote(
+                              selectedPiece.firstSegment,
+                              selectedPiece.text,
+                              selectedPiece.firstSegIndex
+                            )
+                          }
+                          onCopyLink={() =>
+                            onCopyLink(selectedPiece.firstSegment, selectedPiece.firstSegIndex)
+                          }
+                          onSave={() =>
+                            onSaveMoment(
+                              selectedPiece.firstSegment,
+                              selectedPiece.firstSegIndex,
+                              selectedPiece.text
+                            )
+                          }
+                          onShare={
+                            onSharePassage
+                              ? () => onSharePassage(selectedPiece.firstSegment)
+                              : undefined
+                          }
+                          onClose={onCloseSelection}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          </Fragment>
         );
       })}
     </article>

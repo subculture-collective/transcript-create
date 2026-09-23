@@ -469,7 +469,7 @@ test("visitors can read, save, remove, and reopen a transcript moment", async ({
   ).toBeVisible();
 
   const sentence = page.getByRole("button", {
-    name: "Play sentence from 00:00:12",
+    name: "Open passage at 00:00:12",
   });
   await expect(sentence).toContainText("Labor rights are worth protecting.");
   await sentence.click();
@@ -607,7 +607,7 @@ test("keyboard-only visitors can cite, verify, search within, and recover", asyn
   );
 
   const sentence = page.getByRole("button", {
-    name: "Play sentence from 00:00:12",
+    name: "Open passage at 00:00:12",
   });
   await sentence.focus();
   await page.keyboard.press("Enter");
@@ -879,7 +879,7 @@ test("400-percent reflow keeps primary touch targets operable", async ({
   await page.goto(`/v/${seededVideo.id}`);
   await minimumTargetSize(page, "Find");
   const sentence = page.getByRole("button", {
-    name: "Play sentence from 00:00:12",
+    name: "Open passage at 00:00:12",
   });
   await sentence.press("Enter");
   await minimumTargetSize(page, "Save moment");

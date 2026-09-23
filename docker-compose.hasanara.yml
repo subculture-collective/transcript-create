@@ -1,3 +1,12 @@
+# HasanAra client identity: the public brand profile and editorial preset are
+# read by every application process that loads settings.
+x-hasanara-client-environment: &hasanara-client-environment
+    SITE_PROFILE_PATH: /config/branding/hasanara.json
+    ARCHIVE_EDITORIAL_PRESET: hasanara
+
+x-hasanara-client-volumes: &hasanara-client-volumes
+    - ./config/branding:/config/branding:ro
+
 networks:
     management:
         name: management
@@ -20,6 +29,8 @@ services:
 
     migrations:
         container_name: hasanara-migrations
+        environment: *hasanara-client-environment
+        volumes: *hasanara-client-volumes
 
     api:
         container_name: hasanara-api
@@ -41,6 +52,8 @@ services:
             RATE_LIMIT_WINDOW_SECONDS: '60'
             REDIS_URL: redis://redis:6379/0
             OPENSEARCH_TLS_VERIFY: 'true'
+            <<: *hasanara-client-environment
+        volumes: *hasanara-client-volumes
         restart: unless-stopped
 
     worker:
@@ -53,6 +66,8 @@ services:
         environment:
             CHANNEL_SYNC_URLS: ${CHANNEL_SYNC_URLS:-https://www.youtube.com/@HasanAbiVODs/videos,https://www.youtube.com/@HasanAbiVODsBackup/videos,https://www.youtube.com/@HasanAbiVODs3/videos}
             CHANNEL_SYNC_INTERVAL_SECONDS: ${CHANNEL_SYNC_INTERVAL_SECONDS:-21600}
+            <<: *hasanara-client-environment
+        volumes: *hasanara-client-volumes
         restart: unless-stopped
         stop_grace_period: 1h
 
@@ -71,6 +86,8 @@ services:
             ARCHIVE_SUMMARY_REFRESH_SECONDS: ${ARCHIVE_SUMMARY_REFRESH_SECONDS:-3600}
             OTEL_SDK_DISABLED: 'true'
             PYTHONPATH: /app
+            <<: *hasanara-client-environment
+        volumes: *hasanara-client-volumes
         depends_on:
             db:
                 condition: service_healthy
@@ -110,6 +127,8 @@ services:
             ARCHIVE_SUMMARY_MODEL: ${ARCHIVE_SUMMARY_MODEL:-qwen3:8b}
             OTEL_SDK_DISABLED: 'true'
             PYTHONPATH: /app
+            <<: *hasanara-client-environment
+        volumes: *hasanara-client-volumes
         networks:
             - default
             - dev
@@ -171,6 +190,14 @@ services:
         profiles: !override []
         env_file: ${HASANARA_ENV_FILE:-.env}
 
+    analytics-retention:
+        environment: *hasanara-client-environment
+        volumes: *hasanara-client-volumes
+
+    archive-enrichment-queue:
+        environment: *hasanara-client-environment
+        volumes: *hasanara-client-volumes
+
     frontend:
         build:
             context: .
@@ -181,4 +208,6 @@ services:
             - management
         ports:
             - 10.0.0.200:5173:80
+        volumes:
+            - ./config/branding/hasanara-assets:/usr/share/nginx/html/branding:ro
         restart: unless-stopped

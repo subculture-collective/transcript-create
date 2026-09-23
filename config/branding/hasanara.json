@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "name": "HasanAra",
+  "creator_name": "HasanAbi",
+  "description": "Search every HasanAbi broadcast, read the cited transcript, and share the exact moment.",
+  "tagline": "Piker Broadcasting Service",
+  "operator_name": "Subcult",
+  "operator_url": "https://subcult.tv",
+  "project_notice": "HasanAra is an independent archive. Broadcasts and trademarks belong to their respective owners.",
+  "logo_url": "/branding/logo.svg",
+  "favicon_url": "/branding/favicon.svg",
+  "social_image_url": "/branding/social-card.svg",
+  "theme": {
+    "dark": {
+      "accent": "#ff3333",
+      "accent-hover": "#ff6b6b",
+      "accent-soft": "#3d1212",
+      "accent-contrast": "#140303",
+      "accent-2": "#ff6633",
+      "accent-3": "#cd3333",
+      "player-accent": "#ff3333",
+      "cta": "#ff6633"
+    },
+    "light": {
+      "accent": "#cd3333",
+      "accent-hover": "#a32424",
+      "accent-soft": "#fbe3dc",
+      "accent-contrast": "#ffffff",
+      "accent-2": "#ff6633",
+      "accent-3": "#cd3333",
+      "player-accent": "#ff3333",
+      "cta": "#cd3333"
+    }
+  }
+}

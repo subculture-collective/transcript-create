@@ -129,9 +129,9 @@ def passage_page(
     if re.fullmatch(r"[A-Za-z0-9_-]{11}", youtube_id):
         embed = f'<iframe title="Source video" src="https://www.youtube.com/embed/{youtube_id}?start={start_ms // 1000}&amp;end={(end_ms + 999) // 1000}" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>'
     palette = settings.SITE_BRANDING.theme.dark
-    canvas = palette.get("canvas", "#101014")
-    ink = palette.get("ink", "#f1f1f4")
-    accent = palette.get("accent", "#93c5fd")
+    canvas = palette.get("canvas", "#0f0f0f")
+    ink = palette.get("ink", "#eeeae1")
+    accent = palette.get("accent", "#ff5b52")
     body = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)} · {times}</title><meta name="description" content="{esc(excerpt)}">
 <meta property="og:type" content="article"><meta property="og:title" content="{esc(title)} · {times}">
@@ -161,15 +161,15 @@ def passage_card(
 ):
     passage = load_passage(db, video_id, start_ms, end_ms)
     palette = settings.SITE_BRANDING.theme.dark
-    image = Image.new("RGB", (1200, 630), palette.get("canvas", "#101014"))
+    image = Image.new("RGB", (1200, 630), palette.get("canvas", "#0f0f0f"))
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, 18, 630), fill=palette.get("accent", "#93c5fd"))
+    draw.rectangle((0, 0, 18, 630), fill=palette.get("accent", "#ff5b52"))
     font = ImageFont.load_default(size=38)
     small = ImageFont.load_default(size=26)
-    draw.text((60, 42), settings.SITE_NAME[:60], font=small, fill=palette.get("accent", "#93c5fd"))
+    draw.text((60, 42), settings.SITE_NAME[:60], font=small, fill=palette.get("accent", "#ff5b52"))
     title = str(passage["video"]["title"] or "Archive recording")[:200]
     draw.multiline_text(
-        (60, 102), "\n".join(textwrap.wrap(title, 48)[:3]), font=font, fill=palette.get("ink", "#f1f1f4"), spacing=10
+        (60, 102), "\n".join(textwrap.wrap(title, 48)[:3]), font=font, fill=palette.get("ink", "#eeeae1"), spacing=10
     )
     excerpt = " ".join(passage["rows"][0]["text"].split())[:300]
     draw.multiline_text((60, 290), "\n".join(textwrap.wrap(excerpt, 66)[:5]), font=small, fill="#ceccd4", spacing=9)
@@ -177,7 +177,7 @@ def passage_card(
         (60, 550),
         f"{passage_time(start_ms)} - {passage_time(end_ms)} | Source and context",
         font=small,
-        fill=palette.get("accent", "#93c5fd"),
+        fill=palette.get("accent", "#ff5b52"),
     )
     output = BytesIO()
     image.save(output, format="PNG")

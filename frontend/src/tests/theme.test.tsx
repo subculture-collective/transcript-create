@@ -241,7 +241,7 @@ describe('theme service', () => {
         </ThemeProvider>
       );
 
-      expect(mockMeta.setAttribute).toHaveBeenCalledWith('content', '#101014');
+      expect(mockMeta.setAttribute).toHaveBeenCalledWith('content', '#0f0f0f');
     });
   });
 });

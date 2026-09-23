@@ -21,6 +21,13 @@ vi.mock('../services', () => ({
     logout: auth.logout,
   }),
   useTheme: () => ({ theme: 'dark', toggleTheme: theme.toggle }),
+  api: {
+    getExploreIntelligence: vi.fn().mockResolvedValue({
+      topic_cards: [{ label: 'Gaza', total_moments: 12, recent_mentions_90d: 4 }],
+      trending_searches: [{ term: 'labor', frequency: 3 }],
+      summary: { popular_searches: [{ term: 'gaza', frequency: 9 }] },
+    }),
+  },
 }));
 
 describe('AppLayout navigation', () => {
@@ -43,6 +50,19 @@ describe('AppLayout navigation', () => {
       expect(navigation.getByRole('link', { name })).toHaveAttribute('href', href);
     }
     return axe.run(container).then((result) => expect(result.violations).toEqual([]));
+  });
+
+  it('shows trending archive topics on the wire as search links', async () => {
+    render(<AppLayout />, { wrapper: MemoryRouter });
+    const wire = screen.getByRole('region', { name: 'Trending in the archive' });
+    const gaza = await within(wire).findAllByRole('link', { name: /Gaza/ });
+    expect(gaza[0]).toHaveAttribute('href', '/search?q=Gaza');
+    expect(gaza[0]).toHaveTextContent('4 mentions in 90 days');
+    expect(within(wire).getAllByRole('link', { name: /labor/ })[0]).toHaveTextContent(
+      'trending search'
+    );
+    // Duplicate popular terms collapse into the topic entry.
+    expect(within(wire).getAllByRole('link', { name: /gaza/i })).toHaveLength(1);
   });
 
   it('links the public project and legal pages from the footer', () => {

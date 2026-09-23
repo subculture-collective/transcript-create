@@ -30,8 +30,11 @@ describe('PlainTranscriptTurns', () => {
         activeSegId={null}
         isSavedSegment={() => false}
         onClickSegment={vi.fn()}
+        onPlayFrom={vi.fn()}
+        onCloseSelection={vi.fn()}
         onSaveMoment={vi.fn()}
         onCopyQuote={vi.fn()}
+        onCopyLink={vi.fn()}
       />
     );
 

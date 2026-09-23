@@ -11,9 +11,9 @@ export type SiteConfig = {
   favicon_url?: string;
   social_image_url?: string;
   theme?: {
-    font: 'system' | 'editorial' | 'mono';
-    dark: Record<string, string>;
-    light: Record<string, string>;
+    font?: 'system' | 'editorial' | 'mono' | null;
+    dark?: Record<string, string>;
+    light?: Record<string, string>;
   };
   name: string;
   description: string;

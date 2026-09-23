@@ -3029,6 +3029,7 @@
       },
       "BrandTheme": {
         "additionalProperties": false,
+        "description": "Optional overrides of the default design. Unset fields keep the stylesheet's values.",
         "properties": {
           "dark": {
             "additionalProperties": {
@@ -3038,14 +3039,20 @@
             "type": "object"
           },
           "font": {
-            "default": "system",
-            "enum": [
-              "system",
-              "editorial",
-              "mono"
+            "anyOf": [
+              {
+                "enum": [
+                  "system",
+                  "editorial",
+                  "mono"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Font",
-            "type": "string"
+            "title": "Font"
           },
           "light": {
             "additionalProperties": {

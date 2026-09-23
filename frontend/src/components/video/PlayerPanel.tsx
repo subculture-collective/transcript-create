@@ -11,9 +11,7 @@ type Props = {
 
 export default function PlayerPanel({ video, start, playerRef, className = '' }: Props) {
   return (
-    <div
-      className={`overflow-hidden rounded-xl border border-border bg-[#09090b] shadow-[0_24px_70px_rgba(0,0,0,0.32)] ${className}`}
-    >
+    <div className={`overflow-hidden bg-black ${className}`}>
       {video ? (
         <YouTubePlayer
           ref={playerRef}
@@ -35,12 +33,6 @@ export default function PlayerPanel({ video, start, playerRef, className = '' }:
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/75">
-        <span>Source video</span>
-        <span className="inline-flex items-center gap-1.5 text-player-accent">
-          <span className="h-1.5 w-1.5 rounded-full bg-player-accent" /> Synced transcript
-        </span>
-      </div>
     </div>
   );
 }

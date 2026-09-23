@@ -43,7 +43,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const colors = site.theme?.[theme] ?? {};
     const tokens = new Set(
-      'canvas surface surface-muted surface-raised border border-strong ink muted subtle accent accent-hover accent-soft accent-contrast player-accent cta success success-soft warning warning-soft danger danger-soft'.split(
+      'canvas surface surface-muted surface-raised border border-strong ink muted subtle accent accent-hover accent-soft accent-contrast accent-2 accent-3 player-accent cta success success-soft warning warning-soft danger danger-soft'.split(
         ' '
       )
     );
@@ -60,17 +60,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       editorial: '"Alegreya Sans", "Segoe UI", sans-serif',
       mono: 'ui-monospace, "SFMono-Regular", Menlo, monospace',
     };
-    const font = fonts[site.theme?.font ?? 'system'] ?? fonts.system;
-    for (const token of ['--font-body', '--font-display', '--font-sans']) {
-      document.documentElement.style.setProperty(token, font);
-      applied.push(token);
+    // Without a client profile font, keep the stylesheet's typefaces.
+    const font = site.theme?.font ? fonts[site.theme.font] : undefined;
+    if (font) {
+      for (const token of ['--font-body', '--font-display', '--font-sans']) {
+        document.documentElement.style.setProperty(token, font);
+        applied.push(token);
+      }
     }
     // Update meta theme-color
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
       metaThemeColor.setAttribute(
         'content',
-        colors.canvas ?? (theme === 'dark' ? '#101014' : '#f1f1f4')
+        colors.canvas ?? (theme === 'dark' ? '#0f0f0f' : '#faf9f5')
       );
     }
     return () => {

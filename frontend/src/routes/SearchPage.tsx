@@ -24,7 +24,9 @@ import {
   buildQuoteText,
   plainTextFromSnippet,
 } from '../features/search/moments';
+import { useQuery } from '@tanstack/react-query';
 import { SearchFiltersPanel, SearchMomentsList } from '../components/archive';
+import SearchInsights from '../components/archive/SearchInsights';
 
 async function copyText(text: string) {
   if (!navigator.clipboard) throw new Error('Clipboard unavailable');
@@ -63,7 +65,6 @@ function ResultHeader({
         ) : null}
       </Link>
       <div className="min-w-0 space-y-2">
-        <div className="archive-eyebrow">VOD dossier</div>
         <Link
           to={video ? `/v/${video.id}` : '#'}
           className="block text-xl font-semibold leading-6 tracking-[-0.035em] text-ink transition-colors hover:text-accent sm:text-2xl"
@@ -129,6 +130,12 @@ export default function SearchPage() {
     queryError,
   } = useArchiveSearch(filters);
   const canSubmitSearch = Boolean(q.trim());
+  const intelligence = useQuery({
+    queryKey: ['archive-intelligence'],
+    queryFn: () => api.getExploreIntelligence(),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
 
   useLayoutEffect(() => {
     setQ(filters.q);
@@ -218,6 +225,26 @@ export default function SearchPage() {
     }
   }
 
+  const relatedTerms = useMemo(() => {
+    const needle = filters.q.trim().toLowerCase();
+    const terms: string[] = [];
+    for (const card of intelligence.data?.topic_cards ?? []) {
+      const names = [card.label, ...(card.aliases ?? [])].map((name) => name.toLowerCase());
+      if (needle && names.some((name) => name.includes(needle) || needle.includes(name)))
+        terms.push(...(card.related_topics ?? []));
+      else if (card.related_topics?.some((topic) => topic.toLowerCase() === needle))
+        terms.push(card.label);
+    }
+    terms.push(...suggestedSearches.map((item) => item.term));
+    const seen = new Set([needle]);
+    return terms.filter((term) => {
+      const key = term.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [filters.q, intelligence.data?.topic_cards, suggestedSearches]);
+
   const exportParams = useMemo(() => {
     const value = serializeFilters({ ...filters, limit: 5000, offset: undefined });
     value.set('format', 'json');
@@ -236,11 +263,14 @@ export default function SearchPage() {
 
   return (
     <div className="space-y-5 lg:space-y-7">
-      <section className="archive-masthead p-5 sm:p-8 lg:p-10">
-        <div className="relative z-10 mx-auto max-w-5xl space-y-7">
-          <div className="text-center">
+      <section
+        className="archive-masthead search-hero"
+        data-compact={shouldFetch ? 'true' : undefined}
+      >
+        <div className="relative z-10 mx-auto max-w-5xl space-y-6">
+          <div className="search-hero-copy">
             <div className="archive-eyebrow">Transcript search</div>
-            <h1 className="mt-4 text-4xl font-semibold tracking-[-0.055em] text-ink sm:text-6xl">
+            <h1 className="mt-3 text-4xl font-extrabold tracking-[-0.04em] text-ink sm:text-5xl">
               Search the record.
             </h1>
             <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-muted sm:text-lg">
@@ -371,7 +401,10 @@ export default function SearchPage() {
             )}
           </div>
 
-          <section aria-label="Search context" className="space-y-4 xl:sticky xl:top-24">
+          <section aria-label="Search context" className="search-rail">
+            {!loading && (
+              <SearchInsights query={filters.q} groups={groupedGroups} related={relatedTerms} />
+            )}
             <section className="archive-section space-y-4">
               <div className="archive-rule-title">Research tools</div>
               <div className="flex flex-wrap gap-2" aria-label="Every mention exports">
@@ -446,23 +479,6 @@ export default function SearchPage() {
                     </li>
                   ))}
                 </ol>
-              </section>
-            )}
-
-            {suggestedSearches.length > 0 && (
-              <section className="archive-section space-y-4">
-                <div className="archive-rule-title">Related starts</div>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedSearches.slice(0, 10).map((item) => (
-                    <Link
-                      key={item.term}
-                      to={`/search?q=${encodeURIComponent(item.term)}`}
-                      className="source-pill hover:border-accent/50 hover:text-ink"
-                    >
-                      {item.term}
-                    </Link>
-                  ))}
-                </div>
               </section>
             )}
           </section>

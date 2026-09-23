@@ -4051,18 +4051,17 @@ export interface components {
       /** Plan */
       plan: string;
     };
-    /** BrandTheme */
+    /**
+     * BrandTheme
+     * @description Optional overrides of the default design. Unset fields keep the stylesheet's values.
+     */
     BrandTheme: {
       /** Dark */
       dark?: {
         [key: string]: string;
       };
-      /**
-       * Font
-       * @default system
-       * @enum {string}
-       */
-      font: 'system' | 'editorial' | 'mono';
+      /** Font */
+      font?: ('system' | 'editorial' | 'mono') | null;
       /** Light */
       light?: {
         [key: string]: string;

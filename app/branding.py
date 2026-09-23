@@ -9,36 +9,19 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 COLOR_TOKENS = frozenset(
     "canvas surface surface-muted surface-raised border border-strong ink muted subtle "
-    "accent accent-hover accent-soft accent-contrast player-accent cta success success-soft "
+    "accent accent-hover accent-soft accent-contrast accent-2 accent-3 player-accent cta "
+    "success success-soft "
     "warning warning-soft danger danger-soft".split()
 )
 
 
 class BrandTheme(BaseModel):
+    """Optional overrides of the default design. Unset fields keep the stylesheet's values."""
+
     model_config = ConfigDict(extra="forbid")
-    font: Literal["system", "editorial", "mono"] = "system"
-    dark: dict[str, str] = Field(
-        default_factory=lambda: {
-            "canvas": "#101014",
-            "ink": "#f1f1f4",
-            "accent": "#93c5fd",
-            "accent-hover": "#bfdbfe",
-            "accent-soft": "#172b46",
-            "accent-contrast": "#101014",
-            "player-accent": "#93c5fd",
-        }
-    )
-    light: dict[str, str] = Field(
-        default_factory=lambda: {
-            "canvas": "#f1f1f4",
-            "ink": "#1e1d22",
-            "accent": "#1d4ed8",
-            "accent-hover": "#1e40af",
-            "accent-soft": "#dbeafe",
-            "accent-contrast": "#ffffff",
-            "player-accent": "#1d4ed8",
-        }
-    )
+    font: Literal["system", "editorial", "mono"] | None = None
+    dark: dict[str, str] = Field(default_factory=dict)
+    light: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("dark", "light")
     @classmethod

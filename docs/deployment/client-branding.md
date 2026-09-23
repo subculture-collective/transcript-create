@@ -12,6 +12,8 @@ One tested core release can serve all clients. Never edit React components, comp
 
 Copy [the Northstar example](../../config/branding/northstar.json) and [its assets](../../config/branding/northstar-assets). Set `SITE_PROFILE_PATH` to an absolute path readable by the API and every Python application role. The file is validated at process startup; a missing file, unsupported schema, unknown field, unsafe URL or invalid color fails startup.
 
+The HasanAra profile is [`config/branding/hasanara.json`](../../config/branding/hasanara.json), with assets in [`hasanara-assets`](../../config/branding/hasanara-assets). Its logo files are vector traces of the Piker Broadcasting Service mark: `logo.svg` (compact mark), `favicon.svg`, `badge.svg` (full TV badge with wordmark) and `social-card.svg`.
+
 ```bash
 SITE_PROFILE_PATH=/absolute/path/to/client/brand.json .venv/bin/python -m uvicorn app.main:app --port 8000
 VITE_API_PROXY_TARGET=http://localhost:8000 npm --prefix frontend run dev
@@ -25,10 +27,10 @@ For local Vite development, place client assets under `frontend/public/branding/
 | `name`, `description`, `creator_name`, `tagline` | Site identity, home copy, route titles and metadata. |
 | `operator_name`, `operator_url`, `project_notice` | Operator attribution, About, Support and footer. Empty operator URL omits the link. |
 | `logo_url`, `favicon_url`, `social_image_url` | Same-origin absolute paths or HTTPS asset URLs. |
-| `theme.font` | `system`, `editorial` or `mono`; no executable CSS or arbitrary font URLs. |
+| `theme.font` | Optional: `system`, `editorial` or `mono`. When omitted, the core typefaces (Newsreader and Inter Tight) apply. No executable CSS or arbitrary font URLs. |
 | `theme.dark`, `theme.light` | Partial maps of semantic color tokens to six-digit hex colors. Omitted tokens use the core stylesheet. |
 
-Supported tokens: `canvas`, `surface`, `surface-muted`, `surface-raised`, `border`, `border-strong`, `ink`, `muted`, `subtle`, `accent`, `accent-hover`, `accent-soft`, `accent-contrast`, `player-accent`, `cta`, `success`, `success-soft`, `warning`, `warning-soft`, `danger`, `danger-soft`. Set accent/contrast and background/ink pairs together and check contrast in both themes. Theme switching retains the visitor's preference. Server-rendered passage pages and generated PNG cards use the client's dark canvas, ink and accent.
+Supported tokens: `canvas`, `surface`, `surface-muted`, `surface-raised`, `border`, `border-strong`, `ink`, `muted`, `subtle`, `accent`, `accent-hover`, `accent-soft`, `accent-contrast`, `accent-2`, `accent-3`, `player-accent`, `cta`, `success`, `success-soft`, `warning`, `warning-soft`, `danger`, `danger-soft`. Set accent/contrast and background/ink pairs together and check contrast in both themes. `accent-2`, `accent-3` and `player-accent` form the three-colour stripe under the header and color data marks; they are decorative and need not meet text contrast. A profile without a theme keeps the Broadsheet colors. Theme switching retains the visitor's preference. Server-rendered passage pages and generated PNG cards use the client's dark canvas, ink and accent, falling back to the core night-edition colors.
 
 The generated [JSON schema](../../config/branding/schema.json) describes the complete public profile. Do not store passwords, OAuth credentials, private URLs, feature entitlements or arbitrary HTML in it. `/api/site` exposes only public profile fields and the existing explicit feature flags. Those flags remain server environment settings.
 

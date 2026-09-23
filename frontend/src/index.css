@@ -1687,24 +1687,10 @@ body::before {
   }
 }
 
-@keyframes ink-in {
-  from {
-    opacity: 0;
-    filter: blur(6px);
-    letter-spacing: 0.02em;
-  }
-}
-
 @keyframes rise-in {
   from {
     opacity: 0;
     transform: translateY(10px);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
   }
 }
 
@@ -1755,26 +1741,6 @@ body::before {
     background-size: var(--rule-w) 2px;
   }
 
-  main h1 {
-    animation: ink-in 700ms var(--ease-ink) both;
-  }
-
-  /* Page sections fade in without moving, so nothing shifts during load. */
-  main > div > section,
-  .episode-header,
-  .transcript-layout {
-    animation: fade-in 450ms var(--ease-ink) both;
-  }
-
-  main > div > section:nth-child(2),
-  .transcript-layout {
-    animation-delay: 90ms;
-  }
-
-  main > div > section:nth-child(3) {
-    animation-delay: 160ms;
-  }
-
   .transcript-paragraph[data-open='true'] {
     box-shadow: none;
   }
@@ -1814,14 +1780,6 @@ body::before {
 
   .episode-strip-playhead {
     animation: playhead-pulse 1.6s ease-in-out infinite;
-  }
-
-  .search-result-card:nth-of-type(2) {
-    animation-delay: 60ms;
-  }
-
-  .search-result-card:nth-of-type(3) {
-    animation-delay: 120ms;
   }
 }
 
@@ -1914,7 +1872,6 @@ body::before {
 @layer components {
   .home-emblem {
     @apply mb-6 hidden h-40 w-80 object-contain object-left lg:block;
-    animation: fade-in 700ms var(--ease-ink) 150ms both;
     filter: drop-shadow(0 18px 40px rgb(0 0 0 / 0.35));
   }
 }

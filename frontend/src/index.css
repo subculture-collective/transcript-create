@@ -1702,6 +1702,12 @@ body::before {
   }
 }
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @keyframes draw-down {
   from {
     transform: scaleY(0);
@@ -1753,10 +1759,11 @@ body::before {
     animation: ink-in 700ms var(--ease-ink) both;
   }
 
+  /* Page sections fade in without moving, so nothing shifts during load. */
   main > div > section,
   .episode-header,
   .transcript-layout {
-    animation: rise-in 500ms var(--ease-ink) both;
+    animation: fade-in 450ms var(--ease-ink) both;
   }
 
   main > div > section:nth-child(2),
@@ -1898,15 +1905,16 @@ body::before {
     fill: var(--color-accent-2);
   }
 
+  /* Fixed box: the image's intrinsic ratio must not move the header on load. */
   .site-logo {
-    @apply h-9 w-auto max-w-[5.5rem] object-contain;
+    @apply h-9 w-16 shrink-0 object-contain object-left;
   }
 }
 
 @layer components {
   .home-emblem {
-    @apply mb-6 hidden h-auto max-h-44 w-auto max-w-[20rem] object-contain lg:block;
-    animation: rise-in 700ms var(--ease-ink) 150ms both;
+    @apply mb-6 hidden h-40 w-80 object-contain object-left lg:block;
+    animation: fade-in 700ms var(--ease-ink) 150ms both;
     filter: drop-shadow(0 18px 40px rgb(0 0 0 / 0.35));
   }
 }

@@ -24,6 +24,7 @@ def test_protected_fingerprint_detects_database_mutations(db_session, mutation):
             "enrichment_canary_protected_label_fingerprint",
         ],
         cwd=ROOT,
+        env={**os.environ, "TRANSCRIPT_DEPLOY_ROOT": str(ROOT)},
         text=True,
         capture_output=True,
         check=True,
@@ -108,6 +109,7 @@ enrichment_canary_evidence_root={evidence}
         "PATH": f"{tmp_path}:/usr/bin:/bin",
         "HOME": os.environ.get("HOME", ""),
         "USER": os.environ.get("USER", ""),
+        "TRANSCRIPT_DEPLOY_ROOT": str(tmp_path),
     }
     return subprocess.run(
         ["bash", "-c", shell],
@@ -130,7 +132,7 @@ def test_enrichment_canary_wrapper_rejects_unsafe_arguments_without_docker(tmp_p
         result = subprocess.run(
             ["bash", str(SCRIPT), *arguments],
             cwd=ROOT,
-            env={"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", "")},
+            env={"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", ""), "TRANSCRIPT_DEPLOY_ROOT": str(tmp_path)},
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -297,6 +299,7 @@ psql_admin_sql "SELECT :'probe_value';" -At -v probe_value=safe-probe
 """,
         ],
         cwd=ROOT,
+        env={**os.environ, "TRANSCRIPT_DEPLOY_ROOT": str(ROOT)},
         text=True,
         capture_output=True,
         check=False,

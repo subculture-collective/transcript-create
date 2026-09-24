@@ -39,8 +39,10 @@ migration ordering, release evidence, and operator approval gates.
 > that uses the guarded release helper.** They are retained for local or generic
 > stacks. Guarded production changes must follow the
 > [private-beta deployment runbook](../deployment/private-beta.md) and use only
-> the named, preflighted actions exposed by `scripts/compose_prod.sh`. Restore
-> rehearsals run on the isolated staging host described by that runbook.
+> the named, preflighted actions exposed by `scripts/compose_prod.sh`, run from
+> the client deployment with `TRANSCRIPT_DEPLOY_ROOT` set (see the [production
+> deployment layout](../deployment/client-branding.md#production-deployment-layout)).
+> Restore rehearsals run on the isolated staging host described by that runbook.
 
 ### Running Backups
 

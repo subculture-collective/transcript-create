@@ -2,7 +2,7 @@
 services:
     db:
         build:
-            context: .
+            context: ${TRANSCRIPT_CORE_DIR:-.}
             dockerfile: Dockerfile.postgres-walg
         image: hasanara-postgres-walg:3.0.8
         environment:
@@ -34,7 +34,7 @@ services:
 
     backup:
         build:
-            context: .
+            context: ${TRANSCRIPT_CORE_DIR:-.}
             dockerfile: Dockerfile.postgres-walg
         image: hasanara-postgres-walg:3.0.8
         environment:

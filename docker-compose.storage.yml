@@ -1,12 +1,7 @@
 # Host-storage override for deployments where project data should live with the
 # compose directory instead of Docker's default /var/lib/docker volume store.
-#
-# Use with:
-#   docker compose -p hasanara \
-#     -f docker-compose.yml \
-#     -f docker-compose.gtx1080.yml \
-#     -f docker-compose.hasanara.yml \
-#     -f docker-compose.storage.yml up -d
+# State paths are relative to the Compose project directory; production client
+# deployments use scripts/compose_prod.sh, which sets it to the deployment root.
 
 services:
     db:
@@ -19,19 +14,19 @@ services:
 
     prometheus:
         volumes: !override
-            - ./config/prometheus:/etc/prometheus
+            - ${TRANSCRIPT_CORE_DIR:-.}/config/prometheus:/etc/prometheus
             - ./docker-volumes/prometheus-data:/prometheus
 
     grafana:
         volumes: !override
             - ./docker-volumes/grafana-data:/var/lib/grafana
-            - ./config/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-            - ./config/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-            - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+            - ${TRANSCRIPT_CORE_DIR:-.}/config/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+            - ${TRANSCRIPT_CORE_DIR:-.}/config/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+            - ${TRANSCRIPT_CORE_DIR:-.}/config/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
     backup:
         volumes: !override
             - ./docker-volumes/dbdata:/var/lib/postgresql/data:ro
             - ./backups:/backups
-            - ./scripts:/scripts:ro
+            - ${TRANSCRIPT_CORE_DIR:-.}/scripts:/scripts:ro
             - ./data:/data:ro

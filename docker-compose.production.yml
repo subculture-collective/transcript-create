@@ -1,19 +1,9 @@
-# HasanAra client identity: the public brand profile and editorial preset are
-# read by every application process that loads settings.
-x-hasanara-client-environment: &hasanara-client-environment
-    SITE_PROFILE_PATH: /config/branding/hasanara.json
-    ARCHIVE_EDITORIAL_PRESET: hasanara
-
-x-hasanara-client-volumes: &hasanara-client-volumes
-    - ./config/branding:/config/branding:ro
-
-networks:
-    management:
-        name: management
-        external: true
-    dev:
-        name: dev
-        external: true
+# Production service topology shared by every client deployment. The client's
+# docker-compose.client.yml follows this file and supplies identity, origins,
+# host port bindings, external networks and the brand profile.
+#
+# Container names, the "hasanara" project name and database role names are
+# retained compatibility identifiers; scripts/compose_prod.sh checks them.
 
 services:
     redis:
@@ -22,38 +12,23 @@ services:
 
     db:
         container_name: hasanara-db
-        ports: !override
-            - 10.0.0.200:15432:5432
+        ports: !override []
         restart: unless-stopped
         stop_grace_period: 10m
 
     migrations:
         container_name: hasanara-migrations
-        environment: *hasanara-client-environment
-        volumes: *hasanara-client-volumes
 
     api:
         container_name: hasanara-api
         devices: !override []
         group_add: !override []
-        networks:
-            - default
-            - management
-        ports: !override
-            - 10.0.0.200:${API_HOST_PORT:-41177}:8000
+        ports: !override []
         environment:
-            FRONTEND_ORIGIN: https://hasanara.tv
-            CORS_ALLOW_ORIGINS: https://hasanara.tv
-            OAUTH_GOOGLE_REDIRECT_URI: ${OAUTH_GOOGLE_REDIRECT_URI:?OAUTH_GOOGLE_REDIRECT_URI is required}
-            OAUTH_TWITCH_REDIRECT_URI: ${OAUTH_TWITCH_REDIRECT_URI:?OAUTH_TWITCH_REDIRECT_URI is required}
-            BOOTSTRAP_ADMIN_IDENTITIES: ${BOOTSTRAP_ADMIN_IDENTITIES:-}
-            FORWARDED_ALLOW_IPS: 172.20.0.250
             RATE_LIMIT_REQUESTS: '100'
             RATE_LIMIT_WINDOW_SECONDS: '60'
             REDIS_URL: redis://redis:6379/0
             OPENSEARCH_TLS_VERIFY: 'true'
-            <<: *hasanara-client-environment
-        volumes: *hasanara-client-volumes
         restart: unless-stopped
 
     worker:
@@ -64,10 +39,7 @@ services:
             disable: true
         ports: !override []
         environment:
-            CHANNEL_SYNC_URLS: ${CHANNEL_SYNC_URLS:-https://www.youtube.com/@HasanAbiVODs/videos,https://www.youtube.com/@HasanAbiVODsBackup/videos,https://www.youtube.com/@HasanAbiVODs3/videos}
             CHANNEL_SYNC_INTERVAL_SECONDS: ${CHANNEL_SYNC_INTERVAL_SECONDS:-21600}
-            <<: *hasanara-client-environment
-        volumes: *hasanara-client-volumes
         restart: unless-stopped
         stop_grace_period: 1h
 
@@ -86,8 +58,6 @@ services:
             ARCHIVE_SUMMARY_REFRESH_SECONDS: ${ARCHIVE_SUMMARY_REFRESH_SECONDS:-3600}
             OTEL_SDK_DISABLED: 'true'
             PYTHONPATH: /app
-            <<: *hasanara-client-environment
-        volumes: *hasanara-client-volumes
         depends_on:
             db:
                 condition: service_healthy
@@ -127,11 +97,6 @@ services:
             ARCHIVE_SUMMARY_MODEL: ${ARCHIVE_SUMMARY_MODEL:-qwen3:8b}
             OTEL_SDK_DISABLED: 'true'
             PYTHONPATH: /app
-            <<: *hasanara-client-environment
-        volumes: *hasanara-client-volumes
-        networks:
-            - default
-            - dev
         depends_on:
             db:
                 condition: service_healthy
@@ -190,24 +155,10 @@ services:
         profiles: !override []
         env_file: ${HASANARA_ENV_FILE:-.env}
 
-    analytics-retention:
-        environment: *hasanara-client-environment
-        volumes: *hasanara-client-volumes
-
-    archive-enrichment-queue:
-        environment: *hasanara-client-environment
-        volumes: *hasanara-client-volumes
-
     frontend:
         build:
-            context: .
+            context: ${TRANSCRIPT_CORE_DIR:-.}
             dockerfile: frontend/Dockerfile
         image: hasanara-frontend:latest
         container_name: hasanara-web
-        networks:
-            - management
-        ports:
-            - 10.0.0.200:5173:80
-        volumes:
-            - ./config/branding/hasanara-assets:/usr/share/nginx/html/branding:ro
         restart: unless-stopped

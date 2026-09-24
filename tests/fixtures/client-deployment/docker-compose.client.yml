@@ -1,0 +1,23 @@
+# Neutral client overlay for deployment contract tests. A real deployment keeps
+# its overlay, brand profile and assets in its own repository.
+networks:
+    proxy:
+        name: proxy
+        external: true
+
+services:
+    api:
+        networks:
+            - default
+            - proxy
+        environment:
+            FRONTEND_ORIGIN: https://archive.example.invalid
+            SITE_PROFILE_PATH: /config/branding/brand.json
+        volumes:
+            - ./branding:/config/branding:ro
+
+    frontend:
+        networks:
+            - proxy
+        volumes:
+            - ./branding/assets:/usr/share/nginx/html/branding:ro

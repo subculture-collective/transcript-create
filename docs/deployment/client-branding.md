@@ -12,7 +12,7 @@ One tested core release can serve all clients. Never edit React components, comp
 
 Copy [the Northstar example](../../config/branding/northstar.json) and [its assets](../../config/branding/northstar-assets). Set `SITE_PROFILE_PATH` to an absolute path readable by the API and every Python application role. The file is validated at process startup; a missing file, unsupported schema, unknown field, unsafe URL or invalid color fails startup.
 
-The HasanAra profile is [`config/branding/hasanara.json`](../../config/branding/hasanara.json), with assets in [`hasanara-assets`](../../config/branding/hasanara-assets). Its logo files are vector traces of the Piker Broadcasting Service mark: `logo.svg` (compact mark), `favicon.svg`, `badge.svg` (full TV badge with wordmark) and `social-card.svg`.
+Client profiles and assets are not stored here. HasanAra's profile, artwork and production overlay are in its deployment repository, `subculture-collective/hasanara`.
 
 ```bash
 SITE_PROFILE_PATH=/absolute/path/to/client/brand.json .venv/bin/python -m uvicorn app.main:app --port 8000
@@ -35,6 +35,29 @@ Supported tokens: `canvas`, `surface`, `surface-muted`, `surface-raised`, `borde
 The generated [JSON schema](../../config/branding/schema.json) describes the complete public profile. Do not store passwords, OAuth credentials, private URLs, feature entitlements or arbitrary HTML in it. `/api/site` exposes only public profile fields and the existing explicit feature flags. Those flags remain server environment settings.
 
 Existing `SITE_NAME`, `SITE_DESCRIPTION` and `SITE_CREATOR_NAME` environment values take precedence over corresponding file values. Remove those variables when the profile should own identity. Defaults are neutral if no profile is selected or if the frontend cannot fetch configuration. The static SPA HTML is neutral before JavaScript loads; client metadata updates after `/api/site` loads. Public passage pages render their identity and metadata on the server for crawlers.
+
+## Production deployment layout
+
+A production client is a deployment repository. It pins this repository as a Git submodule at `core/`, checked out at a release's `source_commit`, and commits:
+
+| Path | Purpose |
+| --- | --- |
+| `core/` | Submodule at the released core commit |
+| `docker-compose.client.yml` | Client overlay: origins, OAuth callback requirements, host port bindings, external networks, channel sources, and profile and asset mounts |
+| `branding/brand.json`, `branding/assets/` | Public profile and assets, mounted read-only |
+| `release-images.json` | The verified, digest-pinned release manifest being deployed |
+
+The operator env file (`.env.prod`), diarization credentials and the state directories (`data/`, `cache/`, `backups/`, `docker-volumes/`, `deploy-backups/`) stay in the deployment directory and are ignored by Git.
+
+`scripts/compose_prod.sh` requires `TRANSCRIPT_DEPLOY_ROOT` to name that directory. It uses the directory as the Compose project directory, so state paths resolve there, and passes `TRANSCRIPT_CORE_DIR` so core-owned paths (scripts, configuration, build contexts) resolve inside the submodule. Compose files are applied in this order: core `docker-compose.yml`, `docker-compose.gtx1080.yml` and `docker-compose.production.yml`, then the client overlay, then core `docker-compose.storage.yml`, `docker-compose.pitr.yml` and, last, `docker-compose.release.yml`. Run it from the deployment:
+
+```bash
+TRANSCRIPT_DEPLOY_ROOT="$PWD" core/scripts/compose_prod.sh preflight
+```
+
+Operator procedures elsewhere in this documentation write `scripts/compose_prod.sh`; run them the same way. The preflight requires clean core and deployment trees, a core `HEAD` equal to the manifest's `source_commit`, the client overlay, and every external network named in the rendered configuration. `docker-compose.production.yml` defines the shared production services the preflight enforces. The `hasanara` Compose project name, container names and database role names are retained compatibility identifiers used by the guarded maintenance actions; one host therefore runs one production client.
+
+To update a client, advance the submodule to the new release's `source_commit`, replace `release-images.json` with that release's verified manifest, review the diff, commit, and run the deployment's normal preflight and deploy steps.
 
 ## Update all branded implementations
 

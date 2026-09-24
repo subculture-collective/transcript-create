@@ -17,6 +17,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "scripts" / "release_preflight.py"
+FIXTURE_DEPLOYMENT = ROOT / "tests" / "fixtures" / "client-deployment"
 SPEC = importlib.util.spec_from_file_location("release_preflight", SCRIPT_PATH)
 assert SPEC and SPEC.loader
 preflight = importlib.util.module_from_spec(SPEC)
@@ -237,7 +238,7 @@ def test_overlay_forces_env_file_and_diarization_is_opt_in() -> None:
         'env_file: !override ["${HASANARA_DIARIZATION_ENV_FILE:?HASANARA_DIARIZATION_ENV_FILE is required}"]' in overlay
     )
     assert "gpus: !reset null" in overlay
-    host = (ROOT / "docker-compose.hasanara.yml").read_text(encoding="utf-8")
+    host = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
     assert "profiles: [diarization]" in host
     assert "REDIS_URL: redis://redis:6379/0" in host
     assert "RATE_LIMIT_REQUESTS: '100'" in host
@@ -272,7 +273,7 @@ def test_manifest_head_mismatch_fails_without_value_leak(monkeypatch: pytest.Mon
     path.write_text(json.dumps(manifest()), encoding="utf-8")
     monkeypatch.setattr(preflight, "ensure_clean_tree", lambda *_: None)
     monkeypatch.setattr(preflight, "repository_head", lambda _: "c" * 40)
-    with pytest.raises(preflight.PreflightError, match="does not match HEAD"):
+    with pytest.raises(preflight.PreflightError, match="does not match the core checkout"):
         preflight.validate(tmp_path, path, False)
 
 
@@ -426,22 +427,22 @@ def test_diarization_profile_contract_fails_closed(monkeypatch: pytest.MonkeyPat
             name: rendered_service(name, data["images"][role]) for name, role in preflight.SERVICE_ROLES.items()
         }
     }
-    preflight.validate_diarization_contract(rendered, data)
+    preflight.validate_diarization_contract(rendered, data, ROOT)
     rendered["services"]["diarization-worker"]["environment"]["DIARIZATION_DEVICE"] = "cuda"
     with pytest.raises(preflight.PreflightError, match="diarization environment"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, ROOT)
     rendered["services"]["diarization-worker"]["environment"]["DIARIZATION_DEVICE"] = "cpu"
     rendered["services"]["diarization-worker"]["gpus"] = "all"
     with pytest.raises(preflight.PreflightError, match="diarization runtime"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, ROOT)
     rendered["services"]["diarization-worker"]["gpus"] = None
     rendered["services"]["diarization-worker"]["devices"] = ["/dev/nvidia0"]
     with pytest.raises(preflight.PreflightError, match="diarization runtime"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, ROOT)
     rendered["services"]["diarization-worker"]["devices"] = []
     rendered["services"]["diarization-worker"]["group_add"] = ["video"]
     with pytest.raises(preflight.PreflightError, match="diarization runtime"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, ROOT)
 
 
 @pytest.mark.parametrize(
@@ -469,7 +470,7 @@ def test_diarization_contract_rejects_noncanonical_rendered_runtime_values(
     rendered = {"services": {"diarization-worker": rendered_service("diarization-worker", data["images"]["ml-cuda"])}}
     rendered["services"]["diarization-worker"]["environment"][key] = value
     with pytest.raises(preflight.PreflightError, match="diarization environment"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, ROOT)
 
 
 def test_diarization_contract_rejects_wrong_image_extra_environment_and_noncanonical_mounts(
@@ -480,7 +481,6 @@ def test_diarization_contract_rejects_wrong_image_extra_environment_and_noncanon
         "validate_diarization_env_file",
         lambda: "postgresql+psycopg://hasanara_diarization:strong-password@db:5432/transcripts",
     )
-    monkeypatch.setattr(preflight, "ROOT", tmp_path)
     (tmp_path / "data").mkdir()
     (tmp_path / "cache" / "hf").mkdir(parents=True)
     data = manifest()
@@ -490,20 +490,20 @@ def test_diarization_contract_rejects_wrong_image_extra_environment_and_noncanon
         {"source": str(tmp_path / "cache" / "hf"), "target": "/root/.cache/hf", "read_only": True},
     ]
     rendered = {"services": {"diarization-worker": service}}
-    preflight.validate_diarization_contract(rendered, data)
+    preflight.validate_diarization_contract(rendered, data, tmp_path)
     service["image"] = digest("wrong")
     with pytest.raises(preflight.PreflightError, match="image"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, tmp_path)
     service["image"] = data["images"]["ml-cuda"]
     service["environment"]["FUTURE_EXTRA"] = "no"
     with pytest.raises(preflight.PreflightError, match="environment"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, tmp_path)
     del service["environment"]["FUTURE_EXTRA"]
     link = tmp_path / "linked-data"
     link.symlink_to(tmp_path / "data", target_is_directory=True)
     service["volumes"][0]["source"] = str(link)
     with pytest.raises(preflight.PreflightError, match="mount"):
-        preflight.validate_diarization_contract(rendered, data)
+        preflight.validate_diarization_contract(rendered, data, tmp_path)
 
 
 @pytest.mark.parametrize("symlinked_path", ("data", "cache", "cache/hf"))
@@ -515,7 +515,6 @@ def test_diarization_contract_rejects_symlinked_mount_ancestors(
         "validate_diarization_env_file",
         lambda: "postgresql+psycopg://hasanara_diarization:strong-password@db:5432/transcripts",
     )
-    monkeypatch.setattr(preflight, "ROOT", tmp_path)
     external = tmp_path / "external"
     (external / "data").mkdir(parents=True)
     (external / "cache" / "hf").mkdir(parents=True)
@@ -536,7 +535,7 @@ def test_diarization_contract_rejects_symlinked_mount_ancestors(
         {"source": str(tmp_path / "cache" / "hf"), "target": "/root/.cache/hf", "read_only": True},
     ]
     with pytest.raises(preflight.PreflightError, match="mount"):
-        preflight.validate_diarization_contract({"services": {"diarization-worker": service}}, data)
+        preflight.validate_diarization_contract({"services": {"diarization-worker": service}}, data, tmp_path)
 
 
 def test_diarization_env_file_rejects_extra_keys_symlinks_and_unsafe_mode(
@@ -574,7 +573,57 @@ def test_preflight_uses_dedicated_environment_file(monkeypatch: pytest.MonkeyPat
     env_file = tmp_path / "inert-release.env"
     monkeypatch.setenv("HASANARA_ENV_FILE", str(env_file))
 
-    assert preflight.compose_command()[5] == str(env_file)
+    command = preflight.compose_command(deployment=tmp_path)
+    assert command[command.index("--env-file") + 1] == str(env_file)
+    assert command[command.index("--project-directory") + 1] == str(tmp_path)
+    files = [command[index + 1] for index, item in enumerate(command) if item == "--file"]
+    assert files[-1] == str(preflight.CORE_ROOT / "docker-compose.release.yml")
+    assert str(tmp_path / preflight.CLIENT_OVERLAY) in files
+    assert not any(name.startswith(str(tmp_path)) for name in files if not name.endswith(preflight.CLIENT_OVERLAY))
+
+
+def test_preflight_requires_an_absolute_existing_deployment_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("TRANSCRIPT_DEPLOY_ROOT", raising=False)
+    with pytest.raises(preflight.PreflightError, match="TRANSCRIPT_DEPLOY_ROOT"):
+        preflight.deploy_root()
+    monkeypatch.setenv("TRANSCRIPT_DEPLOY_ROOT", "relative/deployment")
+    with pytest.raises(preflight.PreflightError, match="absolute directory"):
+        preflight.deploy_root()
+    monkeypatch.setenv("TRANSCRIPT_DEPLOY_ROOT", str(tmp_path / "missing"))
+    with pytest.raises(preflight.PreflightError, match="absolute directory"):
+        preflight.deploy_root()
+    monkeypatch.setenv("TRANSCRIPT_DEPLOY_ROOT", str(tmp_path))
+    assert preflight.deploy_root() == tmp_path
+
+
+def test_operator_helper_requires_a_deployment_root() -> None:
+    environment = {"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", "")}
+    result = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "compose_prod.sh"), "ps"],
+        cwd=ROOT,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert result.returncode == 64
+    assert "TRANSCRIPT_DEPLOY_ROOT" in result.stderr
+
+
+def test_external_networks_are_discovered_from_the_rendered_deployment() -> None:
+    rendered = {
+        "networks": {
+            "default": {"name": "hasanara_default"},
+            "management": {"name": "management", "external": True},
+            "proxy": {"external": True},
+        }
+    }
+    assert preflight.external_networks(rendered) == ["management", "proxy"]
+    assert preflight.external_networks({}) == []
+    with pytest.raises(preflight.PreflightError, match="external network name"):
+        preflight.external_networks({"networks": {"bad": {"name": "bad name", "external": True}}})
 
 
 def test_diarization_env_path_is_read_from_selected_operator_file(
@@ -687,53 +736,65 @@ def test_mount_validation_requires_active_bind_sources(tmp_path: Path) -> None:
     preflight.verify_mount_parents(tmp_path)
 
 
-def test_deploy_runs_strict_preflight_in_a_clean_operator_tree(tmp_path: Path) -> None:
-    """Exercise the operator path without Docker, rendered secrets, or dirty-tree bypasses."""
-    scripts = tmp_path / "scripts"
-    scripts.mkdir()
-    for source in ("release_preflight.py", "compose_prod.sh"):
-        shutil.copy2(ROOT / "scripts" / source, scripts / source)
-    for compose_file in preflight.COMPOSE_FILES:
-        (tmp_path / compose_file).write_text("services: {}\n", encoding="utf-8")
-    (tmp_path / ".gitignore").write_text(
-        ".env.prod\n.env.diarization\nrelease-images.json\ndocker-volumes/\nbackups/\ndata/\ncache/\nfake-bin/\ndocker-calls\n",
-        encoding="utf-8",
-    )
-    subprocess.run(["git", "init"], cwd=tmp_path, check=True, stdout=subprocess.DEVNULL)
-    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+def _commit_all(root: Path, message: str) -> str:
+    subprocess.run(["git", "init"], cwd=root, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
     subprocess.run(
-        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "release source"],
-        cwd=tmp_path,
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", message],
+        cwd=root,
         check=True,
         stdout=subprocess.DEVNULL,
     )
-    head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, text=True, stdout=subprocess.PIPE
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, text=True, stdout=subprocess.PIPE
     ).stdout.strip()
+
+
+def test_deploy_runs_strict_preflight_in_a_clean_operator_tree(tmp_path: Path) -> None:
+    """Exercise the operator path without Docker, rendered secrets, or dirty-tree bypasses."""
+    core = tmp_path / "core"
+    scripts = core / "scripts"
+    scripts.mkdir(parents=True)
+    for source in ("release_preflight.py", "compose_prod.sh"):
+        shutil.copy2(ROOT / "scripts" / source, scripts / source)
+    for compose_file in preflight.COMPOSE_FILES:
+        if compose_file != preflight.CLIENT_OVERLAY:
+            (core / compose_file).write_text("services: {}\n", encoding="utf-8")
+    head = _commit_all(core, "release source")
+
+    deployment = tmp_path / "deployment"
+    deployment.mkdir()
+    (deployment / preflight.CLIENT_OVERLAY).write_text("services: {}\n", encoding="utf-8")
+    (deployment / ".gitignore").write_text(
+        ".env.prod\n.env.diarization\ndocker-volumes/\nbackups/\ndata/\ncache/\nfake-bin/\ndocker-calls\n",
+        encoding="utf-8",
+    )
     release_manifest = manifest()
     release_manifest["source_commit"] = head
-    (tmp_path / "release-images.json").write_text(json.dumps(release_manifest), encoding="utf-8")
-    diarization_env = tmp_path / ".env.diarization"
+    (deployment / "release-images.json").write_text(json.dumps(release_manifest), encoding="utf-8")
+    _commit_all(deployment, "deployment")
+    diarization_env = deployment / ".env.diarization"
     diarization_env.write_text(
         "HF_TOKEN=inert\nDATABASE_URL=postgresql+psycopg://hasanara_diarization:strong-password@db:5432/transcripts\n",
         encoding="utf-8",
     )
     diarization_env.chmod(0o600)
-    (tmp_path / ".env.prod").write_text(
+    (deployment / ".env.prod").write_text(
         f"INERT_OPERATOR_VALUE=1\nHASANARA_DIARIZATION_ENV_FILE={diarization_env}\n", encoding="utf-8"
     )
     for relative in ("docker-volumes/dbdata", "docker-volumes/redis-data", "backups", "data", "cache/hf"):
-        (tmp_path / relative).mkdir(parents=True)
+        (deployment / relative).mkdir(parents=True)
 
     rendered = {
         "services": {
             service: rendered_service(service, release_manifest["images"][role])
             for service, role in preflight.SERVICE_ROLES.items()
-        }
+        },
+        "networks": {"management": {"name": "management", "external": True}},
     }
-    docker_dir = tmp_path / "fake-bin"
+    docker_dir = deployment / "fake-bin"
     docker_dir.mkdir()
-    docker_log = tmp_path / "docker-calls"
+    docker_log = deployment / "docker-calls"
     docker = docker_dir / "docker"
     docker.write_text(
         "#!/bin/sh\n"
@@ -744,7 +805,7 @@ def test_deploy_runs_strict_preflight_in_a_clean_operator_tree(tmp_path: Path) -
         f"  *'config --services') printf '%s\\n' {shlex.quote(chr(10).join(sorted(preflight.BASE_SERVICES)))}; exit 0 ;;\n"
         f"  *'config --format json') printf '%s\\n' {shlex.quote(json.dumps(rendered))}; exit 0 ;;\n"
         "  *'ps --all --filter label=com.docker.compose.project=hasanara --format'*) exit 0 ;;\n"
-        "  'network inspect '*|'compose '*' up -d --no-build --pull always') exit 0 ;;\n"
+        "  'network inspect management'|'compose '*' up -d --no-build --pull always') exit 0 ;;\n"
         "  *) exit 1 ;;\n"
         "esac\n",
         encoding="utf-8",
@@ -755,9 +816,10 @@ def test_deploy_runs_strict_preflight_in_a_clean_operator_tree(tmp_path: Path) -
         "PATH": f"{docker_dir}:{os.environ['PATH']}",
         "HOME": os.environ.get("HOME", ""),
         "USER": "test",
+        "TRANSCRIPT_DEPLOY_ROOT": str(deployment),
     }
     result = subprocess.run(
-        ["bash", "scripts/compose_prod.sh", "deploy"],
+        ["bash", str(scripts / "compose_prod.sh"), "deploy"],
         cwd=tmp_path,
         env=environment,
         text=True,
@@ -767,24 +829,42 @@ def test_deploy_runs_strict_preflight_in_a_clean_operator_tree(tmp_path: Path) -
     assert result.returncode == 0, result.stderr
     assert "release preflight passed" in result.stdout
     calls = docker_log.read_text(encoding="utf-8").splitlines()
-    expected_deploy = " ".join(
-        [
-            "compose",
-            "--project-name",
-            "hasanara",
-            "--env-file",
-            ".env.prod",
-            *[item for compose_file in preflight.COMPOSE_FILES for item in ("--file", compose_file)],
-            "up",
-            "-d",
-            "--no-build",
-            "--pull",
-            "always",
-        ]
-    )
+    expected_deploy = " ".join([*_expected_compose(core, deployment), "up", "-d", "--no-build", "--pull", "always"])
     assert calls[-1] == expected_deploy
     assert [call for call in calls if " up -d --no-build --pull always" in call] == [expected_deploy]
     assert next(index for index, call in enumerate(calls) if "ps --all --filter" in call) < calls.index(expected_deploy)
+    assert "network inspect management" in calls
+
+
+def test_deploy_preflight_rejects_a_core_checkout_that_is_not_the_release(tmp_path: Path) -> None:
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "README").write_text("core\n", encoding="utf-8")
+    _commit_all(core, "core")
+    deployment = tmp_path / "deployment"
+    deployment.mkdir()
+    (deployment / preflight.CLIENT_OVERLAY).write_text("services: {}\n", encoding="utf-8")
+    _commit_all(deployment, "deployment")
+    manifest_path = tmp_path / "release-images.json"
+    manifest_path.write_text(json.dumps(manifest()), encoding="utf-8")
+    with pytest.raises(preflight.PreflightError, match="does not match the core checkout"):
+        preflight.validate(deployment, manifest_path, False, core=core)
+
+
+def _expected_compose(core: Path, deployment: Path) -> list[str]:
+    command = [
+        "compose",
+        "--project-name",
+        "hasanara",
+        "--project-directory",
+        str(deployment),
+        "--env-file",
+        ".env.prod",
+    ]
+    for compose_file in preflight.COMPOSE_FILES:
+        base = deployment if compose_file == preflight.CLIENT_OVERLAY else core
+        command.extend(("--file", str(base / compose_file)))
+    return command
 
 
 def test_retire_disabled_profiles_uses_limited_preflight_and_authoritative_compose_command(tmp_path: Path) -> None:
@@ -803,7 +883,12 @@ def test_retire_disabled_profiles_uses_limited_preflight_and_authoritative_compo
     for executable in (fake_bin / "python3", fake_bin / "docker"):
         executable.chmod(0o755)
 
-    environment = {"PATH": f"{fake_bin}:{os.environ['PATH']}", "HOME": os.environ.get("HOME", ""), "USER": "test"}
+    environment = {
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "HOME": os.environ.get("HOME", ""),
+        "USER": "test",
+        "TRANSCRIPT_DEPLOY_ROOT": str(tmp_path),
+    }
     result = subprocess.run(
         ["bash", str(ROOT / "scripts" / "compose_prod.sh"), "maintenance", "retire-disabled-profiles", "--approved"],
         cwd=ROOT,
@@ -815,16 +900,11 @@ def test_retire_disabled_profiles_uses_limited_preflight_and_authoritative_compo
 
     assert result.returncode == 0, result.stderr
     assert python_log.read_text(encoding="utf-8").splitlines() == [
-        "scripts/release_preflight.py --allow-disabled-profile-services"
+        f"{ROOT / 'scripts' / 'release_preflight.py'} --allow-disabled-profile-services"
     ]
     expected = " ".join(
         [
-            "compose",
-            "--project-name",
-            "hasanara",
-            "--env-file",
-            ".env.prod",
-            *[item for compose_file in preflight.COMPOSE_FILES for item in ("--file", compose_file)],
+            *_expected_compose(ROOT, tmp_path),
             "--profile",
             "full",
             "--profile",
@@ -872,6 +952,7 @@ def test_profile_command_failure_does_not_leak_secrets(
     )
     with pytest.raises(preflight.PreflightError, match="Compose profile validation failed"):
         preflight.validate_requested_profiles(ROOT)
+    monkeypatch.setenv("TRANSCRIPT_DEPLOY_ROOT", str(ROOT))
     monkeypatch.setattr(
         preflight,
         "validate",
@@ -886,6 +967,7 @@ def test_preflight_redacts_subprocess_secret(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     sentinel = "SENTINEL_SECRET_MUST_NOT_LEAK"
+    monkeypatch.setenv("TRANSCRIPT_DEPLOY_ROOT", str(ROOT))
     monkeypatch.setattr(
         preflight,
         "validate",
@@ -913,9 +995,15 @@ def test_deploy_and_config_rejection_paths_do_not_invoke_compose() -> None:
         ("config", "--format", "json"),
     ):
         result = subprocess.run(
-            ["bash", str(script), *arguments], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            ["bash", str(script), *arguments],
+            cwd=ROOT,
+            env={**os.environ, "TRANSCRIPT_DEPLOY_ROOT": str(ROOT)},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         assert result.returncode == 64
+        assert "must name the client deployment directory" not in result.stderr
         assert "docker" not in result.stdout
     helper = script.read_text(encoding="utf-8")
     assert "if (($# != 0)); then" in helper
@@ -927,7 +1015,11 @@ def test_config_safe_selectors_reach_only_the_fake_compose(tmp_path: Path) -> No
     docker = tmp_path / "docker"
     docker.write_text(f"#!/bin/sh\nprintf '%s' \"$*\" > {marker}\n", encoding="utf-8")
     docker.chmod(0o755)
-    environment = {"PATH": f"{tmp_path}:/usr/bin:/bin", "HOME": os.environ.get("HOME", "")}
+    environment = {
+        "PATH": f"{tmp_path}:/usr/bin:/bin",
+        "HOME": os.environ.get("HOME", ""),
+        "TRANSCRIPT_DEPLOY_ROOT": str(tmp_path),
+    }
     script = ROOT / "scripts" / "compose_prod.sh"
     for selector in ("--quiet", "--services", "--profiles", "--images"):
         result = subprocess.run(
@@ -1018,9 +1110,15 @@ def test_config_safe_selectors_are_exact_and_maintenance_is_fixed() -> None:
         ("maintenance", "recover-attention-backlog", "yt-dlp", "1", "--confirm", "wrong"),
     ):
         result = subprocess.run(
-            ["bash", str(script), *arguments], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            ["bash", str(script), *arguments],
+            cwd=ROOT,
+            env={**os.environ, "TRANSCRIPT_DEPLOY_ROOT": str(ROOT)},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         assert result.returncode == 64
+        assert "must name the client deployment directory" not in result.stderr
 
 
 def test_backup_scheduler_dependencies_are_built_into_the_image() -> None:
@@ -1696,17 +1794,19 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
     values["HASANARA_DIARIZATION_ENV_FILE"] = str(diarization_env)
     env_file.write_text("\n".join(f"{key}={value}" for key, value in values.items()), encoding="utf-8")
     monkeypatch.setenv("HASANARA_ENV_FILE", str(env_file))
-    command = ["docker", "compose", "--env-file", str(env_file)]
-    for name in preflight.COMPOSE_FILES:
-        command.extend(("--file", name))
+    deployment = tmp_path / "deployment"
+    deployment.mkdir()
+    shutil.copy2(FIXTURE_DEPLOYMENT / preflight.CLIENT_OVERLAY, deployment / preflight.CLIENT_OVERLAY)
+    command = preflight.compose_command(ROOT, deployment)
     environment = {
         "PATH": os.environ["PATH"],
         "HOME": os.environ.get("HOME", ""),
         "HASANARA_ENV_FILE": str(env_file),
+        "TRANSCRIPT_CORE_DIR": str(ROOT),
     }
     result = subprocess.run(
         [*command, "config", "--quiet"],
-        cwd=ROOT,
+        cwd=deployment,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1715,7 +1815,7 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
     assert result.returncode == 0, "Compose config --quiet failed (output intentionally suppressed)"
     default_services = subprocess.run(
         [*command, "config", "--services"],
-        cwd=ROOT,
+        cwd=deployment,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1725,7 +1825,7 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
     assert "diarization-worker" not in default_services.stdout.splitlines()
     default_environment = subprocess.run(
         [*command, "config", "--environment"],
-        cwd=ROOT,
+        cwd=deployment,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1737,12 +1837,11 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
     diarization_file.write_text(
         env_file.read_text(encoding="utf-8") + "\nCOMPOSE_PROFILES=diarization\n", encoding="utf-8"
     )
-    diarization_command = ["docker", "compose", "--env-file", str(diarization_file)]
-    for name in preflight.COMPOSE_FILES:
-        diarization_command.extend(("--file", name))
+    diarization_command = list(command)
+    diarization_command[diarization_command.index("--env-file") + 1] = str(diarization_file)
     diarization_services = subprocess.run(
         [*diarization_command, "config", "--services"],
-        cwd=ROOT,
+        cwd=deployment,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1752,7 +1851,7 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
     assert "diarization-worker" in diarization_services.stdout.splitlines()
     diarization_environment = subprocess.run(
         [*diarization_command, "config", "--environment"],
-        cwd=ROOT,
+        cwd=deployment,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1763,7 +1862,7 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
         preflight.parse_compose_profiles(diarization_environment.stdout)
     full_services = subprocess.run(
         [*command, "--profile", "full", "config", "--services"],
-        cwd=ROOT,
+        cwd=deployment,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1774,7 +1873,7 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
         preflight.validate_active_service_set(set(full_services.stdout.splitlines()))
     rendered = subprocess.run(
         [*diarization_command, "config", "--format", "json"],
-        cwd=ROOT,
+        cwd=deployment,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1783,7 +1882,7 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
     assert rendered.returncode == 0, "Compose JSON rendering failed (output intentionally suppressed)"
     configured = json.loads(rendered.stdout)["services"]
     preflight.validate_diarization_contract(
-        {"services": configured}, {"images": {"ml-cuda": configured["diarization-worker"]["image"]}}
+        {"services": configured}, {"images": {"ml-cuda": configured["diarization-worker"]["image"]}}, deployment
     )
     env_file_services = {
         "migrations",

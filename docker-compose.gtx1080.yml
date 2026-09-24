@@ -1,13 +1,13 @@
 services:
     migrations:
         build:
-            context: .
+            context: ${TRANSCRIPT_CORE_DIR:-.}
             dockerfile: Dockerfile.api
         image: hasanara-api:latest
 
     api:
         build:
-            context: .
+            context: ${TRANSCRIPT_CORE_DIR:-.}
             dockerfile: Dockerfile.api
         image: hasanara-api:latest
         environment:
@@ -25,7 +25,7 @@ services:
 
     worker:
         build:
-            context: .
+            context: ${TRANSCRIPT_CORE_DIR:-.}
             dockerfile: Dockerfile.ingest.cuda
         image: hasanara-ingest:gtx1080
         environment:
@@ -67,7 +67,7 @@ services:
 
     diarization-worker:
         build:
-            context: .
+            context: ${TRANSCRIPT_CORE_DIR:-.}
             dockerfile: Dockerfile.cuda.overlay
             args:
                 WORKER_RUNTIME_IMAGE: hasanara:gtx1080-runtime

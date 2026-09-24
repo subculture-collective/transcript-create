@@ -265,6 +265,11 @@ jobs:
           [[ "$trivy_image" =~ ^docker\.io/aquasec/trivy@sha256:[0-9a-f]{64}$ ]]
           cache_volume="hasanara-trivy-${{ gitea.run_id }}-${{ matrix.role }}"
           docker volume create "$cache_volume" >/dev/null
+          # The job talks to the host Docker daemon, so bind mounts of job-workspace
+          # paths resolve on the host and arrive empty. Copy inputs into the volume.
+          docker run --rm -i --network none -v "$cache_volume:/cache" --entrypoint sh "$trivy_image" \
+            -c 'cat > /cache/lightning.vex.json && test -s /cache/lightning.vex.json' \
+            < security/lightning-2.6.6.vex.json
           printf 'image=%s\ncache_volume=%s\n' "$trivy_image" "$cache_volume" >> "$GITHUB_OUTPUT"
       - name: Block local high and critical application-library vulnerabilities
         env:
@@ -274,16 +279,14 @@ jobs:
         run: |
           set -euo pipefail
           if [[ '${{ matrix.role }}' == ml-cuda ]]; then
-            docker run --rm --network none --cpus=2 --memory=4g \
-              -v "$PWD/scripts/check_lightning_patch.py:/check.py:ro" \
-              --entrypoint python3 "$IMAGE_REF" /check.py
+            docker run --rm -i --network none --cpus=2 --memory=4g \
+              --entrypoint python3 "$IMAGE_REF" - < scripts/check_lightning_patch.py
           fi
           docker run --rm \
             --cpus=2 --memory=4g --memory-swap=4g --pids-limit=512 \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$TRIVY_CACHE_VOLUME:/root/.cache/trivy" \
-            -v "$PWD/security/lightning-2.6.6.vex.json:/lightning.vex.json:ro" \
-            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --vex /lightning.vex.json --scanners vuln --format sarif \
+            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --vex /root/.cache/trivy/lightning.vex.json --scanners vuln --format sarif \
             --severity CRITICAL,HIGH --pkg-types library --exit-code 1 "$IMAGE_REF" \
             > "trivy-${{ matrix.role }}-local-library.sarif"
       - name: Push scanned local image and resolve digest
@@ -367,20 +370,20 @@ jobs:
           TRIVY_IMAGE: ${{ steps.trivy.outputs.image }}
           TRIVY_CACHE_VOLUME: ${{ steps.trivy.outputs.cache_volume }}
           IMAGE_REF: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          TRIVY_USERNAME: ${{ vars.REGISTRY_USER }}
+          TRIVY_PASSWORD: ${{ secrets.REGISTRY_PAT }}
         run: |
           set -euo pipefail
           if [[ '${{ matrix.role }}' == ml-cuda ]]; then
-            docker run --rm --network none --cpus=2 --memory=4g \
-              -v "$PWD/scripts/check_lightning_patch.py:/check.py:ro" \
-              --entrypoint python3 "$IMAGE_REF" /check.py
+            docker run --rm -i --network none --cpus=2 --memory=4g \
+              --entrypoint python3 "$IMAGE_REF" - < scripts/check_lightning_patch.py
           fi
           docker run --rm \
             --cpus=2 --memory=4g --memory-swap=4g --pids-limit=512 \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$HOME/.docker:/root/.docker:ro" \
+            -e TRIVY_USERNAME -e TRIVY_PASSWORD \
             -v "$TRIVY_CACHE_VOLUME:/root/.cache/trivy" \
-            -v "$PWD/security/lightning-2.6.6.vex.json:/lightning.vex.json:ro" \
-            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --vex /lightning.vex.json --scanners vuln --format sarif \
+            "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --vex /root/.cache/trivy/lightning.vex.json --scanners vuln --format sarif \
             --severity CRITICAL,HIGH --pkg-types library --exit-code 1 "$IMAGE_REF" \
             > "trivy-${{ matrix.role }}-library.sarif"
       - name: Report digest OS vulnerabilities
@@ -390,12 +393,14 @@ jobs:
           TRIVY_IMAGE: ${{ steps.trivy.outputs.image }}
           TRIVY_CACHE_VOLUME: ${{ steps.trivy.outputs.cache_volume }}
           IMAGE_REF: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          TRIVY_USERNAME: ${{ vars.REGISTRY_USER }}
+          TRIVY_PASSWORD: ${{ secrets.REGISTRY_PAT }}
         run: |
           set -euo pipefail
           docker run --rm \
             --cpus=2 --memory=4g --memory-swap=4g --pids-limit=512 \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$HOME/.docker:/root/.docker:ro" \
+            -e TRIVY_USERNAME -e TRIVY_PASSWORD \
             -v "$TRIVY_CACHE_VOLUME:/root/.cache/trivy" \
             "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --scanners vuln --format sarif \
             --severity CRITICAL,HIGH --pkg-types os --exit-code 0 "$IMAGE_REF" \
@@ -405,12 +410,14 @@ jobs:
           TRIVY_IMAGE: ${{ steps.trivy.outputs.image }}
           TRIVY_CACHE_VOLUME: ${{ steps.trivy.outputs.cache_volume }}
           IMAGE_REF: ${{ matrix.image }}@${{ steps.publish.outputs.digest }}
+          TRIVY_USERNAME: ${{ vars.REGISTRY_USER }}
+          TRIVY_PASSWORD: ${{ secrets.REGISTRY_PAT }}
         run: |
           set -euo pipefail
           docker run --rm \
             --cpus=2 --memory=4g --memory-swap=4g --pids-limit=512 \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$HOME/.docker:/root/.docker:ro" \
+            -e TRIVY_USERNAME -e TRIVY_PASSWORD \
             -v "$TRIVY_CACHE_VOLUME:/root/.cache/trivy" \
             "$TRIVY_IMAGE" image --timeout 15m --cache-dir /root/.cache/trivy --format spdx-json --exit-code 0 "$IMAGE_REF" \
             > "${{ matrix.role }}.spdx.json"

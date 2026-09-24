@@ -1362,6 +1362,10 @@ def test_release_workflow_contracts() -> None:
     assert '[[ "$trivy_image" =~ ^docker\\.io/aquasec/trivy@sha256:[0-9a-f]{64}$ ]]' in cache_setup.group(0)
     assert 'docker volume create "$cache_volume" >/dev/null' in cache_setup.group(0)
     assert "echo" not in cache_setup.group(0)
+    # Runner jobs use the host Docker daemon: inputs travel through the managed
+    # volume or stdin, never through workspace bind mounts that arrive empty.
+    assert "< security/lightning-2.6.6.vex.json" in cache_setup.group(0)
+    assert "/cache/lightning.vex.json" in cache_setup.group(0)
 
     def scan_step(name: str) -> str:
         match = re.search(
@@ -1373,8 +1377,8 @@ def test_release_workflow_contracts() -> None:
     local_scan = scan_step("Block local high and critical application-library vulnerabilities")
     digest_scan = scan_step("Block digest high and critical application-library vulnerabilities")
     for scan in (local_scan, digest_scan):
-        assert "--vex /lightning.vex.json" in scan
-        assert "scripts/check_lightning_patch.py:/check.py:ro" in scan
+        assert "--vex /root/.cache/trivy/lightning.vex.json" in scan
+        assert '--entrypoint python3 "$IMAGE_REF" - < scripts/check_lightning_patch.py' in scan
         assert "--network none" in scan
     os_scan = scan_step("Report digest OS vulnerabilities")
     sbom_scan = scan_step("Generate SPDX JSON SBOM for digest")
@@ -1387,8 +1391,12 @@ def test_release_workflow_contracts() -> None:
         assert "${{ github.workspace }}" not in scan
         assert "--timeout 15m" in scan
     for scan in (digest_scan, os_scan, sbom_scan):
-        assert '-v "$HOME/.docker:/root/.docker:ro"' in scan
-    assert "/root/.docker:rw" not in images
+        assert "-e TRIVY_USERNAME -e TRIVY_PASSWORD" in scan
+        assert "TRIVY_USERNAME: ${{ vars.REGISTRY_USER }}" in scan
+        assert "TRIVY_PASSWORD: ${{ secrets.REGISTRY_PAT }}" in scan
+    assert "/root/.docker" not in images
+    assert '-v "$PWD/' not in images
+    assert '-v "$HOME/' not in images
 
     def normalize_command(scan: str) -> str:
         return re.sub(r"\s+", " ", scan.replace("\\\n", " "))

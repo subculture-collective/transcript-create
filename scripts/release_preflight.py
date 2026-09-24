@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Validate a HasanAra release without exposing rendered Compose secrets."""
+"""Validate a client release without exposing rendered Compose secrets.
+
+The core checkout (this script's repository) supplies the shared Compose files and must be at
+the release manifest's source commit. TRANSCRIPT_DEPLOY_ROOT names the client deployment
+directory: the Compose project directory holding the operator env file, release manifest,
+client overlay and state mounts.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +19,7 @@ from pathlib import Path
 from typing import Any, NoReturn, Sequence
 from urllib.parse import urlparse
 
-ROOT = Path(__file__).resolve().parent.parent
+CORE_ROOT = Path(__file__).resolve().parent.parent
 DIGEST_RE = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 IMAGE_ROLES = {"api", "ingest-cuda", "ml-cuda", "frontend", "postgres-walg", "redis"}
@@ -48,10 +54,14 @@ SERVICE_LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
 COMPOSE_ROW_DELIMITER = "\x1f"
 COMPOSE_ONEOFF_LABELS = {"", "false", "0", "no"}
 URL_UNRESERVED_RE = re.compile(r"^[A-Za-z0-9._~-]+$")
+CLIENT_OVERLAY = "docker-compose.client.yml"
+# Ordered Compose files: core files are relative to CORE_ROOT and the client overlay to the
+# deployment root. The release overlay must remain last.
 COMPOSE_FILES = (
     "docker-compose.yml",
     "docker-compose.gtx1080.yml",
-    "docker-compose.hasanara.yml",
+    "docker-compose.production.yml",
+    CLIENT_OVERLAY,
     "docker-compose.storage.yml",
     "docker-compose.pitr.yml",
     "docker-compose.release.yml",
@@ -129,25 +139,58 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return data
 
 
-def run(command: Sequence[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+def run(command: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+    )
 
 
-def checked(command: Sequence[str], *, cwd: Path, error: str) -> subprocess.CompletedProcess[str]:
-    result = run(command, cwd=cwd)
+def checked(
+    command: Sequence[str], *, cwd: Path, error: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    result = run(command, cwd=cwd, env=env)
     if result.returncode:
         fail(error)
     return result
 
 
-def compose_command() -> list[str]:
+def deploy_root() -> Path:
+    raw = os.environ.get("TRANSCRIPT_DEPLOY_ROOT", "")
+    if not raw:
+        fail("TRANSCRIPT_DEPLOY_ROOT must name the client deployment directory")
+    root = Path(raw)
+    if not root.is_absolute() or not root.is_dir():
+        fail("TRANSCRIPT_DEPLOY_ROOT must be an existing absolute directory")
+    return root
+
+
+def compose_files(core: Path, deployment: Path) -> list[Path]:
+    return [(deployment if name == CLIENT_OVERLAY else core) / name for name in COMPOSE_FILES]
+
+
+def compose_command(core: Path = CORE_ROOT, deployment: Path | None = None) -> list[str]:
+    deployment = deploy_root() if deployment is None else deployment
     # The operator wrapper fixes this to .env.prod. Honoring the same variable
     # here lets isolated tests render with an inert temporary env file.
     env_file = os.environ.get("HASANARA_ENV_FILE", ".env.prod")
-    command = ["docker", "compose", "--project-name", "hasanara", "--env-file", env_file]
-    for compose_file in COMPOSE_FILES:
-        command.extend(("--file", compose_file))
+    command = [
+        "docker",
+        "compose",
+        "--project-name",
+        "hasanara",
+        "--project-directory",
+        str(deployment),
+        "--env-file",
+        env_file,
+    ]
+    for compose_file in compose_files(core, deployment):
+        command.extend(("--file", str(compose_file)))
     return command
+
+
+def compose_environment(core: Path, deployment: Path) -> dict[str, str]:
+    """Pass only the path variables the core Compose files interpolate."""
+    return {**os.environ, "TRANSCRIPT_CORE_DIR": str(core), "TRANSCRIPT_DEPLOY_ROOT": str(deployment)}
 
 
 def repository_head(root: Path) -> str:
@@ -166,8 +209,18 @@ def ensure_clean_tree(root: Path, allow_dirty: bool) -> None:
         fail("source tree is dirty; use --allow-dirty only for a local rehearsal")
 
 
+def compose_checked(root: Path, arguments: Sequence[str], error: str) -> subprocess.CompletedProcess[str]:
+    """Run Compose for the deployment at root with the core checkout's shared files."""
+    return checked(
+        [*compose_command(CORE_ROOT, root), *arguments],
+        cwd=root,
+        error=error,
+        env=compose_environment(CORE_ROOT, root),
+    )
+
+
 def active_services(root: Path) -> set[str]:
-    result = checked([*compose_command(), "config", "--services"], cwd=root, error="Compose service validation failed")
+    result = compose_checked(root, ("config", "--services"), "Compose service validation failed")
     services = {line.strip() for line in result.stdout.splitlines() if line.strip()}
     validate_active_service_set(services)
     return services
@@ -221,9 +274,7 @@ def parse_compose_profiles(environment: str) -> None:
 
 
 def validate_requested_profiles(root: Path) -> None:
-    result = checked(
-        [*compose_command(), "config", "--environment"], cwd=root, error="Compose profile validation failed"
-    )
+    result = compose_checked(root, ("config", "--environment"), "Compose profile validation failed")
     parse_compose_profiles(result.stdout)
 
 
@@ -352,7 +403,7 @@ def validate_diarization_env_file() -> str:
     return values["DATABASE_URL"]
 
 
-def validate_diarization_contract(rendered: dict[str, Any], manifest: dict[str, Any]) -> None:
+def validate_diarization_contract(rendered: dict[str, Any], manifest: dict[str, Any], deployment: Path) -> None:
     """Validate the opt-in worker even when its Compose profile is disabled."""
     diarization_url = validate_diarization_env_file()
     service = rendered.get("services", {}).get("diarization-worker")
@@ -416,7 +467,7 @@ def validate_diarization_contract(rendered: dict[str, Any], manifest: dict[str, 
     mounts = {
         (item.get("target"), item.get("source"), item.get("read_only")) for item in volumes if isinstance(item, dict)
     }
-    expected_sources = {"/data": ROOT / "data", "/root/.cache/hf": ROOT / "cache" / "hf"}
+    expected_sources = {"/data": deployment / "data", "/root/.cache/hf": deployment / "cache" / "hf"}
     actual_sources = {target: source for target, source, read_only in mounts if read_only is True}
     if (
         len(mounts) != 2
@@ -429,10 +480,10 @@ def validate_diarization_contract(rendered: dict[str, Any], manifest: dict[str, 
         if not isinstance(source_value, str):
             fail("Compose diarization mount contract is invalid")
         source = Path(source_value)
-        source = source if source.is_absolute() else ROOT / source
+        source = source if source.is_absolute() else deployment / source
         try:
-            ancestor = ROOT
-            for part in expected.relative_to(ROOT).parts:
+            ancestor = deployment
+            for part in expected.relative_to(deployment).parts:
                 ancestor /= part
                 if ancestor.is_symlink():
                     fail("Compose diarization mount contract is invalid")
@@ -442,8 +493,23 @@ def validate_diarization_contract(rendered: dict[str, Any], manifest: dict[str, 
             fail("Compose diarization mount contract is invalid")
 
 
-def verify_networks(root: Path) -> None:
-    for network in ("management", "dev"):
+def external_networks(rendered: dict[str, Any]) -> list[str]:
+    """Return the external network names the rendered deployment attaches to."""
+    networks = rendered.get("networks", {})
+    if not isinstance(networks, dict):
+        fail("Compose rendered an invalid network configuration")
+    names = []
+    for key, details in networks.items():
+        if isinstance(details, dict) and details.get("external") is True:
+            name = details.get("name", key)
+            if not isinstance(name, str) or not SERVICE_LABEL_RE.fullmatch(name):
+                fail("Compose rendered an invalid external network name")
+            names.append(name)
+    return sorted(names)
+
+
+def verify_networks(root: Path, networks: Sequence[str]) -> None:
+    for network in networks:
         checked(
             ("docker", "network", "inspect", network),
             cwd=root,
@@ -459,39 +525,48 @@ def verify_mount_parents(root: Path) -> None:
             fail(f"required mount parent is missing: {relative}")
 
 
-def validate(root: Path, manifest_path: Path, allow_dirty: bool, allow_disabled_profile_services: bool = False) -> None:
+def validate(
+    root: Path,
+    manifest_path: Path,
+    allow_dirty: bool,
+    allow_disabled_profile_services: bool = False,
+    core: Path = CORE_ROOT,
+) -> None:
+    """Validate the deployment at root against the core checkout and its release manifest."""
     manifest = load_manifest(manifest_path)
+    # The deployment tree records the core pin, so a dirty or moved core is caught twice.
+    ensure_clean_tree(core, allow_dirty)
     ensure_clean_tree(root, allow_dirty)
-    if repository_head(root) != manifest["source_commit"]:
-        fail("release manifest source commit does not match HEAD")
-    checked([*compose_command(), "config", "--quiet"], cwd=root, error="Compose configuration validation failed")
+    if repository_head(core) != manifest["source_commit"]:
+        fail("release manifest source commit does not match the core checkout")
+    if not (root / CLIENT_OVERLAY).is_file():
+        fail(f"client overlay is missing: {CLIENT_OVERLAY}")
+    compose_checked(root, ("config", "--quiet"), "Compose configuration validation failed")
     validate_requested_profiles(root)
     services = active_services(root)
-    rendered_result = checked(
-        [*compose_command(), "config", "--format", "json"], cwd=root, error="Compose rendering failed"
-    )
+    rendered_result = compose_checked(root, ("config", "--format", "json"), "Compose rendering failed")
     try:
         rendered = json.loads(rendered_result.stdout)
     except json.JSONDecodeError:
         fail("Compose rendered invalid JSON")
     validate_rendered_services(rendered, services, manifest)
-    diarization_result = checked(
-        [*compose_command(), "--profile", "diarization", "config", "--format", "json"],
-        cwd=root,
-        error="Compose diarization rendering failed",
+    diarization_result = compose_checked(
+        root, ("--profile", "diarization", "config", "--format", "json"), "Compose diarization rendering failed"
     )
     try:
-        validate_diarization_contract(json.loads(diarization_result.stdout), manifest)
+        validate_diarization_contract(json.loads(diarization_result.stdout), manifest, root)
     except json.JSONDecodeError:
         fail("Compose diarization rendered invalid JSON")
     validate_project_services(project_services(root), services, allow_disabled_profile_services)
-    verify_networks(root)
+    verify_networks(root, external_networks(rendered))
     verify_mount_parents(root)
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = SafeArgumentParser(description="Validate a release without printing Compose configuration.")
-    parser.add_argument("--manifest", type=Path, default=ROOT / "release-images.json")
+    parser.add_argument(
+        "--manifest", type=Path, help="release manifest; defaults to the deployment's release-images.json"
+    )
     parser.add_argument("--allow-dirty", action="store_true", help="allow a dirty tree for a local rehearsal only")
     parser.add_argument("--allow-disabled-profile-services", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
@@ -500,7 +575,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = parse_args(sys.argv[1:] if argv is None else argv)
-        validate(ROOT, args.manifest, args.allow_dirty, args.allow_disabled_profile_services)
+        deployment = deploy_root()
+        manifest = args.manifest or deployment / "release-images.json"
+        validate(deployment, manifest, args.allow_dirty, args.allow_disabled_profile_services)
     except PreflightError as error:
         print(f"release preflight failed: {error}", file=sys.stderr)
         return 1

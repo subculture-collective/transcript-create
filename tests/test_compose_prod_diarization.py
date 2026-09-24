@@ -56,7 +56,12 @@ run_diarization_canary {VIDEO_ID}
     result = subprocess.run(
         ["bash", "-c", code],
         cwd=ROOT,
-        env={"PATH": f"{tmp_path}:/usr/bin:/bin", "HOME": os.environ.get("HOME", ""), "CANARY_LOG": str(log)},
+        env={
+            "PATH": f"{tmp_path}:/usr/bin:/bin",
+            "HOME": os.environ.get("HOME", ""),
+            "CANARY_LOG": str(log),
+            "TRANSCRIPT_DEPLOY_ROOT": str(tmp_path),
+        },
         text=True,
         capture_output=True,
         timeout=15,
@@ -107,6 +112,7 @@ def test_sourceable_helper_does_not_capture_locals_in_traps() -> None:
     result = subprocess.run(
         ["bash", "-c", f"source {SCRIPT}; declare -F run_diarization_canary recover_diarization_canary"],
         cwd=ROOT,
+        env={**os.environ, "TRANSCRIPT_DEPLOY_ROOT": str(ROOT)},
         text=True,
         capture_output=True,
     )

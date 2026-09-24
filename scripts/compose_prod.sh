@@ -1,30 +1,43 @@
 #!/usr/bin/env bash
-# Run the exact HasanAra production stack without inherited shell variables.
+# Run a client's exact production stack without inherited shell variables.
+#
+# TRANSCRIPT_DEPLOY_ROOT names the client deployment directory: the Compose
+# project directory holding .env.prod, release-images.json,
+# docker-compose.client.yml and the state mounts. This core checkout supplies
+# the shared Compose files and scripts.
 set -Eeuo pipefail
 
-repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-cd "$repo_root"
+core_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+if [[ -z ${TRANSCRIPT_DEPLOY_ROOT:-} ]]; then
+    printf '%s\n' 'TRANSCRIPT_DEPLOY_ROOT must name the client deployment directory' >&2
+    exit 64
+fi
+deploy_root=$(cd -- "$TRANSCRIPT_DEPLOY_ROOT" && pwd)
+cd "$deploy_root"
 
-readonly -a CLEAN_ENV=(env -i PATH="$PATH" HOME="$HOME" USER="${USER:-}" HASANARA_ENV_FILE=.env.prod)
+readonly -a CLEAN_ENV=(env -i PATH="$PATH" HOME="$HOME" USER="${USER:-}" HASANARA_ENV_FILE=.env.prod
+    TRANSCRIPT_DEPLOY_ROOT="$deploy_root" TRANSCRIPT_CORE_DIR="$core_root")
 readonly -a COMPOSE=(docker compose
     --project-name hasanara
+    --project-directory "$deploy_root"
     --env-file .env.prod
-    --file docker-compose.yml
-    --file docker-compose.gtx1080.yml
-    --file docker-compose.hasanara.yml
-    --file docker-compose.storage.yml
-    --file docker-compose.pitr.yml
-    --file docker-compose.release.yml)
+    --file "$core_root/docker-compose.yml"
+    --file "$core_root/docker-compose.gtx1080.yml"
+    --file "$core_root/docker-compose.production.yml"
+    --file "$deploy_root/docker-compose.client.yml"
+    --file "$core_root/docker-compose.storage.yml"
+    --file "$core_root/docker-compose.pitr.yml"
+    --file "$core_root/docker-compose.release.yml")
 
-run_preflight() { "${CLEAN_ENV[@]}" python3 scripts/release_preflight.py; }
-run_retirement_preflight() { "${CLEAN_ENV[@]}" python3 scripts/release_preflight.py --allow-disabled-profile-services; }
+run_preflight() { "${CLEAN_ENV[@]}" python3 "$core_root/scripts/release_preflight.py"; }
+run_retirement_preflight() { "${CLEAN_ENV[@]}" python3 "$core_root/scripts/release_preflight.py" --allow-disabled-profile-services; }
 compose() { "${CLEAN_ENV[@]}" "${COMPOSE[@]}" "$@"; }
 run_compose() { exec "${CLEAN_ENV[@]}" "${COMPOSE[@]}" "$@"; }
-usage() { printf '%s\n' 'usage: scripts/compose_prod.sh {preflight|deploy|maintenance|config|ps|logs|top|images|version} [arguments]' >&2; }
+usage() { printf '%s\n' 'usage: TRANSCRIPT_DEPLOY_ROOT=<deployment> scripts/compose_prod.sh {preflight|deploy|maintenance|config|ps|logs|top|images|version} [arguments]' >&2; }
 is_uuid() { [[ $1 =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; }
 
 check_diarization_role() {
-    compose exec -T db psql -v ON_ERROR_STOP=1 -U postgres -d transcripts < scripts/check_diarization_role.sql
+    compose exec -T db psql -v ON_ERROR_STOP=1 -U postgres -d transcripts < "$core_root/scripts/check_diarization_role.sql"
 }
 
 # Canary state is global so EXIT/INT/TERM handlers never interpolate locals.
@@ -489,7 +502,7 @@ command=${1:-}
 case "$command" in
     preflight)
         shift
-        exec "${CLEAN_ENV[@]}" python3 scripts/release_preflight.py "$@"
+        exec "${CLEAN_ENV[@]}" python3 "$core_root/scripts/release_preflight.py" "$@"
         ;;
     deploy)
         shift

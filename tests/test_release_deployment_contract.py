@@ -1077,6 +1077,14 @@ def test_walg_build_overrides_and_verifies_patched_x_crypto() -> None:
     assert "GOEXPERIMENT=jsonv2 CGO_ENABLED=0 go build -mod=readonly -trimpath" in dockerfile
 
 
+def test_walg_build_overrides_and_verifies_patched_grpc() -> None:
+    dockerfile = (ROOT / "Dockerfile.postgres-walg").read_text(encoding="utf-8")
+    assert "ARG WALG_GRPC_VERSION=v1.83.2" in dockerfile
+    assert 'go mod edit -require="google.golang.org/grpc@${WALG_GRPC_VERSION}"' in dockerfile
+    assert 'go list -mod=mod -m -f "{{.Version}}" google.golang.org/grpc' in dockerfile
+    assert '"${WALG_GRPC_VERSION}"' in dockerfile
+
+
 def test_cuda_constraints_override_networkx_for_python_310() -> None:
     dockerfile = (ROOT / "Dockerfile.cuda").read_text(encoding="utf-8")
     assert "libpython3.10" in dockerfile

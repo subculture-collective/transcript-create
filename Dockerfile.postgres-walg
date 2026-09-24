@@ -18,6 +18,7 @@ ARG WALG_VERSION=v3.0.9-dev.0c3efc9
 ARG WALG_REVISION=0c3efc982dccb6f25e5fcdf713ef037a86d62b49
 ARG WALG_BUILD_DATE=2026-07-23T00:00:00Z
 ARG WALG_X_CRYPTO_VERSION=v0.55.0
+ARG WALG_GRPC_VERSION=v1.83.2
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
@@ -27,8 +28,11 @@ RUN apt-get update \
     && test "$(git rev-parse HEAD)" = "${WALG_REVISION}" \
     && go mod edit -require="golang.org/x/crypto@${WALG_X_CRYPTO_VERSION}" \
     && go mod download "golang.org/x/crypto@${WALG_X_CRYPTO_VERSION}" \
+    && go mod edit -require="google.golang.org/grpc@${WALG_GRPC_VERSION}" \
+    && go mod download "google.golang.org/grpc@${WALG_GRPC_VERSION}" \
     && go mod tidy \
     && test "$(go list -mod=mod -m -f "{{.Version}}" golang.org/x/crypto)" = "${WALG_X_CRYPTO_VERSION}" \
+    && test "$(go list -mod=mod -m -f "{{.Version}}" google.golang.org/grpc)" = "${WALG_GRPC_VERSION}" \
     && GOEXPERIMENT=jsonv2 CGO_ENABLED=0 go build -mod=readonly -trimpath \
         -ldflags="-s -w -X github.com/wal-g/wal-g/cmd/pg.buildDate=${WALG_BUILD_DATE} -X github.com/wal-g/wal-g/cmd/pg.gitRevision=${WALG_REVISION} -X github.com/wal-g/wal-g/cmd/pg.walgVersion=${WALG_VERSION}" \
         -o /out/wal-g ./main/pg

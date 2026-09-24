@@ -676,6 +676,8 @@ test("shell focus and forced-color selected states remain visible", async ({
   page,
 }) => {
   await page.goto("/");
+  // Tab only after the lazy route renders; otherwise focus can stay on <body>.
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const focusStopCount = (page.viewportSize()?.width ?? 1280) < 1024 ? 3 : 11;
   for (let index = 0; index < focusStopCount; index += 1) {
     await page.keyboard.press("Tab");
@@ -1002,6 +1004,9 @@ test("client profiles apply identity, assets and both themes across responsive p
   await page.route("**/api/site", route => route.fulfill({ json: { ...profile, public_passages_enabled: true, community_enabled: false } }));
   await page.route("**/branding/*", route => route.fulfill({ path: path.resolve("../config/branding/northstar-assets", new URL(route.request().url()).pathname.split("/").pop()!), contentType: "image/svg+xml" }));
   await page.addInitScript(() => localStorage.setItem('themePreference', 'dark'));
+  // Start wide so the desktop theme toggle exists in mobile projects too; the
+  // narrow half of this test resizes to 390px below.
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/about");
   await expect(page.getByText("About Northstar Archive")).toBeVisible();
   await expect(page).toHaveTitle("About the archive — Northstar Archive");

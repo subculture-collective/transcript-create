@@ -104,8 +104,9 @@ describe('StreamsPage', () => {
       expect(listMock).toHaveBeenCalledTimes(1);
     });
 
+    // The request resolves before React commits the cards; wait for the render.
     expect(
-      screen.getByRole('link', { name: 'Watch First stream with transcript' })
+      await screen.findByRole('link', { name: 'Watch First stream with transcript' })
     ).toHaveAttribute('href', '/v/video-1');
     expect(screen.getByText('First stream')).toBeInTheDocument();
     expect(screen.getByText(/Guest One · Chadvice/)).toBeInTheDocument();

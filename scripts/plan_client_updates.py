@@ -61,14 +61,25 @@ def plan_updates(manifest_path: Path, fleet_path: Path, output: Path) -> dict:
                     }
                 ]
             elif role == "frontend":
+                entry["environment"] = {
+                    "SITE_PROFILE_PATH": "/etc/transcript-archive/brand.json",
+                    "FRONTEND_ORIGIN": "${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required for link previews}",
+                }
                 entry["volumes"] = [
+                    {
+                        "type": "bind",
+                        "source": str(profile_path),
+                        "target": "/etc/transcript-archive/brand.json",
+                        "read_only": True,
+                        "bind": {"create_host_path": False},
+                    },
                     {
                         "type": "bind",
                         "source": str(assets),
                         "target": "/usr/share/nginx/html/branding",
                         "read_only": True,
                         "bind": {"create_host_path": False},
-                    }
+                    },
                 ]
             services[service] = entry
         prepared[name] = {"services": services}

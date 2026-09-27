@@ -120,8 +120,7 @@ function RouteTransitionManager() {
       link.href = site.favicon_url || '/icon.svg';
       link.removeAttribute('type');
     }
-    const social = document.querySelector<HTMLMetaElement>('meta[property="og:image"]');
-    if (social) social.content = site.social_image_url || '/social-card.svg';
+    // Keep the crawler-visible raster image rendered by the frontend entrypoint.
 
     const pathChanged = previousPath.current !== location.pathname;
     if (!pathChanged) return;

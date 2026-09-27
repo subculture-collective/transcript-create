@@ -1,4 +1,4 @@
-"""Contracts for backend-only release artifact selection."""
+"""Contracts for selective application release artifact selection."""
 
 from pathlib import Path
 
@@ -6,15 +6,17 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".gitea" / "workflows" / "backend-role-release.yaml"
 
 
-def test_selective_release_only_accepts_api_or_ingest_worker():
+def test_selective_release_accepts_only_supported_application_roles():
     source = WORKFLOW.read_text(encoding="utf-8")
 
     assert "- api" in source
     assert "- ingest-cuda" in source
-    assert '[[ "$ROLE" == api || "$ROLE" == ingest-cuda ]]' in source
+    assert '[[ "$ROLE" == api || "$ROLE" == ingest-cuda || "$ROLE" == frontend ]]' in source
     assert "Dockerfile.api" in source
     assert "Dockerfile.ingest.cuda" in source
-    assert "frontend/Dockerfile" not in source
+    assert "frontend/Dockerfile" in source
+    assert "- frontend" in source
+    assert "-m unittest discover -s frontend/scripts" in source
     assert "Dockerfile.cuda" not in source
     assert "Dockerfile.postgres-walg" not in source
 

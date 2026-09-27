@@ -112,8 +112,12 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.target.outputs.image }}:${{ steps.target.outputs.tag }}
         run: |
-          docker run --rm --network none -v "$PWD:/source:ro" -w /source --entrypoint python3 "$IMAGE_REF" \
-            -m unittest discover -s frontend/scripts -p 'test_*.py'
+          set -euo pipefail
+          container=$(docker create --network none -w /tmp --entrypoint python3 "$IMAGE_REF" \
+            -m unittest discover -s frontend/scripts -p 'test_*.py')
+          trap 'docker rm -f "$container" >/dev/null' EXIT
+          docker cp frontend "$container:/tmp/frontend"
+          docker start --attach "$container"
       - name: Block high and critical application vulnerabilities
         env:
           IMAGE_REF: ${{ steps.target.outputs.image }}:${{ steps.target.outputs.tag }}

@@ -100,6 +100,11 @@ def test_one_release_updates_multiple_clients_without_editing_profiles(tmp_path)
         assert Path(mount["source"]).name == f"{name}.json"
         assert mount["read_only"] is True
         assert compose["services"]["worker"]["environment"]["SITE_PROFILE_PATH"] == mount["target"]
+        frontend = compose["services"]["frontend"]
+        assert frontend["environment"]["SITE_PROFILE_PATH"] == mount["target"]
+        assert "FRONTEND_ORIGIN:?" in frontend["environment"]["FRONTEND_ORIGIN"]
+        assert frontend["volumes"][0] == mount
+        assert frontend["volumes"][1]["target"] == "/usr/share/nginx/html/branding"
     assert (tmp_path / "north.json").read_bytes() == before
     with pytest.raises(FileExistsError):
         plan_updates(manifest, fleet, tmp_path / "plan")

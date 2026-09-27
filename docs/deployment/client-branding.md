@@ -6,7 +6,15 @@
 
 Keep application code in this repository. Keep each client's public `brand.json`, assets, private environment, deployment topology and release history in that client's deployment directory or configuration repository. Each client has its own database, sessions, storage, origin and OAuth registrations. This does not introduce multi-tenant authentication or data routing.
 
-One tested core release can serve all clients. Never edit React components, compiled bundles or upstream Git history to customize a client. Changes to the profile require restarting the API/application roles and reloading the browser; frontend rebuilding is unnecessary.
+One tested core release can serve all clients. Never edit React components, compiled bundles or upstream Git history to customize a client. Changes to the profile require restarting the API/application roles and frontend, then reloading the browser; frontend rebuilding is unnecessary.
+
+## Link previews
+
+The production frontend reads the same `SITE_PROFILE_PATH` as the API at startup. Set `FRONTEND_ORIGIN` to the public origin, such as `https://hasanara.tv`, and mount the public profile read-only in the frontend as well as the application roles. The update planner includes this mount and requires `FRONTEND_ORIGIN` from the deployment environment. If `SITE_NAME` or `SITE_DESCRIPTION` overrides are used in the API, supply the same overrides to the frontend.
+
+Before Nginx starts, the entrypoint writes the title, description, Open Graph and Twitter card tags into `index.html`. Crawlers receive these without executing JavaScript or contacting the API. Local SVG social artwork is converted to a 1200 × 630 PNG at `/social-preview.png`, outside the read-only branding mount. Remote social images must already use a raster format such as PNG or JPEG. Restart the frontend after changing the profile or artwork. Existing client overlays must add the profile mount and origin when adopting this core release.
+
+This supplies a site preview for the SPA routes. It does not add video playback embeds or per-video metadata; shared passage pages retain their own previews. Platforms may retain cached previews after deployment.
 
 ## Configure a client
 

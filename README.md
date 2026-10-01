@@ -1,99 +1,53 @@
-# Transcript Archive
+# Rekolekt
 
-Transcript Archive is a configurable, citation-first application for long-form
-recordings. It ingests videos, stores timestamped transcripts, supports full-text search
-and archive browsing, and lets people save and share passages with their source context.
+**Searchable recordings. Quotable moments. Source intact.**
 
-This repository contains the shared application core. Each client deployment supplies a
-versioned public profile and assets while running the same application images. Branding
-changes do not require a source fork or frontend rebuild.
+Rekolekt turns long-form recordings into a searchable transcript archive. Find
+what was said, return to the timestamp in the source video, and save or share a
+passage with its context.
 
-## Application stack
+It is built for creators, researchers, and communities who want recorded
+conversations to stay useful after the broadcast ends.
 
-- React 19 and Vite frontend
-- FastAPI application and worker services
-- PostgreSQL as the source of truth
-- Redis for caches and coordination
-- Optional OpenSearch acceleration with PostgreSQL fallback
-- Docker Compose, Kubernetes, Helm, Ansible and Terraform deployment assets
+[Explore Rekolekt](https://subcult.tv/products/transcript-create) · [See it in use at HasanAra](https://hasanara.tv) · [Suggest a feature](https://git.subcult.tv/subculture-collective/transcript-create/issues)
 
-The core includes durable ingestion jobs, scoped API keys, OAuth accounts, saved searches
-and moments, pseudonymous analytics, archive intelligence, passage sharing, and an
-optional creator community. Client-facing features remain controlled by server settings;
-the public branding profile does not grant entitlements or contain secrets.
+## Turn an archive into something people can use
 
-## Local development
+- **Make recordings searchable:** ingest videos and build timestamped transcripts
+  that visitors can browse and search.
+- **Keep the source close:** open results in the original player and read the
+  surrounding transcript.
+- **Share a passage:** choose a start and end, preview the selection, and copy a
+  link that restores the range and context. Basic passage links need no account.
+- **Build a personal reference:** save searches and moments, and export transcript
+  text for further work.
+- **Make it your archive:** supply a public brand profile, artwork, and theme
+  while using the same application core.
 
-Supported versions are Python 3.11, Node.js 20, and Docker with Compose.
+Automated transcription can contain errors. Passage links point to the currently
+available source and transcript; they are not immutable citations or downloaded
+video clips. See the [passage-sharing guide](docs/product/passage-sharing.md).
 
-```bash
-python3.11 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-npm --prefix frontend ci
-npm --prefix e2e ci
-cp .env.example .env
-ALLOW_SESSION_TOKEN_CONTRACT_MIGRATION=true docker compose up --build
-```
+## One application, distinct archives
 
-The frontend defaults to `http://localhost:5173`; the API defaults to
-`http://localhost:8000`, with interactive API documentation at `/docs`. The migration
-opt-in above is for a fresh controlled bootstrap. Follow the migration runbook for an
-existing deployment.
+[HasanAra](https://hasanara.tv) runs on Rekolekt with its own identity and broadcast
+sources. Other archives can supply their own branding without maintaining a
+source fork or rebuilding the frontend. Available features depend on the
+deployment's server settings.
 
-The main source areas are:
+The source repository retains the name `transcript-create`.
 
-| Path | Purpose |
-| --- | --- |
-| `app/` | FastAPI routes, domain services, persistence and schemas |
-| `worker/` | ingestion, transcription, formatting and background processing |
-| `frontend/` | React application and component tests |
-| `e2e/` | seeded Playwright journeys |
-| `alembic/` | ordered database migrations |
-| `config/branding/` | profile schema and safe example client configuration |
-| `clients/` | client release-profile validation and planning code |
-| `scripts/` | maintained verification, migration and operator utilities |
+## Run your own or contribute
 
-## Branding and client updates
+The application uses React, FastAPI, PostgreSQL, and transcription workers.
+Local development requires Python 3.11, Node.js 20, and Docker with Compose.
+The [development guide](DEVELOPMENT.md) covers setup and the canonical `make verify`
+gate.
 
-Start with the [Northstar example profile](config/branding/northstar.json), validate its
-fields against the [profile schema](config/branding/schema.json), and supply it through
-`SITE_PROFILE_PATH`. Store client secrets, infrastructure and release history outside the
-public profile.
-
-The [client branding guide](docs/deployment/client-branding.md) describes asset mounts,
-theme tokens, profile precedence, and the fleet update planner. The planner combines a
-verified digest-pinned release manifest with a client inventory and produces reviewable
-Compose overrides. It never edits client profiles, databases or secrets and does not
-perform a deployment.
-
-## Verification
-
-Run focused tests while developing, then run the canonical gate before delivery:
-
-```bash
-TEST_POSTGRES_PORT=55433 mise exec node@20 -- \
-  env PYTHON_BIN="$PWD/.venv/bin/python" make verify
-```
-
-The gate starts disposable PostgreSQL, Redis and OpenSearch services; applies every
-migration; checks Python and TypeScript quality; runs backend and frontend coverage;
-builds the production frontend; validates generated contracts and documentation; audits
-dependencies; and exercises the seeded Chromium journey. See the
-[testing guide](docs/development/testing.md) for focused commands, suite ownership and
-coverage expectations.
-
-## Documentation
-
-- [Architecture](docs/development/architecture.md) and [transcript processing](docs/development/transcript-processing.md)
-- [API reference](docs/api-reference.md), generated [OpenAPI](docs/api/openapi.json), and [access matrix](docs/access-matrix.md)
-- [Client branding and shared updates](docs/deployment/client-branding.md)
-- [Passage-sharing contract](docs/product/passage-sharing.md)
-- [Deployment matrix](docs/deployment/README.md) and [production readiness](docs/operations/production-readiness.md)
-- [Database migrations](docs/MIGRATIONS.md)
-- [Accessibility](docs/ACCESSIBILITY.md) and [design system](docs/DESIGN_SYSTEM.md)
+- [Client branding and deployment](docs/deployment/client-branding.md)
+- [Testing guide](docs/development/testing.md)
+- [API reference](docs/api-reference.md)
 - [Documentation index](docs/STATUS.md)
 
-`/api` is v1-stable: changes are additive, deprecations remain for at least two releases,
-and breaking changes require `/api/v2`.
-
-[Apache-2.0 license](LICENSE) · [third-party notices](docs/THIRD_PARTY_NOTICES.md)
+Built by [Subcult](https://subcult.tv). Licensed under [Apache-2.0](LICENSE), with
+[third-party notices](docs/THIRD_PARTY_NOTICES.md).

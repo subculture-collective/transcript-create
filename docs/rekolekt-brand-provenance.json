@@ -40,17 +40,23 @@
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/spacegrotesk-OFL.txt",
       "destination": "frontend/public/brand/rekolekt/fonts/spacegrotesk-OFL.txt",
-      "sha256": "564ce565c371c5e5bbf286006565a7c9aa55a9f56e7ca58d56e05d649dd61a72"
+      "sha256": "18a4de52385f6b988782639d5d0cc1326e5a8c2de9a7f01d7b20d9aedcc60943",
+      "source_sha256": "564ce565c371c5e5bbf286006565a7c9aa55a9f56e7ca58d56e05d649dd61a72",
+      "transformation": "Normalize line endings and trailing whitespace; license text unchanged."
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/publicsans-OFL.txt",
       "destination": "frontend/public/brand/rekolekt/fonts/publicsans-OFL.txt",
-      "sha256": "157a9e77f7580246e97c769490e2e977ae94399f9d30f4556015c41fe8c28bac"
+      "sha256": "510d6e86ca0681edd7c5669df50c24b372a4d96b80bf507c2d29585132a24718",
+      "source_sha256": "157a9e77f7580246e97c769490e2e977ae94399f9d30f4556015c41fe8c28bac",
+      "transformation": "Normalize line endings and trailing whitespace; license text unchanged."
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/jetbrainsmono-OFL.txt",
       "destination": "frontend/public/brand/rekolekt/fonts/jetbrainsmono-OFL.txt",
-      "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d"
+      "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
+      "source_sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
+      "transformation": "Normalize line endings and trailing whitespace; license text unchanged."
     }
   ]
 }

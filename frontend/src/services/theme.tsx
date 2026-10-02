@@ -63,7 +63,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // Without a client profile font, keep the stylesheet's typefaces.
     const font = site.theme?.font ? fonts[site.theme.font] : undefined;
     if (font) {
-      for (const token of ['--font-body', '--font-display', '--font-sans']) {
+      for (const token of ['--font-body', '--font-display', '--font-sans', '--font-label']) {
         document.documentElement.style.setProperty(token, font);
         applied.push(token);
       }

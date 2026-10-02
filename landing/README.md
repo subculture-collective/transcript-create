@@ -5,8 +5,9 @@ selected SUBCULT Studio Rekolekt pack. Asset origins and hashes are recorded in
 `../docs/rekolekt-brand-provenance.json`; fonts include their redistribution licenses.
 The supplied marks are copied without geometry changes.
 
-The interactive transcript contains illustrative text. Real archive links lead to
-HasanAra. The product page makes no claim of a hosted Rekolekt signup service.
+The interactive transcript uses a short public automated-transcript excerpt from
+HasanAra. `source-example.json` records the source URLs, retrieval date and exact
+segments. Selection updates a timestamped source link and a copyable range link. The product page makes no claim of a hosted Rekolekt signup service.
 The shared application uses the selected palette and local fonts by default;
 existing runtime client profiles continue to override that theme. The optional
 `config/branding/rekolekt.json` profile supplies the product identity to a deployment.

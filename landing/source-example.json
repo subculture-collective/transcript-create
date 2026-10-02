@@ -1,0 +1,30 @@
+{
+  "retrieved_at": "2026-10-02",
+  "metadata_url": "https://hasanara.tv/api/videos/f8d3484a-dcaf-48ab-b58d-f604f6631294",
+  "transcript_url": "https://hasanara.tv/api/videos/f8d3484a-dcaf-48ab-b58d-f604f6631294/transcript?mode=formatted&source=best",
+  "recording_url": "https://www.youtube.com/watch?v=mObKJZC5L7g",
+  "title": "HasanAbi September 17, 2026 \u2013",
+  "channel": "HasanAbi VODs",
+  "source": "whisper",
+  "segments": [
+    {
+      "start_ms": 704350,
+      "end_ms": 708490,
+      "text": "This is the no ads broadcast brought to you by the Piker Broadcasting Service,",
+      "speaker_label": null
+    },
+    {
+      "start_ms": 708590,
+      "end_ms": 712470,
+      "text": "the people's broadcasting service for you, the people by you, the people.",
+      "speaker_label": null
+    },
+    {
+      "start_ms": 712470,
+      "end_ms": 718210,
+      "text": "Piker Broadcasting Service sponsored by your voluntary contributions in the form of subscriptions",
+      "speaker_label": null
+    }
+  ],
+  "note": "Short public automated-transcript excerpt; errors may exist. Links refer to the currently available recording and transcript."
+}

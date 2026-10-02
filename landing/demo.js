@@ -22,8 +22,8 @@ search.addEventListener('input', () => {
     copy.append(document.createTextNode(text.slice(cursor)));
   });
   document.querySelector('#search-status').textContent = query
-    ? (matches ? `${matches} matching ${matches === 1 ? 'word' : 'words'} in this example.` : 'No matches here. Try “context” or “source”.')
-    : 'Three passages. One continuous conversation.';
+    ? (matches ? `${matches} matching ${matches === 1 ? 'word' : 'words'} in this example.` : 'No matches here. Try “broadcasting” or “people”.')
+    : 'Three transcript segments from the same recording.';
 });
 passages.forEach((passage) => passage.addEventListener('click', () => {
   passages.forEach((item) => {
@@ -31,4 +31,25 @@ passages.forEach((passage) => passage.addEventListener('click', () => {
     item.setAttribute('aria-pressed', String(item === passage));
   });
   document.querySelector('#selection-status').textContent = `SELECTED / ${passage.dataset.time}`;
+  const source = document.querySelector('#source-link');
+  source.href = passage.dataset.sourceUrl;
+  source.textContent = `Open source at ${passage.dataset.time} ↗`;
+  document.querySelector('#copy-status').textContent = '';
+  document.querySelector('#copy-passage').textContent = 'Copy passage link';
 }));
+
+document.querySelector('#copy-passage').addEventListener('click', async () => {
+  const selected = document.querySelector('.passage.selected');
+  const status = document.querySelector('#copy-status');
+  try {
+    await navigator.clipboard.writeText(selected.dataset.passageUrl);
+    status.textContent = `Passage link copied for ${selected.dataset.time}.`;
+    document.querySelector('#copy-passage').textContent = 'Link copied';
+  } catch {
+    status.replaceChildren(document.createTextNode('Clipboard unavailable. Copy this link: '));
+    const link = document.createElement('a');
+    link.href = selected.dataset.passageUrl;
+    link.textContent = selected.dataset.passageUrl;
+    status.append(link);
+  }
+});

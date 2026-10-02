@@ -1,0 +1,19 @@
+/* Selected SUBCULT Studio Rekolekt pack; see docs/rekolekt-brand-provenance.json. */
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('/brand/rekolekt/fonts/Space-Grotesk-0.ttf') format('truetype');
+  font-weight: 300 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Public Sans';
+  src: url('/brand/rekolekt/fonts/Public-Sans-0.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/brand/rekolekt/fonts/JetBrains-Mono-0.ttf') format('truetype');
+  font-weight: 100 800;
+  font-display: swap;
+}

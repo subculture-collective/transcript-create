@@ -73,7 +73,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (metaThemeColor) {
       metaThemeColor.setAttribute(
         'content',
-        colors.canvas ?? (theme === 'dark' ? '#0f0f0f' : '#faf9f5')
+        colors.canvas ?? (theme === 'dark' ? '#16201b' : '#faf9f5')
       );
     }
     return () => {

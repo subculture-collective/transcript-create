@@ -8,12 +8,12 @@ Light- and dark-theme text tokens must maintain at least WCAG AA 4.5:1 contrast 
 
 Prefer presentational sections backed by query hooks, URL adapters, mutation controllers, and view models. Route state belongs in the URL when it must be shareable. All routes are lazy loaded; admin code must remain outside public route downloads. Gzip budgets are 150 KiB for the shell plus initial route and 100 KiB per lazy route.
 
-## Broadsheet
+## Rekolekt / Index
 
-**Status:** default design, 2026-09-23.
+**Status:** default theme updated from the selected SUBCULT Studio Rekolekt pack, 2026-10-02.
 
-- **Editions.** The night edition (dark) is the primary design: newsprint black, warm off-white ink, and a signal red accent. The paper edition (light) uses off-white paper, black ink, and a deep red accent. The theme still follows the visitor's system preference until they toggle it.
-- **Type.** Newsreader for headlines, chapter headings, and transcript text; Inter Tight for interface text; JetBrains Mono for timecodes, counts, and the small uppercase labels (`.archive-eyebrow`, `.meta-label`, `.archive-rule-title`, through `--font-label`). Episode titles and chapter headings are italic. A client profile font replaces the headline, interface and label faces only when the profile sets `theme.font`. These three roles match the HasanAra and Rekolekt packs in SUBCULT Studio, which both assign JetBrains Mono to labels.
+- **Editions.** The night edition (dark) is the primary design: dark ink `#16201b`, paper text `#f2eee5`, and index green `#b8df72`. The paper edition (light) uses off-white paper, black ink, and a dark green accent. The theme still follows the visitor's system preference until they toggle it.
+- **Type.** Space Grotesk for headlines, chapter headings, and transcript text; Public Sans for interface text; JetBrains Mono for timecodes, counts, and the small uppercase labels (`.archive-eyebrow`, `.meta-label`, `.archive-rule-title`, through `--font-label`). Fonts are hosted locally with their redistribution licenses; titles use the upright display face. A client profile font replaces the headline, interface and label faces only when the profile sets `theme.font`. The selected Rekolekt pack supplies all three faces. Asset origins and hashes are in [the provenance manifest](rekolekt-brand-provenance.json).
 - **Shape.** Tailwind's radius scale is squared off (0 to 3px). Panels drop borders and shadows for a heavy top rule in the ink colour (`--rule`), and the site header ends in a double rule.
 - **Texture.** A fixed SVG noise layer adds newsprint grain behind content, and mastheads carry a halftone dot pattern that fades in from one side.
 - **Motion.** Panel rules draw across on arrival, the open-paragraph rule draws down, chart bars rise, and spoken transcript text eases from grey to ink. Content never fades or slides in: opacity entrances failed contrast checks mid-animation, and translated entrances moved elements during layout-stability checks. `prefers-reduced-motion` stops all of these, including the ticker.

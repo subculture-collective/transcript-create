@@ -8,5 +8,7 @@
     Content-Security-Policy "default-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     -Server
   }
+  @mutable path / /index.html /style.css /demo.js /source-example.json
+  header @mutable Cache-Control "no-cache"
   file_server
 }

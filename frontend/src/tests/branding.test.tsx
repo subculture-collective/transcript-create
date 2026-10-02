@@ -75,12 +75,17 @@ describe('client branding', () => {
     await waitFor(() =>
       expect(document.documentElement.style.getPropertyValue('--color-accent')).toBe('#ffaa00')
     );
+    // A profile font also replaces the label face, so labels follow the client's type.
+    expect(document.documentElement.style.getPropertyValue('--font-label')).toContain(
+      'ui-monospace'
+    );
     act(() => screen.getByRole('button', { name: 'Northstar · dark' }).click());
     expect(document.documentElement.style.getPropertyValue('--color-accent')).toBe('#884400');
     expect(document.documentElement.style.getPropertyValue('--color-border')).toBe('');
     expect(localStorage.setItem).toHaveBeenCalledWith('themePreference', 'light');
     view.unmount();
     expect(document.documentElement.style.getPropertyValue('--color-accent')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--font-label')).toBe('');
   });
 
   it('does not accept an unsupported profile version', async () => {

@@ -19,7 +19,9 @@
   --font-serif: 'Newsreader', 'Iowan Old Style', Georgia, serif;
   --font-reading: 'Newsreader', 'Iowan Old Style', Georgia, serif;
   --font-mono:
-    'JetBrainsMono Nerd Font', 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Monaco', monospace;
+    'JetBrains Mono', 'JetBrainsMono Nerd Font', 'SFMono-Regular', 'Menlo', 'Monaco', monospace;
+  /* Small uppercase labels and metadata. A client profile font replaces it. */
+  --font-label: var(--font-mono);
   /* Broadsheet: square corners, hairline and heavy rules instead of shadows. */
   --radius-xs: 0px;
   --radius-sm: 1px;
@@ -1538,8 +1540,9 @@ h3 {
   .archive-eyebrow,
   .meta-label,
   .archive-rule-title {
-    font-family: var(--font-sans);
-    letter-spacing: 0.14em;
+    font-family: var(--font-label);
+    font-weight: 500;
+    letter-spacing: 0.12em;
   }
 
   .nav-link {

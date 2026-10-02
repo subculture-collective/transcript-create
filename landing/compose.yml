@@ -1,0 +1,13 @@
+services:
+  rekolekt-landing:
+    image: ${REKOLEKT_LANDING_IMAGE:?Set the qualified landing image}
+    container_name: rekolekt-landing
+    restart: unless-stopped
+    networks: [projects]
+    read_only: true
+    tmpfs: [/data, /config]
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+networks:
+  projects:
+    external: true

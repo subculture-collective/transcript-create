@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './rekolekt-brand.css';
 
 @property --rule-w {
   syntax: '<percentage>';
@@ -13,13 +14,13 @@
 }
 
 @theme {
-  --font-display: 'Newsreader', 'Iowan Old Style', Georgia, serif;
-  --font-body: 'Inter Tight', system-ui, 'Segoe UI', sans-serif;
-  --font-sans: 'Inter Tight', system-ui, 'Segoe UI', sans-serif;
-  --font-serif: 'Newsreader', 'Iowan Old Style', Georgia, serif;
-  --font-reading: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Public Sans', system-ui, 'Segoe UI', sans-serif;
+  --font-sans: 'Public Sans', system-ui, 'Segoe UI', sans-serif;
+  --font-serif: 'Space Grotesk', system-ui, sans-serif;
+  --font-reading: 'Space Grotesk', system-ui, sans-serif;
   --font-mono:
-    'JetBrainsMono Nerd Font', 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Monaco', monospace;
+    'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Monaco', monospace;
   /* Broadsheet: square corners, hairline and heavy rules instead of shadows. */
   --radius-xs: 0px;
   --radius-sm: 1px;
@@ -29,24 +30,24 @@
   --radius-2xl: 3px;
   --radius-3xl: 3px;
   /* Night edition (default dark). */
-  --color-canvas: #0f0f0f;
-  --color-surface: #161616;
-  --color-surface-muted: #1f1f1f;
-  --color-surface-raised: #262626;
-  --color-border: #2f2f2f;
-  --color-border-strong: #5a5650;
-  --color-ink: #eeeae1;
-  --color-muted: #b5afa3;
-  --color-subtle: #968f84;
-  --color-accent: #ff5b52;
-  --color-accent-hover: #ff8a83;
-  --color-accent-soft: #3b1614;
-  --color-accent-contrast: #1a0403;
+  --color-canvas: #16201b;
+  --color-surface: #1c2922;
+  --color-surface-muted: #25342b;
+  --color-surface-raised: #2c3e32;
+  --color-border: #3e5143;
+  --color-border-strong: #8d9e8a;
+  --color-ink: #f2eee5;
+  --color-muted: #b9c5b3;
+  --color-subtle: #a1b29b;
+  --color-accent: #b8df72;
+  --color-accent-hover: #cbed97;
+  --color-accent-soft: #2d4121;
+  --color-accent-contrast: #16201b;
   /* Secondary accents for the tri-colour stripe and data marks (decorative). */
-  --color-accent-2: #ff8f4d;
-  --color-accent-3: #c7453c;
-  --color-player-accent: #ff5b52;
-  --color-cta: #ff5b52;
+  --color-accent-2: #8d9e8a;
+  --color-accent-3: #b8df72;
+  --color-player-accent: #b8df72;
+  --color-cta: #b8df72;
   --color-success: #8fd4a0;
   --color-success-soft: #14301d;
   --color-warning: #f2cb55;
@@ -89,14 +90,14 @@
   --color-ink: #121212;
   --color-muted: #464646;
   --color-subtle: #5d5d5d;
-  --color-accent: #b3121f;
-  --color-accent-hover: #8a0d17;
-  --color-accent-soft: #fbe7e8;
+  --color-accent: #3c5e19;
+  --color-accent-hover: #2c4710;
+  --color-accent-soft: #e5edda;
   --color-accent-contrast: #ffffff;
-  --color-accent-2: #d9541e;
-  --color-accent-3: #7c1a14;
-  --color-player-accent: #ff5b52;
-  --color-cta: #b3121f;
+  --color-accent-2: #536648;
+  --color-accent-3: #3c5e19;
+  --color-player-accent: #b8df72;
+  --color-cta: #3c5e19;
   --color-success: #1f5f3a;
   --color-success-soft: #e3f1e8;
   --color-warning: #6b4f00;
@@ -1524,11 +1525,11 @@ h3 {
   }
 
   .episode-title {
-    @apply text-[clamp(1.9rem,3.4vw,3rem)] font-semibold italic leading-[1.05];
+    @apply text-[clamp(1.9rem,3.4vw,3rem)] font-semibold leading-[1.05];
   }
 
   .transcript-chapter-heading h3 {
-    @apply text-2xl font-semibold italic;
+    @apply text-2xl font-semibold;
   }
 
   .transcript-chapter-heading {
@@ -1629,7 +1630,7 @@ body::before {
   .wire-label {
     @apply flex shrink-0 items-center bg-accent px-3 font-semibold uppercase tracking-[0.16em] text-accent-contrast;
     font-family: var(--font-display);
-    font-style: italic;
+    font-style: normal;
     letter-spacing: 0.04em;
     text-transform: none;
     font-size: 0.95rem;
@@ -1836,7 +1837,7 @@ body::before {
   .wire-label {
     @apply relative;
     background: var(--color-accent-3);
-    color: #fff;
+    color: var(--color-accent-contrast);
   }
 
   .wire-label::after {

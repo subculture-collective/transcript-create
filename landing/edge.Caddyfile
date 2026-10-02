@@ -1,0 +1,3 @@
+http://rekolekt.subcult.tv {
+  reverse_proxy rekolekt-landing:8080
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "Rekolekt",
+  "description": "Search recordings, share a passage, and keep its context.",
+  "creator_name": "the creators",
+  "tagline": "Searchable recordings. Source intact.",
+  "operator_name": "SUBCULT",
+  "operator_url": "https://subcult.tv",
+  "project_notice": "Source recordings and trademarks belong to their respective owners.",
+  "logo_url": "/brand/rekolekt/logos/lockup-primary-outlined.svg",
+  "favicon_url": "/brand/rekolekt/logos/mark-primary-outlined.svg",
+  "social_image_url": "/social-card.svg",
+  "theme": {}
+}

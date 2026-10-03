@@ -23,7 +23,7 @@ describe('SupportPage', () => {
     );
 
     expect(
-      await screen.findByRole('heading', { name: 'Keep the public record searchable.' })
+      await screen.findByRole('heading', { name: 'Donations pay for hosting and transcription.' })
     ).toBeInTheDocument();
     expect(screen.getByText(/Donations are not open yet/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Donate securely/ })).not.toBeInTheDocument();

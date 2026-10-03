@@ -2,10 +2,16 @@ import { useSite } from '../services/site';
 import { Link } from 'react-router-dom';
 
 const method = [
-  ['Capture', 'Track public broadcasts and retain durable source metadata.'],
-  ['Transcribe', 'Turn speech into timestamped text while preserving the source VOD.'],
-  ['Structure', 'Add chapters, topics, and timelines without hiding the underlying transcript.'],
-  ['Cite', 'Send every result back to the exact moment that supports it.'],
+  ['Source records', 'Each public recording is tracked together with its source metadata.'],
+  [
+    'Transcripts',
+    'Speech is transcribed automatically into timestamped text. The source VOD stays linked.',
+  ],
+  [
+    'Chapters and topics',
+    'Chapters, topics, and timelines are layered on top. The underlying transcript stays readable.',
+  ],
+  ['Timestamps', 'Every result links to the moment in the recording it came from.'],
 ];
 
 export default function AboutPage() {
@@ -16,10 +22,13 @@ export default function AboutPage() {
         <div className="relative z-10 grid min-h-[29rem] gap-10 px-5 py-9 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(19rem,0.65fr)] lg:items-end lg:px-12 lg:py-14">
           <div className="space-y-7">
             <div className="archive-eyebrow">About {site.name}</div>
-            <h1 className="archive-display">A broadcast archive built like a public record.</h1>
+            <h1 className="archive-display">
+              Recordings, transcribed and linked back to their source.
+            </h1>
             <p className="max-w-3xl text-lg leading-8 text-muted sm:text-xl">
-              {site.name} makes long-form recordings legible: searchable transcripts, timestamped
-              evidence, topic histories, and direct paths back to the original video.
+              {site.name} keeps a timestamped transcript of each recording, indexes the text for
+              search, groups mentions by topic, and links every result to its moment in the original
+              video.
             </p>
             <div className="flex flex-wrap gap-4 text-sm font-semibold">
               <Link to="/search" className="action-link">
@@ -46,7 +55,7 @@ export default function AboutPage() {
           <div>
             <div className="archive-eyebrow">The method</div>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.045em] text-ink">
-              Evidence before interpretation.
+              What is kept for each recording
             </h2>
           </div>
           <ol className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
@@ -65,14 +74,15 @@ export default function AboutPage() {
 
       <section className="grid gap-5 md:grid-cols-3">
         <div className="archive-section md:col-span-2">
-          <div className="archive-eyebrow">Editorial posture</div>
+          <div className="archive-eyebrow">Accuracy</div>
           <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-ink">
-            Search results are leads, not verdicts.
+            Check the recording before you quote.
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-            Automated transcripts and generated chapters can be wrong. {site.name} keeps the source,
-            timestamps, and transcript context visible so readers can verify what was actually said.
-            Corrections should improve the record without erasing its provenance.
+            Transcripts are produced automatically, and they and the generated chapters can be
+            wrong. {site.name} keeps the source, timestamps, and surrounding transcript visible so
+            readers can verify what was actually said. Corrections should fix the transcript without
+            erasing its provenance.
           </p>
         </div>
         <div className="archive-section">

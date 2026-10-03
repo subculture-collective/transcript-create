@@ -271,7 +271,7 @@ export default function SearchPage() {
           <div className="search-hero-copy">
             <div className="archive-eyebrow">Transcript search</div>
             <h1 className="mt-3 text-4xl font-extrabold tracking-[-0.04em] text-ink sm:text-5xl">
-              Search the record.
+              Search the transcripts
             </h1>
             <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-muted sm:text-lg">
               Enter a topic or exact phrase. Results are grouped by broadcast and open directly at

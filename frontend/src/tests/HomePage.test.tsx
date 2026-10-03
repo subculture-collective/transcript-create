@@ -58,7 +58,7 @@ describe('HomePage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: 'Find the moment. Read the record.' })
+        screen.getByRole('heading', { name: 'Search what was said in the recordings.' })
       ).toBeInTheDocument();
     });
 
@@ -79,7 +79,7 @@ describe('HomePage', () => {
       'href',
       '/explore'
     );
-    expect(screen.getByRole('link', { name: 'Browse every VOD' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Browse all VODs' })).toHaveAttribute(
       'href',
       '/episodes'
     );

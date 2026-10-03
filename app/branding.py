@@ -35,7 +35,10 @@ class BrandProfile(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     schema_version: Literal[1] = 1
     name: str = Field(default="Transcript Archive", min_length=1, max_length=80)
-    description: str = Field(default="Search the archive, share a passage, and keep its context.", max_length=300)
+    description: str = Field(
+        default="A searchable archive of timestamped transcripts, with each passage linked to its source recording.",
+        max_length=300,
+    )
     creator_name: str = Field(default="the creators", min_length=1, max_length=100)
     tagline: str = Field(default="Broadcast archive", max_length=100)
     operator_name: str = Field(default="Archive team", min_length=1, max_length=100)

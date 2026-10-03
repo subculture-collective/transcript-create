@@ -309,7 +309,7 @@ test("anonymous visitors can search from the populated archive home", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Find the moment. Read the record." }),
+    page.getByRole("heading", { name: "Search what was said in the recordings." }),
   ).toBeVisible();
   await expect(page.getByText("Seeded archive episode").first()).toBeVisible();
 

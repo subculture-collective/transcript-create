@@ -258,7 +258,13 @@ class SearchRepository:
                     v.channel_name
                 FROM youtube_transcripts yt
                 JOIN videos v ON yt.video_id = v.id
-                JOIN youtube_segments ys ON ys.youtube_transcript_id = yt.id
+                JOIN LATERAL (
+                    SELECT segment.id, segment.start_ms, segment.end_ms, segment.text
+                    FROM youtube_segments segment
+                    WHERE segment.youtube_transcript_id = yt.id
+                    ORDER BY segment.start_ms ASC
+                    LIMIT 1
+                ) ys ON true
                 WHERE {' AND '.join(title_where)}
                 ORDER BY yt.video_id, ys.start_ms ASC
             ), title_hits AS (
@@ -467,7 +473,13 @@ class SearchRepository:
                     v.channel_name
                 FROM youtube_transcripts yt
                 JOIN videos v ON yt.video_id = v.id
-                JOIN youtube_segments ys ON ys.youtube_transcript_id = yt.id
+                JOIN LATERAL (
+                    SELECT segment.id, segment.start_ms, segment.end_ms, segment.text
+                    FROM youtube_segments segment
+                    WHERE segment.youtube_transcript_id = yt.id
+                    ORDER BY segment.start_ms ASC
+                    LIMIT 1
+                ) ys ON true
                 WHERE {' AND '.join(youtube_title_where)}
                 ORDER BY video_id, start_ms ASC
             ), youtube_title_hits AS (

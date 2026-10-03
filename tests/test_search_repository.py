@@ -1,3 +1,6 @@
+import pytest
+from sqlalchemy import text
+
 from app import crud
 from app.search.highlights import HIGHLIGHT_END, HIGHLIGHT_START, POSTGRES_HEADLINE_OPTIONS
 from app.search.repositories import PostgresSearchBackend
@@ -24,6 +27,33 @@ class FakeDB:
     def execute(self, statement, params):
         self.calls.append({"statement": statement, "params": params})
         return FakeResult(self.rows)
+
+
+@pytest.mark.parametrize("method", ["search_youtube", "search_best"])
+def test_title_search_selects_earliest_segment_across_transcripts(db_session, method):
+    # Temporary relations keep this regression independent of the archive size.
+    for sql in [
+        "CREATE TEMP TABLE videos (id text, title text, youtube_id text, uploaded_at timestamptz, "
+        "duration_seconds int, channel_name text, category text, language text) ON COMMIT DROP",
+        "CREATE TEMP TABLE segments (id bigint, video_id text, start_ms int, end_ms int, "
+        "text text, text_tsv tsvector, speaker_label text) ON COMMIT DROP",
+        "CREATE TEMP TABLE youtube_transcripts (id bigint, video_id text) ON COMMIT DROP",
+        "CREATE TEMP TABLE youtube_segments (id bigint, youtube_transcript_id bigint, "
+        "start_ms int, end_ms int, text text, text_tsv tsvector) ON COMMIT DROP",
+        "INSERT INTO videos (id,title,youtube_id,channel_name) VALUES "
+        "('v1','titleonlyneedle','yt1','channel'), ('empty','titleonlyneedle','yt2','channel')",
+        "INSERT INTO youtube_transcripts VALUES (1,'v1'), (2,'v1'), (3,'empty')",
+        "INSERT INTO youtube_segments VALUES "
+        "(1,1,5000,6000,'later',to_tsvector('english','later')), "
+        "(2,1,1000,2000,'first',to_tsvector('english','first')), "
+        "(3,2,0,1000,'earliest',to_tsvector('english','earliest'))",
+    ]:
+        db_session.execute(text(sql))
+
+    search = getattr(SearchRepository(), method)
+    rows = search(db_session, q="titleonlyneedle", limit=10)
+    assert [(row["id"], row["video_id"], row["start_ms"]) for row in rows] == [(3, "v1", 0)]
+    assert search(db_session, q="titleonlyneedle", filters={"channel": "excluded"}) == []
 
 
 def test_search_native_builds_expected_sql_and_params():

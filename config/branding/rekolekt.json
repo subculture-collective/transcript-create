@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "name": "Rekolekt",
-  "description": "Search recordings, share a passage, and keep its context.",
+  "description": "Rekolekt transcribes each recording with timestamps, indexes the text, and links every passage back to the second it was spoken.",
   "creator_name": "the creators",
-  "tagline": "Searchable recordings. Source intact.",
+  "tagline": "Software for recording archives",
   "operator_name": "SUBCULT",
   "operator_url": "https://subcult.tv",
   "project_notice": "Source recordings and trademarks belong to their respective owners.",

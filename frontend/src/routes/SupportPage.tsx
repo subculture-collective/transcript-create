@@ -7,17 +7,17 @@ import type { SupportConfig } from '../types/api';
 const fundingLines = [
   {
     number: '01',
-    title: 'Keep the archive online',
-    copy: 'Storage, backups, bandwidth, and the systems that keep thousands of broadcasts available.',
+    title: 'Hosting',
+    copy: 'Storage, backups, bandwidth, and the servers that keep the recordings available.',
   },
   {
     number: '02',
-    title: 'Turn broadcasts into a record',
-    copy: 'Transcription, search indexing, chapter generation, and the ongoing work of citing every result.',
+    title: 'Transcription and indexing',
+    copy: 'Transcription, search indexing, and chapter generation for the recordings in the archive.',
   },
   {
     number: '03',
-    title: 'Keep access public',
+    title: 'Public access',
     copy: 'No paywall around search, transcripts, timelines, or the source links behind a claim.',
   },
 ];
@@ -53,11 +53,10 @@ export default function SupportPage() {
               <span className="archive-eyebrow">Support {site.name}</span>
               <span className="source-pill">public infrastructure</span>
             </div>
-            <h1 className="archive-display">Keep the public record searchable.</h1>
+            <h1 className="archive-display">Donations pay for hosting and transcription.</h1>
             <p className="max-w-2xl text-lg leading-8 text-muted sm:text-xl">
-              {site.name} turns years of livestreams into a searchable, timestamped archive.
-              Donations pay for the unglamorous machinery that keeps the record online, cited, and
-              open.
+              {site.name} is a searchable, timestamped archive of recordings. Donations pay for the
+              storage, servers, and transcription that keep it online and open to everyone.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               {donationsEnabled ? (

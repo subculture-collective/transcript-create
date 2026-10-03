@@ -173,8 +173,8 @@ export default function TopicPage() {
           <div className="text-xs uppercase tracking-[0.24em] text-subtle">Topic</div>
           <h1 className="page-title mt-2">Topic: {topic}</h1>
           <p className="mt-2 max-w-2xl text-muted">
-            Citation-backed mention map for a real search term. This page only shows moments that
-            were actually found in recordings.
+            Mentions of this term across the archive. Every moment listed here was found in a
+            transcript and links to its timestamp.
           </p>
         </div>
 

@@ -30,7 +30,7 @@ const routeMeta: Array<{ match: RegExp; title: string; description: string }> = 
   {
     match: /^\/search/,
     title: 'Search transcripts — {name}',
-    description: 'Find timestamped, citation-backed moments across the archive.',
+    description: 'Search the transcripts for timestamped moments.',
   },
   {
     match: /^\/explore/,
@@ -75,7 +75,7 @@ const routeMeta: Array<{ match: RegExp; title: string; description: string }> = 
   {
     match: /^\/about/,
     title: 'About the archive — {name}',
-    description: 'How {name} turns public broadcasts into a searchable, cited record.',
+    description: 'How {name} transcribes, indexes, and links its recordings.',
   },
   {
     match: /^\/(privacy|terms)/,
@@ -178,7 +178,7 @@ function HeaderSearch() {
         name="header-q"
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        placeholder="Search every transcript…"
+        placeholder="Search transcripts…"
         aria-label="Search transcripts"
         autoComplete="off"
       />

@@ -25,7 +25,8 @@ export type SiteConfig = {
 };
 const defaults: SiteConfig = {
   name: 'Transcript Archive',
-  description: 'Search the archive, share a passage, and keep its context.',
+  description:
+    'A searchable archive of timestamped transcripts, with each passage linked to its source recording.',
   creator_name: 'the creators',
   public_passages_enabled: true,
   community_enabled: false,

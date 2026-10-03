@@ -79,10 +79,11 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-6">
-              <h1 className="archive-display">Find the moment. Read the record.</h1>
+              <h1 className="archive-display">Search what was said in the recordings.</h1>
               <p className="max-w-2xl text-lg leading-8 text-muted sm:text-xl">
-                Search years of broadcasts by topic or exact phrase, then move from the result
-                straight into the cited transcript and VOD.
+                Search the transcripts by topic or exact phrase. Each result opens the recording and
+                its transcript at the timestamp. Transcripts are generated automatically and can
+                contain errors, so check the recording before you quote one.
               </p>
             </div>
 
@@ -91,7 +92,7 @@ export default function HomePage() {
                 Explore the archive →
               </Link>
               <Link to="/episodes" className="text-muted transition-colors hover:text-ink">
-                Browse every VOD
+                Browse all VODs
               </Link>
               <Link to="/support" className="text-muted transition-colors hover:text-ink">
                 Support the archive
@@ -107,7 +108,7 @@ export default function HomePage() {
               height="180"
               className="home-emblem"
             />
-            <div className="archive-rule-title">Search the record</div>
+            <div className="archive-rule-title">Search transcripts</div>
             <form onSubmit={onSubmit} className="archive-command">
               <label className="sr-only" htmlFor="home-search">
                 Search {site.name}
@@ -250,7 +251,7 @@ export default function HomePage() {
         <div className="archive-section space-y-5">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <div className="archive-eyebrow">Latest signal</div>
+              <div className="archive-eyebrow">New in the archive</div>
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.045em] text-ink">
                 Recently indexed
               </h2>
@@ -279,12 +280,12 @@ export default function HomePage() {
 
         <section aria-label="Archive highlights" className="archive-section flex flex-col gap-6">
           <div>
-            <div className="archive-eyebrow">Open a thread</div>
+            <div className="archive-eyebrow">Starting points</div>
             <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-ink">
               Popular searches
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Recurring archive terms, ready to open as timestamped evidence.
+              Terms people search for often. Each opens its matching transcript moments.
             </p>
           </div>
 
@@ -306,7 +307,7 @@ export default function HomePage() {
               <p className="text-sm text-muted">
                 {summaryState === 'error'
                   ? 'Popular searches could not be loaded. Retry the archive summary.'
-                  : 'Search activity will surface useful starting points here.'}
+                  : 'Popular searches appear here once people have searched the archive.'}
               </p>
             )}
           </div>
@@ -330,14 +331,18 @@ export default function HomePage() {
         <div>
           <div className="archive-eyebrow">How it works</div>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.045em] text-ink">
-            From broadcast to evidence.
+            From a search to the recording.
           </h2>
         </div>
         <ol className="grid gap-3 sm:grid-cols-3">
           {[
-            ['01', 'Search', 'Use a subject, name, or exact phrase.'],
-            ['02', 'Inspect', 'Compare matching moments across VODs.'],
-            ['03', 'Read', 'Open the transcript at the cited timestamp.'],
+            ['01', 'Query', 'A subject, a name, or an exact phrase.'],
+            ['02', 'Results', 'Matching transcript moments, grouped by VOD.'],
+            [
+              '03',
+              'Source',
+              'The recording and its transcript, opened at the timestamp. The transcript is automatic, so check the recording before quoting.',
+            ],
           ].map(([number, title, copy]) => (
             <li key={number} className="border-l border-border pl-4">
               <div className="font-mono text-xs text-accent">{number}</div>

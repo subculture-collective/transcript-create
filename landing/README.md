@@ -22,6 +22,24 @@ rtk proxy node --check landing/demo.js
 rtk proxy docker build -t rekolekt-landing:review landing
 ```
 
+## Social preview
+
+`social-preview.svg` is the source for `social-preview.png` (1200 × 630). Its text
+repeats the page headline, so edit both together. The SVG names only generic
+`sans-serif` and `monospace` families; the committed PNG was rendered on Kvant,
+where they resolve to Liberation Sans and BitstromWera Nerd Font
+(rsvg-convert 2.62.3). Another font setup gives different glyphs, so look at the
+PNG after rendering.
+
+```sh
+rtk proxy rsvg-convert -w 1200 -h 630 landing/social-preview.svg -o landing/social-preview.png
+rtk proxy sha256sum landing/social-preview.png landing/style.css landing/demo.js
+```
+
+`index.html` versions `style.css`, `demo.js` and the `og:image` URL with `?v=` and
+the first 12 hex characters of the file's SHA-256. Update the matching value
+whenever one of those files changes.
+
 Check the rendered desktop and narrow layouts, search matches and empty results,
 passage selection, keyboard access, FAQ disclosure, local fonts and images.
 

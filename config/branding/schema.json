@@ -56,7 +56,7 @@
       "type": "string"
     },
     "description": {
-      "default": "Search the archive, share a passage, and keep its context.",
+      "default": "A searchable archive of timestamped transcripts, with each passage linked to its source recording.",
       "maxLength": 300,
       "title": "Description",
       "type": "string"

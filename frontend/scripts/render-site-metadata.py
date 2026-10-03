@@ -32,7 +32,10 @@ def render(root: Path, environ: dict) -> None:
     name = environ.get("SITE_NAME", profile.get("name", "Transcript Archive"))
     description = environ.get(
         "SITE_DESCRIPTION",
-        profile.get("description", "Search the archive, share a passage, and keep its context."),
+        profile.get(
+            "description",
+            "A searchable archive of timestamped transcripts, with each passage linked to its source recording.",
+        ),
     )
     image = profile.get("social_image_url") or "/social-card.svg"
     dimensions = []

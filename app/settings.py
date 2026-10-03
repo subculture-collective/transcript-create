@@ -153,7 +153,10 @@ class Settings(BaseSettings):
     CLIP_SPOOL_DIR: str = ""
     ATPROTO_ENABLED: bool = False
     ATPROTO_HANDLE_RESOLVER: str = "https://bsky.social"
-    SITE_DESCRIPTION: str = Field(default="Search the archive, share a passage, and keep its context.", max_length=300)
+    SITE_DESCRIPTION: str = Field(
+        default="A searchable archive of timestamped transcripts, with each passage linked to its source recording.",
+        max_length=300,
+    )
     PUBLIC_PASSAGES_ENABLED: bool = True
     # Public Stripe-hosted Payment Link. The archive never accepts card details or
     # creates charges directly; an empty value keeps donations disabled.

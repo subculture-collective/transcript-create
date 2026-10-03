@@ -200,7 +200,7 @@ export default function FavoritesPage() {
         <div className="text-xs uppercase tracking-[0.24em] text-subtle">Saved</div>
         <h1 className="page-title">Saved moments and searches</h1>
         <p className="max-w-2xl text-muted">
-          Keep interesting moments handy and preserve the searches that matter.
+          Transcript moments and searches you have saved, kept here so you can return to them.
         </p>
       </section>
 

@@ -1,5 +1,7 @@
 # Rekolekt
 
+![Rekolekt: The sentence, and where it was said. Green index mark on a dark archive field.](docs/assets/readme/banner.png)
+
 Rekolekt is software for running an archive of long recordings. It transcribes
 each recording with timestamps, indexes the text, and links every passage back
 to the second it was spoken in the source video.
@@ -8,7 +10,7 @@ You deploy it yourself; it is not a hosted upload service. It suits people who
 maintain a collection and want others to search and cite it: a creator with a
 back catalog, a research group, a community keeping its own reference.
 
-[Explore Rekolekt](https://subcult.tv/products/transcript-create) · [See it in use at HasanAra](https://hasanara.tv) · [Suggest a feature](https://git.subcult.tv/subculture-collective/transcript-create/issues)
+[Explore Rekolekt](https://subcult.tv/products/rekolekt) · [See it in use at HasanAra](https://hasanara.tv) · [Suggest a feature](https://git.subcult.tv/subculture-collective/rekolekt/issues)
 
 ## What it does
 
@@ -35,13 +37,13 @@ sources. Other archives can supply their own branding without maintaining a
 source fork or rebuilding the frontend. Available features depend on the
 deployment's server settings.
 
-The source repository retains the name `transcript-create`.
+The repository is now `subculture-collective/rekolekt`; historical deployment
+identifiers may still use `transcript-create`.
 
 ## Run your own or contribute
 
-The application uses React, FastAPI, PostgreSQL, and transcription workers.
-Local development requires Python 3.11, Node.js 20, and Docker with Compose.
-The [development guide](DEVELOPMENT.md) covers setup and the canonical `make verify`
+For ingestion, deployment configuration, local setup and verification, the
+[development guide](DEVELOPMENT.md) covers setup and the canonical `make verify`
 gate.
 
 - [Client branding and deployment](docs/deployment/client-branding.md)

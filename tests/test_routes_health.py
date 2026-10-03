@@ -2,12 +2,25 @@
 
 import statistics
 import time
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routes.health import admin_required
+
+
+@pytest.mark.asyncio
+async def test_disabled_opensearch_does_not_acquire_database_connection(monkeypatch):
+    from app.routes import health
+
+    monkeypatch.setattr(health.settings, "SEARCH_BACKEND", "postgres")
+    connect = MagicMock(side_effect=RuntimeError("database pool exhausted"))
+    monkeypatch.setattr(health.engine, "connect", connect)
+
+    assert await health.check_opensearch() == {"status": "disabled"}
+    connect.assert_not_called()
 
 
 @pytest.fixture

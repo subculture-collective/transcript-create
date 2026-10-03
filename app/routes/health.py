@@ -117,13 +117,13 @@ async def check_opensearch() -> Dict[str, Any]:
     Returns:
         Dict with status, latency_ms, and optional error
     """
+    if settings.SEARCH_BACKEND != "opensearch":
+        return {"status": "disabled"}
+
     from app.search.outbox import search_freshness
 
     with engine.connect() as conn:
         freshness = search_freshness(conn)
-    if settings.SEARCH_BACKEND != "opensearch":
-        return {"status": "disabled", **freshness}
-
     start_time = time.time()
     try:
         import requests

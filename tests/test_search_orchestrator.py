@@ -87,12 +87,17 @@ def test_search_orchestrator_anonymous_search_skips_history(monkeypatch):
     )
     monkeypatch.setattr(search_analytics, "save_search_history", save_history)
     monkeypatch.setattr("app.search.orchestrator.PostgresSearchBackend", lambda _db: FakeBackend())
+    freshness = MagicMock(side_effect=RuntimeError("external index backlog is unavailable"))
+    monkeypatch.setattr("app.search.orchestrator.search_freshness", freshness)
 
     result = SearchOrchestrator().search(db, request, q="hello", source="native")
 
     assert result.hits[0].snippet == "hello"
     assert result.hits[0].highlights == []
     assert result.hits[0].source == "whisper"
+    assert result.indexed_at is None
+    assert result.index_lag_seconds == 0
+    freshness.assert_not_called()
     save_history.assert_not_called()
 
 

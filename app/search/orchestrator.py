@@ -329,15 +329,16 @@ class SearchOrchestrator:
                 len(hits),
                 query_time_ms,
             )
-        freshness = search_freshness(db)
+        # PostgreSQL searches read the source tables directly; external index
+        # backlog is unrelated to their freshness and can be costly to count.
         return SearchResponse(
             total=None,
             hits=hits,
             query_time_ms=query_time_ms,
             backend="postgres",
             degraded=False,
-            indexed_at=freshness["indexed_at"],
-            index_lag_seconds=freshness["index_lag_seconds"],
+            indexed_at=None,
+            index_lag_seconds=0,
         )
 
     def _postgres_fallback(

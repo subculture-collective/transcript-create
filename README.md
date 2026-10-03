@@ -1,34 +1,34 @@
 # Rekolekt
 
-**Searchable recordings. Quotable moments. Source intact.**
+Rekolekt is software for running an archive of long recordings. It transcribes
+each recording with timestamps, indexes the text, and links every passage back
+to the second it was spoken in the source video.
 
-Rekolekt turns long-form recordings into a searchable transcript archive. Find
-what was said, return to the timestamp in the source video, and save or share a
-passage with its context.
-
-It is built for creators, researchers, and communities who want recorded
-conversations to stay useful after the broadcast ends.
+You deploy it yourself; it is not a hosted upload service. It suits people who
+maintain a collection and want others to search and cite it: a creator with a
+back catalog, a research group, a community keeping its own reference.
 
 [Explore Rekolekt](https://subcult.tv/products/transcript-create) · [See it in use at HasanAra](https://hasanara.tv) · [Suggest a feature](https://git.subcult.tv/subculture-collective/transcript-create/issues)
 
-## Turn an archive into something people can use
+## What it does
 
-- **Make recordings searchable:** ingest videos and build timestamped transcripts
-  that visitors can browse and search.
-- **Keep the source close:** open results in the original player and read the
-  surrounding transcript.
-- **Share a passage:** choose a start and end, preview the selection, and copy a
-  link that restores the range and context. Basic passage links need no account.
-- **Build a personal reference:** save searches and moments, and export transcript
-  text for further work.
-- **Make it your archive:** supply a public brand profile, artwork, and theme
-  while using the same application core.
+- **Transcript and index:** videos are ingested and transcribed into timestamped
+  text that visitors can browse and search.
+- **Source link:** results open in the original player, with the surrounding
+  transcript alongside.
+- **Passage link:** a visitor chooses a start and end, previews the selection, and
+  copies a link that restores the range and context. Basic passage links need no
+  account.
+- **Saves and exports:** visitors can save searches and moments, and export
+  transcript text for further work.
+- **Brand profile:** each archive supplies its own public profile, artwork, and
+  theme while using the same application core.
 
-Automated transcription can contain errors. Passage links point to the currently
-available source and transcript; they are not immutable citations or downloaded
-video clips. See the [passage-sharing guide](docs/product/passage-sharing.md).
+Transcripts are machine-made and can contain errors; check the recording before
+quoting. Passage links point to the currently available source and transcript;
+they are not immutable citations or downloaded video clips. See the [passage-sharing guide](docs/product/passage-sharing.md).
 
-## One application, distinct archives
+## Each archive runs under its own name
 
 [HasanAra](https://hasanara.tv) runs on Rekolekt with its own identity and broadcast
 sources. Other archives can supply their own branding without maintaining a

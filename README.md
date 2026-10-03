@@ -42,6 +42,7 @@ identifiers may still use `transcript-create`.
 
 ## Run your own or contribute
 
+Local development requires Python 3.11, Node.js 20, and Docker with Compose.
 For ingestion, deployment configuration, local setup and verification, the
 [development guide](DEVELOPMENT.md) covers setup and the canonical `make verify`
 gate.

@@ -1,6 +1,6 @@
 # Rekolekt
 
-![Rekolekt: The sentence, and where it was said. Green index mark on a dark archive field.](docs/assets/readme/banner.png)
+![Rekolekt: The sentence, and where it was said. Green index mark on a dark archive field.](https://git.subcult.tv/api/v1/repos/subculture-collective/rekolekt/raw/docs/assets/readme/banner.png?ref=050194e739f35554a0b22db4abd22a52359d694f)
 
 Rekolekt is software for running an archive of long recordings. It transcribes
 each recording with timestamps, indexes the text, and links every passage back

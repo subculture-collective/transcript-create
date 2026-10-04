@@ -46,14 +46,8 @@ output/playwright/
 output/verification/
 docker-volumes/
 
-# Frontend build artifacts
+# Node build artifacts (commit tooling, JavaScript SDK)
 **/node_modules
-frontend/node_modules
-frontend/dist
-frontend/dist-ssr
-frontend/.vite
-frontend/.eslintcache
-frontend/.tsbuildinfo
 
 # Documentation
 # Exclude all Markdown files except DEPENDENCIES.md.
@@ -64,7 +58,6 @@ docs/
 
 # Tests (not needed in production image)
 tests/
-e2e/
 *.test.js
 *.spec.js
 *.test.py

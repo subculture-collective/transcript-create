@@ -154,6 +154,7 @@ activemq-data/
 .envrc
 .venv
 .release-venv/
+.verify-venv/
 env/
 venv/
 .venv/*
@@ -221,30 +222,17 @@ __marimo__/
 data/
 cache/
 
-# --- Monorepo / Frontend (Vite React) ---
-# Node and build outputs
-frontend/node_modules/
-frontend/dist/
-frontend/dist-ssr/
-frontend/.vite/
-frontend/.eslintcache
-frontend/.tsbuildinfo
+# Node and build outputs (commit tooling, JavaScript SDK)
 **/node_modules/
 **/dist/
 
 # Local deepwork orchestration state
 .blacktower/deepwork/
 
-# Frontend env and local overrides
-frontend/.env
-frontend/.env.*
-frontend/*.local
-
 # Package manager lockfiles (managed per workspace)
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
-!e2e/package-lock.json
 
 # OS/editor cruft and logs
 **/.DS_Store
@@ -277,6 +265,3 @@ deploy-backups/
 /*.bak-*
 /title-entity-candidates*.csv
 /people-from-titles.json
-
-# Deployment-owned client assets for local Vite previews
-frontend/public/branding/

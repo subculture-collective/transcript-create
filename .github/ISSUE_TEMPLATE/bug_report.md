@@ -47,9 +47,7 @@ Paste logs here
 <!-- Please complete the following information -->
 
 - **OS**: [e.g., Ubuntu 22.04, macOS 14, Windows 11]
-- **Browser** (if frontend issue): [e.g., Chrome 120, Firefox 121, Safari 17]
-- **Python Version** (if backend issue): [e.g., 3.11.5]
-- **Node Version** (if frontend issue): [e.g., 20.10.0]
+- **Python Version**: [e.g., 3.11.5]
 - **Docker Version** (if using Docker): [e.g., 24.0.7]
 - **Installation Method**: [Docker Compose / Local / Kubernetes / Other]
 

@@ -11,8 +11,6 @@ CANONICAL = (
     "docs/STATUS.md",
     "docs/access-matrix.md",
     "docs/api-reference.md",
-    "docs/ACCESSIBILITY.md",
-    "docs/DESIGN_SYSTEM.md",
     "docs/MIGRATIONS.md",
     "docs/development/architecture.md",
     "docs/development/testing.md",
@@ -61,28 +59,12 @@ def main() -> int:
         if (ROOT / relative).exists():
             errors.append(f"retired audit or planning artifact exists: {relative}")
 
-    retired_assets = (
-        "frontend/public/offline.html",
-        "frontend/public/manifest.json",
-    )
-    for relative in retired_assets:
+    # Core is headless: the bundled frontend and browser suite live in rekolekt-web.
+    for relative in ("frontend", "e2e"):
         if (ROOT / relative).exists():
-            errors.append(f"retired PWA asset exists: {relative}")
-
-    retirement_worker = ROOT / "frontend/public/sw.js"
-    if retirement_worker.exists():
-        worker_source = retirement_worker.read_text(encoding="utf-8")
-        required_retirement_markers = (
-            "caches.keys()",
-            "caches.delete(key)",
-            "self.registration.unregister()",
-            "self.clients.matchAll",
-            "client.navigate(client.url)",
-        )
-        if any(marker not in worker_source for marker in required_retirement_markers):
-            errors.append("frontend/public/sw.js is not the approved retirement worker")
-        if "addEventListener('fetch'" in worker_source or "cache.put(" in worker_source:
-            errors.append("frontend/public/sw.js must not cache or intercept application requests")
+            errors.append(f"headless core must not contain {relative}/; it belongs in rekolekt-web")
+    if not (ROOT / "docs/api/openapi.json").is_file():
+        errors.append("missing committed API contract: docs/api/openapi.json")
 
     retired_sources = (
         "requirements.txt",
@@ -96,31 +78,8 @@ def main() -> int:
         if "stripe" in text:
             errors.append(f"retired Stripe configuration remains in {relative}")
 
-    frontend_runtime = "\n".join(
-        (ROOT / relative).read_text(encoding="utf-8") for relative in ("frontend/src/main.tsx", "frontend/index.html")
-    )
-    for marker in ("serviceWorker", "manifest.json", "offline.html", "sw.js"):
-        if marker in frontend_runtime:
-            errors.append(f"retired PWA runtime marker remains: {marker}")
-
-    route_source = (ROOT / "frontend/src/main.tsx").read_text(encoding="utf-8")
-    for route in (
-        "search",
-        "explore",
-        "episodes",
-        "timeline",
-        "topics/:query",
-        "v/:videoId",
-        "login",
-        "saved",
-        "favorites",
-        "admin",
-    ):
-        if f"path: '{route}'" not in route_source:
-            errors.append(f"documented frontend route missing from router: {route}")
-
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    if "make verify" not in readme or "Python 3.11" not in readme or "Node.js 20" not in readme:
+    if "make verify" not in readme or "Python 3.11" not in readme or "docs/api/openapi.json" not in readme:
         errors.append("README is missing the canonical runtime or verification command")
 
     if errors:

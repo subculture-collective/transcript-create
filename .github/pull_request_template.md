@@ -44,7 +44,7 @@
 
 - [ ] Unit tests
 - [ ] Integration tests
-- [ ] E2E tests
+- [ ] OpenAPI contract check (`make openapi-check`)
 - [ ] Manual testing
 - [ ] Not applicable
 
@@ -54,7 +54,6 @@
 
 - **OS**:
 - **Python Version**:
-- **Node Version** (if frontend):
 - **Database**:
 
 ## 📸 Screenshots / Videos (if applicable)
@@ -71,7 +70,7 @@
 
 ### Code Quality
 
-- [ ] My code follows the project's style guidelines (ruff, black, isort for Python; ESLint, Prettier for TypeScript)
+- [ ] My code follows the project's style guidelines (ruff, black, isort)
 - [ ] I have performed a self-review of my code
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] My changes generate no new warnings
@@ -81,15 +80,15 @@
 
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
-- [ ] I have run the full test suite (pytest for backend, npm test for frontend)
+- [ ] I have run the full verification (`make verify`)
 - [ ] Integration tests pass (if applicable)
-- [ ] E2E tests pass (if applicable)
+- [ ] If the API changed, I regenerated `docs/api/openapi.json` with `make openapi`
 
 ### Documentation
 
 - [ ] I have updated the documentation accordingly (README, docs/, code comments)
 - [ ] I have updated the API documentation (if API changes)
-- [ ] I have added/updated JSDoc or docstrings
+- [ ] I have added/updated docstrings
 - [ ] I have updated the CHANGELOG.md (if applicable)
 
 ### Database Changes

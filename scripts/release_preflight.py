@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 CORE_ROOT = Path(__file__).resolve().parent.parent
 DIGEST_RE = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
-IMAGE_ROLES = {"api", "ingest-cuda", "ml-cuda", "frontend", "postgres-walg", "redis"}
+IMAGE_ROLES = {"api", "ingest-cuda", "ml-cuda", "postgres-walg", "redis"}
 SERVICE_ROLES = {
     "db": "postgres-walg",
     "backup": "postgres-walg",
@@ -34,7 +34,6 @@ SERVICE_ROLES = {
     "archive-enrichment-queue": "api",
     "worker": "ingest-cuda",
     "diarization-worker": "ml-cuda",
-    "frontend": "frontend",
     "redis": "redis",
 }
 RETIRABLE_SERVICES = {"opensearch", "dashboards", "prometheus", "grafana", "diarization-worker"}

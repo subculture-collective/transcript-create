@@ -80,7 +80,7 @@ def fleet_files(tmp_path):
                 "id": name,
                 "profile": f"{name}.json",
                 "assets": "assets",
-                "services": ["api", "frontend", "migrations", "worker"],
+                "services": ["api", "migrations", "worker"],
             }
         )
     fleet = tmp_path / "fleet.json"
@@ -100,11 +100,7 @@ def test_one_release_updates_multiple_clients_without_editing_profiles(tmp_path)
         assert Path(mount["source"]).name == f"{name}.json"
         assert mount["read_only"] is True
         assert compose["services"]["worker"]["environment"]["SITE_PROFILE_PATH"] == mount["target"]
-        frontend = compose["services"]["frontend"]
-        assert frontend["environment"]["SITE_PROFILE_PATH"] == mount["target"]
-        assert "FRONTEND_ORIGIN:?" in frontend["environment"]["FRONTEND_ORIGIN"]
-        assert frontend["volumes"][0] == mount
-        assert frontend["volumes"][1]["target"] == "/usr/share/nginx/html/branding"
+        assert set(compose["services"]) == {"api", "migrations", "worker"}
     assert (tmp_path / "north.json").read_bytes() == before
     with pytest.raises(FileExistsError):
         plan_updates(manifest, fleet, tmp_path / "plan")
@@ -124,6 +120,17 @@ def test_mutable_images_cannot_be_planned(tmp_path):
     data["images"]["api"] = "registry.example/api:latest"
     manifest.write_text(json.dumps(data))
     with pytest.raises(PreflightError):
+        plan_updates(manifest, fleet, tmp_path / "plan")
+
+
+def test_release_manifest_and_plan_have_no_frontend_role(tmp_path):
+    assert "frontend" not in IMAGE_ROLES
+    assert "frontend" not in SERVICE_ROLES
+    manifest, fleet = fleet_files(tmp_path)
+    data = json.loads(fleet.read_text())
+    data["clients"][0]["services"].append("frontend")
+    fleet.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="unknown or duplicate"):
         plan_updates(manifest, fleet, tmp_path / "plan")
 
 

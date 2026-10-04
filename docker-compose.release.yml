@@ -106,10 +106,6 @@ services:
             ALLOW_SESSION_TOKEN_CONTRACT_MIGRATION: "false"
             ALLOW_EVENT_TOKEN_CONTRACT_MIGRATION: "false"
 
-    frontend:
-        build: !reset null
-        image: ${HASANARA_FRONTEND_IMAGE:?HASANARA_FRONTEND_IMAGE is required}
-
     backup:
         build: !reset null
         image: ${HASANARA_POSTGRES_IMAGE:?HASANARA_POSTGRES_IMAGE is required}

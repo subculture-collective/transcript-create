@@ -154,11 +154,3 @@ services:
     backup:
         profiles: !override []
         env_file: ${HASANARA_ENV_FILE:-.env}
-
-    frontend:
-        build:
-            context: ${TRANSCRIPT_CORE_DIR:-.}
-            dockerfile: frontend/Dockerfile
-        image: hasanara-frontend:latest
-        container_name: hasanara-web
-        restart: unless-stopped

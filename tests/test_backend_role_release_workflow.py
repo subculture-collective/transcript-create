@@ -11,12 +11,12 @@ def test_selective_release_accepts_only_supported_application_roles():
 
     assert "- api" in source
     assert "- ingest-cuda" in source
-    assert '[[ "$ROLE" == api || "$ROLE" == ingest-cuda || "$ROLE" == frontend ]]' in source
+    assert '[[ "$ROLE" == api || "$ROLE" == ingest-cuda ]]' in source
     assert "Dockerfile.api" in source
     assert "Dockerfile.ingest.cuda" in source
-    assert "frontend/Dockerfile" in source
-    assert "- frontend" in source
-    assert "-m unittest discover -s frontend/scripts" in source
+    assert "frontend/Dockerfile" not in source
+    assert "- frontend" not in source
+    assert "hasanara-frontend" not in source
     assert "Dockerfile.cuda" not in source
     assert "Dockerfile.postgres-walg" not in source
 
@@ -56,3 +56,11 @@ def test_selected_digest_is_scanned_signed_attested_and_uploaded():
     assert "--type slsaprovenance --predicate selected.provenance.json" in source
     assert "--type spdxjson --predicate selected.spdx.json" in source
     assert "release-images.json" in source
+
+
+def test_selective_release_drops_a_legacy_frontend_role_from_the_base_manifest():
+    source = WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'if role not in {os.environ["ROLE"], "redis", "frontend"}:' in source
+    assert 'manifest["images"].pop("frontend", None)' in source
+    assert 'manifest["services"].pop("frontend", None)' in source

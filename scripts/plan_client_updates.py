@@ -41,8 +41,8 @@ def plan_updates(manifest_path: Path, fleet_path: Path, output: Path) -> dict:
                 if not asset.is_relative_to(assets) or not asset.is_file():
                     raise ValueError("Client brand asset is missing or outside the asset directory")
         selected = client["services"]
-        if not isinstance(selected, list) or not {"api", "frontend", "migrations"}.issubset(selected):
-            raise ValueError("Client services must include api, frontend and migrations")
+        if not isinstance(selected, list) or not {"api", "migrations"}.issubset(selected):
+            raise ValueError("Client services must include api and migrations")
         if len(set(selected)) != len(selected) or set(selected) - set(SERVICE_ROLES):
             raise ValueError("Client services contain unknown or duplicate services")
         services = {}
@@ -59,27 +59,6 @@ def plan_updates(manifest_path: Path, fleet_path: Path, output: Path) -> dict:
                         "read_only": True,
                         "bind": {"create_host_path": False},
                     }
-                ]
-            elif role == "frontend":
-                entry["environment"] = {
-                    "SITE_PROFILE_PATH": "/etc/transcript-archive/brand.json",
-                    "FRONTEND_ORIGIN": "${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required for link previews}",
-                }
-                entry["volumes"] = [
-                    {
-                        "type": "bind",
-                        "source": str(profile_path),
-                        "target": "/etc/transcript-archive/brand.json",
-                        "read_only": True,
-                        "bind": {"create_host_path": False},
-                    },
-                    {
-                        "type": "bind",
-                        "source": str(assets),
-                        "target": "/usr/share/nginx/html/branding",
-                        "read_only": True,
-                        "bind": {"create_host_path": False},
-                    },
                 ]
             services[service] = entry
         prepared[name] = {"services": services}

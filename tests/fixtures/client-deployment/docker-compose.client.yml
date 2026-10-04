@@ -15,9 +15,3 @@ services:
             SITE_PROFILE_PATH: /config/branding/brand.json
         volumes:
             - ./branding:/config/branding:ro
-
-    frontend:
-        networks:
-            - proxy
-        volumes:
-            - ./branding/assets:/usr/share/nginx/html/branding:ro

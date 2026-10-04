@@ -37,7 +37,7 @@ RUN apt-get update \
         -ldflags="-s -w -X github.com/wal-g/wal-g/cmd/pg.buildDate=${WALG_BUILD_DATE} -X github.com/wal-g/wal-g/cmd/pg.gitRevision=${WALG_REVISION} -X github.com/wal-g/wal-g/cmd/pg.walgVersion=${WALG_VERSION}" \
         -o /out/wal-g ./main/pg
 
-FROM postgres:16
+FROM postgres:18
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates cron rsync \

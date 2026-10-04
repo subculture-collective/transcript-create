@@ -520,8 +520,8 @@ case "$command" in
             run_enrichment_canary "$2"; exit $?
         fi
         if [[ ${1:-} == recover-attention-backlog ]]; then
-            if (($# != 3 && $# != 5)) || [[ ${2:-} != alignment && ${2:-} != yt-dlp ]] || [[ ! ${3:-} =~ ^[1-5]$ ]]; then
-                printf '%s\n' 'recover-attention-backlog requires cohort alignment|yt-dlp, limit 1..5, and optional --confirm RECOVER' >&2
+            if (($# != 3 && $# != 5)) || [[ ! ${2:-} =~ ^(alignment|yt-dlp|failed-gpu-unavailable|failed-yt-dlp)$ ]] || [[ ! ${3:-} =~ ^[1-5]$ ]]; then
+                printf '%s\n' 'recover-attention-backlog requires cohort alignment|yt-dlp|failed-gpu-unavailable|failed-yt-dlp, limit 1..5, and optional --confirm RECOVER' >&2
                 exit 64
             fi
             if (($# == 5)) && [[ ${4:-} != --confirm || ${5:-} != RECOVER ]]; then

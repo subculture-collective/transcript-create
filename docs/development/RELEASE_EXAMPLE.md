@@ -24,9 +24,7 @@ $ npm run release -- --dry-run
 
 ✔ bumping version in pyproject.toml from 0.1.0 to 0.2.0
 ✔ bumping version in package.json from 0.1.0 to 0.2.0
-✔ bumping version in frontend/package.json from 0.1.0 to 0.2.0
 ✔ bumping version in clients/javascript/package.json from 0.1.0 to 0.2.0
-✔ bumping version in e2e/package.json from 0.1.0 to 0.2.0
 ✔ outputting changes to CHANGELOG.md
 
 ---
@@ -50,7 +48,7 @@ $ npm run release -- --dry-run
 * update API authentication guide ([mno345])
 ---
 
-✔ committing pyproject.toml package.json frontend/package.json clients/javascript/package.json e2e/package.json CHANGELOG.md
+✔ committing pyproject.toml package.json clients/javascript/package.json CHANGELOG.md
 ✔ tagging release v0.2.0
 ```
 
@@ -62,11 +60,9 @@ $ npm run release
 
 ✔ bumping version in pyproject.toml from 0.1.0 to 0.2.0
 ✔ bumping version in package.json from 0.1.0 to 0.2.0
-✔ bumping version in frontend/package.json from 0.1.0 to 0.2.0
 ✔ bumping version in clients/javascript/package.json from 0.1.0 to 0.2.0
-✔ bumping version in e2e/package.json from 0.1.0 to 0.2.0
 ✔ outputting changes to CHANGELOG.md
-✔ committing pyproject.toml package.json frontend/package.json clients/javascript/package.json e2e/package.json CHANGELOG.md
+✔ committing pyproject.toml package.json clients/javascript/package.json CHANGELOG.md
 ✔ tagging release v0.2.0
 ℹ Run `git push --follow-tags` to publish
 ```

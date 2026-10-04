@@ -4,7 +4,7 @@
 
 Use additive Alembic migrations first. Verify the full history on an empty PostgreSQL database with `make verify`. Before production migration, back up PostgreSQL and complete a restore rehearsal.
 
-Deploy additive schema, then compatible API/frontend/worker images, backfills, and finally deferred destructive cleanup in a later release. Historical billing columns remain dormant compatibility fields; they do not imply a billing contract.
+Deploy additive schema, then compatible API/worker images, backfills, and finally deferred destructive cleanup in a later release. Historical billing columns remain dormant compatibility fields; they do not imply a billing contract.
 
 ## 20260813_multi_provider_ids: multiple identities per provider
 

@@ -1,7 +1,7 @@
 # Blocking Dependency and SAST Gates
 
 Transcript Archive blocks releases on reachable dependency advisories and high-severity
-Python SAST findings. The canonical runtime gate uses Python 3.11 and Node 20.
+Python SAST findings. The canonical runtime gate uses Python 3.11.
 
 Run the focused gates locally with no advisory suppressions:
 
@@ -12,7 +12,6 @@ rtk proxy python -m pip_audit -r requirements.txt --no-deps --disable-pip
 rtk proxy python -m pip_audit -r constraints.txt --no-deps --disable-pip
 rtk proxy python -m pip_audit -r requirements-ml-runtime.txt --no-deps --disable-pip
 rtk proxy python -m bandit -r app/ worker/ -lll -ii
-rtk proxy python scripts/check_security_exceptions.py --npm-audit --package-dir frontend
 ```
 
 The installed-environment pip-audit covers resolved transitive packages in
@@ -23,8 +22,18 @@ TorchAudio, TorchCodec, and pyannote, and is blocked by fixed high/critical
 Trivy application-library findings. Operating-system findings are reported
 separately; package-type scanning is conservative and is not described as
 reachability analysis. Bandit blocks
-high-severity findings with medium-or-higher confidence. The frontend gate
-blocks high and critical npm advisories.
+high-severity findings with medium-or-higher confidence. The mypy baseline and
+backend test coverage gates also run in `make verify`.
+
+## October 3: npm gates removed with the frontend
+
+Core became headless on October 3, 2026: `frontend/` and `e2e/` moved to the
+`rekolekt-web` repository. No npm package with a lockfile remains in core (the
+root commit tooling and `clients/javascript` have none), so the npm audit gate
+(`check_security_exceptions.py --npm-audit`), its React Router reachability
+check, and the frontend bundle budget were removed. There were no npm exception
+entries to retire. Archive frontends and `rekolekt-web` own their npm audits.
+The release workflow no longer builds or scans a frontend image.
 
 The Gitea release workflow builds and loads an image once, scans that local
 artifact, and pushes it without rebuilding. It then resolves and rescans the
@@ -54,9 +63,9 @@ preserves the validator's exit status before parsing its output.
 - **pip:** build stages use 26.2, then remove pip from immutable runtime images.
   Its vendored msgpack and setuptools remained vulnerable even in pip 26.2.1;
   removing the installer removes that code rather than hiding its metadata.
-- **Frontend:** the lockfile audit returned zero vulnerabilities on September 19
-  after the earlier registry outage cleared. There is no active brace-expansion
-  exception; the old path-specific exception description is retired.
+- **Frontend (historical):** the lockfile audit returned zero vulnerabilities on
+  September 19 after the earlier registry outage cleared. The frontend has since
+  left core; see the October 3 section above.
 - **Torch:** ML runtimes now pin 2.13.0, TorchAudio 2.11.0 and TorchCodec 0.14.0.
   The earlier conclusion that TorchAudio 2.13.0 was required was incorrect:
   upstream explicitly supports TorchAudio 2.11 with Torch 2.11 and later, and

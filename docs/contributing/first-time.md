@@ -238,10 +238,6 @@ Open the relevant files in your editor and make your changes.
 # Backend tests
 pytest tests/
 
-# Frontend tests
-cd frontend
-npm test
-
 # Run linters
 ruff check app/ worker/
 black --check app/ worker/

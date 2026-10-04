@@ -2,7 +2,7 @@
 
 Use these terms exactly in architecture review, implementation plans, and refactor notes.
 
-- **Module**: Anything with an interface and an implementation: a function, class, package, feature slice, route group, worker workflow, or frontend kernel.
+- **Module**: Anything with an interface and an implementation: a function, class, package, feature slice, route group, or worker workflow.
 - **Interface**: Everything a caller must know to use the Module: types, invariants, error modes, ordering, configuration, side effects, and lifecycle. The interface is not just the type signature.
 - **Implementation**: The code inside a Module that callers should not need to know in order to use it correctly.
 - **Depth**: Leverage at the interface: a lot of behavior behind a small interface. A **Deep** Module has high leverage. A **Shallow** Module has an interface nearly as complex as its implementation.

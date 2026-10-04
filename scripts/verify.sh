@@ -43,7 +43,7 @@ cleanup() {
 check_dependencies() {
   local -a missing=()
   local command_name
-  for command_name in docker npm "${PYTHON_BIN}"; do
+  for command_name in docker "${PYTHON_BIN}"; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
       missing+=("${command_name}")
     fi
@@ -112,19 +112,7 @@ read -r -a pip_audit_ignores <<< "$pip_audit_ignore_output"
 # advisory service cannot resolve. Audit their declared base versions as well.
 "${PYTHON_BIN}" -m pip_audit -r requirements-ml-runtime.txt --no-deps --disable-pip "${pip_audit_ignores[@]}"
 
-echo 'Running frontend verification...'
-npm --prefix frontend run api:check
-npm --prefix frontend run lint
-npm --prefix frontend run format:check
-npm --prefix frontend run type-check
-npm --prefix frontend run test:coverage
-npm --prefix frontend run build
-npm --prefix frontend run bundle:check
-"${PYTHON_BIN}" scripts/check_security_exceptions.py --npm-audit --package-dir frontend
-
-if [[ "${VERIFY_SKIP_BROWSER:-0}" != "1" ]]; then
-  echo 'Running seeded Chromium archive smoke tests...'
-  npm --prefix e2e run test:critical
-fi
+echo 'Checking the committed OpenAPI contract...'
+PYTHON_BIN="${PYTHON_BIN}" "${REPO_ROOT}/scripts/check_api_contracts.sh"
 
 echo 'Verification passed.'

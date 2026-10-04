@@ -4,56 +4,56 @@
   "files": [
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/tokens.json",
-      "destination": "frontend/public/brand/rekolekt/tokens.json",
+      "destination": "landing/brand/tokens.json",
       "sha256": "7a9a6aa5740162c71247d114c8e2a654362d95186eb12c3955fe100b9c36dc6f"
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/tokens.css",
-      "destination": "frontend/public/brand/rekolekt/tokens.css",
+      "destination": "landing/brand/tokens.css",
       "sha256": "12cb222aa7dc19109b5a4af24acd6ab0d5508d745da3f37bcf51e1a6e7f35226"
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/logos/mark-primary-outlined.svg",
-      "destination": "frontend/public/brand/rekolekt/logos/mark-primary-outlined.svg",
+      "destination": "landing/brand/logos/mark-primary-outlined.svg",
       "sha256": "8deb1ca24f642bdaefc2eb1ee4c78142959a0eefa0835dbdc43bd5f6401f48ca"
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/logos/lockup-primary-outlined.svg",
-      "destination": "frontend/public/brand/rekolekt/logos/lockup-primary-outlined.svg",
+      "destination": "landing/brand/logos/lockup-primary-outlined.svg",
       "sha256": "fd593b034e7ade52fa2742700b9dadc8f38f522cf1c98f124bd2a463f1d46282"
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/Space-Grotesk-0.ttf",
-      "destination": "frontend/public/brand/rekolekt/fonts/Space-Grotesk-0.ttf",
+      "destination": "landing/brand/fonts/Space-Grotesk-0.ttf",
       "sha256": "ec926d5065eaca49a48f96e312bbae0bbc5733c24215cf5dfabbdccee926fef7"
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/Public-Sans-0.ttf",
-      "destination": "frontend/public/brand/rekolekt/fonts/Public-Sans-0.ttf",
+      "destination": "landing/brand/fonts/Public-Sans-0.ttf",
       "sha256": "d8a092f98db3ae7c7f01e73f8f23aaaec97f16c325765042ae5a052f4d8de546"
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/JetBrains-Mono-0.ttf",
-      "destination": "frontend/public/brand/rekolekt/fonts/JetBrains-Mono-0.ttf",
+      "destination": "landing/brand/fonts/JetBrains-Mono-0.ttf",
       "sha256": "44ce4a84f20d60f24539bd0cef11f79c29e38609e0f8adf18551c9794a5d9dc3"
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/spacegrotesk-OFL.txt",
-      "destination": "frontend/public/brand/rekolekt/fonts/spacegrotesk-OFL.txt",
+      "destination": "landing/brand/fonts/spacegrotesk-OFL.txt",
       "sha256": "18a4de52385f6b988782639d5d0cc1326e5a8c2de9a7f01d7b20d9aedcc60943",
       "source_sha256": "564ce565c371c5e5bbf286006565a7c9aa55a9f56e7ca58d56e05d649dd61a72",
       "transformation": "Normalize line endings and trailing whitespace; license text unchanged."
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/publicsans-OFL.txt",
-      "destination": "frontend/public/brand/rekolekt/fonts/publicsans-OFL.txt",
+      "destination": "landing/brand/fonts/publicsans-OFL.txt",
       "sha256": "510d6e86ca0681edd7c5669df50c24b372a4d96b80bf507c2d29585132a24718",
       "source_sha256": "157a9e77f7580246e97c769490e2e977ae94399f9d30f4556015c41fe8c28bac",
       "transformation": "Normalize line endings and trailing whitespace; license text unchanged."
     },
     {
       "source": "branding/2026-10-01-packs/brands/rekolekt/fonts/jetbrainsmono-OFL.txt",
-      "destination": "frontend/public/brand/rekolekt/fonts/jetbrainsmono-OFL.txt",
+      "destination": "landing/brand/fonts/jetbrainsmono-OFL.txt",
       "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
       "source_sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
       "transformation": "Normalize line endings and trailing whitespace; license text unchanged."

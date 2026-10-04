@@ -3029,12 +3029,15 @@
       },
       "BrandTheme": {
         "additionalProperties": false,
-        "description": "Optional overrides of the default design. Unset fields keep the stylesheet's values.",
+        "deprecated": true,
+        "description": "Deprecated visual overrides from the site profile: font choice and colour tokens.\n\nStill served so existing frontends keep working. New frontends should own their styling.",
         "properties": {
           "dark": {
             "additionalProperties": {
               "type": "string"
             },
+            "deprecated": true,
+            "description": "Deprecated: frontends own their styling. Still served so existing frontends keep working.",
             "title": "Dark",
             "type": "object"
           },
@@ -3052,12 +3055,16 @@
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Deprecated: frontends own their styling. Still served so existing frontends keep working.",
             "title": "Font"
           },
           "light": {
             "additionalProperties": {
               "type": "string"
             },
+            "deprecated": true,
+            "description": "Deprecated: frontends own their styling. Still served so existing frontends keep working.",
             "title": "Light",
             "type": "object"
           }
@@ -6216,7 +6223,9 @@
             "type": "string"
           },
           "theme": {
-            "$ref": "#/components/schemas/BrandTheme"
+            "$ref": "#/components/schemas/BrandTheme",
+            "deprecated": true,
+            "description": "Deprecated: frontends own their styling. Still served so existing frontends keep working."
           }
         },
         "required": [

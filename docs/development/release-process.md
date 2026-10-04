@@ -13,6 +13,25 @@ This document outlines the versioning scheme, release procedures, and checklists
 - [Hotfix Releases](#hotfix-releases)
 - [Docker Images](#docker-images)
 
+## Release artifacts (current)
+
+The release that deployments consume is built by Gitea Actions, not GitHub. Older sections
+below describe the GitHub-era process and are kept for the versioning and changelog
+conventions.
+
+- `.gitea/workflows/release.yaml` ("Release candidate artifacts") runs `make verify`, then
+  builds, scans, signs and attests one image per backend role and writes
+  `release-images.json` (`schema_version` 1, `source_commit`, `images`, `services`).
+- Image roles: `api`, `ingest-cuda`, `ml-cuda`, `postgres-walg`, plus the third-party
+  `redis` digest. Core is headless and publishes no frontend image; each archive builds
+  and deploys its own frontend.
+- `.gitea/workflows/backend-role-release.yaml` ("Selective application release artifact")
+  rebuilds only `api` or `ingest-cuda` and reuses the other digests from a verified base
+  manifest. A base manifest from an older release that still lists `frontend` is accepted;
+  the `frontend` entry is dropped from the new manifest.
+- The OpenAPI document `docs/api/openapi.json` is versioned with the source. Frontends
+  generate their clients from the copy at the release's `source_commit`.
+
 ## Automated Release Process
 
 We use an automated release process powered by:
@@ -43,9 +62,7 @@ npm run release:major   # Breaking changes (0.1.0 → 1.0.0)
 # - CHANGELOG.md
 # - pyproject.toml
 # - package.json
-# - frontend/package.json
 # - clients/javascript/package.json
-# - e2e/package.json
 
 git push origin main
 ```
@@ -161,9 +178,9 @@ For pre-releases, append a pre-release identifier:
 
 #### Code Quality
 - [ ] All CI/CD checks pass on main branch
-- [ ] All tests pass (unit, integration, E2E)
+- [ ] All tests pass (unit, integration) and `make verify` passes, including the OpenAPI drift check
 - [ ] Code coverage meets threshold (70%+)
-- [ ] No critical security vulnerabilities (run `pip-audit`, `npm audit`)
+- [ ] No critical security vulnerabilities (run `pip-audit`)
 - [ ] Linting passes with no warnings
 
 #### Documentation
@@ -184,7 +201,7 @@ For pre-releases, append a pre-release identifier:
 - [ ] Docker images build successfully
 - [ ] Kubernetes deployment tested (if applicable)
 - [ ] Performance benchmarks acceptable
-- [ ] Cross-browser testing (for frontend changes)
+- [ ] Archive frontends checked against any API contract change
 
 #### Dependencies
 - [ ] Dependencies up to date
@@ -212,9 +229,6 @@ Update version in relevant files:
 ```bash
 # pyproject.toml
 version = "1.2.0"
-
-# frontend/package.json
-"version": "1.2.0"
 
 # app/__init__.py (if version exported)
 __version__ = "1.2.0"

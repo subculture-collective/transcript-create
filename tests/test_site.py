@@ -32,3 +32,22 @@ def test_site_config_is_explicit_public_allowlist(monkeypatch):
         "clip_exports_enabled",
         "public_passages_enabled",
     }
+
+
+def test_site_theme_is_still_served_but_deprecated_in_the_contract(monkeypatch):
+    from app.branding import BrandProfile
+
+    profile = BrandProfile.model_validate(
+        {"theme": {"font": "mono", "dark": {"accent": "#112233"}, "light": {"ink": "#000000"}}}
+    )
+    monkeypatch.setattr(settings, "SITE_BRANDING", profile)
+    data = TestClient(app).get("/site").json()
+    assert data["theme"] == {"font": "mono", "dark": {"accent": "#112233"}, "light": {"ink": "#000000"}}
+
+    schemas = app.openapi()["components"]["schemas"]
+    assert schemas["SiteConfig"]["properties"]["theme"]["deprecated"] is True
+    theme = schemas["BrandTheme"]
+    assert theme["deprecated"] is True
+    assert all(theme["properties"][field]["deprecated"] is True for field in ("font", "dark", "light"))
+    for field in ("name", "description", "tagline", "logo_url", "favicon_url", "social_image_url", "project_notice"):
+        assert "deprecated" not in schemas["SiteConfig"]["properties"][field]

@@ -32,11 +32,6 @@ This guide walks you through setting up Transcript Create for local development.
   - Install: [https://www.python.org/downloads/](https://www.python.org/downloads/)
   - Verify: `python --version` or `python3 --version`
 
-- **Node.js 20+**: Frontend development
-  - Install: [https://nodejs.org/](https://nodejs.org/)
-  - We recommend using [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm)
-  - Verify: `node --version` and `npm --version`
-
 - **PostgreSQL 15+**: Database
   - Install: [https://www.postgresql.org/download/](https://www.postgresql.org/download/)
   - Or use Docker: `docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:15`
@@ -104,7 +99,8 @@ SESSION_SECRET=your_generated_secret_here
 # For local dev without Docker:
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/postgres
 
-# Frontend origin (default is fine for local dev)
+# Origin of the archive frontend you develop against (CORS, CSRF, cookies).
+# Core ships no frontend; this default matches a local rekolekt-web dev server.
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
@@ -157,17 +153,11 @@ docker compose logs -f
 docker compose logs -f api
 ```
 
-#### 3. Start Frontend
+#### 3. Connect a frontend (optional)
 
-The frontend runs outside Docker for faster development:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend will be available at [http://localhost:5173](http://localhost:5173)
+Core is headless and has no frontend. To work on a web interface, run an archive
+frontend or a [`rekolekt-web`](https://git.subcult.tv/subculture-collective/rekolekt-web)
+app against `http://localhost:8000` and set `FRONTEND_ORIGIN` to its origin.
 
 #### 4. Verify Services
 
@@ -205,15 +195,7 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-#### 2. Install Frontend Dependencies
-
-```bash
-cd frontend
-npm install
-cd ..
-```
-
-#### 3. Install Pre-commit Hooks
+#### 2. Install Pre-commit Hooks
 
 ```bash
 # Quick setup script (recommended)
@@ -224,9 +206,9 @@ pip install pre-commit
 pre-commit install
 ```
 
-#### 4. Start Services
+#### 3. Start Services
 
-You'll need **three terminal windows**:
+You'll need **two terminal windows**:
 
 **Terminal 1 - API:**
 ```bash
@@ -238,12 +220,6 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 source .venv/bin/activate  # If not already activated
 python -m worker.loop
-```
-
-**Terminal 3 - Frontend:**
-```bash
-cd frontend
-npm run dev
 ```
 
 ## Database Setup
@@ -292,7 +268,6 @@ psql $DATABASE_URL -c "\dt"
 
 ### 1. Access Services
 
-- **Frontend**: [http://localhost:5173](http://localhost:5173)
 - **API**: [http://localhost:8000](http://localhost:8000)
 - **API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **API Health**: [http://localhost:8000/health](http://localhost:8000/health)
@@ -318,27 +293,16 @@ curl http://localhost:8000/jobs/{job_id}
 # Backend tests
 pytest tests/ -v
 
-# Frontend tests
-cd frontend
-npm test
-
-# E2E tests (requires services running)
-cd e2e
-npm test
+# OpenAPI contract drift check
+make openapi-check PYTHON_BIN=.venv/bin/python
 ```
 
 ### 4. Run Linters
 
 ```bash
-# Backend
 ruff check app/ worker/
 black --check app/ worker/
 isort --check-only app/ worker/
-
-# Frontend
-cd frontend
-npm run lint
-npm run format:check
 ```
 
 ## Common Issues
@@ -349,7 +313,7 @@ If you get "port already in use" errors:
 
 ```bash
 # Check what's using the port
-lsof -i :8000  # or :5173, :5432
+lsof -i :8000  # or :5432
 
 # Kill the process (on Unix)
 kill -9 <PID>
@@ -367,17 +331,6 @@ python --version
 # Use pyenv to install specific version
 pyenv install 3.11.7
 pyenv local 3.11.7
-```
-
-### Node Version Issues
-
-```bash
-# Check Node version
-node --version
-
-# Use nvm to switch versions
-nvm install 20
-nvm use 20
 ```
 
 ### Database Connection Errors

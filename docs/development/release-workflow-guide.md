@@ -76,9 +76,7 @@ This will:
 - Update version in all files:
   - `pyproject.toml`
   - `package.json`
-  - `frontend/package.json`
   - `clients/javascript/package.json`
-  - `e2e/package.json`
 - Update `CHANGELOG.md` with categorized changes
 - Create a git commit with changes
 - Create a git tag (but not push it)

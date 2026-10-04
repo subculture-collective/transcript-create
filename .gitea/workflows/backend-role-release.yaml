@@ -10,7 +10,6 @@ on:
         options:
           - api
           - ingest-cuda
-          - frontend
       base_manifest_json:
         description: Verified release-images.json whose unchanged digests will be reused
         required: true
@@ -33,7 +32,7 @@ jobs:
           set -euo pipefail
           [[ -n "$RELEASE_OPERATOR" && "$ACTOR" == "$RELEASE_OPERATOR" ]]
           [[ "$REF" =~ ^refs/heads/(release/v|codex/) ]]
-          [[ "$ROLE" == api || "$ROLE" == ingest-cuda || "$ROLE" == frontend ]]
+          [[ "$ROLE" == api || "$ROLE" == ingest-cuda ]]
       - name: Checkout exact source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -50,9 +49,6 @@ jobs:
               ;;
             ingest-cuda)
               printf '%s\n' 'dockerfile=Dockerfile.ingest.cuda' 'image=git.subcult.tv/subculture-collective/hasanara-ingest-cuda' >> "$GITHUB_OUTPUT"
-              ;;
-            frontend)
-              printf '%s\n' 'dockerfile=frontend/Dockerfile' 'image=git.subcult.tv/subculture-collective/hasanara-frontend' >> "$GITHUB_OUTPUT"
               ;;
             *) exit 1 ;;
           esac
@@ -71,7 +67,6 @@ jobs:
               "api": "git.subcult.tv/subculture-collective/hasanara-api",
               "ingest-cuda": "git.subcult.tv/subculture-collective/hasanara-ingest-cuda",
               "ml-cuda": "git.subcult.tv/subculture-collective/hasanara-ml-cuda",
-              "frontend": "git.subcult.tv/subculture-collective/hasanara-frontend",
               "postgres-walg": "git.subcult.tv/subculture-collective/hasanara-postgres-walg",
           }
           manifest = json.loads(os.environ["BASE_MANIFEST_JSON"])
@@ -107,17 +102,6 @@ jobs:
           build-args: |
             GIT_COMMIT=${{ gitea.sha }}
             BUILD_DATE=${{ steps.target.outputs.build_date }}
-      - name: Verify frontend metadata in the runtime image
-        if: inputs.role == 'frontend'
-        env:
-          IMAGE_REF: ${{ steps.target.outputs.image }}:${{ steps.target.outputs.tag }}
-        run: |
-          set -euo pipefail
-          container=$(docker create --network none -w /tmp --entrypoint python3 "$IMAGE_REF" \
-            -m unittest discover -s frontend/scripts -p 'test_*.py')
-          trap 'docker rm -f "$container" >/dev/null' EXIT
-          docker cp frontend "$container:/tmp/frontend"
-          docker start --attach "$container"
       - name: Block high and critical application vulnerabilities
         env:
           IMAGE_REF: ${{ steps.target.outputs.image }}:${{ steps.target.outputs.tag }}
@@ -234,8 +218,10 @@ jobs:
           python3 - <<'PY' > reused-images.txt
           import json, os
           images = json.load(open("base-release-images.json", encoding="utf-8"))["images"]
+          # Core no longer publishes a frontend image. A base manifest from an
+          # earlier release may still list one; it is dropped, not reused.
           for role, image in sorted(images.items()):
-              if role not in {os.environ["ROLE"], "redis"}:
+              if role not in {os.environ["ROLE"], "redis", "frontend"}:
                   print(image)
           PY
           while IFS= read -r image; do
@@ -257,6 +243,9 @@ jobs:
           manifest = json.loads(Path("base-release-images.json").read_text(encoding="utf-8"))
           manifest["source_commit"] = os.environ["SOURCE_COMMIT"]
           manifest["images"][os.environ["ROLE"]] = f"{os.environ['IMAGE']}@{os.environ['DIGEST']}"
+          manifest["images"].pop("frontend", None)
+          if isinstance(manifest.get("services"), dict):
+              manifest["services"].pop("frontend", None)
           manifest["selective_release"] = {"rebuilt": [os.environ["ROLE"]], "reused_artifacts_reverified": True}
           Path("release-images.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY

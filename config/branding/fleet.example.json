@@ -7,7 +7,6 @@
       "assets": "northstar-assets",
       "services": [
         "api",
-        "frontend",
         "migrations"
       ]
     }

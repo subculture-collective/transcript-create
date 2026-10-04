@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import argparse
 import ast
-import json
-import os
-import subprocess
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Iterable, Never, cast
+from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -23,8 +20,6 @@ class SecurityException:
 # Both historical ML exceptions expired. Scan without suppressions; an
 # unavailable compatible wheel is a release blocker, not an implicit renewal.
 EXCEPTIONS: tuple[SecurityException, ...] = ()
-
-NPM_SEVERITIES = {"info", "low", "moderate", "high", "critical"}
 
 
 def _import_aliases(tree: ast.AST) -> dict[str, str]:
@@ -81,91 +76,12 @@ def validate(*, today: date, roots: Iterable[Path]) -> None:
         raise SystemExit("temporary security exception became reachable:\n" + "\n".join(findings))
 
 
-def _security_error(message: str) -> Never:
-    raise SystemExit(f"npm security exception gate failed: {message}")
-
-
-def _validate_router_usage(package_dir: Path) -> None:
-    source_root = package_dir / "src"
-    if not source_root.is_dir():
-        _security_error(f"frontend source directory is missing: {source_root}")
-    checker = Path(__file__).resolve().parents[1] / "frontend" / "scripts" / "check-react-router-usage.mjs"
-    try:
-        result = subprocess.run(["node", str(checker), str(source_root)], check=False, capture_output=True, text=True)
-    except OSError as error:
-        _security_error(f"could not run React Router AST checker: {error}")
-    if result.returncode != 0:
-        _security_error(f"React Router AST checker failed ({result.returncode}): {result.stderr.strip()}")
-    try:
-        output = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        _security_error(f"malformed React Router AST checker output: {error}")
-    findings = output.get("findings") if isinstance(output, dict) else None
-    if not isinstance(findings, list) or not all(isinstance(finding, str) for finding in findings):
-        _security_error("malformed React Router AST checker output")
-    if findings:
-        _security_error("React Router exception became reachable:\n" + "\n".join(findings))
-
-
-def validate_npm_audit(*, today: date, package_dir: Path, audit: dict[str, object]) -> None:
-    del today
-    _validate_router_usage(package_dir)
-    vulnerabilities = audit.get("vulnerabilities")
-    if not isinstance(vulnerabilities, dict):
-        _security_error("audit JSON is missing vulnerabilities")
-    vulnerabilities = cast(dict[str, object], vulnerabilities)
-    for name, record in vulnerabilities.items():
-        if not isinstance(name, str) or not isinstance(record, dict):
-            _security_error("malformed vulnerability record")
-        record = cast(dict[str, object], record)
-        severity = record.get("severity")
-        if not isinstance(severity, str) or severity not in NPM_SEVERITIES:
-            _security_error(f"malformed or unknown vulnerability severity for {name}")
-        if severity in {"high", "critical"}:
-            _security_error(f"{severity} vulnerability present: {name}")
-
-
-def run_npm_audit(*, today: date, package_dir: Path) -> None:
-    environment = dict(os.environ)
-    environment.update({"NPM_CONFIG_OMIT": "", "NPM_CONFIG_PRODUCTION": "false"})
-    try:
-        result = subprocess.run(
-            ["npm", "audit", "--package-lock-only", "--include=dev", "--audit-level=high", "--json"],
-            cwd=package_dir,
-            check=False,
-            capture_output=True,
-            text=True,
-            env=environment,
-        )
-    except OSError as error:
-        _security_error(f"could not run npm audit: {error}")
-    if result.returncode not in {0, 1}:
-        _security_error(f"npm audit command failed ({result.returncode}): {result.stderr.strip()}")
-    try:
-        audit = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        _security_error(f"malformed npm audit JSON: {error}")
-    if not isinstance(audit, dict):
-        _security_error("npm audit JSON must be an object")
-    validate_npm_audit(today=today, package_dir=package_dir, audit=audit)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pip-audit-args", action="store_true")
-    parser.add_argument("--npm-audit", action="store_true")
-    parser.add_argument("--package-dir", type=Path)
     args = parser.parse_args()
 
     today = datetime.now(timezone.utc).date()
-    if args.npm_audit:
-        if args.pip_audit_args or args.package_dir is None:
-            parser.error("--npm-audit requires --package-dir and cannot be combined with --pip-audit-args")
-        run_npm_audit(today=today, package_dir=args.package_dir)
-        print("npm audit has no high or critical vulnerabilities")
-        return
-    if args.package_dir is not None:
-        parser.error("--package-dir requires --npm-audit")
     validate(today=today, roots=(Path("app"), Path("worker")))
     if args.pip_audit_args:
         print(" ".join(f"--ignore-vuln {item.advisory_id}" for item in EXCEPTIONS))

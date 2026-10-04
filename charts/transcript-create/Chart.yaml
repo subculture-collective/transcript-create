@@ -16,5 +16,4 @@ sources:
 maintainers:
   - name: onnwee
     url: https://github.com/onnwee
-icon: https://raw.githubusercontent.com/subculture-collective/transcript-create/main/frontend/public/logo.png
 dependencies: []

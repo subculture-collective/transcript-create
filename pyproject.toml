@@ -20,7 +20,6 @@ exclude = [
     "dist",
     ".eggs",
     "*.egg-info",
-    "frontend",
 ]
 
 [tool.ruff.lint]
@@ -50,14 +49,12 @@ exclude = '''
   | dist
   | \.eggs
   | .*\.egg-info
-  | frontend
 )/
 '''
 
 [tool.isort]
 profile = "black"
 line_length = 120
-extend_skip = ["frontend"]
 src_paths = ["app", "worker", "scripts", "tests", "alembic"]
 known_first_party = ["app", "worker", "tests", "scripts", "alembic"]
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
@@ -69,13 +66,12 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
 exclude = [
-    "frontend/",
     ".venv/",
     "venv/",
 ]
 
 [tool.bandit]
-exclude_dirs = ["frontend", ".venv", "venv", "tests"]
+exclude_dirs = [".venv", "venv", "tests"]
 skips = ["B101"]  # Skip assert_used test
 
 [tool.pytest.ini_options]

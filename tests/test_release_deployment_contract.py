@@ -41,7 +41,6 @@ IMAGE_VARIABLES = {
     "HASANARA_API_IMAGE",
     "HASANARA_INGEST_IMAGE",
     "HASANARA_ML_IMAGE",
-    "HASANARA_FRONTEND_IMAGE",
     "HASANARA_POSTGRES_IMAGE",
     "HASANARA_REDIS_IMAGE",
 }
@@ -216,7 +215,8 @@ def test_release_overlay_is_last_and_requires_immutable_images() -> None:
     overlay = (ROOT / "docker-compose.release.yml").read_text(encoding="utf-8")
     for variable in IMAGE_VARIABLES:
         assert f"${{{variable}:?{variable} is required}}" in overlay
-    assert overlay.count("build: !reset null") == 12
+    assert overlay.count("build: !reset null") == 11
+    assert "frontend:" not in overlay and "HASANARA_FRONTEND_IMAGE" not in overlay
     assert "POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}" in overlay
     assert (
         overlay.count(
@@ -1237,9 +1237,8 @@ def test_cuda_bootstrap_uses_canonical_pypi_before_torch() -> None:
 def test_release_workflow_contracts() -> None:
     release_path = ROOT / ".gitea" / "workflows" / "release.yaml"
     assert release_path.is_file()
-    assert (ROOT / "e2e" / "package-lock.json").is_file()
-    assert "package-lock.json" not in (ROOT / "e2e" / ".gitignore").read_text(encoding="utf-8")
-    assert "!e2e/package-lock.json" in (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert not (ROOT / "frontend").exists()
+    assert not (ROOT / "e2e").exists()
     assert not (ROOT / ".gitea" / "workflows" / "release.yml").exists()
     assert not (ROOT / ".github" / "workflows" / "release.yml").exists()
     workflow = release_path.read_text(encoding="utf-8")
@@ -1278,7 +1277,6 @@ def test_release_workflow_contracts() -> None:
     assert ".gitea" in set((ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines())
     assert re.search(r"^permissions:\n  contents: read\n", workflow, flags=re.MULTILINE)
     verify = job_section("verify")
-    cross_browser = job_section("cross-browser")
     verification_step = re.search(
         r"^      - name: Run canonical verification\n(.*?)(?=^      - name:|\Z)",
         verify,
@@ -1324,8 +1322,8 @@ def test_release_workflow_contracts() -> None:
     images = job_section("images")
     release = job_section("release")
     assert re.search(r"^    runs-on: switchyard-production$", images, flags=re.MULTILINE)
-    assert re.search(r"^    needs: verify$", cross_browser, flags=re.MULTILINE)
-    for name, job in (("cross-browser", cross_browser), ("images", images)):
+    assert re.search(r"^    needs: verify$", images, flags=re.MULTILINE)
+    for name, job in (("images", images),):
         strategy = re.search(
             r"^    strategy:\n(.*?)(?=^    [a-z][\w-]*:|\Z)",
             job,
@@ -1344,8 +1342,9 @@ def test_release_workflow_contracts() -> None:
     )
     assert manifest_generation
     manifest_text = manifest_generation.group(0)
-    expected_roles = ("api", "ingest-cuda", "ml-cuda", "frontend", "postgres-walg")
-    assert 'roles = ("api", "ingest-cuda", "ml-cuda", "frontend", "postgres-walg")' in manifest_text
+    expected_roles = ("api", "ingest-cuda", "ml-cuda", "postgres-walg")
+    assert 'roles = ("api", "ingest-cuda", "ml-cuda", "postgres-walg")' in manifest_text
+    assert "frontend" not in manifest_text
     assert all(f'"{role}"' in manifest_text for role in expected_roles)
     assert "for role in roles:" in manifest_text
     assert 'path = Path("image-evidence") / role / f"{role}.json"' in manifest_text
@@ -1635,15 +1634,15 @@ def test_release_workflow_contracts() -> None:
     ):
         assert evidence in images
 
-    for job in ("verify:", "cross-browser:", "images:", "release:"):
+    for job in ("verify:", "images:", "release:"):
         assert f"  {job}" in workflow
-    assert "needs: [verify, cross-browser-gate]" in workflow
+    for retired in ("cross-browser", "playwright", "npm ", "setup-node", "frontend", "e2e/"):
+        assert retired not in workflow
     assert "needs: images" in workflow
     for role, dockerfile in (
         ("api", "Dockerfile.api"),
         ("ingest-cuda", "Dockerfile.ingest.cuda"),
         ("ml-cuda", "Dockerfile.cuda"),
-        ("frontend", "frontend/Dockerfile"),
         ("postgres-walg", "Dockerfile.postgres-walg"),
     ):
         assert f"- role: {role}" in workflow
@@ -1665,13 +1664,12 @@ def test_release_workflow_contracts() -> None:
         "git.subcult.tv/subculture-collective/hasanara-api",
         "git.subcult.tv/subculture-collective/hasanara-ingest-cuda",
         "git.subcult.tv/subculture-collective/hasanara-ml-cuda",
-        "git.subcult.tv/subculture-collective/hasanara-frontend",
         "git.subcult.tv/subculture-collective/hasanara-postgres-walg",
     ):
         assert image in workflow
     assert 'schema_version": 1' in workflow and '"redis": "redis"' in workflow
-    assert workflow.count("actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a") == 9
-    assert workflow.count("actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5") >= 3
+    assert workflow.count("actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a") == 4
+    assert workflow.count("actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5") >= 2
     assert "gitea.api_url" in workflow and "gitea.token" in workflow and 'prerelease": True' in workflow
     assert '"$API_URL/repos/$REPOSITORY/releases"' in workflow
     assert "gitea.event_name == 'push'" in workflow
@@ -1691,79 +1689,6 @@ def test_release_workflow_contracts() -> None:
     ):
         assert forbidden not in workflow
     assert ":latest" not in workflow
-
-
-def test_release_cross_browser_marker_gate_contract() -> None:
-    workflow = (ROOT / ".gitea" / "workflows" / "release.yaml").read_text(encoding="utf-8")
-
-    def job_section(name: str) -> str:
-        match = re.search(
-            rf"^  {re.escape(name)}:\n(.*?)(?=^  [a-z][\w-]*:\n|\Z)",
-            workflow,
-            flags=re.MULTILINE | re.DOTALL,
-        )
-        assert match, f"missing {name} job"
-        return match.group(1)
-
-    cross_browser = job_section("cross-browser")
-    gate = job_section("cross-browser-gate")
-    images = job_section("images")
-    evidence = ("firefox-desktop", "webkit-desktop", "chromium-mobile", "webkit-mobile")
-    download_sha = "actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a"
-    upload_sha = "actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5"
-
-    for key in evidence:
-        assert f"evidence: {key}" in cross_browser
-        assert f"name: cross-browser-success-{key}" in gate
-        assert f"path: cross-browser-evidence/{key}" in gate
-    assert '--project="${{ matrix.project }}" --workers=1' in cross_browser
-    marker = re.search(
-        r"^      - name: Create cross-browser success marker\n(.*?)(?=^      - name:|\Z)",
-        cross_browser,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    upload = re.search(
-        r"^      - name: Upload cross-browser success marker\n(.*?)(?=^      - name:|\Z)",
-        cross_browser,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    report = re.search(
-        r"^      - name: Upload browser artifacts\n(.*?)(?=^      - name:|\Z)",
-        cross_browser,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    assert marker and upload and report
-    assert "printf '%s' '${{ gitea.sha }}'" in marker.group(0)
-    assert "if:" not in marker.group(0)
-    assert cross_browser.index(marker.group(0)) > cross_browser.index("Run seeded archive smoke test")
-    assert cross_browser.index(marker.group(0)) > cross_browser.index(report.group(0))
-    assert cross_browser.index(upload.group(0)) > cross_browser.index(marker.group(0))
-    assert cross_browser.rstrip().endswith(upload.group(0).rstrip())
-    assert upload_sha in upload.group(0)
-    assert "if:" not in upload.group(0)
-    assert "name: cross-browser-success-${{ matrix.evidence }}" in upload.group(0)
-    assert "path: cross-browser-success/${{ matrix.evidence }}.sha" in upload.group(0)
-    assert "if: always()" in report.group(0)
-    assert "e2e/test-results" in report.group(0) and "e2e/playwright-report" in report.group(0)
-
-    assert "needs: cross-browser" in gate
-    assert "if: always()" not in gate
-    assert "uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in gate
-    assert "ref: ${{ gitea.sha }}" in gate
-    assert gate.count(download_sha) == 4
-    validation = re.search(
-        r"^      - name: Validate cross-browser success markers\n(.*?)(?=^      - name:|\Z)",
-        gate,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    assert validation
-    assert (
-        "python3 scripts/validate_browser_evidence.py --root cross-browser-evidence --sha '${{ gitea.sha }}'"
-        in validation.group(0)
-    )
-    assert "needs: [verify, cross-browser-gate]" in images
-    assert "needs.verify.result == 'success'" in images
-    assert "needs.cross-browser-gate.result == 'success'" in images
 
 
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker is unavailable")
@@ -1899,7 +1824,6 @@ def test_compose_render_with_inert_values_when_available(tmp_path: Path, monkeyp
         "api": "HASANARA_API_IMAGE",
         "ingest-cuda": "HASANARA_INGEST_IMAGE",
         "ml-cuda": "HASANARA_ML_IMAGE",
-        "frontend": "HASANARA_FRONTEND_IMAGE",
         "postgres-walg": "HASANARA_POSTGRES_IMAGE",
         "redis": "HASANARA_REDIS_IMAGE",
     }

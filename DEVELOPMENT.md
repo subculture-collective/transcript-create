@@ -6,13 +6,20 @@ Transcript Archive is a configurable, citation-first application for long-form
 recordings. It ingests videos, stores timestamped transcripts, supports full-text search
 and archive browsing, and lets people save and share passages with their source context.
 
-This repository contains the shared application core. Each client deployment supplies a
-versioned public profile and assets while running the same application images. Branding
-changes do not require a source fork or frontend rebuild.
+This repository is the headless core: backend services and the HTTP API, with no web
+pages. The API contract, committed at [`docs/api/openapi.json`](docs/api/openapi.json),
+is the product surface. Each archive builds and owns its whole frontend on another origin
+and supplies a versioned public profile while running the same backend images.
+
+Frontends live with the archives. The
+[`rekolekt-web`](https://git.subcult.tv/subculture-collective/rekolekt-web) kit
+(`@subcult/rekolekt-web`) provides the API client, generated OpenAPI types, hooks and
+stylable default components, with no pages. The designed application and Playwright
+suite that used to live under `frontend/` and `e2e/` are preserved on its
+`archive/reference-app-ae1cc82` branch.
 
 ## Application stack
 
-- React 19 and Vite frontend
 - FastAPI application and worker services
 - PostgreSQL as the source of truth
 - Redis for caches and coordination
@@ -26,19 +33,19 @@ the public branding profile does not grant entitlements or contain secrets.
 
 ## Local development
 
-Supported versions are Python 3.11, Node.js 20, and Docker with Compose.
+Supported versions are Python 3.11 and Docker with Compose.
 
 ```bash
 python3.11 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-npm --prefix frontend ci
-npm --prefix e2e ci
+.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
-ALLOW_SESSION_TOKEN_CONTRACT_MIGRATION=true docker compose up --build
+ALLOW_SESSION_TOKEN_CONTRACT_MIGRATION=true docker compose up --build db redis migrations api
 ```
 
-The frontend defaults to `http://localhost:5173`; the API defaults to
-`http://localhost:8000`, with interactive API documentation at `/docs`. The migration
+The API defaults to `http://localhost:8000`, with interactive API documentation at
+`/docs`. `FRONTEND_ORIGIN` names the origin of the frontend you develop against (for
+example a `rekolekt-web` app on `http://localhost:5173`); the API uses it for CORS,
+CSRF and cookies. The migration
 opt-in above is for a fresh controlled bootstrap. Follow the migration runbook for an
 existing deployment.
 
@@ -48,8 +55,8 @@ The main source areas are:
 | --- | --- |
 | `app/` | FastAPI routes, domain services, persistence and schemas |
 | `worker/` | ingestion, transcription, formatting and background processing |
-| `frontend/` | React application and component tests |
-| `e2e/` | seeded Playwright journeys |
+| `docs/api/openapi.json` | committed OpenAPI contract; regenerate with `make openapi` |
+| `landing/` | static Rekolekt product page, deployed separately |
 | `alembic/` | ordered database migrations |
 | `config/branding/` | profile schema and safe example client configuration |
 | `clients/` | client release-profile validation and planning code |
@@ -59,11 +66,11 @@ The main source areas are:
 
 Start with the [Northstar example profile](config/branding/northstar.json), validate its
 fields against the [profile schema](config/branding/schema.json), and supply it through
-`SITE_PROFILE_PATH`. Store client secrets, infrastructure and release history outside the
-public profile.
+`SITE_PROFILE_PATH`. The API serves it at `/site`. Store client secrets, infrastructure
+and release history outside the public profile.
 
-The [client branding guide](docs/deployment/client-branding.md) describes asset mounts,
-theme tokens, profile precedence, and the fleet update planner. The planner combines a
+The [client branding guide](docs/deployment/client-branding.md) describes the profile
+fields, the deprecated theme tokens, profile precedence, and the fleet update planner. The planner combines a
 verified digest-pinned release manifest with a client inventory and produces reviewable
 Compose overrides. It never edits client profiles, databases or secrets and does not
 perform a deployment.
@@ -73,14 +80,14 @@ perform a deployment.
 Run focused tests while developing, then run the canonical gate before delivery:
 
 ```bash
-TEST_POSTGRES_PORT=55433 mise exec node@20 -- \
-  env PYTHON_BIN="$PWD/.venv/bin/python" make verify
+PYTHON_BIN="$PWD/.venv/bin/python" make verify
 ```
 
 The gate starts disposable PostgreSQL, Redis and OpenSearch services; applies every
-migration; checks Python and TypeScript quality; runs backend and frontend coverage;
-builds the production frontend; validates generated contracts and documentation; audits
-dependencies; and exercises the seeded Chromium journey. See the
+migration; checks Python quality, the mypy baseline and backend coverage; validates
+documentation; audits Python dependencies; and regenerates the OpenAPI document to fail
+on drift from `docs/api/openapi.json`. After an API change, run `make openapi` and commit
+the regenerated file. See the
 [testing guide](docs/development/testing.md) for focused commands, suite ownership and
 coverage expectations.
 
@@ -92,7 +99,6 @@ coverage expectations.
 - [Passage-sharing contract](docs/product/passage-sharing.md)
 - [Deployment matrix](docs/deployment/README.md) and [production readiness](docs/operations/production-readiness.md)
 - [Database migrations](docs/MIGRATIONS.md)
-- [Accessibility](docs/ACCESSIBILITY.md) and [design system](docs/DESIGN_SYSTEM.md)
 - [Documentation index](docs/STATUS.md)
 
 `/api` is v1-stable: changes are additive, deprecations remain for at least two releases,

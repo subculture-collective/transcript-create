@@ -70,7 +70,7 @@ assignees: []
 
 - [ ] All users
 - [ ] API users
-- [ ] Frontend users
+- [ ] Archive frontend developers
 - [ ] Administrators
 - [ ] Contributors/developers
 - [ ] Self-hosted deployments

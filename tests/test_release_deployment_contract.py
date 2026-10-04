@@ -1070,7 +1070,10 @@ def test_config_safe_selectors_are_exact_and_maintenance_is_fixed() -> None:
     assert "SELECT pg_switch_wal();" in helper
     assert "SELECT archived_count, failed_count, last_archived_wal" in helper
     assert "run_compose exec backup wal-g backup-list" in helper
-    assert "recover-attention-backlog requires cohort alignment|yt-dlp, limit 1..5" in helper
+    assert (
+        "recover-attention-backlog requires cohort alignment|yt-dlp|failed-gpu-unavailable|failed-yt-dlp, limit 1..5"
+        in helper
+    )
     assert 'python -m scripts.recover_attention_backlog --cohort "$2" --limit "$3"' in helper
     assert "--confirm RECOVER" in helper
     canary = helper.split("run_diarization_canary() {", 1)[1].split("\n}\n\nassert_exact_token_container_absent", 1)[0]
@@ -1108,6 +1111,8 @@ def test_config_safe_selectors_are_exact_and_maintenance_is_fixed() -> None:
         ("maintenance", "recover-attention-backlog", "alignment", "6"),
         ("maintenance", "recover-attention-backlog", "unknown", "1"),
         ("maintenance", "recover-attention-backlog", "yt-dlp", "1", "--confirm", "wrong"),
+        ("maintenance", "recover-attention-backlog", "failed-gpu-unavailable", "0"),
+        ("maintenance", "recover-attention-backlog", "failed-other", "1"),
     ):
         result = subprocess.run(
             ["bash", str(script), *arguments],

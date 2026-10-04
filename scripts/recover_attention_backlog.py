@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Dry-run-first, bounded recovery for reviewed needs-attention cohorts."""
+"""Dry-run-first, bounded recovery for reviewed needs-attention and failed cohorts.
+
+``alignment`` and ``yt-dlp`` select pending videos held by needs-attention jobs.
+``failed-gpu-unavailable`` and ``failed-yt-dlp`` select terminally failed videos
+whose recorded error matches the cohort. Each selected video moves to a fresh
+single-video recovery job with a new attempt budget; failed videos also return
+to the pending state. Ordinary job retry/requeue cannot do this because it
+resets only the job row while the video stays failed.
+"""
 
 from __future__ import annotations
 
@@ -12,10 +20,15 @@ from app.audit import ACTION_ADMIN_ACTION, write_audit_event
 from app.db import SessionLocal
 from worker.state_model import TERMINAL_CAPTION_INGEST_STATES, VideoState, pending_video_eligibility_sql
 
-COHORT_PATTERNS = {
+ATTENTION_COHORT_PATTERNS = {
     "alignment": ("%align%", "%boolean index did not match indexed array%"),
     "yt-dlp": ("%yt-dlp%", "%youtube-dl%"),
 }
+FAILED_COHORT_PATTERNS = {
+    "failed-gpu-unavailable": ("%no CUDA-capable device%", "%no GPU configuration succeeded%"),
+    "failed-yt-dlp": ("%yt-dlp%", "%youtube-dl%"),
+}
+COHORT_PATTERNS = {**ATTENTION_COHORT_PATTERNS, **FAILED_COHORT_PATTERNS}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -45,24 +58,42 @@ def recover(*, cohort: str, limit: int, mutate: bool) -> list[dict[str, str]]:
             raise RuntimeError(f"no recovery slots are available; {eligible} videos are already eligible")
         selection_limit = min(limit, available) if mutate else limit
         patterns = COHORT_PATTERNS[cohort]
+        failed_cohort = cohort in FAILED_COHORT_PATTERNS
+        source_job_state = "failed" if failed_cohort else "needs_attention"
+        source_video_state = VideoState.FAILED.value if failed_cohort else VideoState.PENDING.value
         rows = (
             db.execute(
                 text("""
                     SELECT j.id AS job_id, v.id AS video_id
                     FROM jobs j
                     JOIN videos v ON v.job_id = j.id
-                    WHERE j.state = 'needs_attention'
-                      AND v.state = 'pending'
+                    WHERE j.state = CAST(:source_job_state AS job_state)
+                      AND v.state = CAST(:source_video_state AS job_state)
                       AND v.caption_ingest_state = ANY(CAST(:terminal_states AS text[]))
+                      AND (v.diarization_error IS NULL OR v.diarization_error NOT LIKE 'canary-%')
                       AND EXISTS (
                           SELECT 1 FROM unnest(CAST(:patterns AS text[])) pattern
-                          WHERE COALESCE(j.last_failure_summary, j.error, '') ILIKE pattern
+                          WHERE CASE WHEN CAST(:failed_cohort AS boolean)
+                                THEN COALESCE(v.error, '')
+                                ELSE COALESCE(j.last_failure_summary, j.error, '') END ILIKE pattern
+                      )
+                      AND (
+                          NOT CAST(:failed_cohort AS boolean)
+                          OR NOT EXISTS (
+                              SELECT 1 FROM videos other
+                              WHERE other.youtube_id = v.youtube_id
+                                AND other.id <> v.id
+                                AND other.state <> CAST(:source_video_state AS job_state)
+                          )
                       )
                     ORDER BY j.updated_at, j.id, v.id
                     FOR UPDATE OF j, v SKIP LOCKED
                     LIMIT :limit
                 """),
                 {
+                    "source_job_state": source_job_state,
+                    "source_video_state": source_video_state,
+                    "failed_cohort": failed_cohort,
                     "terminal_states": list(TERMINAL_CAPTION_INGEST_STATES),
                     "patterns": list(patterns),
                     "limit": selection_limit,
@@ -101,13 +132,15 @@ def recover(*, cohort: str, limit: int, mutate: bool) -> list[dict[str, str]]:
                             j.owner_user_id, 'pending', 'queued', 0, 1
                         FROM jobs j
                         JOIN videos v ON v.job_id = j.id
-                        WHERE j.id=:source_job_id AND j.state='needs_attention'
-                          AND v.id=:video_id AND v.state='pending'
+                        WHERE j.id=:source_job_id AND j.state=CAST(:source_job_state AS job_state)
+                          AND v.id=:video_id AND v.state=CAST(:source_video_state AS job_state)
                           AND v.caption_ingest_state = ANY(CAST(:terminal_states AS text[]))
                         RETURNING id
                     """),
                     {
                         "cohort": cohort,
+                        "source_job_state": source_job_state,
+                        "source_video_state": source_video_state,
                         "source_job_id": source_job_id,
                         "video_id": row["video_id"],
                         "terminal_states": list(TERMINAL_CAPTION_INGEST_STATES),
@@ -117,10 +150,12 @@ def recover(*, cohort: str, limit: int, mutate: bool) -> list[dict[str, str]]:
             moved = db.execute(
                 text("""
                     UPDATE videos
-                    SET job_id=:recovery_job_id, idx=0, error=NULL, updated_at=now()
-                    WHERE id=:video_id AND job_id=:source_job_id AND state='pending'
+                    SET job_id=:recovery_job_id, idx=0, state='pending', error=NULL, updated_at=now()
+                    WHERE id=:video_id AND job_id=:source_job_id
+                      AND state=CAST(:source_video_state AS job_state)
                 """),
                 {
+                    "source_video_state": source_video_state,
                     "recovery_job_id": recovery_job_id,
                     "video_id": row["video_id"],
                     "source_job_id": source_job_id,
@@ -137,6 +172,7 @@ def recover(*, cohort: str, limit: int, mutate: bool) -> list[dict[str, str]]:
                     "operation": "backlog_recovery",
                     "cohort": cohort,
                     "source_job_id": source_job_id,
+                    "source_job_state": source_job_state,
                     "video_id": row["video_id"],
                 },
             )
@@ -147,13 +183,13 @@ def recover(*, cohort: str, limit: int, mutate: bool) -> list[dict[str, str]]:
                     UPDATE jobs j
                     SET state='completed', stage='completed', error=NULL,
                         last_failure_summary=NULL, updated_at=now()
-                    WHERE j.id=:source_job_id AND j.state='needs_attention'
+                    WHERE j.id=:source_job_id AND j.state=CAST(:source_job_state AS job_state)
                       AND NOT EXISTS (
                           SELECT 1 FROM videos v
                           WHERE v.job_id=j.id AND v.state <> 'completed'
                       )
                 """),
-                {"source_job_id": source_job_id},
+                {"source_job_id": source_job_id, "source_job_state": source_job_state},
             )
         db.commit()
         return recovered

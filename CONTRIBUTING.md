@@ -90,12 +90,12 @@ xdg-open htmlcov/index.html  # Linux
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
 
-### Frontend Setup
+### Frontends
 
-```bash
-cd frontend
-npm install
-```
+Rekolekt core is headless and has no frontend. UI work belongs in an archive's own
+frontend or in the [`rekolekt-web`](https://git.subcult.tv/subculture-collective/rekolekt-web)
+kit. If your change touches the API, run `make openapi` and commit the regenerated
+`docs/api/openapi.json`; `make verify` fails when it drifts.
 
 ### Running Locally
 
@@ -350,40 +350,6 @@ mypy app/ worker/
 - Target Python version: 3.11+
 - Configuration in `pyproject.toml`
 
-### TypeScript (Frontend)
-
-**Linting:**
-
-```bash
-cd frontend
-npm run lint
-```
-
-**Formatting:**
-
-```bash
-cd frontend
-# Check formatting
-npm run format:check
-
-# Auto-format
-npm run format
-```
-
-**Type Checking:**
-
-```bash
-cd frontend
-npx tsc --noEmit
-```
-
-**Building:**
-
-```bash
-cd frontend
-npm run build
-```
-
 ### Pre-commit Hooks
 
 We use pre-commit hooks to catch issues before they're committed:
@@ -507,24 +473,6 @@ Runs on changes to:
    - Build Docker image (CPU-compatible check)
    - Verify image builds successfully
 
-### Frontend CI (`frontend-ci.yml`)
-
-Runs on changes to:
-
-- `frontend/**`
-
-**Jobs:**
-
-1. **Lint & Type Check** (Node 20, 22)
-   - ESLint (informational - some errors pre-existing)
-   - Prettier formatting (enforced)
-   - TypeScript type check
-
-2. **Build Verification**
-   - Vite build
-   - Bundle size check (warns if > 500KB)
-   - Upload build artifacts
-
 ### Docker Build & Publish (`docker-build.yml`)
 
 Runs on:
@@ -570,16 +518,10 @@ Runs on:
 3. **Test locally**
 
    ```bash
-   # Backend
    pytest tests/
    ruff check app/ worker/
    black --check app/ worker/
-   
-   # Frontend
-   cd frontend
-   npm run lint
-   npm run format:check
-   npm run build
+   make openapi-check PYTHON_BIN=.venv/bin/python
    ```
 
 4. **Run pre-commit hooks**
@@ -616,13 +558,7 @@ Before merging to `main`, the following checks must pass:
 - ✅ Test with PostgreSQL
 - ✅ Docker Build
 
-**Frontend CI:**
-
-- ✅ Lint & Type Check (Node 20)
-- ✅ Lint & Type Check (Node 22)
-- ✅ Build Verification
-
-**Note:** Some checks use `continue-on-error: true` for informational warnings (mypy, ESLint some rules, security scans) that don't block merges but should be addressed when possible.
+**Note:** Some checks use `continue-on-error: true` for informational warnings (mypy, security scans) that don't block merges but should be addressed when possible.
 
 ### Additional Requirements
 

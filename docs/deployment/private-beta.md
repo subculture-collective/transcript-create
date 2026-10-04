@@ -23,12 +23,13 @@ route.
    paths containing values, or scan output. **Operator pending.**
 3. **Prove access control.** Configure the external management ingress for the
    approved invite cohort. Inspect firewall rules and listeners to prove API and
-   frontend host bindings cannot reach the public internet around that ingress;
+   archive frontend host bindings cannot reach the public internet around that ingress;
    perform a remote negative probe without an invite. Retain private evidence
    without publishing addresses, rules, or credentials. A successful direct host
    API or frontend request blocks release. **Operator pending.**
-4. **Verify candidate.** Record passing `make verify` and the required desktop
-   and mobile browser artifacts for the frozen commit. Any S0/S1 blocks release.
+4. **Verify candidate.** Record passing `make verify` for the frozen core commit
+   and the archive frontend's own desktop and mobile browser evidence. Core no
+   longer produces browser artifacts. Any S0/S1 blocks release.
 5. **Rehearse on staging.** Use a separate staging host. Fixed names, ports,
    networks, and bind paths make co-location with production unsafe. Use empty,
    isolated PostgreSQL and media storage and a staging-only WAL-G bucket/prefix;
@@ -60,7 +61,7 @@ route.
    `scripts/compose_prod.sh maintenance retire-disabled-profiles --approved`,
    then re-run strict preflight. That action retires the fixed disabled-profile
    service set; it is not arbitrary service passthrough. **Operator pending.**
-8. **Operational smoke.** Verify frontend and API health; CSP and cache headers;
+8. **Operational smoke.** Verify archive frontend and API health; CSP and cache headers;
    OAuth; search fallback and lag; ingestion leases and retries; retention;
    backup recency; and alert delivery. On the target host, the default CUDA
    transcription image must pass import, GPU-visibility, and bounded-transcription

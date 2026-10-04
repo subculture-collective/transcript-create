@@ -6,7 +6,6 @@ This document outlines coding standards, patterns, and best practices for contri
 
 - [General Principles](#general-principles)
 - [Python Style Guide](#python-style-guide)
-- [TypeScript / React Style Guide](#typescript--react-style-guide)
 - [Naming Conventions](#naming-conventions)
 - [Error Handling](#error-handling)
 - [Testing Requirements](#testing-requirements)
@@ -253,153 +252,6 @@ logger.info(f"Transcribing video {video_id} with {model_name}")
 logger.info("Transcribing video " + str(video_id) + " with " + model_name)
 ```
 
-## TypeScript / React Style Guide
-
-### TypeScript Basics
-
-**Always use TypeScript**, avoid `any`:
-
-```typescript
-// Good - explicit types
-interface Video {
-  id: number;
-  title: string;
-  duration: number;
-}
-
-function displayVideo(video: Video): void {
-  console.log(video.title);
-}
-
-// Bad - any
-function displayVideo(video: any) {
-  console.log(video.title);
-}
-```
-
-**Use interfaces for objects**:
-
-```typescript
-// Good
-interface SearchParams {
-  query: string;
-  source: 'native' | 'youtube';
-  page?: number;
-}
-
-// Also acceptable for simple types
-type SearchSource = 'native' | 'youtube';
-```
-
-### React Components
-
-**Functional components with hooks**:
-
-```typescript
-// Good - functional component
-import React, { useState, useEffect } from 'react';
-
-interface VideoPlayerProps {
-  videoId: number;
-  autoplay?: boolean;
-}
-
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, autoplay = false }) => {
-  const [isPlaying, setIsPlaying] = useState(autoplay);
-  
-  useEffect(() => {
-    // Effect logic
-  }, [videoId]);
-  
-  return (
-    <div className="video-player">
-      {/* JSX */}
-    </div>
-  );
-};
-
-// Bad - class component (unless needed)
-class VideoPlayer extends React.Component {
-  // Avoid for new components
-}
-```
-
-**Props destructuring**:
-
-```typescript
-// Good
-export const SearchBar: React.FC<SearchBarProps> = ({ 
-  query, 
-  onSearch, 
-  placeholder = 'Search transcripts...' 
-}) => {
-  // Use props directly
-  return <input value={query} onChange={onSearch} placeholder={placeholder} />;
-};
-
-// Bad
-export const SearchBar: React.FC<SearchBarProps> = (props) => {
-  return <input value={props.query} onChange={props.onSearch} placeholder={props.placeholder} />;
-};
-```
-
-### State Management
-
-**Use appropriate hooks**:
-
-```typescript
-// Good - useState for simple state
-const [searchQuery, setSearchQuery] = useState('');
-
-// Good - useReducer for complex state
-const [state, dispatch] = useReducer(searchReducer, initialState);
-
-// Good - useContext for shared state
-const { user } = useContext(UserContext);
-```
-
-### API Calls
-
-**Use async/await** with proper error handling:
-
-```typescript
-// Good
-const fetchVideo = async (videoId: number): Promise<Video> => {
-  try {
-    const response = await axios.get<Video>(`/api/videos/${videoId}`);
-    return response.data;
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      throw new Error(`Failed to fetch video: ${error.message}`);
-    }
-    throw error;
-  }
-};
-
-// Bad
-const fetchVideo = (videoId: number) => {
-  return axios.get(`/api/videos/${videoId}`)
-    .then(res => res.data)
-    .catch(err => console.error(err));  // Swallows error
-};
-```
-
-### Styling
-
-**Use Tailwind utility classes**:
-
-```typescript
-// Good - Tailwind utilities
-<div className="flex items-center space-x-4 p-6 bg-white rounded-lg shadow-md">
-  <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
-</div>
-
-// Avoid inline styles (unless dynamic)
-<div style={{ display: 'flex', padding: '24px' }}>
-  <h2 style={{ fontSize: '20px' }}>{title}</h2>
-</div>
-```
-
 ## Naming Conventions
 
 ### Python
@@ -424,34 +276,6 @@ def _internal_helper():
 
 # File names: snake_case.py
 # video_processor.py, audio_utils.py
-```
-
-### TypeScript / React
-
-```typescript
-// Variables and functions: camelCase
-const videoId = 123;
-function processVideo(videoId: number): void {
-  // ...
-}
-
-// React components: PascalCase
-const VideoPlayer = () => { /* ... */ };
-export const SearchBar: React.FC<Props> = () => { /* ... */ };
-
-// Interfaces and Types: PascalCase
-interface Video {
-  // ...
-}
-type SearchSource = 'native' | 'youtube';
-
-// Constants: UPPER_SNAKE_CASE
-const MAX_RESULTS_PER_PAGE = 50;
-const API_BASE_URL = 'http://localhost:8000';
-
-// File names: PascalCase for components, camelCase for utilities
-// VideoPlayer.tsx, SearchBar.tsx
-// apiClient.ts, searchUtils.ts
 ```
 
 ### Database
@@ -512,29 +336,6 @@ if not audio_path.exists():
     raise FileNotFoundError()
 ```
 
-### TypeScript
-
-**Handle promise rejections**:
-
-```typescript
-// Good
-async function fetchTranscript(videoId: number): Promise<Transcript> {
-  try {
-    const response = await api.get(`/videos/${videoId}/transcript`);
-    return response.data;
-  } catch (error) {
-    logger.error('Failed to fetch transcript', { videoId, error });
-    throw new Error(`Failed to fetch transcript for video ${videoId}`);
-  }
-}
-
-// Bad
-async function fetchTranscript(videoId: number) {
-  const response = await api.get(`/videos/${videoId}/transcript`);
-  return response.data;  // Unhandled rejection
-}
-```
-
 ## Testing Requirements
 
 ### Test Coverage
@@ -575,37 +376,6 @@ def test_transcode_audio_creates_wav(tmp_path):
     # Verify WAV format properties
     assert get_audio_format(output_path) == "wav"
     assert get_sample_rate(output_path) == 16000
-```
-
-### Frontend Tests (Vitest)
-
-```typescript
-// tests/SearchBar.test.tsx
-
-import { render, screen, fireEvent } from '@testing-library/react';
-import { SearchBar } from './SearchBar';
-
-describe('SearchBar', () => {
-  it('renders with placeholder', () => {
-    render(<SearchBar query="" onSearch={() => {}} />);
-    expect(screen.getByPlaceholderText('Search transcripts...')).toBeInTheDocument();
-  });
-
-  it('calls onSearch when input changes', () => {
-    const onSearch = vi.fn();
-    render(<SearchBar query="" onSearch={onSearch} />);
-    
-    const input = screen.getByRole('textbox');
-    fireEvent.change(input, { target: { value: 'test query' } });
-    
-    expect(onSearch).toHaveBeenCalledWith('test query');
-  });
-
-  it('displays current query value', () => {
-    render(<SearchBar query="existing query" onSearch={() => {}} />);
-    expect(screen.getByDisplayValue('existing query')).toBeInTheDocument();
-  });
-});
 ```
 
 ## Documentation Expectations
@@ -716,12 +486,6 @@ ruff check app/ worker/ scripts/
 black app/ worker/ scripts/
 isort app/ worker/ scripts/
 mypy app/ worker/
-
-# TypeScript
-cd frontend
-npm run lint
-npm run format
-npx tsc --noEmit
 ```
 
 ### Pre-commit Hooks
@@ -734,7 +498,7 @@ pre-commit install
 
 Runs automatically on `git commit`:
 - Linting (ruff)
-- Formatting (black, prettier)
+- Formatting (black)
 - Import sorting (isort)
 - Secret detection (gitleaks)
 - Trailing whitespace removal
@@ -744,6 +508,6 @@ Runs automatically on `git commit`:
 - Check [CONTRIBUTING.md](../../CONTRIBUTING.md) for workflow details
 - Review existing code for examples
 - Ask in issues or discussions
-- Refer to official docs: [PEP 8](https://pep8.org/), [TypeScript Handbook](https://www.typescriptlang.org/docs/)
+- Refer to official docs: [PEP 8](https://pep8.org/)
 
 Happy coding! 🚀

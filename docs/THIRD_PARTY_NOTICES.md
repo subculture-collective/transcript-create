@@ -96,61 +96,10 @@ This file contains notices and information for third-party software included wit
   - <https://www.reportlab.com/>
   - Note: Open source version used
 
-### Frontend Dependencies (JavaScript/TypeScript)
+### Frontend Dependencies
 
-#### Core Framework
-
-- **React** - MIT License
-  - Copyright (c) Meta Platforms, Inc. and affiliates
-  - <https://github.com/facebook/react>
-
-- **react-dom** - MIT License
-  - Copyright (c) Meta Platforms, Inc. and affiliates
-  - <https://github.com/facebook/react>
-
-- **react-router-dom** - MIT License
-  - Copyright (c) Remix Software Inc.
-  - <https://github.com/remix-run/react-router>
-
-#### Styling
-
-- **Tailwind CSS** - MIT License
-  - Copyright (c) Tailwind Labs, Inc.
-  - <https://github.com/tailwindlabs/tailwindcss>
-
-- **@tailwindcss/vite** - MIT License
-  - Copyright (c) Tailwind Labs, Inc.
-  - <https://github.com/tailwindlabs/tailwindcss>
-
-#### Build Tools
-
-- **Vite** - MIT License
-  - Copyright (c) 2019-present, Yuxi (Evan) You and Vite contributors
-  - <https://github.com/vitejs/vite>
-
-- **@vitejs/plugin-react-swc** - MIT License
-  - Copyright (c) 2019-present, Yuxi (Evan) You and Vite contributors
-  - <https://github.com/vitejs/vite-plugin-react-swc>
-
-#### HTTP Client
-
-- **ky** - MIT License
-  - Copyright (c) Sindre Sorhus
-  - <https://github.com/sindresorhus/ky>
-
-#### Development Tools
-
-- **TypeScript** - Apache License 2.0
-  - Copyright (c) Microsoft Corporation
-  - <https://github.com/microsoft/TypeScript>
-
-- **ESLint** - MIT License
-  - Copyright OpenJS Foundation and other contributors
-  - <https://github.com/eslint/eslint>
-
-- **typescript-eslint** - BSD-2-Clause License
-  - Copyright (c) 2019 typescript-eslint and other contributors
-  - <https://github.com/typescript-eslint/typescript-eslint>
+Core ships no frontend since October 3, 2026. Frontend dependency notices live with each
+archive frontend and the `rekolekt-web` kit.
 
 ### GPU and Compute Platforms
 
@@ -261,7 +210,7 @@ Users are responsible for compliance with these third-party service terms.
 
 ## Updates
 
-This notice file is current as of the date of this release. Dependencies may be updated over time. Users should review `requirements.txt` and `frontend/package.json` for the current list of direct dependencies.
+This notice file is current as of the date of this release. Dependencies may be updated over time. Users should review `requirements.txt` for the current list of direct dependencies.
 
 For the most up-to-date license information, consult each dependency's repository or package metadata.
 

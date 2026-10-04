@@ -112,7 +112,7 @@ ENV PYTHONUNBUFFERED=1 \
 ### 8. Enhanced .dockerignore
 
 Excludes unnecessary files:
-- Tests (tests/, e2e/)
+- Tests (tests/)
 - CI/CD (.github/)
 - Documentation (docs/, *.md except DEPENDENCIES.md)
 - Development tools (.vscode, .idea)

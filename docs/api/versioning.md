@@ -17,5 +17,14 @@ in parallel for the documented migration window; an unversioned breaking
 change is not permitted.
 
 The canonical machine-readable version 1 contract is
-[`openapi.json`](openapi.json). `make verify` regenerates both that document and
-the frontend TypeScript contract and fails on drift.
+[`openapi.json`](openapi.json). It is a committed, versioned artifact and the
+product surface of the headless core: archive frontends and the `rekolekt-web`
+kit generate their clients and types from it. `make verify` regenerates the
+document with `scripts/generate_openapi.py` and fails on drift; run
+`make openapi` after an API change and commit the result.
+
+Field-level deprecations are marked `deprecated: true` in the schema. The field
+keeps being served with its existing meaning until a removal follows the policy
+above. The `SiteConfig.theme` object (`BrandTheme.font`, `BrandTheme.dark`,
+`BrandTheme.light`) is deprecated this way: existing frontends keep receiving it,
+and new frontends should own their styling.

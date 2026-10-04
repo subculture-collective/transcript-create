@@ -20,7 +20,7 @@ This document provides comprehensive guidelines for managing dependencies in tra
 transcript-create uses multiple dependency management systems:
 
 - **Python (pip)**: API and worker backend dependencies
-- **npm**: Frontend, E2E tests, and SDK dependencies
+- **npm**: JavaScript SDK (`clients/javascript`) and root commit tooling. Core is headless and has no frontend packages; archive frontends manage their own.
 - **Docker**: Base images for containerized deployments
 - **GitHub Actions**: CI/CD workflow actions
 
@@ -58,9 +58,9 @@ All Dependabot PRs are automatically labeled for easy filtering:
 - `javascript`: npm packages
 - `docker`: Docker images
 - `ci`: GitHub Actions
-- `frontend`, `testing`, `sdk`, `tooling`: Specific subsystems
+- `sdk`, `tooling`: Specific subsystems
 
-Maintainer `@onnwee` is automatically assigned as reviewer for Python, Docker, and frontend PRs.
+Maintainer `@onnwee` is automatically assigned as reviewer for Python and Docker PRs.
 
 ### How Dependabot PRs Work
 
@@ -145,36 +145,14 @@ For testing, linting, or development-only tools:
 
 ### npm Dependencies
 
-#### Frontend Dependencies
+Run npm commands in `clients/javascript` (SDK) or the repository root (commit tooling):
 
-1. **Navigate to frontend directory**:
-   ```bash
-   cd frontend
-   ```
+```bash
+npm install --save-exact <package>@<version>
+```
 
-2. **Install with exact version**:
-   ```bash
-   # For production dependencies
-   npm install --save-exact <package>@<version>
-   
-   # For dev dependencies
-   npm install --save-exact --save-dev <package>@<version>
-   ```
-
-3. **Verify package-lock.json** is updated
-
-4. **Run tests**:
-   ```bash
-   npm run test
-   npm run lint
-   npm run build
-   ```
-
-5. **Commit both package.json and package-lock.json**
-
-#### Other npm Projects (e2e, SDK, root)
-
-Follow the same process in the respective directory.
+Neither directory commits a lockfile. Frontend dependencies belong to each archive
+frontend and to the `rekolekt-web` kit.
 
 ### Docker Base Images
 
@@ -253,7 +231,7 @@ pip freeze > constraints.txt
 #### npm
 
 ```bash
-cd frontend  # or e2e, clients/javascript, etc.
+cd clients/javascript  # or the repository root
 
 # Update specific package
 npm install <package>@<new-version>
@@ -284,11 +262,8 @@ docker compose logs -f
    # Python tests
    pytest
    
-   # Frontend tests
-   cd frontend && npm run test
-   
-   # E2E tests
-   cd e2e && npm run test
+   # OpenAPI contract
+   make openapi-check PYTHON_BIN=.venv/bin/python
    
    # Integration tests
    docker compose up -d
@@ -300,9 +275,6 @@ docker compose logs -f
    # Python
    pip-audit -r requirements.txt
    bandit -r app/ worker/
-   
-   # npm (if vulnerabilities exist)
-   npm audit
    ```
 
 3. **Build Docker images**:
@@ -373,10 +345,6 @@ bandit -r app/ worker/ -ll
 # Check for secrets
 gitleaks detect --source . -v
 
-# npm audit (in each npm directory)
-cd frontend && npm audit
-cd ../e2e && npm audit
-cd ../clients/javascript && npm audit
 ```
 
 ### Handling False Positives
@@ -413,7 +381,6 @@ We follow [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH):
 - **Python**: Minimum Python 3.12
 - **Node.js**: Minimum Node.js 18 LTS
 - **Docker**: Docker Compose v2
-- **Browsers** (frontend): Last 2 versions of major browsers
 
 ### Deprecation Policy
 
@@ -483,20 +450,12 @@ All Dependabot PRs automatically trigger:
    - Unit tests (pytest)
    - Security scans (bandit, pip-audit)
 
-2. **Frontend CI** (`.github/workflows/frontend-ci.yml`):
-   - TypeScript compilation
-   - ESLint
-   - Unit tests (vitest)
-   - Build verification
-
-3. **Integration Tests** (`.github/workflows/integration-tests.yml`):
+2. **Integration Tests** (`.github/workflows/integration-tests.yml`):
    - Docker compose build
    - API integration tests
    - Worker pipeline tests
 
-4. **E2E Tests** (`.github/workflows/e2e-tests.yml`):
-   - Playwright browser tests
-   - Full user workflows
+The canonical gate is `make verify`, run by `.gitea/workflows/verify.yaml` on Gitea.
 
 ### Manual Testing Checklist
 
@@ -507,7 +466,7 @@ For major updates or security patches, test manually:
 - [ ] Job creation works
 - [ ] Worker processes videos
 - [ ] Transcription completes
-- [ ] Frontend loads and functions
+- [ ] `/site`, search and `/videos` respond
 - [ ] Authentication works
 - [ ] Export features work
 - [ ] No errors in logs

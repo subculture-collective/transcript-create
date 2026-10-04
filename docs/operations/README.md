@@ -26,8 +26,8 @@ Deployment order, credential scrub/session rotation, the temporary legacy-write
 guard, 90-day raw-event retention, and the roll-forward-only boundary.
 
 ### [Blocking Dependency and SAST Gates](security-gates.md)
-Canonical pip-audit, Bandit, and npm-audit commands plus the expiring exception
-contract.
+Canonical pip-audit and Bandit commands plus the expiring exception contract.
+The npm audit gate left core with the frontend.
 
 ### [Private Beta Deployment](../deployment/private-beta.md)
 Digest-pinned deployment, ingress isolation, WAL-G restore rehearsal,

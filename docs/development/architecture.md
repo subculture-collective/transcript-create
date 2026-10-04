@@ -1,8 +1,8 @@
 # Architecture
 
-**Status:** shipped and authoritative (2026-07-12).
+**Status:** shipped and authoritative (2026-10-03).
 
-React 19 and React Router provide lazy-loaded public and capability-gated admin routes. TanStack Query owns shared request freshness, cancellation, and deduplication; Ky is the HTTP transport. Search snippets are plain text with Unicode code-point highlight ranges.
+Rekolekt core is headless: it ships backend services and the HTTP API, and no web pages. The committed OpenAPI document is the contract with frontends. Each archive builds its own frontend on its own origin; the `rekolekt-web` kit supplies an API client, generated types, hooks and stylable default components. Search snippets are plain text with Unicode code-point highlight ranges, so a frontend can render highlights without trusting HTML.
 
 FastAPI exposes the stable `/api` contract. PostgreSQL is the source of truth. Redis stores versioned JSON DTOs only. OpenSearch is an optional read accelerator maintained by a transactional PostgreSQL outbox; classified outages fall back to PostgreSQL and expose degraded/freshness metadata.
 

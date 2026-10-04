@@ -56,7 +56,6 @@ This project implements multiple layers of security scanning:
 
 1. **Dependency Scanning**
    - Python: `pip-audit` checks for known CVEs in dependencies
-   - JavaScript: `npm audit` scans frontend dependencies
    - Schedule: On every PR, push to main/develop, and weekly
 
 2. **Container Image Scanning**

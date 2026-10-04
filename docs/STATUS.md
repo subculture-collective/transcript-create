@@ -1,6 +1,6 @@
 # Documentation index
 
-**Status:** authoritative index (2026-09-19).
+**Status:** authoritative index (2026-10-03).
 
 Use this index to distinguish maintained contracts from optional deployment guides. Dated
 audit exports, implementation plans, screenshots and completion reports are intentionally
@@ -14,7 +14,7 @@ excluded from the repository; Git history retains them when historical context i
 | Branding and releases | [client branding](deployment/client-branding.md), [deployment matrix](deployment/README.md), [release process](development/release-process.md) |
 | Database and operations | [migrations](MIGRATIONS.md), [operations](operations/README.md), [production readiness](operations/production-readiness.md), [backup operations](operations/backup-operations.md) |
 | Product contracts | [passage sharing](product/passage-sharing.md), [creator community](product/creator-community.md), [authorized clips](product/authorized-original-clips.md) |
-| Interface | [design system](DESIGN_SYSTEM.md), [accessibility](ACCESSIBILITY.md) |
+| Frontends | Core is headless. Archives own their frontends; the [`rekolekt-web`](https://git.subcult.tv/subculture-collective/rekolekt-web) kit and its `archive/reference-app-ae1cc82` branch hold the former design system, accessibility notes and reference app. |
 
 The [private-beta runbook](deployment/private-beta.md) and [moderated testing
 protocol](user-testing/private-beta.md) describe evidence required for an actual release.

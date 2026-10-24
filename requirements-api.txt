@@ -18,4 +18,4 @@ slowapi==0.1.9
 redis==5.2.1
 
 # Server-rendered passage preview cards
-pillow==12.3.0
+pillow==13.0.0
